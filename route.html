@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Map Checkpoints with Zoom</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    textarea {
+      width: 400px;
+      height: 100px;
+    }
+    #mapCanvas {
+      border: 1px solid #ccc;
+      display: block;
+      margin-top: 20px;
+    }
+    button {
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Event Route Visualiser</h1>
+  <p>Export your route and paste it here:</p>
+  <textarea id="jsonInput">[
+  {"x": 100, "y": 150},
+  {"x": 200, "y": 250},
+  {"x": 300, "y": 100}
+]</textarea>
+  <br>
+  <button onclick="renderMap()">Render Map</button>
+  <button onclick="zoomIn()">Zoom In</button>
+  <button onclick="zoomOut()">Zoom Out</button>
+  <canvas id="mapCanvas"></canvas>
+
+  <script>
+    // Global variables to store image, scale, translation, and checkpoints.
+    let currentScale = 1;
+    let offsetX = 0, offsetY = 0;
+    let image;
+    let checkpointsGlobal = [];
+    let isDragging = false;
+    let lastX = 0, lastY = 0;
+
+    // Load the JSON and image, then render the map.
+    function renderMap() {
+      // Reset zoom parameters when re-rendering.
+      currentScale = 1;
+      offsetX = 0;
+      offsetY = 0;
+
+      let jsonText = document.getElementById('jsonInput').value;
+      try {
+        checkpointsGlobal = JSON.parse(jsonText).waypoints.map(({ translation }) => ({
+          x: translation.x / 2140 + 596,
+          y: translation.y / 2140 + 148
+        }));
+        console.log(checkpointsGlobal)
+      } catch (e) {
+        alert("Invalid JSON: " + e.message);
+        return;
+      }
+
+      image = new Image();
+      image.onload = function() {
+        const canvas = document.getElementById('mapCanvas');
+        // Set the canvas size to match the image dimensions.
+        canvas.width = 1000;
+        canvas.height = 1000;
+        fitToCheckpoints();
+      };
+      // Replace 'map.png' with the actual path or URL of your PNG map.
+      image.src = 'map.png';
+    }
+
+    // Draws the map and checkpoints based on the current scale and offset.
+    function draw() {
+      const canvas = document.getElementById('mapCanvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      // Apply translation (panning) and scaling (zooming).
+      ctx.translate(offsetX, offsetY);
+      ctx.scale(currentScale, currentScale);
+
+      // Draw the map image.
+      ctx.drawImage(image, 0, 0, 4000, 4000, 0, 0, 1000, 1000);
+
+      // Draw each checkpoint as a circle with its index number.
+      checkpointsGlobal.forEach(function(point, index) {
+        const radius = 1.5;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'red';
+        ctx.fill();
+        ctx.lineWidth = 0.2;
+        ctx.strokeStyle = 'black';
+        ctx.stroke();
+
+        // Render the index number.
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 2px sans-serif';
+        const text = index.toString();
+        const textMetrics = ctx.measureText(text);
+        const textX = point.x - textMetrics.width / 2;
+        const textY = point.y + 0.66; // Vertical centering adjustment.
+        ctx.fillText(text, textX, textY);
+      });
+      ctx.restore();
+    }
+
+    function fitToCheckpoints() {
+      if (checkpointsGlobal.length === 0) {
+        draw();
+        return;
+      }
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      checkpointsGlobal.forEach(function(point) {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x);
+        maxY = Math.max(maxY, point.y);
+      });
+
+      // Add a margin (in world coordinates).
+      const margin = 20;
+      const bboxWidth = maxX - minX;
+      const bboxHeight = maxY - minY;
+
+      const canvas = document.getElementById('mapCanvas');
+      // Compute scale factors required to fit the bounding box (including margin) into the canvas.
+      let scaleX = (canvas.width - 2 * margin) / (bboxWidth || 1);
+      let scaleY = (canvas.height - 2 * margin) / (bboxHeight || 1);
+      // Choose the smaller scale factor to ensure the entire bounding box is visible.
+      currentScale = Math.min(scaleX, scaleY);
+
+      // Compute the center of the bounding box.
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      // Set the offset so that the bounding box center maps to the canvas center.
+      offsetX = canvas.width / 2 - currentScale * centerX;
+      offsetY = canvas.height / 2 - currentScale * centerY;
+
+      draw();
+    }
+
+    // Zoom function adjusting scale and offset so the zoom remains centered on a specific point.
+    function zoom(zoomFactor, centerX, centerY) {
+      // Convert canvas coordinates to world coordinates.
+      const worldX = (centerX - offsetX) / currentScale;
+      const worldY = (centerY - offsetY) / currentScale;
+
+      currentScale *= zoomFactor;
+      // Adjust offset so the zoom focus remains stationary.
+      offsetX = centerX - currentScale * worldX;
+      offsetY = centerY - currentScale * worldY;
+      draw();
+    }
+
+    // Zoom In using canvas center as focal point.
+    function zoomIn() {
+      const canvas = document.getElementById('mapCanvas');
+      zoom(1.1, canvas.width / 2, canvas.height / 2);
+    }
+
+    // Zoom Out using canvas center as focal point.
+    function zoomOut() {
+      const canvas = document.getElementById('mapCanvas');
+      zoom(0.9, canvas.width / 2, canvas.height / 2);
+    }
+
+    // Set up event listeners after the window loads.
+    window.addEventListener('load', () => {
+      const canvas = document.getElementById('mapCanvas');
+
+      // Zoom with mouse wheel.
+      canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+        zoom(zoomFactor, mouseX, mouseY);
+      });
+
+      // Mouse down to start panning.
+      canvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        canvas.style.cursor = 'grabbing';
+        const rect = canvas.getBoundingClientRect();
+        lastX = e.clientX - rect.left;
+        lastY = e.clientY - rect.top;
+      });
+
+      // Mouse move to update panning if dragging.
+      canvas.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const rect = canvas.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+        // Calculate the difference from the last position.
+        const dx = currentX - lastX;
+        const dy = currentY - lastY;
+        offsetX += dx;
+        offsetY += dy;
+        lastX = currentX;
+        lastY = currentY;
+        draw();
+      });
+
+      // End panning on mouse up or when leaving the canvas.
+      canvas.addEventListener('mouseup', () => {
+        isDragging = false;
+        canvas.style.cursor = 'grab';
+      });
+      canvas.addEventListener('mouseleave', () => {
+        isDragging = false;
+        canvas.style.cursor = 'grab';
+      });
+    });
+  </script>
+</body>
+</html>
