@@ -16,7 +16,6 @@ import logging
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
-log = logging.getLogger(__name__)
 
 from amc_peripheral.settings import (
     GUILD_ID,
@@ -47,6 +46,10 @@ from amc_peripheral.settings import (
 from amc_peripheral.utils.text_utils import split_markdown
 from amc_peripheral.radio.tts import tts as tts_google
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
+
+log = logging.getLogger(__name__)
+
+
 
 # Pydantic Models
 class Editorial(BaseModel):
