@@ -2,7 +2,6 @@ import pytest
 import discord
 from discord.ext import commands
 from unittest.mock import AsyncMock
-from amc_peripheral.bot.knowledge_cog import KnowledgeCog
 from amc_peripheral.utils.text_utils import split_markdown, is_code_block_open
 
 class MockBot(commands.Bot):

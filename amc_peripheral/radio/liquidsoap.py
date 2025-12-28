@@ -1,7 +1,6 @@
 import socket
 import logging
 from typing import Optional, Dict, Any
-from amc_peripheral.settings import LIQUIDSOAP_TELNET_HOST, LIQUIDSOAP_TELNET_PORT
 
 logger = logging.getLogger('liquidsoap_controller')
 

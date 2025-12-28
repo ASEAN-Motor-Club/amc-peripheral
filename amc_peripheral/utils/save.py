@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-import os
-import json
-from amc_peripheral.settings import STATIC_PATH
 from Crypto.Cipher import AES
 
 KEY = b"66c5fd51a70e5e232cd236bd6895f802"

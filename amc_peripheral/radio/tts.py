@@ -4,9 +4,7 @@ Make sure to be working in a virtual environment.
 Note: ssml must be well-formed according to:
     https://www.w3.org/TR/speech-synthesis/
 """
-import os
 from google.cloud import texttospeech
-from amc_peripheral.settings import STATIC_PATH
 
 # Instantiates a client
 client = texttospeech.TextToSpeechClient()
