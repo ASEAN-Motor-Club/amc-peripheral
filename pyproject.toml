@@ -35,8 +35,8 @@ dependencies = [
 ]
 
 [project.scripts]
-motortown_bot = "amc_peripheral.bot.bot:main"
-motortown_radio = "amc_peripheral.radio.radio:main"
+amc_bot = "amc_peripheral.bot.bot:main"
+amc_radio = "amc_peripheral.radio.radio:main"
 
 [build-system]
 requires = ["hatchling"]

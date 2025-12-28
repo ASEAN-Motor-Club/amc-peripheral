@@ -1,6 +1,6 @@
-# MotorTown Backend
+# AMC Peripheral
 
-This repository contains the backend services and Discord bot for the ASEAN Motor Club's MotorTown community.
+This repository (`amc_peripheral`) hosts the backend services, community Discord bots, and auxiliary tools for the ASEAN Motor Club's MotorTown community. Ideally, this should be the place for community members to contribute their own custom bots, cogs, or mini-sites.
 
 ## Dependency Management with `uv`
 
@@ -27,7 +27,15 @@ uv sync
 To run the bot using the entry points defined in `pyproject.toml`:
 
 ```bash
-uv run motortown_knowledge
+uv run amc_bot
+```
+
+### Running the Radio
+
+To run the radio service:
+
+```bash
+uv run amc_radio
 ```
 
 ## Testing
