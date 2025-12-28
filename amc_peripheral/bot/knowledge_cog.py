@@ -195,15 +195,21 @@ class KnowledgeCog(commands.Cog):
 
         system_message = "You are a helpful bot in Motor Town, an open world driving game, specifically in 'ASEAN Motor Club'.\nAnswer in a short sentence or paragraph since the game only allows short messages, and avoid using newlines.\nOnly use the following knowledge. Do not use markdown or emojis.\n\n" + self.knowledge_system_message
         
+        messages = [
+            {"role": "system", "content": system_message},
+        ]
+        if events_str:
+            messages.append({"role": "user", "content": "# Upcoming events:\n\n" + events_str})
+        
+        messages.extend([
+            {"role": "user", "content": f"## Context\nTime: {now.strftime('%A, %Y-%m-%d %H:%M')}\n\n### Online Players:\n{player_data}\n\n### Previous messages:\n{prev_messages}"},
+            {"role": "user", "content": f"### Message from {player_name}:\n{question}"},
+        ])
+
         completion = await self.openai_client_openrouter.chat.completions.create(
             model=DEFAULT_AI_MODEL,
             reasoning_effort="medium",
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": '# Upcoming events:\n\n' + events_str},
-                {"role": "user", "content": f"## Context\nTime: {now.strftime('%A, %Y-%m-%d %H:%M')}\n\n### Online Players:\n{player_data}\n\n### Previous messages:\n{prev_messages}"},
-                {"role": "user", "content": f'### Message from {player_name}:\n{question}'},
-            ],
+            messages=messages,
         )
         self.user_requests[player_name].append(now)
         return completion.choices[0].message.content
