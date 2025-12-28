@@ -39,7 +39,7 @@ amc_bot = "amc_peripheral.bot.bot:main"
 amc_radio = "amc_peripheral.radio.radio:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "editables"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
