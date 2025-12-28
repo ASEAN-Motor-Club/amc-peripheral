@@ -96,6 +96,9 @@
         }: let
           cfg = config.services.amc-peripheral;
         in {
+          imports = [
+            ./radio/liquidsoap.nix
+          ];
           options.services.amc-peripheral = {
             enable = lib.mkEnableOption "AMC Peripheral Services";
             environmentFile = lib.mkOption {
