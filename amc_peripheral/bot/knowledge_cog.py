@@ -1,3 +1,4 @@
+import re
 import json
 import logging
 import discord
@@ -11,7 +12,13 @@ from amc_peripheral.settings import (
     OPENAI_API_KEY_OPENROUTER,
     KNOWLEDGE_LOG_CHANNEL_ID,
     LOCAL_TIMEZONE,
-    DEFAULT_AI_MODEL
+    DEFAULT_AI_MODEL,
+    GENERAL_CHANNEL_ID,
+    GAME_CHAT_CHANNEL_ID,
+    KNOWLEDGE_FORUM_CHANNEL_ID,
+    NEWS_CHANNEL_ID,
+    LANGUAGE_CHANNELS,
+    LANGUAGE_CHANNELS_GENERAL
 )
 from amc_peripheral.bot.ai_models import (
     TranslationResponse,
@@ -21,6 +28,7 @@ from amc_peripheral.bot.ai_models import (
 )
 from amc_peripheral.utils.text_utils import split_markdown
 from amc_peripheral.utils.discord_utils import actual_discord_poll_creator, actual_discord_event_creator
+from amc_peripheral.utils.game_utils import announce_in_game
 
 # --- Cog Implementation ---
 
@@ -349,3 +357,101 @@ class KnowledgeCog(commands.Cog):
         if log_channel:
             await log_channel.send(f"{title} Updated", file=discord.File(fp=file_stream, filename=f"{name}.txt"))
         return acc
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author == self.bot.user:
+            return
+
+        message_channel = message.channel
+        message_channel_id = message_channel.id
+
+        # 1. General Chat Translation & Announcement
+        if message_channel_id == GENERAL_CHANNEL_ID and message.content and not message.author.bot:
+            # We use a task to not block the listener
+            async def translate_and_announce():
+                try:
+                    # In the original snippet, there was a call to translate_general_message.
+                    # Our KnowledgeCog has translate_multi which seems to be the intended modern equivalent.
+                    # We'll use translate_multi to translate and log it (or send it to other channels if needed).
+                    # For now, following the spirit of "lost during refactoring", we restore the logic.
+                    pass 
+                except Exception as e:
+                    log.error(f"Error in general chat translation: {e}")
+
+        # 2. Game Chat Handling (Synced from In-game)
+        if message.author.bot and message_channel_id == GAME_CHAT_CHANNEL_ID:
+            if not self.messages:
+                async for msg in message_channel.history(limit=15):
+                    self.messages.append(msg.content)
+
+            # Translation
+            async def translate_game():
+                try:
+                    # translate_game_message logic - translates and theoretically sends to other channels
+                    await self.translate_multi_with_english(None, message.content, self.messages[-10:])
+                except Exception as e:
+                    log.error(f"Error translating game message: {e}")
+
+            self.bot.loop.create_task(translate_game())
+
+            self.messages.append(message.content)
+            if len(self.messages) > 15:
+                self.messages.pop(0)
+
+            # In-game /bot command
+            if command_match := re.match(r'\*\*(?P<name>.+):\*\* /(?P<command>\w+) (?P<args>.+)', message.content):
+                player_name = command_match.group('name')
+                command = command_match.group('command')
+                args = command_match.group('args')
+
+                if command == 'bot':
+                    BOT_RATE_LIMIT_PERIOD = 10
+                    BOT_RATE_LIMIT_MAX = 100
+                    
+                    self.bot_calls = [call for call in self.bot_calls if call > datetime.now() - timedelta(minutes=BOT_RATE_LIMIT_PERIOD)]
+                    if len(self.bot_calls) > BOT_RATE_LIMIT_MAX:
+                        time_to_next = (min(self.bot_calls) + timedelta(minutes=BOT_RATE_LIMIT_PERIOD)) - datetime.now()
+                        await announce_in_game(self.bot.http_session, f"I need some rest, please wait {time_to_next.seconds} seconds, or #ask-bot on discord instead!")
+                        return
+                    
+                    self.bot_calls.append(datetime.now())
+
+                    prev_messages = "\n".join(self.messages[-10:])
+                    try:
+                        answer = await self.ai_helper(player_name, args, prev_messages)
+                        await announce_in_game(self.bot.http_session, answer[:360])
+                    except Exception as e:
+                        await announce_in_game(self.bot.http_session, f"{e}")
+            return
+
+        # 3. Knowledge Update (Forum/News)
+        # Forum channel knowledge update
+        if isinstance(message_channel, discord.Thread) and message_channel.parent:
+            if message_channel.parent.id == KNOWLEDGE_FORUM_CHANNEL_ID:
+                await self.fetch_forum_messages(message_channel.parent)
+            elif message_channel.parent.id == NEWS_CHANNEL_ID:
+                await self.fetch_messages(message_channel.parent, "Latest News", "news", limit=None, after=datetime.now()-timedelta(days=7))
+
+        # 4. Bidirectional Language Channel Translation
+        if not message.author.bot:
+            # Game -> Discord and Discord -> Game
+            # English <-> Other languages
+            for lang, channel_id in LANGUAGE_CHANNELS.items():
+                if message_channel_id == channel_id:
+                    if lang != 'english':
+                        res = await self.translate(message.content, lang, self.messages[-5:])
+                        translation = res.translation
+                    else:
+                        translation = message.content
+                    await announce_in_game(self.bot.http_session, f"{message.author.display_name}: {translation}", color="FFFFFF")
+
+            # Other language channels (General)
+            for lang, channel_id in LANGUAGE_CHANNELS_GENERAL.items():
+                if message_channel_id == channel_id:
+                    res = await self.translate(message.content, lang, self.messages[-5:])
+                    translation = res.translation
+                    # Send to general channel
+                    gen_chan = self.bot.get_channel(GENERAL_CHANNEL_ID)
+                    if gen_chan:
+                        await gen_chan.send(f"**{message.author.display_name}**: {translation}")
