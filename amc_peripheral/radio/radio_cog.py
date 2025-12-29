@@ -48,6 +48,7 @@ from amc_peripheral.utils.text_utils import split_markdown
 from amc_peripheral.radio.tts import tts as tts_google
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
 from amc_peripheral.radio.radio_server import get_current_song_metadata, parse_song_info
+from amc_peripheral.utils.game_utils import announce_in_game
 
 log = logging.getLogger(__name__)
 
@@ -459,6 +460,9 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
                     "add_metadata": True,
                 },
             ],
+            'ffmpeg_location': os.environ.get('FFMPEG_PATH'),
+            'prefer_ffmpeg': True,
+            'retries': 5,
             "js_runtimes": {"deno": {"path": DENO_PATH}},
         }
 
@@ -473,6 +477,13 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
                 await asyncio.to_thread(ydl.download, [webpage_url])
         except Exception as e:
             raise Exception(f"Failed to download audio: {e}")
+
+        # --- Push to Queue ---
+        local_path = f"{REQUESTS_PATH}/{base_filename}.mp3"
+        try:
+            await asyncio.to_thread(self.lq.push_to_queue, "song_requests", local_path)
+        except Exception as e:
+            log.error(f"Failed to push song to queue via telnet, but continuing: {e}")
 
         # Update throttling
         self.user_requests[requester].append(now)
@@ -534,6 +545,11 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
         try:
             title, _ = await self.request_song(song_name, requester)
             await channel.send(f"Queued {title} for you, {requester}!")
+            await announce_in_game(
+                self.bot.http_session,
+                f'Queued "{title}" for you, {requester}!',
+                color="FEE75C",
+            )
         except Exception as e:
             await channel.send(f"Failed to queue {song_name} for {requester}: {e}")
 
@@ -794,7 +810,7 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.author.bot:
+        if message.author == self.bot.user:
             return
 
         channel_id = message.channel.id
@@ -833,6 +849,7 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
                 name = command_match.group("name")
                 command = command_match.group("command")
                 args = command_match.group("args")
+                log.info(f"Received command {name} {command} {args}")
 
                 if command == "song_request":
                     song_name = args
