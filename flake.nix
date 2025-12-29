@@ -79,10 +79,6 @@
               enable = true;
               stages = ["pre-push"];
             };
-            ruff-format = {
-              enable = true;
-              stages = ["pre-push"];
-            };
 
             # Custom hook for pyrefly type checking
             pyrefly = {
