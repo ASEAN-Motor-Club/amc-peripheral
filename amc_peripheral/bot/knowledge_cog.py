@@ -32,6 +32,7 @@ from amc_peripheral.utils.discord_utils import (
     actual_discord_event_creator,
 )
 from amc_peripheral.utils.game_utils import announce_in_game
+from amc_peripheral.radio.radio_server import get_current_song
 
 # --- Cog Implementation ---
 
@@ -296,14 +297,68 @@ class KnowledgeCog(commands.Cog):
             ]
         )
 
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_currently_playing_song",
+                    "description": "Get the currently playing song on the radio station. Returns the song title and who requested it.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                },
+            },
+        ]
+
         # pyrefly: ignore [no-matching-overload]
         completion = await self.openai_client_openrouter.chat.completions.create(
             model=DEFAULT_AI_MODEL,
             reasoning_effort="medium",
             messages=messages,
+            tools=tools,
+            tool_choice="auto",
         )
+
+        response_message = completion.choices[0].message if completion.choices else None
+
+        # Handle tool calls
+        if response_message and response_message.tool_calls:
+            messages.append(response_message)
+            for tool_call in response_message.tool_calls:
+                function_name = tool_call.function.name
+
+                if function_name == "get_currently_playing_song":
+                    current_song = await get_current_song(self.bot.http_session)
+                    res = current_song or "No song is currently playing or unable to fetch song info."
+                else:
+                    res = f"Error: Unknown function '{function_name}'"
+
+                messages.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "role": "tool",
+                        "name": function_name,
+                        "content": res,
+                    }
+                )
+
+            # pyrefly: ignore [no-matching-overload]
+            second_completion = await self.openai_client_openrouter.chat.completions.create(
+                model=DEFAULT_AI_MODEL,
+                reasoning_effort="medium",
+                messages=messages,
+            )
+            self.user_requests[player_name].append(now)
+            return (
+                second_completion.choices[0].message.content
+                if second_completion.choices
+                else "Failed to get response"
+            )
+
         self.user_requests[player_name].append(now)
-        return completion.choices[0].message.content
+        return response_message.content if response_message else "Empty response"
 
     async def translate(self, message, language, prev_messages=[]):
         completion = await self.openai_client_openrouter.beta.chat.completions.parse(
