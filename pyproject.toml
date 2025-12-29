@@ -54,4 +54,12 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "dpytest>=0.7.0",
     "aioresponses>=0.7.6",
+    "pyrefly>=0.46.1",
 ]
+
+[tool.pyrefly]
+project_includes = ["amc_peripheral"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
