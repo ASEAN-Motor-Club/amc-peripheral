@@ -65,6 +65,21 @@ class KnowledgeCog(commands.Cog):
             except Exception:
                 pass
 
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Initialize knowledge base from forum channel on startup."""
+        forum_channel = self.bot.get_channel(KNOWLEDGE_FORUM_CHANNEL_ID)
+        if forum_channel is None:
+            log.warning(f"Knowledge forum channel {KNOWLEDGE_FORUM_CHANNEL_ID} not found. Knowledge base will be empty.")
+            return
+
+        if isinstance(forum_channel, discord.ForumChannel):
+            log.info("Loading knowledge base from forum channel...")
+            await self.fetch_forum_messages(forum_channel)
+            log.info(f"Knowledge base loaded: {len(self.knowledge_system_message)} characters")
+        else:
+            log.warning(f"Channel {KNOWLEDGE_FORUM_CHANNEL_ID} is not a ForumChannel, it is a {type(forum_channel).__name__}")
+
     # --- AI Helpers ---
 
     async def ai_helper_discord(self, player_name, question, prev_messages_str, generic=False, smart=False, interaction=None):
