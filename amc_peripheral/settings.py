@@ -4,6 +4,7 @@ import json
 OPENAI_API_KEY_OPENROUTER = os.environ.get("OPENAI_API_KEY_OPENROUTER")
 
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
+DISCORD_TOKEN_RADIO = os.environ.get("DISCORD_TOKEN_RADIO")
 DISCORD_GATEWAY = os.environ.get(
     "DISCORD_GATEWAY", "wss://gateway.discord.gg/?v=10&encoding=json"
 )

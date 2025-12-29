@@ -3,7 +3,7 @@ import aiohttp
 import logging
 import discord
 from discord.ext import commands
-from amc_peripheral.settings import DISCORD_TOKEN, GUILD_ID
+from amc_peripheral.settings import DISCORD_TOKEN_RADIO, GUILD_ID
 from amc_peripheral.radio.radio_cog import RadioCog
 
 log = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ async def _async_main():
     bot = AMCBot()
     async with bot:
         # pyrefly: ignore [bad-argument-type]
-        await bot.start(DISCORD_TOKEN)
+        await bot.start(DISCORD_TOKEN_RADIO)
 
 
 def main():
