@@ -47,6 +47,7 @@ from amc_peripheral.settings import (
 from amc_peripheral.utils.text_utils import split_markdown
 from amc_peripheral.radio.tts import tts as tts_google
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
+from amc_peripheral.radio.radio_server import get_current_song_metadata, parse_song_info
 
 log = logging.getLogger(__name__)
 
@@ -724,28 +725,17 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
             # log.warning(f'Radio channel cannot be found from channel id: {RADIO_CHANNEL_ID}')
             return
 
-        filename = None
-        try:
-            async with self.bot.http_session.get(
-                "http://localhost:6001/metadata"
-            ) as resp:
-                metadata = await resp.json()
-                filename = metadata.get("filename")
-        except Exception:
-            # log.error("Could not fetch metadata")
+        metadata = await get_current_song_metadata(self.bot.http_session)
+        if not metadata:
             return
 
-        if not filename:
+        song_info = parse_song_info(metadata)
+        if not song_info:
             return
 
-        filename = filename.removeprefix("/var/lib/radio/")
-        try:
-            folder, filepath = filename.split("/")
-            requester, song_path = filepath.split("-", 1)
-            song_title = song_path.removesuffix(".mp3")
-        except ValueError:
-            # Handle unexpected filename format
-            return
+        folder = song_info["folder"]
+        requester = song_info["requester"]
+        song_title = song_info["song_title"]
 
         embed = discord.Embed(
             title="📻 AMC Radio",
