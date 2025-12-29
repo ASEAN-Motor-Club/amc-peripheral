@@ -4,6 +4,7 @@ from Crypto.Cipher import AES
 KEY = b"66c5fd51a70e5e232cd236bd6895f802"
 BLOCK_SIZE = 16
 
+
 def encrypt(data: bytes) -> bytes:
     size = 4 + len(data)
     pad_size = (size + BLOCK_SIZE) & ~(BLOCK_SIZE - 1)
@@ -17,6 +18,7 @@ def encrypt(data: bytes) -> bytes:
         out[i : i + BLOCK_SIZE] = cipher.encrypt(bytes(out[i : i + BLOCK_SIZE]))
     return bytes(out)
 
+
 def decrypt(data: bytes) -> bytes:
     cipher = AES.new(KEY, AES.MODE_ECB)
     buf = bytearray(data)
@@ -29,6 +31,7 @@ def decrypt(data: bytes) -> bytes:
         res.append((b + 1) & 0xFF)
     return bytes(res[:orig_len])
 
+
 def encrypt_file(path: str) -> bytes:
     """
     Read the file at `path`, encrypt its contents, and return the encrypted bytes.
@@ -36,6 +39,7 @@ def encrypt_file(path: str) -> bytes:
     with open(path, "rb") as f:
         data = f.read()
     return encrypt(data)
+
 
 def decrypt_file(path: str) -> bytes:
     """
@@ -45,4 +49,3 @@ def decrypt_file(path: str) -> bytes:
     with open(path, "rb") as f:
         data = f.read()
     return decrypt(data)
-

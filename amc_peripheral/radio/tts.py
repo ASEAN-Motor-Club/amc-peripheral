@@ -4,18 +4,25 @@ Make sure to be working in a virtual environment.
 Note: ssml must be well-formed according to:
     https://www.w3.org/TR/speech-synthesis/
 """
+
 from google.cloud import texttospeech
 
 # Instantiates a client
 client = texttospeech.TextToSpeechClient()
 
-def tts(text, voice_language_code="en-GB", voice_name="en-GB-Chirp3-HD-Leda", use_markup=False, volume_gain_db=6.0):
 
+def tts(
+    text,
+    voice_language_code="en-GB",
+    voice_name="en-GB-Chirp3-HD-Leda",
+    use_markup=False,
+    volume_gain_db=6.0,
+):
     # Set the text input to be synthesized
     if use_markup:
-      synthesis_input = texttospeech.SynthesisInput(markup=text)
+        synthesis_input = texttospeech.SynthesisInput(markup=text)
     else:
-      synthesis_input = texttospeech.SynthesisInput(text=text)
+        synthesis_input = texttospeech.SynthesisInput(text=text)
 
     # Build the voice request, select the language code ("en-US") and the ssml
     # voice gender ("neutral")
@@ -25,8 +32,7 @@ def tts(text, voice_language_code="en-GB", voice_name="en-GB-Chirp3-HD-Leda", us
 
     # Select the type of audio file you want returned
     audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3,
-        volume_gain_db=volume_gain_db
+        audio_encoding=texttospeech.AudioEncoding.MP3, volume_gain_db=volume_gain_db
     )
 
     # Perform the text-to-speech request on the text input with the selected
@@ -35,14 +41,18 @@ def tts(text, voice_language_code="en-GB", voice_name="en-GB-Chirp3-HD-Leda", us
         input=synthesis_input, voice=voice, audio_config=audio_config
     )
 
-    return response.audio_content #bytes
+    return response.audio_content  # bytes
 
-def tts_ssml(text, voice_language_code="en-GB", voice_name="en-GB-Chirp3-HD-Leda", volume_gain_db=6.0):
 
+def tts_ssml(
+    text,
+    voice_language_code="en-GB",
+    voice_name="en-GB-Chirp3-HD-Leda",
+    volume_gain_db=6.0,
+):
     # Set the text input to be synthesized
     synthesis_input = texttospeech.SynthesisInput(ssml=text)
 
-
     # Build the voice request, select the language code ("en-US") and the ssml
     # voice gender ("neutral")
     voice = texttospeech.VoiceSelectionParams(
@@ -51,8 +61,7 @@ def tts_ssml(text, voice_language_code="en-GB", voice_name="en-GB-Chirp3-HD-Leda
 
     # Select the type of audio file you want returned
     audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3,
-        volume_gain_db=volume_gain_db
+        audio_encoding=texttospeech.AudioEncoding.MP3, volume_gain_db=volume_gain_db
     )
 
     # Perform the text-to-speech request on the text input with the selected
@@ -61,7 +70,8 @@ def tts_ssml(text, voice_language_code="en-GB", voice_name="en-GB-Chirp3-HD-Leda
         input=synthesis_input, voice=voice, audio_config=audio_config
     )
 
-    return response.audio_content #bytes
+    return response.audio_content  # bytes
+
 
 def tts_multi(turns, voice_language_code="en-US", volume_gain_db=6.0):
     multi_speaker_markup = texttospeech.MultiSpeakerMarkup(
@@ -85,8 +95,7 @@ def tts_multi(turns, voice_language_code="en-US", volume_gain_db=6.0):
 
     # Select the type of audio file you want returned
     audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3,
-        volume_gain_db=volume_gain_db
+        audio_encoding=texttospeech.AudioEncoding.MP3, volume_gain_db=volume_gain_db
     )
 
     # Perform the text-to-speech request on the text input with the selected
@@ -95,5 +104,4 @@ def tts_multi(turns, voice_language_code="en-US", volume_gain_db=6.0):
         input=synthesis_input, voice=voice, audio_config=audio_config
     )
 
-    return response.audio_content #bytes
-
+    return response.audio_content  # bytes

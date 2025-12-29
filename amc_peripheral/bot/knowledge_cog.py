@@ -18,30 +18,36 @@ from amc_peripheral.settings import (
     KNOWLEDGE_FORUM_CHANNEL_ID,
     NEWS_CHANNEL_ID,
     LANGUAGE_CHANNELS,
-    LANGUAGE_CHANNELS_GENERAL
+    LANGUAGE_CHANNELS_GENERAL,
 )
 from amc_peripheral.bot.ai_models import (
     TranslationResponse,
     MultiTranslation,
     MultiTranslationWithEnglish,
-    ModerationResponse
+    ModerationResponse,
 )
 from amc_peripheral.utils.text_utils import split_markdown
-from amc_peripheral.utils.discord_utils import actual_discord_poll_creator, actual_discord_event_creator
+from amc_peripheral.utils.discord_utils import (
+    actual_discord_poll_creator,
+    actual_discord_event_creator,
+)
 from amc_peripheral.utils.game_utils import announce_in_game
 
 # --- Cog Implementation ---
 
 log = logging.getLogger(__name__)
 
+
 class KnowledgeCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.local_tz = ZoneInfo(LOCAL_TIMEZONE)
-        
+
         # clients
-        self.openai_client_openrouter = AsyncOpenAI(api_key=OPENAI_API_KEY_OPENROUTER, base_url="https://openrouter.ai/api/v1")
-        
+        self.openai_client_openrouter = AsyncOpenAI(
+            api_key=OPENAI_API_KEY_OPENROUTER, base_url="https://openrouter.ai/api/v1"
+        )
+
         # state
         self.knowledge_system_message = ""
         self.user_requests = {}
@@ -49,17 +55,19 @@ class KnowledgeCog(commands.Cog):
         self.moderation_cooldown = [20]
         self.player_warnings = {}
         self.bot_calls = []
-        
+
     async def cog_load(self):
         # Context Menus
         self.ctx_menus = [
-            app_commands.ContextMenu(name="Process Image with Prompt", callback=self.process_image_context),
+            app_commands.ContextMenu(
+                name="Process Image with Prompt", callback=self.process_image_context
+            ),
         ]
         for menu in self.ctx_menus:
             self.bot.tree.add_command(menu)
 
     async def cog_unload(self):
-        for menu in getattr(self, 'ctx_menus', []):
+        for menu in getattr(self, "ctx_menus", []):
             try:
                 self.bot.tree.remove_command(menu.name, type=menu.type)
             except Exception:
@@ -70,19 +78,33 @@ class KnowledgeCog(commands.Cog):
         """Initialize knowledge base from forum channel on startup."""
         forum_channel = self.bot.get_channel(KNOWLEDGE_FORUM_CHANNEL_ID)
         if forum_channel is None:
-            log.warning(f"Knowledge forum channel {KNOWLEDGE_FORUM_CHANNEL_ID} not found. Knowledge base will be empty.")
+            log.warning(
+                f"Knowledge forum channel {KNOWLEDGE_FORUM_CHANNEL_ID} not found. Knowledge base will be empty."
+            )
             return
 
         if isinstance(forum_channel, discord.ForumChannel):
             log.info("Loading knowledge base from forum channel...")
             await self.fetch_forum_messages(forum_channel)
-            log.info(f"Knowledge base loaded: {len(self.knowledge_system_message)} characters")
+            log.info(
+                f"Knowledge base loaded: {len(self.knowledge_system_message)} characters"
+            )
         else:
-            log.warning(f"Channel {KNOWLEDGE_FORUM_CHANNEL_ID} is not a ForumChannel, it is a {type(forum_channel).__name__}")
+            log.warning(
+                f"Channel {KNOWLEDGE_FORUM_CHANNEL_ID} is not a ForumChannel, it is a {type(forum_channel).__name__}"
+            )
 
     # --- AI Helpers ---
 
-    async def ai_helper_discord(self, player_name, question, prev_messages_str, generic=False, smart=False, interaction=None):
+    async def ai_helper_discord(
+        self,
+        player_name,
+        question,
+        prev_messages_str,
+        generic=False,
+        smart=False,
+        interaction=None,
+    ):
         now = datetime.now(self.local_tz)
         if generic:
             system_message = "You are a helpful assistant for the ASEAN MotorTown Club discord server."
@@ -102,12 +124,15 @@ class KnowledgeCog(commands.Cog):
                             "type": "object",
                             "properties": {
                                 "question": {"type": "string"},
-                                "options": {"type": "array", "items": {"type": "string"}},
-                                "channel_id": {"type": "string"}
+                                "options": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                                "channel_id": {"type": "string"},
                             },
-                            "required": ["question", "options"]
-                        }
-                    }
+                            "required": ["question", "options"],
+                        },
+                    },
                 },
                 {
                     "type": "function",
@@ -122,22 +147,33 @@ class KnowledgeCog(commands.Cog):
                                 "location": {"type": "string"},
                                 "start_time": {"type": "string", "format": "date-time"},
                                 "end_time": {"type": "string", "format": "date-time"},
-                                "timezone": {"type": "string"}
+                                "timezone": {"type": "string"},
                             },
-                            "required": ["name", "start_time", "timezone"]
-                        }
-                    }
-                }
+                            "required": ["name", "start_time", "timezone"],
+                        },
+                    },
+                },
             ]
 
         messages = [
             {"role": "system", "content": system_message},
-            {"role": "user", "content": f"## Context\nThe current date and time (in Bangkok GMT+7 timezone) is: {now.strftime('%A, %Y-%m-%d %H:%M')}"}
+            {
+                "role": "user",
+                "content": f"## Context\nThe current date and time (in Bangkok GMT+7 timezone) is: {now.strftime('%A, %Y-%m-%d %H:%M')}",
+            },
         ]
         if prev_messages_str:
-            messages.append({"role": "user", "content": f'## Previous messages:\n{prev_messages_str}'})
-        messages.append({"role": "user", "content": f'### Message from {player_name}\n{question}'})
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"## Previous messages:\n{prev_messages_str}",
+                }
+            )
+        messages.append(
+            {"role": "user", "content": f"### Message from {player_name}\n{question}"}
+        )
 
+        # pyrefly: ignore [no-matching-overload]
         completion = await self.openai_client_openrouter.chat.completions.create(
             model=model,
             reasoning_effort="medium",
@@ -153,13 +189,15 @@ class KnowledgeCog(commands.Cog):
             for tool_call in response_message.tool_calls:
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
-                
+
                 if function_name == "create_poll":
                     res = await actual_discord_poll_creator(
                         self.bot,
                         function_args.get("question"),
                         function_args.get("options"),
-                        (function_args.get("channel_id") or interaction.channel.id) if interaction else None
+                        (function_args.get("channel_id") or interaction.channel.id)
+                        if interaction
+                        else None,
                     )
                 elif function_name == "create_scheduled_event":
                     res = await actual_discord_event_creator(
@@ -169,58 +207,96 @@ class KnowledgeCog(commands.Cog):
                         function_args.get("location"),
                         function_args.get("start_time"),
                         function_args.get("end_time"),
-                        function_args.get("timezone")
+                        function_args.get("timezone"),
                     )
                 else:
                     res = f"Error: Unknown function '{function_name}'"
-                
-                messages.append({"tool_call_id": tool_call.id, "role": "tool", "name": function_name, "content": res})
 
-            second_completion = await self.openai_client_openrouter.chat.completions.create(
-                model=model,
-                reasoning_effort="medium",
-                messages=messages,
+                messages.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "role": "tool",
+                        "name": function_name,
+                        "content": res,
+                    }
+                )
+
+            # pyrefly: ignore [no-matching-overload]
+            second_completion = (
+                # pyrefly: ignore [no-matching-overload]
+                await self.openai_client_openrouter.chat.completions.create(
+                    model=model,
+                    reasoning_effort="medium",
+                    messages=messages,
+                )
             )
-            return second_completion.choices[0].message.content if second_completion.choices else "Failed to get follow-up"
+            return (
+                second_completion.choices[0].message.content
+                if second_completion.choices
+                else "Failed to get follow-up"
+            )
 
         return response_message.content if response_message else "Empty response"
 
     async def ai_helper(self, player_name, question, prev_messages):
         now = datetime.now(self.local_tz)
-        
+
         # Throttling
         fifteen_minutes_ago = now - timedelta(minutes=15)
-        self.user_requests[player_name] = [t for t in self.user_requests.get(player_name, []) if t > fifteen_minutes_ago]
-        
+        self.user_requests[player_name] = [
+            t
+            for t in self.user_requests.get(player_name, [])
+            if t > fifteen_minutes_ago
+        ]
+
         five_minutes_ago = now - timedelta(minutes=5)
         last_5 = sum(1 for t in self.user_requests[player_name] if t > five_minutes_ago)
         if last_5 >= 4:
-            raise Exception('Quota exceeded (3/5min)')
+            raise Exception("Quota exceeded (3/5min)")
         if len(self.user_requests[player_name]) >= 5:
-            raise Exception('Quota exceeded (4/15min)')
+            raise Exception("Quota exceeded (4/15min)")
 
         # Fetch active players
-        async with self.bot.http_session.get("https://server.aseanmotorclub.com/api/active_players/") as resp:
+        async with self.bot.http_session.get(
+            "https://server.aseanmotorclub.com/api/active_players/"
+        ) as resp:
             player_data = await resp.text()
 
-        events_str = '\n\n'.join([
-            f"## {event.name}\nDate/Time:{event.start_time.replace(tzinfo=ZoneInfo('UTC')).astimezone(self.local_tz).strftime('%A, %Y-%m-%d %H:%M')}\nLocation: {event.location}\n{event.description}"
-            for event in self.bot.guilds[0].scheduled_events if event.start_time > now
-        ])
+        events_str = "\n\n".join(
+            [
+                f"## {event.name}\nDate/Time:{event.start_time.replace(tzinfo=ZoneInfo('UTC')).astimezone(self.local_tz).strftime('%A, %Y-%m-%d %H:%M')}\nLocation: {event.location}\n{event.description}"
+                for event in self.bot.guilds[0].scheduled_events
+                if event.start_time > now
+            ]
+        )
 
-        system_message = "You are a helpful bot in Motor Town, an open world driving game, specifically in 'ASEAN Motor Club'.\nAnswer in a short sentence or paragraph since the game only allows short messages, and avoid using newlines.\nOnly use the following knowledge. Do not use markdown or emojis.\n\n" + self.knowledge_system_message
-        
+        system_message = (
+            "You are a helpful bot in Motor Town, an open world driving game, specifically in 'ASEAN Motor Club'.\nAnswer in a short sentence or paragraph since the game only allows short messages, and avoid using newlines.\nOnly use the following knowledge. Do not use markdown or emojis.\n\n"
+            + self.knowledge_system_message
+        )
+
         messages = [
             {"role": "system", "content": system_message},
         ]
         if events_str:
-            messages.append({"role": "user", "content": "# Upcoming events:\n\n" + events_str})
-        
-        messages.extend([
-            {"role": "user", "content": f"## Context\nTime: {now.strftime('%A, %Y-%m-%d %H:%M')}\n\n### Online Players:\n{player_data}\n\n### Previous messages:\n{prev_messages}"},
-            {"role": "user", "content": f"### Message from {player_name}:\n{question}"},
-        ])
+            messages.append(
+                {"role": "user", "content": "# Upcoming events:\n\n" + events_str}
+            )
 
+        messages.extend(
+            [
+                {
+                    "role": "user",
+                    "content": f"## Context\nTime: {now.strftime('%A, %Y-%m-%d %H:%M')}\n\n### Online Players:\n{player_data}\n\n### Previous messages:\n{prev_messages}",
+                },
+                {
+                    "role": "user",
+                    "content": f"### Message from {player_name}:\n{question}",
+                },
+            ]
+        )
+
+        # pyrefly: ignore [no-matching-overload]
         completion = await self.openai_client_openrouter.chat.completions.create(
             model=DEFAULT_AI_MODEL,
             reasoning_effort="medium",
@@ -233,9 +309,15 @@ class KnowledgeCog(commands.Cog):
         completion = await self.openai_client_openrouter.beta.chat.completions.parse(
             model="gpt-4.1-mini-2025-04-14",
             messages=[
-                {"role": "system", "content": f"Translate message from {language} to English (or vice versa)"},
-                {"role": "user", "content": '### PREVIOUS MESSAGES:\n' + '\n'.join(prev_messages)},
-                {"role": "user", "content": f'### MESSAGE TO TRANSLATE:\n{message}'},
+                {
+                    "role": "system",
+                    "content": f"Translate message from {language} to English (or vice versa)",
+                },
+                {
+                    "role": "user",
+                    "content": "### PREVIOUS MESSAGES:\n" + "\n".join(prev_messages),
+                },
+                {"role": "user", "content": f"### MESSAGE TO TRANSLATE:\n{message}"},
             ],
             response_format=TranslationResponse,
         )
@@ -246,9 +328,18 @@ class KnowledgeCog(commands.Cog):
         completion = await self.openai_client_openrouter.beta.chat.completions.parse(
             model=DEFAULT_AI_MODEL,
             messages=[
-                {"role": "system", "content": "Translate message into English, Chinese, Indonesian, Malay, Thai and Tagalog. Casual tone, no rude words. Handle slash commands by only translating params."},
-                {"role": "user", "content": '### PREVIOUS MESSAGES:\n' + '\n'.join(messages)},
-                {"role": "user", "content": f'### MESSAGE TO TRANSLATE{sender}:\n\n{message}'},
+                {
+                    "role": "system",
+                    "content": "Translate message into English, Chinese, Indonesian, Malay, Thai and Tagalog. Casual tone, no rude words. Handle slash commands by only translating params.",
+                },
+                {
+                    "role": "user",
+                    "content": "### PREVIOUS MESSAGES:\n" + "\n".join(messages),
+                },
+                {
+                    "role": "user",
+                    "content": f"### MESSAGE TO TRANSLATE{sender}:\n\n{message}",
+                },
             ],
             response_format=MultiTranslationWithEnglish,
         )
@@ -258,9 +349,15 @@ class KnowledgeCog(commands.Cog):
         completion = await self.openai_client_openrouter.beta.chat.completions.parse(
             model="gpt-4.1-mini-2025-04-14",
             messages=[
-                {"role": "system", "content": "Translate message into Chinese, Indonesian, Malay, Thai and Tagalog. Casual tone. Preserve sender [username]."},
-                {"role": "user", "content": '### PREVIOUS MESSAGES:\n' + '\n'.join(messages)},
-                {"role": "user", "content": f'### MESSAGE TO TRANSLATE:\n{message}'},
+                {
+                    "role": "system",
+                    "content": "Translate message into Chinese, Indonesian, Malay, Thai and Tagalog. Casual tone. Preserve sender [username].",
+                },
+                {
+                    "role": "user",
+                    "content": "### PREVIOUS MESSAGES:\n" + "\n".join(messages),
+                },
+                {"role": "user", "content": f"### MESSAGE TO TRANSLATE:\n{message}"},
             ],
             response_format=MultiTranslation,
         )
@@ -270,8 +367,11 @@ class KnowledgeCog(commands.Cog):
         completion = await self.openai_client_openrouter.beta.chat.completions.parse(
             model="google/gemini-2.0-flash-lite-001",
             messages=[
-                {"role": "system", "content": "You are the AI moderator for our game server. Assess tone and context for escalating conflict. Recognize playful banter vs genuine anger."},
-                {"role": "user", "content": f'### MESSAGES:\n{prev_messages}'},
+                {
+                    "role": "system",
+                    "content": "You are the AI moderator for our game server. Assess tone and context for escalating conflict. Recognize playful banter vs genuine anger.",
+                },
+                {"role": "user", "content": f"### MESSAGES:\n{prev_messages}"},
             ],
             response_format=ModerationResponse,
         )
@@ -284,7 +384,7 @@ class KnowledgeCog(commands.Cog):
             label="Prompt",
             placeholder="Type your prompt here...",
             style=discord.TextStyle.long,
-            required=True
+            required=True,
         )
 
         def __init__(self, cog, message):
@@ -294,26 +394,43 @@ class KnowledgeCog(commands.Cog):
 
         async def on_submit(self, interaction: discord.Interaction):
             if not self.message or not self.message.attachments:
-                await interaction.response.send_message("No image found.", ephemeral=True)
+                await interaction.response.send_message(
+                    "No image found.", ephemeral=True
+                )
                 return
 
-            image_urls = [a.url for a in self.message.attachments if any(a.filename.lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg"])]
+            image_urls = [
+                a.url
+                for a in self.message.attachments
+                if any(
+                    a.filename.lower().endswith(ext)
+                    for ext in [".png", ".jpg", ".jpeg"]
+                )
+            ]
             if not image_urls:
-                await interaction.response.send_message("No valid image found.", ephemeral=True)
+                await interaction.response.send_message(
+                    "No valid image found.", ephemeral=True
+                )
                 return
 
             await interaction.response.defer()
             try:
-                response = await self.cog.openai_client_openrouter.chat.completions.create(
-                    model="openai/gpt-4o",
-                    messages=[
-                        {"role": "user", "content": [
-                            {"type": "text", "text": self.prompt.value},
-                        ] + [
-                            {"type": "image_url", "image_url": {"url": url}}
-                            for url in image_urls
-                        ]},
-                    ]
+                response = (
+                    await self.cog.openai_client_openrouter.chat.completions.create(
+                        model="openai/gpt-4o",
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": self.prompt.value},
+                                ]
+                                + [
+                                    {"type": "image_url", "image_url": {"url": url}}
+                                    for url in image_urls
+                                ],
+                            },
+                        ],
+                    )
                 )
                 await interaction.followup.send(response.choices[0].message.content)
             except Exception as e:
@@ -325,18 +442,34 @@ class KnowledgeCog(commands.Cog):
     async def helper_cmd(self, interaction: discord.Interaction, question: str):
         await interaction.response.defer()
         prev = ""
+        # pyrefly: ignore [missing-attribute]
         async for m in interaction.channel.history(limit=20):
             ms = f"### {m.author.display_name}:\n{m.content}\n"
             if m.reactions:
-                ms += "**Reactions**\n" + "\n".join([f"{r.emoji}: {', '.join([u.display_name async for u in r.users()])}" for r in m.reactions])
-            prev = ms + '\n' + prev
-        ans = await self.ai_helper_discord(interaction.user.display_name, question, prev, generic=True, interaction=interaction)
+                ms += "**Reactions**\n" + "\n".join(
+                    [
+                        f"{r.emoji}: {', '.join([u.display_name async for u in r.users()])}"
+                        for r in m.reactions
+                    ]
+                )
+            prev = ms + "\n" + prev
+        ans = await self.ai_helper_discord(
+            interaction.user.display_name,
+            question,
+            prev,
+            generic=True,
+            interaction=interaction,
+        )
         for line in split_markdown(ans):
             await interaction.followup.send(line)
 
-    async def process_image_context(self, interaction: discord.Interaction, message: discord.Message):
+    async def process_image_context(
+        self, interaction: discord.Interaction, message: discord.Message
+    ):
         if not message.attachments:
-            return await interaction.response.send_message("No attachments found.", ephemeral=True)
+            return await interaction.response.send_message(
+                "No attachments found.", ephemeral=True
+            )
         await interaction.response.send_modal(self.PromptModal(self, message))
 
     # --- Thread Fetching ---
@@ -346,17 +479,17 @@ class KnowledgeCog(commands.Cog):
         threads = []
         if isinstance(channel, discord.ForumChannel):
             threads = [t async for t in channel.archived_threads(limit=None)]
-        elif hasattr(channel, "threads"): # TextChannel with threads
+        elif hasattr(channel, "threads"):  # TextChannel with threads
             threads = list(channel.threads)
-        
+
         for thread in threads:
             acc += f"## {thread.name}\n"
             async for msg in thread.history(oldest_first=True, **history_kwargs):
                 acc += f"{msg.content}\n\n"
                 for attachment in msg.attachments:
-                    if attachment.filename.lower().endswith('.txt'):
+                    if attachment.filename.lower().endswith(".txt"):
                         try:
-                            content = (await attachment.read()).decode('utf-8')
+                            content = (await attachment.read()).decode("utf-8")
                             acc += f"--- Attachment: {attachment.filename} ---\n{content}\n\n"
                         except Exception:
                             pass
@@ -368,7 +501,10 @@ class KnowledgeCog(commands.Cog):
         file_stream = BytesIO(acc.encode("utf-8"))
         log_channel = self.bot.get_channel(KNOWLEDGE_LOG_CHANNEL_ID)
         if log_channel:
-            await log_channel.send("Knowledge Updated", file=discord.File(fp=file_stream, filename="knowledge.txt"))
+            await log_channel.send(
+                "Knowledge Updated",
+                file=discord.File(fp=file_stream, filename="knowledge.txt"),
+            )
 
     async def fetch_messages(self, channel, title, name, **kwargs):
         content = await self._fetch_thread_contents(channel, **kwargs)
@@ -376,7 +512,10 @@ class KnowledgeCog(commands.Cog):
         file_stream = BytesIO(acc.encode("utf-8"))
         log_channel = self.bot.get_channel(KNOWLEDGE_LOG_CHANNEL_ID)
         if log_channel:
-            await log_channel.send(f"{title} Updated", file=discord.File(fp=file_stream, filename=f"{name}.txt"))
+            await log_channel.send(
+                f"{title} Updated",
+                file=discord.File(fp=file_stream, filename=f"{name}.txt"),
+            )
         return acc
 
     @commands.Cog.listener()
@@ -388,7 +527,11 @@ class KnowledgeCog(commands.Cog):
         message_channel_id = message_channel.id
 
         # 1. General Chat Translation & Announcement
-        if message_channel_id == GENERAL_CHANNEL_ID and message.content and not message.author.bot:
+        if (
+            message_channel_id == GENERAL_CHANNEL_ID
+            and message.content
+            and not message.author.bot
+        ):
             # We use a task to not block the listener
             async def translate_and_announce():
                 try:
@@ -396,7 +539,7 @@ class KnowledgeCog(commands.Cog):
                     # Our KnowledgeCog has translate_multi which seems to be the intended modern equivalent.
                     # We'll use translate_multi to translate and log it (or send it to other channels if needed).
                     # For now, following the spirit of "lost during refactoring", we restore the logic.
-                    pass 
+                    pass
                 except Exception as e:
                     log.error(f"Error in general chat translation: {e}")
 
@@ -410,7 +553,9 @@ class KnowledgeCog(commands.Cog):
             async def translate_game():
                 try:
                     # translate_game_message logic - translates and theoretically sends to other channels
-                    await self.translate_multi_with_english(None, message.content, self.messages[-10:])
+                    await self.translate_multi_with_english(
+                        None, message.content, self.messages[-10:]
+                    )
                 except Exception as e:
                     log.error(f"Error translating game message: {e}")
 
@@ -421,21 +566,34 @@ class KnowledgeCog(commands.Cog):
                 self.messages.pop(0)
 
             # In-game /bot command
-            if command_match := re.match(r'\*\*(?P<name>.+):\*\* /(?P<command>\w+) (?P<args>.+)', message.content):
-                player_name = command_match.group('name')
-                command = command_match.group('command')
-                args = command_match.group('args')
+            if command_match := re.match(
+                r"\*\*(?P<name>.+):\*\* /(?P<command>\w+) (?P<args>.+)", message.content
+            ):
+                player_name = command_match.group("name")
+                command = command_match.group("command")
+                args = command_match.group("args")
 
-                if command == 'bot':
+                if command == "bot":
                     BOT_RATE_LIMIT_PERIOD = 10
                     BOT_RATE_LIMIT_MAX = 100
-                    
-                    self.bot_calls = [call for call in self.bot_calls if call > datetime.now() - timedelta(minutes=BOT_RATE_LIMIT_PERIOD)]
+
+                    self.bot_calls = [
+                        call
+                        for call in self.bot_calls
+                        if call
+                        > datetime.now() - timedelta(minutes=BOT_RATE_LIMIT_PERIOD)
+                    ]
                     if len(self.bot_calls) > BOT_RATE_LIMIT_MAX:
-                        time_to_next = (min(self.bot_calls) + timedelta(minutes=BOT_RATE_LIMIT_PERIOD)) - datetime.now()
-                        await announce_in_game(self.bot.http_session, f"I need some rest, please wait {time_to_next.seconds} seconds, or #ask-bot on discord instead!")
+                        time_to_next = (
+                            min(self.bot_calls)
+                            + timedelta(minutes=BOT_RATE_LIMIT_PERIOD)
+                        ) - datetime.now()
+                        await announce_in_game(
+                            self.bot.http_session,
+                            f"I need some rest, please wait {time_to_next.seconds} seconds, or #ask-bot on discord instead!",
+                        )
                         return
-                    
+
                     self.bot_calls.append(datetime.now())
 
                     prev_messages = "\n".join(self.messages[-10:])
@@ -450,9 +608,16 @@ class KnowledgeCog(commands.Cog):
         # Forum channel knowledge update
         if isinstance(message_channel, discord.Thread) and message_channel.parent:
             if message_channel.parent.id == KNOWLEDGE_FORUM_CHANNEL_ID:
+                # pyrefly: ignore [bad-argument-type]
                 await self.fetch_forum_messages(message_channel.parent)
             elif message_channel.parent.id == NEWS_CHANNEL_ID:
-                await self.fetch_messages(message_channel.parent, "Latest News", "news", limit=None, after=datetime.now()-timedelta(days=7))
+                await self.fetch_messages(
+                    message_channel.parent,
+                    "Latest News",
+                    "news",
+                    limit=None,
+                    after=datetime.now() - timedelta(days=7),
+                )
 
         # 4. Bidirectional Language Channel Translation
         if not message.author.bot:
@@ -460,19 +625,31 @@ class KnowledgeCog(commands.Cog):
             # English <-> Other languages
             for lang, channel_id in LANGUAGE_CHANNELS.items():
                 if message_channel_id == channel_id:
-                    if lang != 'english':
-                        res = await self.translate(message.content, lang, self.messages[-5:])
+                    if lang != "english":
+                        res = await self.translate(
+                            message.content, lang, self.messages[-5:]
+                        )
+                        # pyrefly: ignore [missing-attribute]
                         translation = res.translation
                     else:
                         translation = message.content
-                    await announce_in_game(self.bot.http_session, f"{message.author.display_name}: {translation}", color="FFFFFF")
+                    await announce_in_game(
+                        self.bot.http_session,
+                        f"{message.author.display_name}: {translation}",
+                        color="FFFFFF",
+                    )
 
             # Other language channels (General)
             for lang, channel_id in LANGUAGE_CHANNELS_GENERAL.items():
                 if message_channel_id == channel_id:
-                    res = await self.translate(message.content, lang, self.messages[-5:])
+                    res = await self.translate(
+                        message.content, lang, self.messages[-5:]
+                    )
+                    # pyrefly: ignore [missing-attribute]
                     translation = res.translation
                     # Send to general channel
                     gen_chan = self.bot.get_channel(GENERAL_CHANNEL_ID)
                     if gen_chan:
-                        await gen_chan.send(f"**{message.author.display_name}**: {translation}")
+                        await gen_chan.send(
+                            f"**{message.author.display_name}**: {translation}"
+                        )

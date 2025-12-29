@@ -1,8 +1,10 @@
 from typing import Optional, List
 from pydantic import BaseModel
 
+
 class TranslationResponse(BaseModel):
     translation: str
+
 
 class MultiTranslation(BaseModel):
     indonesian: str
@@ -12,6 +14,7 @@ class MultiTranslation(BaseModel):
     tagalog: str
     chinese: str
     japanese: str
+
 
 class MultiTranslationWithEnglish(BaseModel):
     english: str
@@ -23,12 +26,14 @@ class MultiTranslationWithEnglish(BaseModel):
     chinese: str
     japanese: str
 
+
 class ModerationResponse(BaseModel):
     conflict_detected: bool
     players_involved: List[str]
     offenders: List[str]
     severity: int
     announcement: Optional[str]
+
 
 class ParticipantResult(BaseModel):
     rank: int
@@ -37,10 +42,12 @@ class ParticipantResult(BaseModel):
     points: int
     team: Optional[str]
 
+
 class TeamResult(BaseModel):
     rank: int
     team_name: str
     points: int
+
 
 class RaceResult(BaseModel):
     markdown_table: str

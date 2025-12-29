@@ -1,8 +1,10 @@
 import re
 
+
 def is_code_block_open(text):
     """Return True if there's an unclosed code block in the text."""
     return text.count("```") % 2 == 1
+
 
 def split_markdown(text, max_length=2000):
     """
@@ -10,7 +12,7 @@ def split_markdown(text, max_length=2000):
     ensuring that code blocks (and similar formatting) are not broken.
     """
     # Split by paragraphs while preserving the delimiters (empty lines)
-    parts = re.split(r'(\n\s*\n)', text)
+    parts = re.split(r"(\n\s*\n)", text)
     chunks = []
     current_chunk = ""
 
@@ -36,4 +38,3 @@ def split_markdown(text, max_length=2000):
         chunks.append(current_chunk)
 
     return chunks
-
