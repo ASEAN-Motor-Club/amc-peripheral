@@ -75,3 +75,56 @@ This bot requires the following **Privileged Gateway Intents** to be enabled in 
 2.  **Message Content Intent**: Required for reading message contents for AI help, translation, and moderation.
 
 Ensure these are toggled **ON** under the "Bot" tab of your application settings.
+
+## Development
+
+### Pre-Push Hooks (Nix)
+
+If you're using Nix with `direnv`, the pre-push hooks are **automatically installed** when you enter the dev shell:
+
+```bash
+# Enter the dev shell (hooks are installed automatically)
+nix develop
+
+# Or if using direnv, just cd into the project
+direnv allow
+```
+
+The hooks will run the following checks before each `git push`:
+- **ruff**: Linting and formatting
+- **pyrefly**: Type checking
+- **pytest**: Tests
+
+### Pre-Push Hooks (Manual)
+
+If you're not using Nix, you can install the pre-push hook manually:
+
+```bash
+ln -sf ../../scripts/pre-push .git/hooks/pre-push
+```
+
+### Running Checks Manually
+
+```bash
+# Lint
+uv run ruff check .
+
+# Format check
+uv run ruff format --check .
+
+# Type check
+uv run pyrefly check .
+
+# Tests
+uv run pytest
+```
+
+### Code Quality Tools
+
+| Tool | Purpose | Command |
+|------|---------|---------|
+| ruff | Linting & formatting | `uv run ruff check .` |
+| pyrefly | Type checking | `uv run pyrefly check .` |
+| pytest | Testing | `uv run pytest` |
+
+

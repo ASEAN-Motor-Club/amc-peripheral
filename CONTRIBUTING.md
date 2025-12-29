@@ -23,7 +23,8 @@ If you are creating a completely new bot or service:
 ## Code Style
 
 *   We use `ruff` for linting and formatting. Please run `uv run ruff check .` and `uv run ruff format .` before submitting.
-*   Type hinting is encouraged.
+*   We use `pyrefly` for type checking. Run `uv run pyrefly check .` before submitting.
+*   Type hinting is required for new code.
 
 ## Testing
 
