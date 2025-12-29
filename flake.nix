@@ -5,6 +5,11 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
 
+    git-hooks-nix = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     pyproject-nix = {
       url = "github:pyproject-nix/pyproject.nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -30,6 +35,10 @@
     ...
   }:
     flake-parts.lib.mkFlake {inherit inputs;} {
+      imports = [
+        inputs.git-hooks-nix.flakeModule
+      ];
+
       systems = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
 
       perSystem = {
@@ -62,6 +71,43 @@
             ]
           );
       in {
+        # Pre-commit/pre-push hooks configuration
+        pre-commit.settings = {
+          hooks = {
+            # Built-in ruff hooks
+            ruff = {
+              enable = true;
+              stages = ["pre-push"];
+            };
+            ruff-format = {
+              enable = true;
+              stages = ["pre-push"];
+            };
+
+            # Custom hook for pyrefly type checking
+            pyrefly = {
+              enable = true;
+              name = "pyrefly";
+              description = "Type check with pyrefly";
+              entry = "uv run pyrefly check .";
+              language = "system";
+              pass_filenames = false;
+              stages = ["pre-push"];
+            };
+
+            # Custom hook for pytest
+            pytest = {
+              enable = true;
+              name = "pytest";
+              description = "Run tests with pytest";
+              entry = "uv run pytest -q";
+              language = "system";
+              pass_filenames = false;
+              stages = ["pre-push"];
+            };
+          };
+        };
+
         devShells.default = let
           editablePythonSet = pythonSet.overrideScope editableOverlay;
           virtualenv = editablePythonSet.mkVirtualEnv "amc-peripheral-dev-env" workspace.deps.all;
@@ -72,7 +118,8 @@
               pkgs.uv
               pkgs.ffmpeg
               pkgs.pkg-config
-            ];
+              pkgs.gh
+            ] ++ config.pre-commit.settings.enabledPackages;
             env = {
               UV_NO_SYNC = "1";
               UV_PYTHON = editablePythonSet.python.interpreter;
@@ -81,6 +128,7 @@
             shellHook = ''
               unset PYTHONPATH
               export REPO_ROOT=$(git rev-parse --show-toplevel)
+              ${config.pre-commit.installationScript}
             '';
           };
 

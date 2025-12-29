@@ -1,0 +1,29 @@
+#!/bin/bash
+# Pre-push hook for amc-peripheral
+# Install: ln -sf ../../scripts/pre-push .git/hooks/pre-push
+
+set -e
+
+echo "🔍 Running pre-push checks..."
+echo ""
+
+echo "📋 Linting with ruff..."
+uv run ruff check .
+echo "✓ Linting passed"
+echo ""
+
+echo "📝 Checking formatting..."
+uv run ruff format --check .
+echo "✓ Formatting check passed"
+echo ""
+
+echo "🔎 Type checking with pyrefly..."
+uv run pyrefly check .
+echo "✓ Type checking passed"
+echo ""
+
+echo "🧪 Running tests..."
+uv run pytest -q
+echo ""
+
+echo "✅ All pre-push checks passed!"
