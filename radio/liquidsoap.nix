@@ -11,7 +11,7 @@ in {
       radio = pkgs.writeText "radio.liq" ''
       log.level := 5
       server.telnet()
-      default_playlist = single("");
+      default_playlist = blank()
       settings.encoder.metadata.export := ["filename", "artist", "title", "album", "genre", "date", "tracknumber", "comment", "track", "year", "dj", "next", "apic", "metadata_url", "metadata_block_picture", "coverart"]
       queue = request.queue(id="song_requests")
 
