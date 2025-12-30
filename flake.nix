@@ -153,6 +153,11 @@
               type = lib.types.path;
               description = "Path to the cookies file.";
             };
+            dbPath = lib.mkOption {
+              type = lib.types.str;
+              default = "/var/lib/radio/radio.db";
+              description = "Path to the sqlite database.";
+            };
           };
 
           config = lib.mkIf cfg.enable {
@@ -172,6 +177,7 @@
                 GOOGLE_APPLICATION_CREDENTIALS = "/var/lib/radio/adc.json";
                 OPUS_PATH = "${pkgs.libopus}/lib/libopus.so";
                 YT_COOKIES_PATH = "${cfg.cookiesPath}";
+                RADIO_DB_PATH = "${cfg.dbPath}";
               };
               restartIfChanged = true;
               serviceConfig = {
@@ -193,6 +199,7 @@
               environment = {
                 FFMPEG_PATH = "${pkgs.ffmpeg}/bin/ffmpeg";
                 FFPROBE_PATH = "${pkgs.ffmpeg}/bin/ffprobe";
+                RADIO_DB_PATH = "${cfg.dbPath}";
               };
               restartIfChanged = true;
               serviceConfig = {

@@ -26,7 +26,9 @@ def mock_bot():
     return bot
 
 @pytest.fixture
-def cog(mock_bot):
+def cog(mock_bot, tmp_path, monkeypatch):
+    db_path = str(tmp_path / "radio.db")
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.RADIO_DB_PATH", db_path)
     with patch("amc_peripheral.radio.radio_cog.LiquidsoapController"):
         with patch("amc_peripheral.radio.radio_cog.AsyncOpenAI"):
             cog = RadioCog(mock_bot)

@@ -42,8 +42,10 @@ from amc_peripheral.settings import (
     REQUESTS_PATH,
     SONGS_PATH,
     JINGLES_PATH,
+    RADIO_DB_PATH,
     DENO_PATH,
 )
+from amc_peripheral.db import RadioDB
 from amc_peripheral.utils.text_utils import split_markdown
 from amc_peripheral.radio.tts import tts as tts_google
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
@@ -122,6 +124,7 @@ class RadioCog(commands.Cog):
         self.banned_requesters = [
             "LemurStreet",
         ]
+        self.db = RadioDB(RADIO_DB_PATH)
 
     async def cog_load(self):
         self.post_gazette_task.start()
@@ -358,7 +361,11 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
         return "Failed, please try again."
 
     async def request_song(
-        self, youtube_link: str, requester: str, bypass_throttling=False
+        self,
+        youtube_link: str,
+        requester: str,
+        discord_id: str | None = None,
+        bypass_throttling=False,
     ):
         now = datetime.now(self.local_tz)
 
@@ -488,6 +495,18 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
         # Update throttling
         self.user_requests[requester].append(now)
         self.recent_song_queue.append(title)
+
+        # Persist request
+        try:
+            self.db.add_request(
+                discord_id=discord_id,
+                song_title=str(title),
+                song_url=str(webpage_url) if webpage_url else None,
+                requester_name=requester,
+            )
+        except Exception as e:
+            log.error(f"Failed to persist song request: {e}")
+
         return title, duration
 
     async def compile_playlist(self):
@@ -553,6 +572,44 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
         except Exception as e:
             await channel.send(f"Failed to queue {song_name} for {requester}: {e}")
 
+    async def game_like_song(self, requester):
+        metadata = await get_current_song_metadata(self.bot.http_session)
+        if not metadata:
+            return
+
+        song_info = parse_song_info(metadata)
+        if not song_info:
+            return
+
+        song_title = song_info["song_title"]
+        original_requester = song_info.get("requester", "Unknown")
+        self.db.add_like(discord_id=requester, song_title=song_title)
+
+        await announce_in_game(
+            self.bot.http_session,
+            f'{requester} liked "{song_title}" (requested by {original_requester})!',
+            color="FEE75C",
+        )
+
+    async def game_dislike_song(self, requester):
+        metadata = await get_current_song_metadata(self.bot.http_session)
+        if not metadata:
+            return
+
+        song_info = parse_song_info(metadata)
+        if not song_info:
+            return
+
+        song_title = song_info["song_title"]
+        original_requester = song_info.get("requester", "Unknown")
+        self.db.add_dislike(discord_id=requester, song_title=song_title)
+
+        await announce_in_game(
+            self.bot.http_session,
+            f'{requester} disliked "{song_title}" (requested by {original_requester}).',
+            color="FEE75C",
+        )
+
     # --- Commands ---
 
     @app_commands.command(name="update_jingles", description="Update jingles")
@@ -601,13 +658,97 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
 
         try:
             title, _ = await self.request_song(
-                song_or_youtube_link, interaction.user.display_name, bypass_throttling
+                song_or_youtube_link,
+                interaction.user.display_name,
+                str(interaction.user.id),
+                bypass_throttling,
             )
             await interaction.followup.send(
                 f'Downloaded, your song "{title}" will be played soon!', ephemeral=True
             )
         except Exception as e:
             await interaction.followup.send(f"Failed: {e}", ephemeral=True)
+
+    @app_commands.command(name="like", description="Like the currently playing song")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def like_cmd(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        metadata = await get_current_song_metadata(self.bot.http_session)
+        if not metadata:
+            await interaction.followup.send(
+                "No song is currently playing.", ephemeral=True
+            )
+            return
+
+        song_info = parse_song_info(metadata)
+        if not song_info:
+            await interaction.followup.send(
+                "Could not identify the current song.", ephemeral=True
+            )
+            return
+
+        song_title = song_info["song_title"]
+        # Unfortunately liquidsoap doesn't always give us the URL, 
+        # but we have the title which is our primary key for likes
+        
+        self.db.add_like(
+            discord_id=str(interaction.user.id),
+            song_title=song_title
+        )
+        
+        await interaction.followup.send(f"❤️ Liked **{song_title}**!", ephemeral=True)
+
+    @app_commands.command(name="dislike", description="Dislike the currently playing song")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def dislike_cmd(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        metadata = await get_current_song_metadata(self.bot.http_session)
+        if not metadata:
+            await interaction.followup.send(
+                "No song is currently playing.", ephemeral=True
+            )
+            return
+
+        song_info = parse_song_info(metadata)
+        if not song_info:
+            await interaction.followup.send(
+                "Could not identify the current song.", ephemeral=True
+            )
+            return
+
+        song_title = song_info["song_title"]
+        
+        self.db.add_dislike(
+            discord_id=str(interaction.user.id),
+            song_title=song_title
+        )
+        
+        await interaction.followup.send(f"👎 Disliked **{song_title}**.", ephemeral=True)
+
+    @app_commands.command(name="list_likes", description="List song likes and unlikes (Admin only)")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @app_commands.checks.has_permissions(administrator=True)
+    async def list_likes_cmd(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        stats = self.db.get_all_song_stats()
+        if not stats:
+            await interaction.followup.send("No likes or unlikes recorded yet.", ephemeral=True)
+            return
+
+        lines = ["# 📻 Song Popularity Stats\n"]
+        for s in stats:
+            title = s["song_title"]
+            likes = s["like_count"]
+            dislikes = s["dislike_count"]
+            if likes > 0 or dislikes > 0:
+                lines.append(f"- **{title}**: ❤️ {likes} | 👎 {dislikes}")
+
+        content = "\n".join(lines)
+        for chunk in split_markdown(content):
+            await interaction.followup.send(chunk, ephemeral=True)
 
     @app_commands.command(
         name="recompile_playlist", description="Recompile radio playlist"
@@ -844,19 +985,24 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
 
         elif channel_id == GAME_CHAT_CHANNEL_ID:
             if command_match := re.match(
-                r"\*\*(?P<name>.+):\*\* /(?P<command>\w+) (?P<args>.+)", message.content
+                r"\*\*(?P<name>.+):\*\* /(?P<command>\w+)(?: (?P<args>.+))?",
+                message.content,
             ):
                 name = command_match.group("name")
                 command = command_match.group("command")
                 args = command_match.group("args")
                 log.info(f"Received command {name} {command} {args}")
 
-                if command == "song_request":
+                if command == "song_request" and args:
                     song_name = args
                     if name in self.banned_requesters:
                         return
                     self.bot.loop.create_task(self.game_request_song(song_name, name))
-                elif command == "event_mode":
+                elif command == "like":
+                    self.bot.loop.create_task(self.game_like_song(name))
+                elif command == "dislike":
+                    self.bot.loop.create_task(self.game_dislike_song(name))
+                elif command == "event_mode" and args:
                     self.bot.loop.create_task(
                         asyncio.to_thread(
                             self.lq._send_command, f"var.set event_mode = {args}"

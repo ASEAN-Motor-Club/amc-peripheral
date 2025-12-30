@@ -74,6 +74,7 @@ PLAYLIST_PATH = os.environ.get("PLAYLIST_PATH", "/var/lib/radio/playlists")
 REQUESTS_PATH = os.environ.get("REQUESTS_PATH", "/var/lib/radio/requests")
 SONGS_PATH = os.environ.get("SONGS_PATH", "/var/lib/radio/songs")
 JINGLES_PATH = os.environ.get("JINGLES_PATH", "/var/lib/radio/jingles")
+RADIO_DB_PATH = os.environ.get("RADIO_DB_PATH", os.path.join(RADIO_PATH, "radio.db"))
 DENO_PATH = os.environ.get(
     "DENO_PATH", "/nix/store/vqh16h1p153k533b66i9h1i91b0k816v-deno-1.46.3/bin/deno"
 )

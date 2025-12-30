@@ -30,7 +30,9 @@ def mock_bot():
 
 
 @pytest.fixture
-def cog(mock_bot):
+def cog(mock_bot, tmp_path, monkeypatch):
+    db_path = str(tmp_path / "radio.db")
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.RADIO_DB_PATH", db_path)
     return RadioCog(mock_bot)
 
 
