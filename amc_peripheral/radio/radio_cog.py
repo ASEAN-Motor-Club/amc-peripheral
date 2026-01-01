@@ -467,9 +467,9 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
                     "add_metadata": True,
                 },
             ],
-            'ffmpeg_location': os.environ.get('FFMPEG_PATH'),
-            'prefer_ffmpeg': True,
-            'retries': 5,
+            "ffmpeg_location": os.environ.get("FFMPEG_PATH"),
+            "prefer_ffmpeg": True,
+            "retries": 5,
             "js_runtimes": {"deno": {"path": DENO_PATH}},
         }
 
@@ -689,17 +689,16 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
             return
 
         song_title = song_info["song_title"]
-        # Unfortunately liquidsoap doesn't always give us the URL, 
+        # Unfortunately liquidsoap doesn't always give us the URL,
         # but we have the title which is our primary key for likes
-        
-        self.db.add_like(
-            discord_id=str(interaction.user.id),
-            song_title=song_title
-        )
-        
+
+        self.db.add_like(discord_id=str(interaction.user.id), song_title=song_title)
+
         await interaction.followup.send(f"❤️ Liked **{song_title}**!", ephemeral=True)
 
-    @app_commands.command(name="dislike", description="Dislike the currently playing song")
+    @app_commands.command(
+        name="dislike", description="Dislike the currently playing song"
+    )
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def dislike_cmd(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -719,15 +718,16 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
             return
 
         song_title = song_info["song_title"]
-        
-        self.db.add_dislike(
-            discord_id=str(interaction.user.id),
-            song_title=song_title
-        )
-        
-        await interaction.followup.send(f"👎 Disliked **{song_title}**.", ephemeral=True)
 
-    @app_commands.command(name="list_likes", description="List song likes and unlikes (Admin only)")
+        self.db.add_dislike(discord_id=str(interaction.user.id), song_title=song_title)
+
+        await interaction.followup.send(
+            f"👎 Disliked **{song_title}**.", ephemeral=True
+        )
+
+    @app_commands.command(
+        name="list_likes", description="List song likes and unlikes (Admin only)"
+    )
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     @app_commands.checks.has_permissions(administrator=True)
     async def list_likes_cmd(self, interaction: discord.Interaction):
@@ -735,7 +735,9 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
 
         stats = self.db.get_all_song_stats()
         if not stats:
-            await interaction.followup.send("No likes or unlikes recorded yet.", ephemeral=True)
+            await interaction.followup.send(
+                "No likes or unlikes recorded yet.", ephemeral=True
+            )
             return
 
         lines = ["# 📻 Song Popularity Stats\n"]
@@ -841,6 +843,10 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
         if chan:
             for chunk in split_markdown(gazette):
                 await chan.send(chunk)
+
+    @post_gazette_task.before_loop
+    async def before_post_gazette_task(self):
+        await self.bot.wait_until_ready()
 
     async def _update_news_logic(self):
         channel = self.bot.get_channel(DYNAMIC_NEWS_CHANNEL)
