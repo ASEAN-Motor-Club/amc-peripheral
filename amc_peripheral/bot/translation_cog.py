@@ -574,32 +574,45 @@ class TranslationCog(commands.Cog):
             await interaction.followup.send("This command only works in text channels.", ephemeral=True)
             return
         
-        messages = [msg async for msg in interaction.channel.history(limit=count)]
-        lines = []
-        
-        for msg in reversed(messages):
-            _, content = self.extract_username_and_content(msg.content)
-            if content.strip():  # Skip empty messages
-                result = await self.translate_to_language(content, target_lang)
-                # pyrefly: ignore [missing-attribute]
-                if result and result.translation:
-                    lines.append(f"**{msg.author.display_name}**: {result.translation}")
-        
-        if lines:
-            # Split into chunks if too long (Discord limit: 2000 chars)
-            output = "\n".join(lines)
-            if len(output) > 2000:
-                # Send first chunk
-                await interaction.followup.send(output[:2000], ephemeral=True)
-                # Send remaining in chunks
-                remaining = output[2000:]
-                while remaining:
-                    await interaction.followup.send(remaining[:2000], ephemeral=True)
-                    remaining = remaining[2000:]
+        try:
+            messages = [msg async for msg in interaction.channel.history(limit=count)]
+            lines = []
+            errors = 0
+            
+            for msg in reversed(messages):
+                _, content = self.extract_username_and_content(msg.content)
+                if content.strip():  # Skip empty messages
+                    try:
+                        result = await self.translate_to_language(content, target_lang)
+                        # pyrefly: ignore [missing-attribute]
+                        if result and result.translation:
+                            lines.append(f"**{msg.author.display_name}**: {result.translation}")
+                    except Exception as e:
+                        log.error(f"Translation error for message {msg.id}: {e}")
+                        errors += 1
+                        # Continue with other messages instead of failing completely
+            
+            if lines:
+                # Split into chunks if too long (Discord limit: 2000 chars)
+                output = "\n".join(lines)
+                if errors > 0:
+                    output += f"\n\n⚠️ {errors} message(s) failed to translate"
+                
+                if len(output) > 2000:
+                    # Send first chunk
+                    await interaction.followup.send(output[:2000], ephemeral=True)
+                    # Send remaining in chunks
+                    remaining = output[2000:]
+                    while remaining:
+                        await interaction.followup.send(remaining[:2000], ephemeral=True)
+                        remaining = remaining[2000:]
+                else:
+                    await interaction.followup.send(output, ephemeral=True)
             else:
-                await interaction.followup.send(output, ephemeral=True)
-        else:
-            await interaction.followup.send("No messages to translate.", ephemeral=True)
+                await interaction.followup.send("No messages to translate.", ephemeral=True)
+        except Exception as e:
+            log.error(f"Error in translate_thread: {e}")
+            await interaction.followup.send(f"❌ Translation failed: {str(e)}", ephemeral=True)
 
     async def _handle_translate_message(self, interaction: discord.Interaction, message: discord.Message):
         """Translate a single message to your language."""
