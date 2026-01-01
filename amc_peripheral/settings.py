@@ -144,7 +144,7 @@ LANGUAGE_CHANNELS_GENERAL = get_env_dict(
 # JARVIS Dev Bot
 DISCORD_TOKEN_DEV = os.environ.get("DISCORD_TOKEN_DEV")
 JARVIS_REPO_PATH = os.environ.get("JARVIS_REPO_PATH")
-JARVIS_AI_MODEL = os.environ.get("JARVIS_AI_MODEL", "anthropic/claude-3.7-sonnet")
+JARVIS_AI_MODEL = os.environ.get("JARVIS_AI_MODEL", "anthropic/claude-sonnet-4.5")
 JARVIS_ALLOWED_CHANNELS = get_env_dict(
     "JARVIS_ALLOWED_CHANNELS",
     [],  # Empty list = all channels allowed

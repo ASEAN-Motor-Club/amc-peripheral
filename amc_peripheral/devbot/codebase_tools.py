@@ -4,7 +4,6 @@ Codebase exploration tools for JARVIS.
 Provides utilities to search, read, and navigate through the monorepo source code.
 """
 
-import os
 import json
 import subprocess
 from pathlib import Path

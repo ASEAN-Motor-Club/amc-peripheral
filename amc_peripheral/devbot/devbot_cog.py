@@ -193,7 +193,7 @@ class DevBotCog(commands.Cog):
                     return
 
                 # Build system message
-                system_message = f"""You are JARVIS (Just A Rather Very Intelligent System), a helpful AI assistant for the ASEAN Motor Club server project.
+                system_message = """You are JARVIS (Just A Rather Very Intelligent System), a helpful AI assistant for the ASEAN Motor Club server project.
 
 Your role is to help developers understand and work with the monorepo codebase. You have access to tools that let you:
 - Search for files by name or pattern
