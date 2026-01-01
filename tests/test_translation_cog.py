@@ -1,5 +1,7 @@
 import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock, AsyncMock, patch
+import tempfile
+import os
 from amc_peripheral.bot.translation_cog import TranslationCog
 
 
@@ -11,12 +13,17 @@ def mock_bot():
     bot.http_session = AsyncMock()
     bot.loop = MagicMock()
     bot.loop.create_task = MagicMock()
+    bot.tree = MagicMock()
+    bot.tree.add_command = MagicMock()
     return bot
 
 
 @pytest.fixture
-def cog(mock_bot):
-    return TranslationCog(mock_bot)
+def cog(mock_bot, tmp_path):
+    # Use temp db path for tests
+    db_path = str(tmp_path / "test_radio.db")
+    with patch("amc_peripheral.bot.translation_cog.RADIO_DB_PATH", db_path):
+        return TranslationCog(mock_bot)
 
 
 def test_translation_cog_init(cog):

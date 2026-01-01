@@ -1,5 +1,6 @@
 import logging
 import discord
+from discord import app_commands, Locale
 from discord.ext import commands
 from openai import AsyncOpenAI
 from amc_peripheral.settings import (
@@ -12,6 +13,7 @@ from amc_peripheral.settings import (
     LANGUAGE_CHANNELS_GENERAL,
     ECO_GAME_CHAT_CHANNEL_ID,
     ECO_GAME_CHAT_CHINESE_CHANNEL_ID,
+    RADIO_DB_PATH,
 )
 from amc_peripheral.bot.ai_models import (
     TranslationResponse,
@@ -19,6 +21,7 @@ from amc_peripheral.bot.ai_models import (
     MultiTranslationWithEnglish,
 )
 from amc_peripheral.utils.game_utils import announce_in_game
+from amc_peripheral.db import RadioDB
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +42,19 @@ Adapt internet slang naturally between languages:
 # Bot ID for the MotorTown game chat relay bot
 GAME_CHAT_BOT_ID = 1375420925910057041
 
+# Locale to language mapping for context menu commands
+LOCALE_TO_LANGUAGE = {
+    Locale.thai: "Thai",
+    Locale.chinese: "Chinese",
+    Locale.taiwan_chinese: "Chinese",
+    Locale.indonesian: "Indonesian",
+    Locale.vietnamese: "Vietnamese",
+    Locale.japanese: "Japanese",
+}
+
+# Supported languages for slash command choices
+SUPPORTED_LANGUAGES = ["English", "Chinese", "Indonesian", "Thai", "Vietnamese", "Japanese"]
+
 
 class TranslationCog(commands.Cog):
     """Handles all translation functionality for Discord channels."""
@@ -52,6 +68,26 @@ class TranslationCog(commands.Cog):
         self.messages = []  # Game chat messages (LANGUAGE_CHANNELS)
         self.general_messages = []  # General channel messages (LANGUAGE_CHANNELS_GENERAL)
         self.eco_game_messages = []  # Eco game chat messages
+        # Database for user language preferences
+        self.db = RadioDB(RADIO_DB_PATH)
+        
+        # Register context menus on bot tree (can't be defined as class methods)
+        self._register_context_menus()
+
+    def _register_context_menus(self):
+        """Register context menu commands on the bot's command tree."""
+        cog = self  # Closure reference
+        
+        @app_commands.context_menu(name="Translate Message")
+        async def translate_message_menu(interaction: discord.Interaction, message: discord.Message):
+            await cog._handle_translate_message(interaction, message)
+        
+        @app_commands.context_menu(name="Translate Last 10")
+        async def translate_batch_menu(interaction: discord.Interaction, message: discord.Message):
+            await cog._handle_translate_batch(interaction, message)
+        
+        self.bot.tree.add_command(translate_message_menu)
+        self.bot.tree.add_command(translate_batch_menu)
 
     # --- Translation Methods ---
 
@@ -461,3 +497,170 @@ class TranslationCog(commands.Cog):
                     log.error(f"Error translating Chinese message to Eco game chat: {e}")
 
             self.bot.loop.create_task(translate_chinese_to_eco_game())
+
+    # --- Slash Commands ---
+
+    async def get_user_language(self, user_id: int) -> str:
+        """Get user's preferred language with fallback chain: DB -> Discord locale -> English."""
+        # Check database first
+        lang = self.db.get_user_language(str(user_id))
+        if lang:
+            return lang
+        return "English"  # Default fallback
+
+    @app_commands.command(name="set-language", description="Set your preferred language for translations")
+    @app_commands.describe(language="Your preferred language")
+    @app_commands.choices(language=[
+        app_commands.Choice(name=lang, value=lang) for lang in SUPPORTED_LANGUAGES
+    ])
+    async def set_language(self, interaction: discord.Interaction, language: str):
+        """Set user's preferred language."""
+        success = self.db.set_user_language(str(interaction.user.id), language)
+        if success:
+            await interaction.response.send_message(
+                f"✅ Your preferred language has been set to **{language}**.",
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                "❌ Failed to save language preference. Please try again.",
+                ephemeral=True
+            )
+
+    @app_commands.command(name="translate", description="Translate text to a language")
+    @app_commands.describe(
+        text="The text to translate",
+        to_language="Target language (defaults to your saved language)"
+    )
+    @app_commands.choices(to_language=[
+        app_commands.Choice(name=lang, value=lang) for lang in SUPPORTED_LANGUAGES
+    ])
+    async def translate_text(self, interaction: discord.Interaction, text: str, to_language: str | None = None):
+        """Translate text to specified language."""
+        await interaction.response.defer(ephemeral=True)
+        
+        # Use provided language or user's saved preference
+        target_lang = to_language or await self.get_user_language(interaction.user.id)
+        
+        result = await self.translate_to_language(text, target_lang)
+        
+        # pyrefly: ignore [missing-attribute]
+        if result and result.translation:
+            embed = discord.Embed(
+                title=f"Translation → {target_lang}",
+                description=result.translation,
+                color=discord.Color.blurple()
+            )
+            embed.add_field(name="Original", value=text[:1024], inline=False)
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        else:
+            await interaction.followup.send("Translation failed.", ephemeral=True)
+
+    @app_commands.command(name="translate_thread", description="Translate recent messages in this channel")
+    @app_commands.describe(count="Number of messages to translate (default: 10)")
+    async def translate_thread(self, interaction: discord.Interaction, count: app_commands.Range[int, 1, 25] = 10):
+        """Translate last N messages in current channel."""
+        await interaction.response.defer(ephemeral=True)
+        target_lang = await self.get_user_language(interaction.user.id)
+        
+        # Ensure channel supports history
+        if not isinstance(interaction.channel, (discord.TextChannel, discord.Thread, discord.VoiceChannel)):
+            await interaction.followup.send("This command only works in text channels.", ephemeral=True)
+            return
+        
+        messages = [msg async for msg in interaction.channel.history(limit=count)]
+        lines = []
+        
+        for msg in reversed(messages):
+            _, content = self.extract_username_and_content(msg.content)
+            if content.strip():  # Skip empty messages
+                result = await self.translate_to_language(content, target_lang)
+                # pyrefly: ignore [missing-attribute]
+                if result and result.translation:
+                    lines.append(f"**{msg.author.display_name}**: {result.translation}")
+        
+        if lines:
+            # Split into chunks if too long (Discord limit: 2000 chars)
+            output = "\n".join(lines)
+            if len(output) > 2000:
+                # Send first chunk
+                await interaction.followup.send(output[:2000], ephemeral=True)
+                # Send remaining in chunks
+                remaining = output[2000:]
+                while remaining:
+                    await interaction.followup.send(remaining[:2000], ephemeral=True)
+                    remaining = remaining[2000:]
+            else:
+                await interaction.followup.send(output, ephemeral=True)
+        else:
+            await interaction.followup.send("No messages to translate.", ephemeral=True)
+
+    async def _handle_translate_message(self, interaction: discord.Interaction, message: discord.Message):
+        """Translate a single message to your language."""
+        await interaction.response.defer(ephemeral=True)
+        
+        # Get user's preferred language with locale fallback
+        target_lang = await self.get_user_language(interaction.user.id)
+        if target_lang == "English" and interaction.locale in LOCALE_TO_LANGUAGE:
+            target_lang = LOCALE_TO_LANGUAGE[interaction.locale]
+        
+        _, content = self.extract_username_and_content(message.content)
+        
+        if not content.strip():
+            await interaction.followup.send("No text to translate.", ephemeral=True)
+            return
+        
+        result = await self.translate_to_language(content, target_lang)
+        
+        # pyrefly: ignore [missing-attribute]
+        if result and result.translation:
+            embed = discord.Embed(
+                title=f"Translation → {target_lang}",
+                description=result.translation,
+                color=discord.Color.blurple()
+            )
+            embed.add_field(name="Original", value=content[:1024], inline=False)
+            embed.set_footer(text=f"From: {message.author.display_name}")
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        else:
+            await interaction.followup.send("Translation failed.", ephemeral=True)
+
+    async def _handle_translate_batch(self, interaction: discord.Interaction, message: discord.Message):
+        """Translate from clicked message and 9 messages before it."""
+        await interaction.response.defer(ephemeral=True)
+        
+        # Get user's preferred language with locale fallback
+        target_lang = await self.get_user_language(interaction.user.id)
+        if target_lang == "English" and interaction.locale in LOCALE_TO_LANGUAGE:
+            target_lang = LOCALE_TO_LANGUAGE[interaction.locale]
+        
+        # Ensure channel supports history
+        if not isinstance(interaction.channel, (discord.TextChannel, discord.Thread, discord.VoiceChannel)):
+            await interaction.followup.send("This command only works in text channels.", ephemeral=True)
+            return
+        
+        # Fetch 9 messages before the clicked message
+        messages = [msg async for msg in interaction.channel.history(limit=9, before=message.created_at)]
+        messages.insert(0, message)  # Include clicked message at start
+        
+        lines = []
+        for msg in reversed(messages):
+            _, content = self.extract_username_and_content(msg.content)
+            if content.strip():
+                result = await self.translate_to_language(content, target_lang)
+                # pyrefly: ignore [missing-attribute]
+                if result and result.translation:
+                    lines.append(f"**{msg.author.display_name}**: {result.translation}")
+        
+        if lines:
+            output = "\n".join(lines)
+            if len(output) > 2000:
+                await interaction.followup.send(output[:2000], ephemeral=True)
+                remaining = output[2000:]
+                while remaining:
+                    await interaction.followup.send(remaining[:2000], ephemeral=True)
+                    remaining = remaining[2000:]
+            else:
+                await interaction.followup.send(output, ephemeral=True)
+        else:
+            await interaction.followup.send("No messages to translate.", ephemeral=True)

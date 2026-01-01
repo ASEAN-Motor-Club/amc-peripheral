@@ -39,6 +39,15 @@ class RadioDB:
             # pyrefly: ignore [missing-attribute]
             self.db["song_likes"].create_index(["discord_id", "song_title"], unique=True)
 
+        # User Language Preferences Table
+        if "user_language_preferences" not in self.db.table_names():
+            # pyrefly: ignore [missing-attribute]
+            self.db["user_language_preferences"].create({
+                "discord_id": str,
+                "language": str,  # English, Chinese, Indonesian, Thai, Vietnamese, Japanese
+                "updated_at": str
+            }, pk="discord_id")
+
     def add_request(self, discord_id: str | None, song_title: str, song_url: str | None, requester_name: str) -> int | None:
         """Record a song request."""
         row = {
@@ -133,3 +142,26 @@ class RadioDB:
             ORDER BY like_count DESC, dislike_count DESC
         """
         return list(self.db.query(query))
+
+    def set_user_language(self, discord_id: str, language: str) -> bool:
+        """Set or update user's preferred language."""
+        row = {
+            "discord_id": str(discord_id),
+            "language": language,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        try:
+            # pyrefly: ignore [missing-attribute]
+            self.db["user_language_preferences"].upsert(row, pk="discord_id")
+            return True
+        except Exception:
+            return False
+
+    def get_user_language(self, discord_id: str) -> str | None:
+        """Get user's preferred language, returns None if not set."""
+        rows = list(self.db["user_language_preferences"].rows_where(
+            "discord_id = ?", [str(discord_id)]
+        ))
+        if rows:
+            return rows[0]["language"]
+        return None
