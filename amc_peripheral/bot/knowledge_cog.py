@@ -17,13 +17,8 @@ from amc_peripheral.settings import (
     GAME_CHAT_CHANNEL_ID,
     KNOWLEDGE_FORUM_CHANNEL_ID,
     NEWS_CHANNEL_ID,
-    LANGUAGE_CHANNELS,
-    LANGUAGE_CHANNELS_GENERAL,
 )
 from amc_peripheral.bot.ai_models import (
-    TranslationResponse,
-    MultiTranslation,
-    MultiTranslationWithEnglish,
     ModerationResponse,
 )
 from amc_peripheral.utils.text_utils import split_markdown
@@ -360,64 +355,6 @@ class KnowledgeCog(commands.Cog):
         self.user_requests[player_name].append(now)
         return response_message.content if response_message else "Empty response"
 
-    async def translate(self, message, language, prev_messages=[]):
-        completion = await self.openai_client_openrouter.beta.chat.completions.parse(
-            model="gpt-4.1-mini-2025-04-14",
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"Translate message from {language} to English (or vice versa)",
-                },
-                {
-                    "role": "user",
-                    "content": "### PREVIOUS MESSAGES:\n" + "\n".join(prev_messages),
-                },
-                {"role": "user", "content": f"### MESSAGE TO TRANSLATE:\n{message}"},
-            ],
-            response_format=TranslationResponse,
-        )
-        return completion.choices[0].message.parsed
-
-    async def translate_multi_with_english(self, player_name, message, messages=[]):
-        sender = f" (from {player_name})" if player_name else ""
-        completion = await self.openai_client_openrouter.beta.chat.completions.parse(
-            model=DEFAULT_AI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Translate message into English, Chinese, Indonesian, Malay, Thai and Tagalog. Casual tone, no rude words. Handle slash commands by only translating params.",
-                },
-                {
-                    "role": "user",
-                    "content": "### PREVIOUS MESSAGES:\n" + "\n".join(messages),
-                },
-                {
-                    "role": "user",
-                    "content": f"### MESSAGE TO TRANSLATE{sender}:\n\n{message}",
-                },
-            ],
-            response_format=MultiTranslationWithEnglish,
-        )
-        return completion.choices[0].message.parsed
-
-    async def translate_multi(self, message, messages=[]):
-        completion = await self.openai_client_openrouter.beta.chat.completions.parse(
-            model="gpt-4.1-mini-2025-04-14",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Translate message into Chinese, Indonesian, Malay, Thai and Tagalog. Casual tone. Preserve sender [username].",
-                },
-                {
-                    "role": "user",
-                    "content": "### PREVIOUS MESSAGES:\n" + "\n".join(messages),
-                },
-                {"role": "user", "content": f"### MESSAGE TO TRANSLATE:\n{message}"},
-            ],
-            response_format=MultiTranslation,
-        )
-        return completion.choices[0].message.parsed
-
     async def moderation(self, prev_messages=[]):
         completion = await self.openai_client_openrouter.beta.chat.completions.parse(
             model="google/gemini-2.0-flash-lite-001",
@@ -598,27 +535,9 @@ class KnowledgeCog(commands.Cog):
                 except Exception as e:
                     log.error(f"Error in general chat translation: {e}")
 
-        # 2. Game Chat Handling (Synced from In-game)
+        # 2. Game Chat Handling (Synced from In-game) - /bot command only
+        # Note: Translation is handled by TranslationCog
         if message.author.bot and message_channel_id == GAME_CHAT_CHANNEL_ID:
-            if not self.messages:
-                async for msg in message_channel.history(limit=15):
-                    self.messages.append(msg.content)
-
-            # Translation
-            async def translate_game():
-                try:
-                    # translate_game_message logic - translates and theoretically sends to other channels
-                    await self.translate_multi_with_english(
-                        None, message.content, self.messages[-10:]
-                    )
-                except Exception as e:
-                    log.error(f"Error translating game message: {e}")
-
-            self.bot.loop.create_task(translate_game())
-
-            self.messages.append(message.content)
-            if len(self.messages) > 15:
-                self.messages.pop(0)
 
             # In-game /bot command
             if command_match := re.match(
@@ -673,38 +592,3 @@ class KnowledgeCog(commands.Cog):
                     limit=None,
                     after=datetime.now() - timedelta(days=7),
                 )
-
-        # 4. Bidirectional Language Channel Translation
-        if not message.author.bot:
-            # Game -> Discord and Discord -> Game
-            # English <-> Other languages
-            for lang, channel_id in LANGUAGE_CHANNELS.items():
-                if message_channel_id == channel_id:
-                    if lang != "english":
-                        res = await self.translate(
-                            message.content, lang, self.messages[-5:]
-                        )
-                        # pyrefly: ignore [missing-attribute]
-                        translation = res.translation
-                    else:
-                        translation = message.content
-                    await announce_in_game(
-                        self.bot.http_session,
-                        f"{message.author.display_name}: {translation}",
-                        color="FFFFFF",
-                    )
-
-            # Other language channels (General)
-            for lang, channel_id in LANGUAGE_CHANNELS_GENERAL.items():
-                if message_channel_id == channel_id:
-                    res = await self.translate(
-                        message.content, lang, self.messages[-5:]
-                    )
-                    # pyrefly: ignore [missing-attribute]
-                    translation = res.translation
-                    # Send to general channel
-                    gen_chan = self.bot.get_channel(GENERAL_CHANNEL_ID)
-                    if gen_chan:
-                        await gen_chan.send(
-                            f"**{message.author.display_name}**: {translation}"
-                        )

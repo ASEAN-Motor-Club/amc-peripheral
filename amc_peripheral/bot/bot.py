@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 from ..settings import DISCORD_TOKEN, GUILD_ID
 from .knowledge_cog import KnowledgeCog
+from .translation_cog import TranslationCog
 from .utils_cog import UtilsCog
 
 log = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ class AMCBot(commands.Bot):
         self.http_session = aiohttp.ClientSession()
         # Load Cogs
         await self.add_cog(KnowledgeCog(self))
+        await self.add_cog(TranslationCog(self))
         await self.add_cog(UtilsCog(self))
 
         # Sync tree

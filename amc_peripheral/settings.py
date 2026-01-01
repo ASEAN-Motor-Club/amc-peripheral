@@ -23,6 +23,7 @@ STATIC_PATH = os.environ.get("STATIC_PATH", "/srv/www")
 
 # AI Config
 DEFAULT_AI_MODEL = os.environ.get("DEFAULT_AI_MODEL", "google/gemini-3-flash-preview")
+TRANSLATION_AI_MODEL = os.environ.get("TRANSLATION_AI_MODEL", "openai/gpt-oss-20b")
 LOCAL_TIMEZONE = os.environ.get("LOCAL_TIMEZONE", "Asia/Bangkok")
 
 # Channels
@@ -44,6 +45,10 @@ KNOWLEDGE_FORUM_CHANNEL_ID = int(
 NEWS_CHANNEL_ID = int(os.environ.get("NEWS_CHANNEL_ID", "1359088371514867746"))
 KNOWLEDGE_LOG_CHANNEL_ID = int(
     os.environ.get("KNOWLEDGE_LOG_CHANNEL_ID", "1359033463864299594")
+)
+ECO_GAME_CHAT_CHANNEL_ID = int(os.environ.get("ECO_GAME_CHAT_CHANNEL_ID", "1455485088799129741"))
+ECO_GAME_CHAT_CHINESE_CHANNEL_ID = int(
+    os.environ.get("ECO_GAME_CHAT_CHINESE_CHANNEL_ID", "1456228574313844870")
 )
 TIMEZONES_CHANNEL_ID = int(
     os.environ.get("TIMEZONES_CHANNEL_ID", "1355738561865056346")
