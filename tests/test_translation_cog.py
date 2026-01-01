@@ -1,7 +1,5 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
-import tempfile
-import os
 from amc_peripheral.bot.translation_cog import TranslationCog
 
 
