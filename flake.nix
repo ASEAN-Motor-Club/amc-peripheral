@@ -158,7 +158,17 @@
               default = "/var/lib/radio/radio.db";
               description = "Path to the sqlite database.";
             };
+            jarvisRepoPath = lib.mkOption {
+              type = lib.types.str;
+              description = "Path to the monorepo source in Nix store for JARVIS.";
+            };
+            jarvisAiModel = lib.mkOption {
+              type = lib.types.str;
+              default = "anthropic/claude-3.7-sonnet";
+              description = "Default AI model for JARVIS.";
+            };
           };
+
 
           config = lib.mkIf cfg.enable {
             systemd.services.amc-radio = {
@@ -210,6 +220,26 @@
               };
               script = ''
                 ${self.packages.${pkgs.system}.default}/bin/amc_bot
+              '';
+            };
+
+            systemd.services.amc-jarvis = {
+              wantedBy = ["multi-user.target"];
+              after = ["network.target"];
+              description = "AMC JARVIS Bot";
+              environment = {
+                JARVIS_REPO_PATH = cfg.jarvisRepoPath;
+                JARVIS_AI_MODEL = cfg.jarvisAiModel;
+              };
+              restartIfChanged = true;
+              serviceConfig = {
+                Type = "simple";
+                Restart = "on-failure";
+                RestartSec = "10";
+                EnvironmentFile = "${cfg.environmentFile}";
+              };
+              script = ''
+                ${self.packages.${pkgs.system}.default}/bin/amc_jarvis
               '';
             };
           };

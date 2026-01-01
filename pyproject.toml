@@ -38,6 +38,7 @@ dependencies = [
 [project.scripts]
 amc_bot = "amc_peripheral.bot.bot:main"
 amc_radio = "amc_peripheral.radio.radio:main"
+amc_jarvis = "amc_peripheral.devbot.devbot:main"
 
 [build-system]
 requires = ["hatchling", "editables"]
