@@ -7,7 +7,7 @@ Provides utilities to search, read, and navigate through the monorepo source cod
 import json
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 
 class CodebaseTools:
@@ -38,7 +38,7 @@ class CodebaseTools:
             ".DS_Store",
         ]
 
-    def search_files(self, pattern: str, max_results: int = 20) -> list[dict]:
+    def search_files(self, pattern: str, max_results: int = 20) -> list[dict[str, Any]]:
         """
         Search for files matching a glob pattern.
 
@@ -135,7 +135,7 @@ class CodebaseTools:
 
     def grep_search(
         self, query: str, path: str = ".", max_results: int = 30
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Search for text pattern using ripgrep.
 
@@ -210,7 +210,7 @@ class CodebaseTools:
 
     def _fallback_grep(
         self, query: str, path: str, max_results: int
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Fallback grep implementation using Python."""
         matches = []
         search_path = self.repo_path / path
@@ -249,7 +249,7 @@ class CodebaseTools:
 
         return matches
 
-    def list_directory(self, path: str = ".", recursive: bool = False) -> list[dict]:
+    def list_directory(self, path: str = ".", recursive: bool = False) -> list[dict[str, Any]]:
         """
         List contents of a directory.
 
@@ -284,13 +284,11 @@ class CodebaseTools:
                         continue
 
                     rel_path = item.relative_to(dir_path)
-                    # pyrefly: ignore [bad-argument-type]
-                    entry = {
+                    entry: dict[str, Any] = {
                         "name": str(rel_path),
                         "type": "directory" if item.is_dir() else "file",
                     }
                     if item.is_file():
-                        # pyrefly: ignore [bad-argument-type]
                         entry["size"] = item.stat().st_size
                     results.append(entry)
 
@@ -308,19 +306,16 @@ class CodebaseTools:
                     if item.name in self.exclude_patterns:
                         continue
 
-                    # pyrefly: ignore [bad-argument-type]
-                    entry = {
+                    entry: dict[str, Any] = {
                         "name": item.name,
                         "type": "directory" if item.is_dir() else "file",
                     }
                     if item.is_file():
-                        # pyrefly: ignore [bad-argument-type]
                         entry["size"] = item.stat().st_size
                     elif item.is_dir():
                         # Count children for directories
                         try:
                             num_children = sum(1 for _ in item.iterdir())
-                            # pyrefly: ignore [bad-argument-type]
                             entry["num_children"] = num_children
                         except PermissionError:
                             pass

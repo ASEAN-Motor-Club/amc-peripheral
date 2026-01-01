@@ -6,6 +6,7 @@ Handles @mentions, tool calling, and guide generation.
 
 import json
 import logging
+from typing import Any, Optional
 import discord
 from discord.ext import commands
 from openai import AsyncOpenAI
@@ -37,18 +38,16 @@ class DevBotCog(commands.Cog):
         )
 
         # Initialize codebase tools
+        self.tools: Optional[CodebaseTools] = None
         try:
-            # pyrefly: ignore [bad-argument-type]
-            self.tools = CodebaseTools(self.repo_path)
+            self.tools = CodebaseTools(self.repo_path)  # type: ignore[arg-type]
             log.info(f"JARVIS initialized with repo path: {self.repo_path}")
         except Exception as e:
             log.error(f"Failed to initialize codebase tools: {e}")
-            # pyrefly: ignore [bad-argument-type]
             self.tools = None
 
         # Tool definitions for LLM
-        # pyrefly: ignore [bad-argument-type]
-        self.tool_definitions = [
+        self.tool_definitions: list[dict[str, Any]] = [
             {
                 "type": "function",
                 "function": {
@@ -303,7 +302,7 @@ Be concise but thorough. Format code blocks with appropriate language tags."""
 
         return "I'm sorry, I couldn't complete your request due to complexity. Please try simplifying your question."
 
-    async def _execute_tool(self, function_name: str, arguments: dict) -> any:  # type: ignore
+    async def _execute_tool(self, function_name: str, arguments: dict) -> Any:
         """
         Execute a codebase tool.
 
@@ -314,6 +313,9 @@ Be concise but thorough. Format code blocks with appropriate language tags."""
         Returns:
             Tool result (serializable)
         """
+        if self.tools is None:
+            return {"error": "Codebase tools not initialized"}
+        
         try:
             if function_name == "search_files":
                 return self.tools.search_files(
