@@ -247,7 +247,7 @@ Be concise but thorough. Format code blocks with appropriate language tags."""
         Returns:
             Final response text
         """
-        max_iterations = 10  # Prevent infinite loops
+        max_iterations = 20  # Prevent infinite loops
         iteration = 0
 
         while iteration < max_iterations:
