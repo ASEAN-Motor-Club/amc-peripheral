@@ -194,9 +194,13 @@ class TranslationCog(commands.Cog):
                                         )
                                     
                                     if res_target and res_target.translation:
-                                        await target_channel.send(
-                                            f"**{message.author.display_name}**: {res_target.translation}"
-                                        )
+                                        # Don't prepend bot's own name
+                                        if message.author == self.bot.user:
+                                            await target_channel.send(res_target.translation)
+                                        else:
+                                            await target_channel.send(
+                                                f"**{message.author.display_name}**: {res_target.translation}"
+                                            )
                             except Exception as e:
                                 log.error(f"Error translating from {lang} to {target_lang}: {e}")
                     
@@ -215,9 +219,13 @@ class TranslationCog(commands.Cog):
                     translation = res.translation
                     gen_chan = self.bot.get_channel(GENERAL_CHANNEL_ID)
                     if gen_chan:
-                        await gen_chan.send(
-                            f"**{message.author.display_name}**: {translation}"
-                        )
+                        # Don't prepend bot's own name
+                        if message.author == self.bot.user:
+                            await gen_chan.send(translation)
+                        else:
+                            await gen_chan.send(
+                                f"**{message.author.display_name}**: {translation}"
+                            )
                     # Track context for future translations
                     self.general_messages.append(f"{message.author.display_name}: {message.content}")
                     if len(self.general_messages) > 15:
@@ -233,9 +241,13 @@ class TranslationCog(commands.Cog):
                                 message.content, lang, self.general_messages[-5:]
                             )
                             if res and res.translation:
-                                await target_channel.send(
-                                    f"**{message.author.display_name}**: {res.translation}"
-                                )
+                                # Don't prepend bot's own name
+                                if message.author == self.bot.user:
+                                    await target_channel.send(res.translation)
+                                else:
+                                    await target_channel.send(
+                                        f"**{message.author.display_name}**: {res.translation}"
+                                    )
                     except Exception as e:
                         log.error(f"Error translating from general to {lang}: {e}")
                 # Track context for future translations
@@ -249,7 +261,11 @@ class TranslationCog(commands.Cog):
             async def translate_eco_game_to_chinese():
                 try:
                     author_name = message.author.display_name
-                    content = f"**{author_name}**: {message.content}"
+                    # Don't include bot's own name in the content
+                    if message.author == self.bot.user:
+                        content = message.content
+                    else:
+                        content = f"**{author_name}**: {message.content}"
 
                     result = await self.translate_to_language(
                         content, "Chinese", self.eco_game_messages[-10:]
@@ -272,7 +288,11 @@ class TranslationCog(commands.Cog):
             async def translate_chinese_to_eco_game():
                 try:
                     author_name = message.author.display_name
-                    content = f"**{author_name}**: {message.content}"
+                    # Don't include bot's own name in the content
+                    if message.author == self.bot.user:
+                        content = message.content
+                    else:
+                        content = f"**{author_name}**: {message.content}"
 
                     result = await self.translate_to_language(
                         content, "English", self.eco_game_messages[-10:]
