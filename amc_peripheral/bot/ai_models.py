@@ -8,10 +8,8 @@ class TranslationResponse(BaseModel):
 
 class MultiTranslation(BaseModel):
     indonesian: str
-    malay: str
     thai: str
     vietnamese: str
-    tagalog: str
     chinese: str
     japanese: str
 
@@ -19,10 +17,8 @@ class MultiTranslation(BaseModel):
 class MultiTranslationWithEnglish(BaseModel):
     english: str
     indonesian: str
-    malay: str
     thai: str
     vietnamese: str
-    tagalog: str
     chinese: str
     japanese: str
 
