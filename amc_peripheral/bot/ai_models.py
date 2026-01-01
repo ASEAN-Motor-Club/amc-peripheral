@@ -49,3 +49,9 @@ class RaceResult(BaseModel):
     markdown_table: str
     participants: List[ParticipantResult]
     team_results: List[TeamResult]
+
+
+class ThreadTranslationResponse(BaseModel):
+    """Response for translating a conversation thread in one go."""
+    translated_thread: str
+

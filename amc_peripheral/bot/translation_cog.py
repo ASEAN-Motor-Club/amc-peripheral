@@ -19,6 +19,7 @@ from amc_peripheral.bot.ai_models import (
     TranslationResponse,
     MultiTranslation,
     MultiTranslationWithEnglish,
+    ThreadTranslationResponse,
 )
 from amc_peripheral.utils.game_utils import announce_in_game
 from amc_peripheral.db import RadioDB
@@ -575,33 +576,50 @@ class TranslationCog(commands.Cog):
             return
         
         try:
+            # Fetch messages and build thread
             messages = [msg async for msg in interaction.channel.history(limit=count)]
-            lines = []
-            errors = 0
+            thread_lines = []
             
             for msg in reversed(messages):
                 _, content = self.extract_username_and_content(msg.content)
-                if content.strip():  # Skip empty messages
-                    try:
-                        result = await self.translate_to_language(content, target_lang)
-                        # pyrefly: ignore [missing-attribute]
-                        if result and result.translation:
-                            lines.append(f"**{msg.author.display_name}**: {result.translation}")
-                    except Exception as e:
-                        log.error(f"Translation error for message {msg.id}: {e}")
-                        errors += 1
-                        # Continue with other messages instead of failing completely
+                if content.strip():
+                    thread_lines.append(f"{msg.author.display_name}: {content}")
             
-            if lines:
-                # Split into chunks if too long (Discord limit: 2000 chars)
-                output = "\n".join(lines)
-                if errors > 0:
-                    output += f"\n\n⚠️ {errors} message(s) failed to translate"
+            if not thread_lines:
+                await interaction.followup.send("No messages to translate.", ephemeral=True)
+                return
+            
+            # Translate entire thread in one API call
+            thread_text = "\n".join(thread_lines)
+            completion = await self.openai_client_openrouter.beta.chat.completions.parse(
+                model=TRANSLATION_AI_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            f"Translate the following conversation thread to {target_lang}. "
+                            "Preserve the format 'Username: message' exactly. "
+                            "Only translate the message content, keep usernames unchanged. "
+                            "Auto-detect source languages. "
+                            f"\n\nGLOSSARY:\n{GAME_GLOSSARY}\n\nCULTURAL ADAPTATION:\n{CULTURAL_ADAPTATION}"
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": f"### THREAD TO TRANSLATE:\n{thread_text}",
+                    },
+                ],
+                response_format=ThreadTranslationResponse,
+            )
+            
+            result = completion.choices[0].message.parsed
+            # pyrefly: ignore [missing-attribute]
+            if result and result.translated_thread:
+                output = result.translated_thread
                 
+                # Split into chunks if too long (Discord limit: 2000 chars)
                 if len(output) > 2000:
-                    # Send first chunk
                     await interaction.followup.send(output[:2000], ephemeral=True)
-                    # Send remaining in chunks
                     remaining = output[2000:]
                     while remaining:
                         await interaction.followup.send(remaining[:2000], ephemeral=True)
@@ -609,7 +627,8 @@ class TranslationCog(commands.Cog):
                 else:
                     await interaction.followup.send(output, ephemeral=True)
             else:
-                await interaction.followup.send("No messages to translate.", ephemeral=True)
+                await interaction.followup.send("❌ Translation failed: No result returned", ephemeral=True)
+                
         except Exception as e:
             log.error(f"Error in translate_thread: {e}")
             await interaction.followup.send(f"❌ Translation failed: {str(e)}", ephemeral=True)
