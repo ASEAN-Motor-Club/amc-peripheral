@@ -32,7 +32,8 @@ class TranslationCog(commands.Cog):
             api_key=OPENAI_API_KEY_OPENROUTER, base_url="https://openrouter.ai/api/v1"
         )
         # Message history for context
-        self.messages = []  # Game chat messages
+        self.messages = []  # Game chat messages (LANGUAGE_CHANNELS)
+        self.general_messages = []  # General channel messages (LANGUAGE_CHANNELS_GENERAL)
         self.eco_game_messages = []  # Eco game chat messages
 
     # --- Translation Methods ---
@@ -44,7 +45,7 @@ class TranslationCog(commands.Cog):
             messages=[
                 {
                     "role": "system",
-                    "content": f"Translate message from {language} to English (or vice versa)",
+                    "content": f"Translate message from {language} to English (or vice versa). IMPORTANT: If the message contains a username format like '**Username**: message' or 'Username: message', preserve the username exactly and only translate the message content.",
                 },
                 {
                     "role": "user",
@@ -64,7 +65,7 @@ class TranslationCog(commands.Cog):
             messages=[
                 {
                     "role": "system",
-                    "content": "Translate message into English, Chinese, Indonesian, Malay, Thai and Tagalog. Casual tone, no rude words. Handle slash commands by only translating params.",
+                    "content": "Translate message into English, Chinese, Indonesian, Malay, Thai and Tagalog. Casual tone, no rude words. Handle slash commands by only translating params. IMPORTANT: If the message contains a username format like '**Username**: message' or 'Username: message', preserve the username exactly and only translate the message content.",
                 },
                 {
                     "role": "user",
@@ -105,7 +106,7 @@ class TranslationCog(commands.Cog):
             messages=[
                 {
                     "role": "system",
-                    "content": f"Translate the following message to {target_language}. Preserve the original meaning and tone. If the message is already in {target_language}, return it unchanged.",
+                    "content": f"Translate the following message to {target_language}. IMPORTANT: Preserve the username format exactly (e.g., '**Username**: message' should become '**Username**: translated_message'). Only translate the message content, not the username. Preserve the original meaning and tone. If the message is already in {target_language}, return it unchanged.",
                 },
                 {
                     "role": "user",
@@ -150,7 +151,7 @@ class TranslationCog(commands.Cog):
 
         # 2. Bidirectional Language Channel Translation (user messages only)
         if not message.author.bot:
-            # Discord language channels -> In-game
+            # Discord language channels -> In-game (all languages)
             for lang, channel_id in LANGUAGE_CHANNELS.items():
                 if message_channel_id == channel_id:
                     if lang != "english":
@@ -160,18 +161,55 @@ class TranslationCog(commands.Cog):
                         # pyrefly: ignore [missing-attribute]
                         translation = res.translation
                     else:
+                        # For English, no translation needed
                         translation = message.content
+                        # Create dummy response for consistency in bidirectional logic
+                        res = type('obj', (object,), {'translation': message.content})()
+                    
                     await announce_in_game(
                         self.bot.http_session,
                         f"{message.author.display_name}: {translation}",
                         color="FFFFFF",
                     )
+                    
+                    # BIDIRECTIONAL: Translate to all other language channels
+                    for target_lang, target_channel_id in LANGUAGE_CHANNELS.items():
+                        if target_lang != lang and target_channel_id != channel_id:
+                            try:
+                                target_channel = self.bot.get_channel(target_channel_id)
+                                if target_channel:
+                                    # Translate from source language to target language
+                                    if lang == "english":
+                                        # English -> Target language
+                                        res_target = await self.translate_to_language(
+                                            message.content, target_lang, self.messages[-5:]
+                                        )
+                                    elif target_lang == "english":
+                                        # Source language -> English (already have this)
+                                        res_target = res
+                                    else:
+                                        # Source language -> English -> Target language
+                                        res_target = await self.translate_to_language(
+                                            translation, target_lang, self.messages[-5:]
+                                        )
+                                    
+                                    if res_target and res_target.translation:
+                                        await target_channel.send(
+                                            f"**{message.author.display_name}**: {res_target.translation}"
+                                        )
+                            except Exception as e:
+                                log.error(f"Error translating from {lang} to {target_lang}: {e}")
+                    
+                    # Track context for future translations
+                    self.messages.append(f"{message.author.display_name}: {message.content}")
+                    if len(self.messages) > 15:
+                        self.messages.pop(0)
 
-            # Language channels -> General channel
+            # Language channels -> General channel (non-English to English)
             for lang, channel_id in LANGUAGE_CHANNELS_GENERAL.items():
                 if message_channel_id == channel_id:
                     res = await self.translate(
-                        message.content, lang, self.messages[-5:]
+                        message.content, lang, self.general_messages[-5:]
                     )
                     # pyrefly: ignore [missing-attribute]
                     translation = res.translation
@@ -180,8 +218,33 @@ class TranslationCog(commands.Cog):
                         await gen_chan.send(
                             f"**{message.author.display_name}**: {translation}"
                         )
+                    # Track context for future translations
+                    self.general_messages.append(f"{message.author.display_name}: {message.content}")
+                    if len(self.general_messages) > 15:
+                        self.general_messages.pop(0)
+            
+            # BIDIRECTIONAL: General channel -> Language channels (English to all)
+            if message_channel_id == GENERAL_CHANNEL_ID:
+                for lang, channel_id in LANGUAGE_CHANNELS_GENERAL.items():
+                    try:
+                        target_channel = self.bot.get_channel(channel_id)
+                        if target_channel:
+                            res = await self.translate_to_language(
+                                message.content, lang, self.general_messages[-5:]
+                            )
+                            if res and res.translation:
+                                await target_channel.send(
+                                    f"**{message.author.display_name}**: {res.translation}"
+                                )
+                    except Exception as e:
+                        log.error(f"Error translating from general to {lang}: {e}")
+                # Track context for future translations
+                self.general_messages.append(f"{message.author.display_name}: {message.content}")
+                if len(self.general_messages) > 15:
+                    self.general_messages.pop(0)
 
-        # 3. Eco Game Chat Channel -> Chinese Translation (both users and bots)
+        # 3. BIDIRECTIONAL Eco Game Chat Translation (both users and bots)
+        # English/Mixed -> Chinese
         if message_channel_id == ECO_GAME_CHAT_CHANNEL_ID and message.content:
             async def translate_eco_game_to_chinese():
                 try:
@@ -203,3 +266,27 @@ class TranslationCog(commands.Cog):
                     log.error(f"Error translating Eco game chat message to Chinese: {e}")
 
             self.bot.loop.create_task(translate_eco_game_to_chinese())
+        
+        # Chinese -> English/Mixed
+        if message_channel_id == ECO_GAME_CHAT_CHINESE_CHANNEL_ID and message.content:
+            async def translate_chinese_to_eco_game():
+                try:
+                    author_name = message.author.display_name
+                    content = f"**{author_name}**: {message.content}"
+
+                    result = await self.translate_to_language(
+                        content, "English", self.eco_game_messages[-10:]
+                    )
+
+                    eco_channel = self.bot.get_channel(ECO_GAME_CHAT_CHANNEL_ID)
+                    if eco_channel and result and result.translation:
+                        await eco_channel.send(result.translation)
+                    
+                    # Track context for future translations
+                    self.eco_game_messages.append(content)
+                    if len(self.eco_game_messages) > 15:
+                        self.eco_game_messages.pop(0)
+                except Exception as e:
+                    log.error(f"Error translating Chinese message to Eco game chat: {e}")
+
+            self.bot.loop.create_task(translate_chinese_to_eco_game())
