@@ -557,11 +557,17 @@ class TranslationCog(commands.Cog):
             await interaction.followup.send("Translation failed.", ephemeral=True)
 
     @app_commands.command(name="translate_thread", description="Translate recent messages in this channel")
-    @app_commands.describe(count="Number of messages to translate (default: 10)")
-    async def translate_thread(self, interaction: discord.Interaction, count: app_commands.Range[int, 1, 25] = 10):
+    @app_commands.describe(
+        count="Number of messages to translate (default: 10)",
+        to_language="Target language (defaults to your saved language)"
+    )
+    @app_commands.choices(to_language=[
+        app_commands.Choice(name=lang, value=lang) for lang in SUPPORTED_LANGUAGES
+    ])
+    async def translate_thread(self, interaction: discord.Interaction, count: app_commands.Range[int, 1, 25] = 10, to_language: str | None = None):
         """Translate last N messages in current channel."""
         await interaction.response.defer(ephemeral=True)
-        target_lang = await self.get_user_language(interaction.user.id)
+        target_lang = to_language or await self.get_user_language(interaction.user.id)
         
         # Ensure channel supports history
         if not isinstance(interaction.channel, (discord.TextChannel, discord.Thread, discord.VoiceChannel)):
