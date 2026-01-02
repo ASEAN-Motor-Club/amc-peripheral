@@ -325,3 +325,71 @@ class CodebaseTools:
 
         except Exception as e:
             return [{"error": f"List directory failed: {str(e)}"}]
+
+    def nix_hash_url(self, url: str, unpack: bool = True) -> dict[str, Any]:
+        """
+        Calculate the Nix hash for a URL.
+
+        Uses nix-prefetch-url to download and hash the URL content.
+        This is useful for getting hashes for fetchzip, fetchurl, etc.
+
+        Args:
+            url: The URL to fetch and hash
+            unpack: Whether to unpack the archive (for fetchzip). Default True.
+
+        Returns:
+            Dict with 'hash' (SRI format) or 'error' key
+        """
+        try:
+            # Build command - use --unpack for archives (fetchzip)
+            cmd = ["nix-prefetch-url", "--type", "sha256"]
+            if unpack:
+                cmd.append("--unpack")
+            cmd.append(url)
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 minute timeout for large downloads
+            )
+
+            if result.returncode != 0:
+                error_msg = result.stderr.strip() or "Unknown error"
+                return {"error": f"nix-prefetch-url failed: {error_msg}"}
+
+            # Get the NAR hash from stdout
+            nar_hash = result.stdout.strip()
+
+            # Convert to SRI format for use in Nix
+            sri_result = subprocess.run(
+                ["nix", "hash", "to-sri", "--type", "sha256", nar_hash],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            if sri_result.returncode != 0:
+                # Fallback: return the base32 hash if SRI conversion fails
+                return {
+                    "hash": nar_hash,
+                    "format": "base32",
+                    "note": "Use this hash directly in Nix expressions",
+                }
+
+            sri_hash = sri_result.stdout.strip()
+            return {
+                "hash": sri_hash,
+                "format": "sri",
+                "url": url,
+                "note": "Use this hash in the 'hash' attribute of fetchzip/fetchurl",
+            }
+
+        except subprocess.TimeoutExpired:
+            return {"error": "Download timed out (exceeded 5 minutes)"}
+        except FileNotFoundError:
+            return {
+                "error": "nix-prefetch-url not found. Ensure Nix is installed and in PATH."
+            }
+        except Exception as e:
+            return {"error": f"Failed to calculate hash: {str(e)}"}

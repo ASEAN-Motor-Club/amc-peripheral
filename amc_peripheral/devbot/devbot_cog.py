@@ -144,6 +144,28 @@ class DevBotCog(commands.Cog):
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "nix_hash_url",
+                    "description": "Calculate the Nix hash for a URL. Returns an SRI hash suitable for use in fetchzip, fetchurl, or other Nix fetchers. Use this when you need to add a mod or package that downloads from a URL.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                "description": "The URL to fetch and calculate the hash for (e.g., 'https://mod.io/download/...')",
+                            },
+                            "unpack": {
+                                "type": "boolean",
+                                "description": "Whether to unpack the archive before hashing (use True for fetchzip, False for fetchurl). Default: True",
+                                "default": True,
+                            },
+                        },
+                        "required": ["url"],
+                    },
+                },
+            },
         ]
 
     @commands.Cog.listener()
@@ -338,6 +360,11 @@ Be concise but thorough. Format code blocks with appropriate language tags."""
                 return self.tools.list_directory(
                     path=arguments.get("path", "."),
                     recursive=arguments.get("recursive", False),
+                )
+            elif function_name == "nix_hash_url":
+                return self.tools.nix_hash_url(
+                    url=arguments["url"],
+                    unpack=arguments.get("unpack", True),
                 )
             else:
                 return {"error": f"Unknown tool: {function_name}"}

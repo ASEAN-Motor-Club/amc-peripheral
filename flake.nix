@@ -231,6 +231,7 @@
                 JARVIS_REPO_PATH = cfg.jarvisRepoPath;
                 JARVIS_AI_MODEL = cfg.jarvisAiModel;
               };
+              path = [pkgs.nix];
               restartIfChanged = true;
               serviceConfig = {
                 Type = "simple";
