@@ -237,21 +237,6 @@ Results are limited to 100 rows. Database is read-only.""",
     async def ai_helper(self, player_name, question, prev_messages):
         now = datetime.now(self.local_tz)
 
-        # Throttling
-        fifteen_minutes_ago = now - timedelta(minutes=15)
-        self.user_requests[player_name] = [
-            t
-            for t in self.user_requests.get(player_name, [])
-            if t > fifteen_minutes_ago
-        ]
-
-        five_minutes_ago = now - timedelta(minutes=5)
-        last_5 = sum(1 for t in self.user_requests[player_name] if t > five_minutes_ago)
-        if last_5 >= 4:
-            raise Exception("Quota exceeded (3/5min)")
-        if len(self.user_requests[player_name]) >= 5:
-            raise Exception("Quota exceeded (4/15min)")
-
         # Fetch active players
         async with self.bot.http_session.get(
             "https://server.aseanmotorclub.com/api/active_players/"
