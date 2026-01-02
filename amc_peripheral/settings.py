@@ -84,6 +84,9 @@ DENO_PATH = os.environ.get(
     "DENO_PATH", "/nix/store/vqh16h1p153k533b66i9h1i91b0k816v-deno-1.46.3/bin/deno"
 )
 
+# Game Database
+GAME_DB_PATH = os.environ.get("GAME_DB_PATH", "/var/lib/motortown/gamedata.db")
+
 
 # Mapping Helpers
 def get_env_dict(var_name, default):

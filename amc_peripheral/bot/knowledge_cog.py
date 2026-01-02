@@ -28,6 +28,7 @@ from amc_peripheral.utils.discord_utils import (
 )
 from amc_peripheral.utils.game_utils import announce_in_game
 from amc_peripheral.radio.radio_server import get_current_song
+from amc_peripheral.bot import game_db
 
 # --- Cog Implementation ---
 
@@ -72,6 +73,14 @@ class KnowledgeCog(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         """Initialize knowledge base from forum channel on startup."""
+        # Validate game database schema
+        if not game_db.validate_schema():
+            log.warning(
+                "Game database schema validation failed - game queries may not work correctly"
+            )
+        else:
+            log.info("Game database schema validated successfully")
+        
         forum_channel = self.bot.get_channel(KNOWLEDGE_FORUM_CHANNEL_ID)
         if forum_channel is None:
             log.warning(
@@ -149,6 +158,32 @@ class KnowledgeCog(commands.Cog):
                         },
                     },
                 },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "query_game_database",
+                        "description": "Query MotorTown game data (vehicles, parts, cargo). Returns structured data about game items.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query_type": {
+                                    "type": "string",
+                                    "enum": ["vehicle_info", "cargo_info", "part_info", "heaviest_cargo", "cargo_by_space"],
+                                    "description": "Type of query to perform"
+                                },
+                                "search_term": {
+                                    "type": "string",
+                                    "description": "Name or ID to search for (required for _info queries)"
+                                },
+                                "filters": {
+                                    "type": "object",
+                                    "description": "Optional filters (e.g., vehicle_type, cargo_type, max_cost, space_type)"
+                                }
+                            },
+                            "required": ["query_type"],
+                        },
+                    },
+                },
             ]
 
         messages = [
@@ -204,6 +239,12 @@ class KnowledgeCog(commands.Cog):
                         function_args.get("start_time"),
                         function_args.get("end_time"),
                         function_args.get("timezone"),
+                    )
+                elif function_name == "query_game_database":
+                    res = game_db.handle_game_query(
+                        function_args.get("query_type"),
+                        function_args.get("search_term"),
+                        function_args.get("filters"),
                     )
                 else:
                     res = f"Error: Unknown function '{function_name}'"
