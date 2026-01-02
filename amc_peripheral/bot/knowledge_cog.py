@@ -8,6 +8,7 @@ from io import BytesIO
 from discord import app_commands
 from discord.ext import commands
 from openai import AsyncOpenAI
+from typing import Optional, List, Any
 from amc_peripheral.settings import (
     OPENAI_API_KEY_OPENROUTER,
     KNOWLEDGE_LOG_CHANNEL_ID,
@@ -17,6 +18,7 @@ from amc_peripheral.settings import (
     GAME_CHAT_CHANNEL_ID,
     KNOWLEDGE_FORUM_CHANNEL_ID,
     NEWS_CHANNEL_ID,
+    BACKEND_API_URL,
 )
 from amc_peripheral.bot.ai_models import (
     ModerationResponse,
@@ -47,6 +49,7 @@ class KnowledgeCog(commands.Cog):
 
         # state
         self.knowledge_system_message = ""
+        self.game_schema_description = ""
         self.user_requests = {}
         self.messages = []
         self.moderation_cooldown = [20]
@@ -81,6 +84,10 @@ class KnowledgeCog(commands.Cog):
         else:
             log.info("Game database schema validated successfully")
         
+        # Load game schema description for LLM tool
+        self.game_schema_description = game_db.get_schema_description()
+        log.info(f"Game schema loaded: {len(self.game_schema_description)} characters")
+        
         forum_channel = self.bot.get_channel(KNOWLEDGE_FORUM_CHANNEL_ID)
         if forum_channel is None:
             log.warning(
@@ -107,7 +114,6 @@ class KnowledgeCog(commands.Cog):
         question,
         prev_messages_str,
         generic=False,
-        smart=False,
         interaction=None,
     ):
         now = datetime.now(self.local_tz)
@@ -118,8 +124,8 @@ class KnowledgeCog(commands.Cog):
 
         model = DEFAULT_AI_MODEL
         tools = []
-        if smart:
-            tools = [
+        model = DEFAULT_AI_MODEL
+        tools = [
                 {
                     "type": "function",
                     "function": {
@@ -162,11 +168,9 @@ class KnowledgeCog(commands.Cog):
                     "type": "function",
                     "function": {
                         "name": "query_game_database",
-                        "description": """Query MotorTown game database with SQL. The database contains:
-- vehicles: id, name, vehicle_type, truck_class, cost, comport, is_taxiable, etc.
-- vehicle_parts: id, name, part_type, cost, mass_kg, etc.
-- active_cargos: id, name, cargo_type, actual_weight_kg, payment_per_km, volume_size, etc.
-- cargo_weights: cargo_id, total_weight_kg, blueprint_path
+                        "description": f"""Query MotorTown game database with SQL.
+
+{self.game_schema_description}
 
 Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates (COUNT, AVG, SUM, MIN, MAX).
 Results are limited to 100 rows. Database is read-only.""",
@@ -179,6 +183,30 @@ Results are limited to 100 rows. Database is read-only.""",
                                 }
                             },
                             "required": ["sql"],
+                        },
+                    },
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_current_subsidies",
+                        "description": "Get the current active government subsidies for cargo deliveries. Returns subsidy rules including cargo types, reward percentages, and source/destination requirements.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {},
+                            "required": [],
+                        },
+                    },
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_server_commands",
+                        "description": "Get a list of all available server-side commands that players can use in-game. Returns command names, shortcuts/aliases, descriptions, and categories.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {},
+                            "required": [],
                         },
                     },
                 },
@@ -202,77 +230,9 @@ Results are limited to 100 rows. Database is read-only.""",
             {"role": "user", "content": f"### Message from {player_name}\n{question}"}
         )
 
-        # pyrefly: ignore [no-matching-overload]
-        completion = await self.openai_client_openrouter.chat.completions.create(
-            model=model,
-            reasoning_effort="medium",
-            messages=messages,
-            tools=tools,
-            tool_choice="auto",
-        )
+        # Use agentic loop (tools are always available)
+        return await self._call_llm_with_tools(messages, tools, model, interaction=interaction)
 
-        response_message = completion.choices[0].message if completion.choices else None
-
-        if response_message and response_message.tool_calls:
-            messages.append(response_message)
-            for tool_call in response_message.tool_calls:
-                function_name = tool_call.function.name
-                function_args = json.loads(tool_call.function.arguments)
-
-                if function_name == "create_poll":
-                    res = await actual_discord_poll_creator(
-                        self.bot,
-                        function_args.get("question"),
-                        function_args.get("options"),
-                        (function_args.get("channel_id") or interaction.channel.id)
-                        if interaction
-                        else None,
-                    )
-                elif function_name == "create_scheduled_event":
-                    res = await actual_discord_event_creator(
-                        interaction.guild if interaction else None,
-                        function_args.get("name"),
-                        function_args.get("description"),
-                        function_args.get("location"),
-                        function_args.get("start_time"),
-                        function_args.get("end_time"),
-                        function_args.get("timezone"),
-                    )
-                elif function_name == "query_game_database":
-                    sql = function_args.get("sql")
-                    if sql:
-                        result = game_db.execute_raw_query(sql)
-                        res = json.dumps(result, indent=2)
-                    else:
-                        res = json.dumps({"error": "sql parameter required"})
-                else:
-                    res = f"Error: Unknown function '{function_name}'"
-
-                messages.append(
-                    {
-                        "tool_call_id": tool_call.id,
-                        "role": "tool",
-                        "name": function_name,
-                        "content": res,
-                    }
-                )
-
-            # pyrefly: ignore [no-matching-overload]
-            second_completion = (
-                # pyrefly: ignore [no-matching-overload]
-                await self.openai_client_openrouter.chat.completions.create(
-                    model=model,
-                    reasoning_effort="medium",
-                    messages=messages,
-                )
-            )
-            return (
-                second_completion.choices[0].message.content
-                if second_completion.choices
-                else "Failed to get follow-up"
-            )
-
-        return response_message.content if response_message else "Empty response"
 
     async def ai_helper(self, player_name, question, prev_messages):
         now = datetime.now(self.local_tz)
@@ -345,55 +305,55 @@ Results are limited to 100 rows. Database is read-only.""",
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "query_game_database",
+                    "description": f"""Query MotorTown game database with SQL.
+
+{self.game_schema_description}
+
+Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates (COUNT, AVG, SUM, MIN, MAX).
+Results are limited to 100 rows. Database is read-only.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "sql": {
+                                "type": "string",
+                                "description": "SQL SELECT query to execute"
+                            }
+                        },
+                        "required": ["sql"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_current_subsidies",
+                    "description": "Get the current active government subsidies for cargo deliveries. Returns subsidy rules including cargo types, reward percentages, and source/destination requirements.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_server_commands",
+                    "description": "Get a list of all available server-side commands that players can use in-game. Returns command names, shortcuts/aliases, descriptions, and categories.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                },
+            },
         ]
 
-        # pyrefly: ignore [no-matching-overload]
-        completion = await self.openai_client_openrouter.chat.completions.create(
-            model=DEFAULT_AI_MODEL,
-            reasoning_effort="medium",
-            messages=messages,
-            tools=tools,
-            tool_choice="auto",
-        )
-
-        response_message = completion.choices[0].message if completion.choices else None
-
-        # Handle tool calls
-        if response_message and response_message.tool_calls:
-            messages.append(response_message)
-            for tool_call in response_message.tool_calls:
-                function_name = tool_call.function.name
-
-                if function_name == "get_currently_playing_song":
-                    current_song = await get_current_song(self.bot.http_session)
-                    res = current_song or "No song is currently playing or unable to fetch song info."
-                else:
-                    res = f"Error: Unknown function '{function_name}'"
-
-                messages.append(
-                    {
-                        "tool_call_id": tool_call.id,
-                        "role": "tool",
-                        "name": function_name,
-                        "content": res,
-                    }
-                )
-
-            # pyrefly: ignore [no-matching-overload]
-            second_completion = await self.openai_client_openrouter.chat.completions.create(
-                model=DEFAULT_AI_MODEL,
-                reasoning_effort="medium",
-                messages=messages,
-            )
-            self.user_requests[player_name].append(now)
-            return (
-                second_completion.choices[0].message.content
-                if second_completion.choices
-                else "Failed to get response"
-            )
-
-        self.user_requests[player_name].append(now)
-        return response_message.content if response_message else "Empty response"
+        return await self._call_llm_with_tools(messages, tools, DEFAULT_AI_MODEL)
 
     async def moderation(self, prev_messages=[]):
         completion = await self.openai_client_openrouter.beta.chat.completions.parse(
@@ -467,6 +427,192 @@ Results are limited to 100 rows. Database is read-only.""",
                 await interaction.followup.send(response.choices[0].message.content)
             except Exception as e:
                 await interaction.followup.send(f"Error: {e}", ephemeral=True)
+
+    # --- Agentic Loop Infrastructure ---
+
+    async def _call_llm_with_tools(
+        self, messages: list[dict], tools: list[dict], model: str, interaction: Optional[discord.Interaction] = None
+    ) -> str:
+        """
+        Call LLM with tool support and handle tool calls iteratively.
+
+        Args:
+            messages: Conversation messages
+            tools: Tool definitions
+            model: AI model to use
+
+        Returns:
+            Final response text
+        """
+        max_iterations = 10  # Fewer than JARVIS since game queries are simpler
+        iteration = 0
+
+        while iteration < max_iterations:
+            iteration += 1
+
+            # Call LLM
+            # pyrefly: ignore [no-matching-overload]
+            completion = await self.openai_client_openrouter.chat.completions.create(
+                model=model,
+                reasoning_effort="medium",
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+            )
+
+            response_message = (
+                completion.choices[0].message if completion.choices else None
+            )
+
+            if not response_message:
+                return "I received an empty response from my AI backend."
+
+            # If no tool calls, return the content
+            if not response_message.tool_calls:
+                return response_message.content or "I don't have a response."
+
+            # Add assistant message to conversation
+            messages.append(response_message)
+
+            # Execute tool calls
+            for tool_call in response_message.tool_calls:
+                function_name = tool_call.function.name
+                function_args = json.loads(tool_call.function.arguments)
+
+                log.info(
+                    f"Knowledge bot calling tool: {function_name} with args: {function_args}"
+                )
+
+                # Call the appropriate tool
+                tool_result = await self._execute_tool(function_name, function_args, interaction)
+
+                # Add tool result to messages
+                messages.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "role": "tool",
+                        "name": function_name,
+                        "content": tool_result,
+                    }
+                )
+
+            # Continue loop to get final response with tool results
+
+        return "I'm sorry, I couldn't complete your request due to complexity. Please try simplifying your question."
+
+    async def _execute_tool(
+        self, function_name: str, arguments: dict, interaction: Optional[discord.Interaction] = None
+    ) -> str:
+        """
+        Execute a knowledge bot  tool.
+
+        Args:
+            function_name: Name of the tool
+            arguments: Tool arguments
+
+        Returns:
+            Tool result as string
+        """
+        try:
+            if function_name == "create_poll":
+                question = arguments.get("question") or ""
+                options = arguments.get("options") or []
+                res = await actual_discord_poll_creator(
+                    self.bot,
+                    question,
+                    options,
+                    arguments.get("channel_id"),
+                )
+                return res
+
+            elif function_name == "create_scheduled_event":
+                # Only allow admins to create events
+                # pyrefly: ignore [missing-attribute]
+                if not interaction or not isinstance(interaction.user, discord.Member) or not interaction.user.guild_permissions.administrator:
+                    return "Error: You do not have permission to create scheduled events."
+                    
+                res = await actual_discord_event_creator(
+                    interaction.guild,
+                    arguments.get("name"),
+                    arguments.get("description"),
+                    arguments.get("location"),
+                    arguments.get("start_time"),
+                    arguments.get("end_time"),
+                    arguments.get("timezone"),
+                )
+                return res
+
+            elif function_name == "query_game_database":
+                sql = arguments.get("sql")
+                if not sql:
+                    return "Database query failed: sql parameter required"
+                
+                result = game_db.execute_raw_query(sql)
+                
+                # Handle errors
+                if "error" in result:
+                    return f"Database query failed: {result['error']}"
+                
+                # Format results for better LLM comprehension
+                results = result.get("results", [])
+                count = result.get("count", 0)
+                truncated = result.get("truncated", False)
+                
+                if count == 0:
+                    return "Query executed successfully but returned no results."
+                
+                # Format as readable output
+                formatted_output = f"Query returned {count} result(s):\n\n"
+                formatted_output += json.dumps(results, indent=2)
+                
+                if truncated:
+                    formatted_output += f"\n\nNote: Results were limited to {count} rows."
+                
+                return formatted_output
+
+            elif function_name == "get_currently_playing_song":
+                from amc_peripheral.radio.radio_server import get_current_song
+                current_song = await get_current_song(self.bot.http_session)
+                return current_song or "No song is currently playing or unable to fetch song info."
+
+            elif function_name == "get_current_subsidies":
+                async with self.bot.http_session.get(f"{BACKEND_API_URL}/api/subsidies/") as resp:
+                    data = await resp.json()
+                    return data.get("subsidies_text", "No subsidy information available.")
+
+            elif function_name == "get_server_commands":
+                async with self.bot.http_session.get(f"{BACKEND_API_URL}/api/commands/") as resp:
+                    if resp.status != 200:
+                        return "Failed to fetch server commands."
+                    commands_data = await resp.json()
+                    
+                    # Format commands by category for better readability
+                    formatted = "Available server commands:\n\n"
+                    
+                    # Group by category
+                    from itertools import groupby
+                    for category, cmds in groupby(commands_data, key=lambda x: x.get('category', 'General')):
+                        formatted += f"## {category}\n"
+                        for cmd in cmds:
+                            cmd_name = cmd['command']
+                            shorthand = cmd.get('shorthand')
+                            description = cmd.get('description', '')
+                            
+                            if shorthand:
+                                formatted += f"- **{cmd_name}** (or **{shorthand}**): {description}\n"
+                            else:
+                                formatted += f"- **{cmd_name}**: {description}\n"
+                        formatted += "\n"
+                    
+                    return formatted
+
+            else:
+                return json.dumps({"error": f"Unknown function: {function_name}"})
+
+        except Exception as e:
+            log.error(f"Tool execution error ({function_name}): {e}", exc_info=True)
+            return json.dumps({"error": f"Tool execution failed: {str(e)}"})
+
 
     # --- Commands ---
 

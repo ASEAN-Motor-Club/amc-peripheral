@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any, List
 log = logging.getLogger(__name__)
 
 GAME_DB_PATH = os.environ.get("GAME_DB_PATH", "/var/lib/motortown/gamedata.db")
-EXPECTED_SCHEMA_VERSION = 1
+EXPECTED_SCHEMA_VERSION = 4
 
 # Raw query safety settings
 BLOCKED_KEYWORDS = ["ATTACH", "PRAGMA", "LOAD_EXTENSION", "DETACH"]
@@ -111,6 +111,55 @@ def validate_schema() -> bool:
     except Exception as e:
         log.error(f"Schema validation failed: {e}")
         return False
+
+
+def get_schema_description() -> str:
+    """
+    Generate a comprehensive description of the database schema for LLM tool descriptions.
+    
+    Uses PRAGMA queries to introspect tables and views, providing column names and types.
+    
+    Returns:
+        Formatted schema description string
+    """
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get all tables and views
+            tables_and_views = cursor.execute("""
+                SELECT name, type FROM sqlite_master 
+                WHERE type IN ('table', 'view') 
+                AND name NOT LIKE 'sqlite_%'
+                ORDER BY type DESC, name
+            """).fetchall()
+            
+            schema_parts = ["MotorTown Game Database Schema:\n"]
+            
+            for table_name, obj_type in tables_and_views:
+                # Get column info using PRAGMA
+                # pyrefly: ignore [sql-injection]
+                columns = cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
+                
+                column_list = []
+                for col in columns:
+                    # col format: (cid, name, type, notnull, dflt_value, pk)
+                    col_name = col[1]
+                    col_type = col[2]
+                    # pyrefly: ignore [bad-argument-type]
+                    column_list.append(f"{col_name} ({col_type})")
+                
+                obj_label = "VIEW" if obj_type == "view" else "TABLE"
+                # pyrefly: ignore [bad-argument-type]
+                schema_parts.append(f"\n{obj_label}: {table_name}")
+                # pyrefly: ignore [bad-argument-type]
+                schema_parts.append(f"  Columns: {', '.join(column_list)}")
+            
+            return "\n".join(schema_parts)
+            
+    except Exception as e:
+        log.error(f"Schema description generation failed: {e}")
+        return "Schema introspection failed - using read-only database with vehicles, vehicle_parts, cargos, and views"
 
 
 def query_vehicle(search_term: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict]:

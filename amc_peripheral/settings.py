@@ -36,6 +36,9 @@ GAME_ANNOUNCEMENTS_CHANNEL_ID = int(
 GAME_SERVER_API_URL = os.environ.get(
     "GAME_SERVER_API_URL", "http://asean-mt-server:8080"
 )
+BACKEND_API_URL = os.environ.get(
+    "BACKEND_API_URL", "http://asean-mt-server"
+)
 GAME_CHAT_CHANNEL_ID = int(
     os.environ.get("GAME_CHAT_CHANNEL_ID", "1344219722886938626")
 )

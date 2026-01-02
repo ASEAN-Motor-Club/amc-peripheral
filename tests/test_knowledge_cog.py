@@ -127,8 +127,12 @@ async def test_ai_helper_has_get_currently_playing_song_tool():
     call_args = cog.openai_client_openrouter.chat.completions.create.call_args
     assert "tools" in call_args.kwargs
     tools = call_args.kwargs["tools"]
-    assert len(tools) == 1
-    assert tools[0]["function"]["name"] == "get_currently_playing_song"
+    # Should now have 3 tools: song, db query, and subsidies
+    assert len(tools) == 3
+    tool_names = [t["function"]["name"] for t in tools]
+    assert "get_currently_playing_song" in tool_names
+    assert "query_game_database" in tool_names
+    assert "get_current_subsidies" in tool_names
     assert result == "The current song is Test Song by Test Artist."
 
 
@@ -156,6 +160,8 @@ async def test_ai_helper_handles_tool_call():
     # Mock second completion (after tool result)
     mock_second_message = MagicMock()
     mock_second_message.content = "Currently playing: Test Song (requested by DJ)"
+    # Explicitly set tool_calls to None to stop the loop
+    mock_second_message.tool_calls = None
     mock_second_completion = MagicMock()
     mock_second_completion.choices = [MagicMock(message=mock_second_message)]
 
