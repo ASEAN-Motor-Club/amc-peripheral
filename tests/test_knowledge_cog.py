@@ -127,12 +127,13 @@ async def test_ai_helper_has_get_currently_playing_song_tool():
     call_args = cog.openai_client_openrouter.chat.completions.create.call_args
     assert "tools" in call_args.kwargs
     tools = call_args.kwargs["tools"]
-    # Should now have 3 tools: song, db query, and subsidies
-    assert len(tools) == 3
+    # Should now have 4 tools: song, db query, subsidies, and server commands
+    assert len(tools) == 4
     tool_names = [t["function"]["name"] for t in tools]
     assert "get_currently_playing_song" in tool_names
     assert "query_game_database" in tool_names
     assert "get_current_subsidies" in tool_names
+    assert "get_server_commands" in tool_names
     assert result == "The current song is Test Song by Test Artist."
 
 

@@ -8,7 +8,7 @@ from io import BytesIO
 from discord import app_commands
 from discord.ext import commands
 from openai import AsyncOpenAI
-from typing import Optional, List, Any
+from typing import Optional
 from amc_peripheral.settings import (
     OPENAI_API_KEY_OPENROUTER,
     KNOWLEDGE_LOG_CHANNEL_ID,
@@ -29,7 +29,6 @@ from amc_peripheral.utils.discord_utils import (
     actual_discord_event_creator,
 )
 from amc_peripheral.utils.game_utils import announce_in_game
-from amc_peripheral.radio.radio_server import get_current_song
 from amc_peripheral.bot import game_db
 
 # --- Cog Implementation ---
@@ -429,7 +428,7 @@ Results are limited to 100 rows. Database is read-only.""",
         Returns:
             Final response text
         """
-        max_iterations = 10  # Fewer than JARVIS since game queries are simpler
+        max_iterations = 15  # Fewer than JARVIS since game queries are simpler
         iteration = 0
 
         while iteration < max_iterations:
