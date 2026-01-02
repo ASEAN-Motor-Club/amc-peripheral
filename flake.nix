@@ -210,6 +210,7 @@
                 FFMPEG_PATH = "${pkgs.ffmpeg}/bin/ffmpeg";
                 FFPROBE_PATH = "${pkgs.ffmpeg}/bin/ffprobe";
                 RADIO_DB_PATH = "${cfg.dbPath}";
+                GAME_DB_PATH = "/var/lib/motortown/gamedata.db";
               };
               restartIfChanged = true;
               serviceConfig = {
