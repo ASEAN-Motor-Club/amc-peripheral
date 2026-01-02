@@ -14,6 +14,75 @@ log = logging.getLogger(__name__)
 GAME_DB_PATH = os.environ.get("GAME_DB_PATH", "/var/lib/motortown/gamedata.db")
 EXPECTED_SCHEMA_VERSION = 1
 
+# Raw query safety settings
+BLOCKED_KEYWORDS = ["ATTACH", "PRAGMA", "LOAD_EXTENSION", "DETACH"]
+MAX_ROWS = 100
+QUERY_TIMEOUT_MS = 5000
+
+
+def execute_raw_query(sql: str) -> dict:
+    """
+    Execute a raw SQL query against the game database.
+    
+    The database is opened in read-only mode for safety.
+    Only SELECT queries are allowed with additional keyword blocking.
+    
+    Args:
+        sql: SQL query string
+        
+    Returns:
+        Dict with 'results' list or 'error' string
+    """
+    
+    sql = sql.strip()
+    sql_upper = sql.upper()
+    
+    # Block dangerous keywords
+    for keyword in BLOCKED_KEYWORDS:
+        if keyword in sql_upper:
+            return {"error": f"Query contains blocked keyword: {keyword}"}
+    
+    # Must be a SELECT query
+    if not sql_upper.startswith("SELECT"):
+        return {"error": "Only SELECT queries are allowed"}
+    
+    try:
+        # Open in read-only mode (uri=True required for mode parameter)
+        conn = sqlite3.connect(
+            f"file:{GAME_DB_PATH}?mode=ro",
+            uri=True,
+            timeout=QUERY_TIMEOUT_MS / 1000
+        )
+        conn.row_factory = sqlite3.Row
+        
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        
+        # Fetch with row limit
+        rows = cursor.fetchmany(MAX_ROWS)
+        results = [dict(row) for row in rows]
+        
+        # Check if there are more rows
+        has_more = cursor.fetchone() is not None
+        
+        conn.close()
+        
+        if has_more:
+            return {
+                "results": results,
+                "count": len(results),
+                "truncated": True,
+                "note": f"Results limited to {MAX_ROWS} rows"
+            }
+        else:
+            return {"results": results, "count": len(results)}
+        
+    except sqlite3.OperationalError as e:
+        return {"error": f"SQL error: {str(e)}"}
+    except Exception as e:
+        log.error(f"Raw query failed: {e}")
+        return {"error": f"Query failed: {str(e)}"}
+
 
 def get_connection() -> sqlite3.Connection:
     """Get database connection with row factory for dict-like access."""

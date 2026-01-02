@@ -162,25 +162,23 @@ class KnowledgeCog(commands.Cog):
                     "type": "function",
                     "function": {
                         "name": "query_game_database",
-                        "description": "Query MotorTown game data (vehicles, parts, cargo). Returns structured data about game items.",
+                        "description": """Query MotorTown game database with SQL. The database contains:
+- vehicles: id, name, vehicle_type, truck_class, cost, comport, is_taxiable, etc.
+- vehicle_parts: id, name, part_type, cost, mass_kg, etc.
+- active_cargos: id, name, cargo_type, actual_weight_kg, payment_per_km, volume_size, etc.
+- cargo_weights: cargo_id, total_weight_kg, blueprint_path
+
+Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates (COUNT, AVG, SUM, MIN, MAX).
+Results are limited to 100 rows. Database is read-only.""",
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "query_type": {
+                                "sql": {
                                     "type": "string",
-                                    "enum": ["vehicle_info", "cargo_info", "part_info", "heaviest_cargo", "cargo_by_space"],
-                                    "description": "Type of query to perform"
-                                },
-                                "search_term": {
-                                    "type": "string",
-                                    "description": "Name or ID to search for (required for _info queries)"
-                                },
-                                "filters": {
-                                    "type": "object",
-                                    "description": "Optional filters (e.g., vehicle_type, cargo_type, max_cost, space_type)"
+                                    "description": "SQL SELECT query to execute"
                                 }
                             },
-                            "required": ["query_type"],
+                            "required": ["sql"],
                         },
                     },
                 },
@@ -241,11 +239,12 @@ class KnowledgeCog(commands.Cog):
                         function_args.get("timezone"),
                     )
                 elif function_name == "query_game_database":
-                    res = game_db.handle_game_query(
-                        function_args.get("query_type"),
-                        function_args.get("search_term"),
-                        function_args.get("filters"),
-                    )
+                    sql = function_args.get("sql")
+                    if sql:
+                        result = game_db.execute_raw_query(sql)
+                        res = json.dumps(result, indent=2)
+                    else:
+                        res = json.dumps({"error": "sql parameter required"})
                 else:
                     res = f"Error: Unknown function '{function_name}'"
 
