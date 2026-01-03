@@ -62,6 +62,10 @@ dev = [
 
 [tool.pyrefly]
 project_includes = ["amc_peripheral"]
+# Use python from PATH (Nix shell provides the correct one)
+# This ensures pyrefly finds the Nix virtualenv's site-packages
+fallback-python-interpreter-name = "python"
+python-version = "3.12"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

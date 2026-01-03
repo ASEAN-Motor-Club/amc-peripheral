@@ -83,8 +83,10 @@
           );
       in {
         # Pre-commit/pre-push hooks configuration
+        # Note: hooks use a separate non-editable virtualenv (pythonSet) because:
+        # - Hooks run outside the shell context, need stable Nix store paths
+        # - DevShell uses editableOverlay which requires $REPO_ROOT (not available in hooks)
         pre-commit.settings = let
-          # Create virtualenv for hooks to use
           hookVirtualenv = pythonSet.mkVirtualEnv "amc-peripheral-hook-env" workspace.deps.all;
         in {
           hooks = {
@@ -94,16 +96,17 @@
               stages = ["pre-push"];
             };
 
-            # pyrefly disabled due to interpreter path detection issues with Nix
-            # pyrefly = {
-            #   enable = true;
-            #   name = "pyrefly";
-            #   description = "Type check with pyrefly";
-            #   entry = "${hookVirtualenv}/bin/pyrefly check .";
-            #   language = "system";
-            #   pass_filenames = false;
-            #   stages = ["pre-push"];
-            # };
+            # Custom hook for pyrefly type checking
+            # Wrap in sh -c to set PATH so pyrefly's fallback interpreter finds hookVirtualenv
+            pyrefly = {
+              enable = true;
+              name = "pyrefly";
+              description = "Type check with pyrefly";
+              entry = "sh -c 'PATH=${hookVirtualenv}/bin:$PATH ${hookVirtualenv}/bin/pyrefly check .'";
+              language = "system";
+              pass_filenames = false;
+              stages = ["pre-push"];
+            };
 
             # Custom hook for pytest
             pytest = {
