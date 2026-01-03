@@ -52,11 +52,6 @@ class KnowledgeCog(commands.Cog):
         self.knowledge_system_message = ""
         self.game_schema_description = ""
         self._ingame_bot_limiter = RateLimiter(max_calls=100, period_minutes=10)
-        self.user_requests = {}
-        self.messages = []
-        self.moderation_cooldown = [20]
-        self.player_warnings = {}
-        self.bot_calls = []
 
         # Debounced knowledge reload
         self._knowledge_reload_task: Optional[asyncio.Task] = None
@@ -727,24 +722,7 @@ Results are limited to 100 rows. Database is read-only.""",
         message_channel = message.channel
         message_channel_id = message_channel.id
 
-        # 1. General Chat Translation & Announcement
-        if (
-            message_channel_id == GENERAL_CHANNEL_ID
-            and message.content
-            and not message.author.bot
-        ):
-            # We use a task to not block the listener
-            async def translate_and_announce():
-                try:
-                    # In the original snippet, there was a call to translate_general_message.
-                    # Our KnowledgeCog has translate_multi which seems to be the intended modern equivalent.
-                    # We'll use translate_multi to translate and log it (or send it to other channels if needed).
-                    # For now, following the spirit of "lost during refactoring", we restore the logic.
-                    pass
-                except Exception as e:
-                    log.error(f"Error in general chat translation: {e}")
-
-        # 2. Game Chat Handling (Synced from In-game) - /bot command only
+        # 1. Game Chat Handling (Synced from In-game) - /bot command only
         # Note: Translation is handled by TranslationCog
         if message.author.bot and message_channel_id == GAME_CHAT_CHANNEL_ID:
 
