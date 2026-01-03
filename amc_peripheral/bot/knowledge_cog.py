@@ -1,6 +1,7 @@
 import re
 import json
 import logging
+import asyncio
 import discord
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -56,6 +57,10 @@ class KnowledgeCog(commands.Cog):
         self.moderation_cooldown = [20]
         self.player_warnings = {}
         self.bot_calls = []
+
+        # Debounced knowledge reload
+        self._knowledge_reload_task: Optional[asyncio.Task] = None
+        self._knowledge_reload_debounce_seconds = 30
 
     async def cog_load(self):
         # Context Menus
@@ -682,6 +687,25 @@ Results are limited to 100 rows. Database is read-only.""",
             )
         return acc
 
+    async def _debounced_knowledge_reload(self, forum_channel: discord.ForumChannel):
+        """Wait for debounce period then reload knowledge."""
+        try:
+            await asyncio.sleep(self._knowledge_reload_debounce_seconds)
+            await self.fetch_forum_messages(forum_channel)
+            log.info("Knowledge base reloaded after debounce")
+        except asyncio.CancelledError:
+            log.debug("Knowledge reload cancelled (new update pending)")
+        finally:
+            self._knowledge_reload_task = None
+
+    def trigger_knowledge_reload(self, forum_channel: discord.ForumChannel):
+        """Trigger a debounced knowledge reload."""
+        if self._knowledge_reload_task is not None:
+            self._knowledge_reload_task.cancel()
+        self._knowledge_reload_task = asyncio.create_task(
+            self._debounced_knowledge_reload(forum_channel)
+        )
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author == self.bot.user:
@@ -743,7 +767,7 @@ Results are limited to 100 rows. Database is read-only.""",
         if isinstance(message_channel, discord.Thread) and message_channel.parent:
             if message_channel.parent.id == KNOWLEDGE_FORUM_CHANNEL_ID:
                 # pyrefly: ignore [bad-argument-type]
-                await self.fetch_forum_messages(message_channel.parent)
+                self.trigger_knowledge_reload(message_channel.parent)
             elif message_channel.parent.id == NEWS_CHANNEL_ID:
                 await self.fetch_messages(
                     message_channel.parent,
