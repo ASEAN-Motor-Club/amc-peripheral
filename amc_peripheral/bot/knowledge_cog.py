@@ -647,7 +647,13 @@ Results are limited to 100 rows. Database is read-only.""",
         acc = ""
         threads = []
         if isinstance(channel, discord.ForumChannel):
-            threads = [t async for t in channel.archived_threads(limit=None)]
+            # Fetch active threads first
+            threads = list(channel.threads)
+            active_count = len(threads)
+            # Then add archived threads
+            async for archived in channel.archived_threads(limit=None):
+                threads.append(archived)
+            log.info(f"Fetched {len(threads)} threads ({active_count} active, {len(threads) - active_count} archived)")
         elif hasattr(channel, "threads"):  # TextChannel with threads
             threads = list(channel.threads)
 
