@@ -1,4 +1,3 @@
-import re
 import json
 import logging
 import asyncio
@@ -15,7 +14,6 @@ from amc_peripheral.settings import (
     KNOWLEDGE_LOG_CHANNEL_ID,
     LOCAL_TIMEZONE,
     DEFAULT_AI_MODEL,
-    GAME_CHAT_CHANNEL_ID,
     KNOWLEDGE_FORUM_CHANNEL_ID,
     NEWS_CHANNEL_ID,
     BACKEND_API_URL,
@@ -55,6 +53,13 @@ class KnowledgeCog(commands.Cog):
         # Debounced knowledge reload
         self._knowledge_reload_task: Optional[asyncio.Task] = None
         self._knowledge_reload_debounce_seconds = 30
+        
+        # SSE connection to backend
+        self._sse_task: Optional[asyncio.Task] = None
+        
+        # Per-player message history for context (player_id -> list of recent messages)
+        self._player_message_history: dict[str, list[str]] = {}
+        self._max_history_per_player = 10
 
     async def cog_load(self):
         # Context Menus
@@ -65,8 +70,15 @@ class KnowledgeCog(commands.Cog):
         ]
         for menu in self.ctx_menus:
             self.bot.tree.add_command(menu)
+        
+        # Start SSE listener for backend events
+        self._sse_task = asyncio.create_task(self._listen_backend_events())
 
     async def cog_unload(self):
+        # Cancel SSE listener
+        if self._sse_task:
+            self._sse_task.cancel()
+        
         for menu in getattr(self, "ctx_menus", []):
             try:
                 self.bot.tree.remove_command(menu.name, type=menu.type)
@@ -713,44 +725,100 @@ Results are limited to 100 rows. Database is read-only.""",
             self._debounced_knowledge_reload(forum_channel)
         )
 
+    # --- SSE Backend Connection ---
+
+    async def _listen_backend_events(self):
+        """Listen to backend SSE for game events with rich context."""
+        import aiohttp
+        
+        while True:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        f"{BACKEND_API_URL}/api/bot_events/",
+                        timeout=aiohttp.ClientTimeout(total=None)  # No timeout for SSE
+                    ) as resp:
+                        async for line in resp.content:
+                            line_str = line.decode('utf-8').strip()
+                            if line_str.startswith("data: "):
+                                try:
+                                    event = json.loads(line_str[6:])
+                                    await self._handle_backend_event(event)
+                                except json.JSONDecodeError as e:
+                                    log.warning(f"Failed to parse SSE event: {e}")
+            except asyncio.CancelledError:
+                log.info("SSE listener cancelled")
+                break
+            except Exception as e:
+                log.error(f"SSE connection error: {e}")
+                await asyncio.sleep(5)  # Reconnect delay
+
+    async def _handle_backend_event(self, event: dict):
+        """Handle events from backend SSE stream."""
+        if event.get("type") == "chat_message":
+            player_id = event["player_id"]
+            player_name = event["player_name"]
+            message = event["message"]
+            
+            # Track message history per player
+            if player_id not in self._player_message_history:
+                self._player_message_history[player_id] = []
+            
+            history = self._player_message_history[player_id]
+            history.append(f"{player_name}: {message}")
+            
+            # Keep only recent messages
+            if len(history) > self._max_history_per_player:
+                self._player_message_history[player_id] = history[-self._max_history_per_player:]
+            
+            # Handle /bot command if this is one
+            if event.get("is_bot_command"):
+                # Build context from recent messages (excluding the /bot command itself)
+                prev_messages = "\n".join(history[:-1]) if len(history) > 1 else ""
+                
+                await self._handle_ingame_bot_command(
+                    player_name=player_name,
+                    player_id=player_id,
+                    discord_id=event.get("discord_id"),
+                    message=message,
+                    prev_messages=prev_messages,
+                )
+
+    async def _handle_ingame_bot_command(
+        self, 
+        player_name: str, 
+        player_id: str, 
+        discord_id: int | None,
+        message: str,
+        prev_messages: str = "",
+    ):
+        """Handle /bot command from in-game with full player context."""
+        allowed, wait_time = self._ingame_bot_limiter.check()
+        if not allowed:
+            assert wait_time is not None
+            await announce_in_game(
+                self.bot.http_session,
+                f"I need some rest, please wait {wait_time.seconds} seconds, or #ask-bot on discord instead!",
+            )
+            return
+
+        try:
+            # Now we have player_id, discord_id, AND message history!
+            answer = await self.ai_helper(player_name, message, prev_messages)
+            await announce_in_game(self.bot.http_session, answer[:360])
+        except Exception as e:
+            log.error(f"Bot command error for {player_name}: {e}")
+            await announce_in_game(self.bot.http_session, f"{e}")
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author == self.bot.user:
             return
 
         message_channel = message.channel
-        message_channel_id = message_channel.id
 
-        # 1. Game Chat Handling (Synced from In-game) - /bot command only
-        # Note: Translation is handled by TranslationCog
-        if message.author.bot and message_channel_id == GAME_CHAT_CHANNEL_ID:
-
-            # In-game /bot command
-            if command_match := re.match(
-                r"\*\*(?P<name>.+):\*\* /(?P<command>\w+) (?P<args>.+)", message.content
-            ):
-                player_name = command_match.group("name")
-                command = command_match.group("command")
-                args = command_match.group("args")
-
-                if command == "bot":
-                    allowed, wait_time = self._ingame_bot_limiter.check()
-                    if not allowed:
-                        assert wait_time is not None  # Type guard: wait_time is always set when rate limited
-                        await announce_in_game(
-                            self.bot.http_session,
-                            f"I need some rest, please wait {wait_time.seconds} seconds, or #ask-bot on discord instead!",
-                        )
-                        return
-
-                    # Note: Previous message history is not currently tracked for in-game chat
-                    prev_messages = ""
-                    try:
-                        answer = await self.ai_helper(player_name, args, prev_messages)
-                        await announce_in_game(self.bot.http_session, answer[:360])
-                    except Exception as e:
-                        await announce_in_game(self.bot.http_session, f"{e}")
-            return
+        # Note: In-game /bot commands are now handled via SSE backend connection
+        # which provides richer player context (player_id, discord_id, character_guid)
 
         # 3. Knowledge Update (Forum/News)
         # Forum channel knowledge update
