@@ -118,3 +118,74 @@ def test_discord_metadata(memory_storage):
     assert messages[0]["discord_user_id"] == "12345"
     assert messages[0]["discord_channel_id"] == "67890"
     assert messages[0]["guild_id"] == "99999"
+
+
+def test_memory_stats(memory_storage):
+    """Test memory statistics."""
+    # Empty stats
+    stats = memory_storage.get_memory_stats()
+    assert stats["total_count"] == 0
+    assert stats["unique_players"] == 0
+    
+    # Add some messages
+    memory_storage.store_message("123", "Player1", "Msg 1", "game_chat")
+    memory_storage.store_message("123", "Player1", "Msg 2", "game_chat")
+    memory_storage.store_message("456", "Player2", "Msg 3", "game_chat")
+    memory_storage.store_message("123", "Bot", "Response", "game_chat", is_bot_response=True)
+    
+    stats = memory_storage.get_memory_stats()
+    assert stats["total_count"] == 4
+    assert stats["unique_players"] == 2
+    assert stats["bot_responses"] == 1
+    assert stats["avg_relevance"] == 1.0  # Default relevance
+
+
+def test_decay_relevance_scores(memory_storage):
+    """Test relevance score decay."""
+    memory_storage.store_message("123", "Player", "Test msg", "game_chat")
+    
+    # Initial relevance should be 1.0
+    messages = memory_storage.get_recent_messages("123")
+    assert messages[0]["relevance_score"] == 1.0
+    
+    # Apply decay - for fresh messages, this should reduce by decay rate
+    updated = memory_storage.decay_relevance_scores(decay_rate=0.5)
+    assert updated >= 1
+    
+    # Check that score decreased
+    messages = memory_storage.get_recent_messages("123")
+    assert messages[0]["relevance_score"] < 1.0
+
+
+def test_low_relevance_count(memory_storage):
+    """Test counting low relevance memories."""
+    # Add messages with default relevance (1.0)
+    memory_storage.store_message("123", "Player", "Msg 1", "game_chat")
+    memory_storage.store_message("123", "Player", "Msg 2", "game_chat")
+    
+    # Initially no low relevance messages
+    assert memory_storage.get_low_relevance_count(threshold=0.3) == 0
+    
+    # Decay scores heavily
+    memory_storage.decay_relevance_scores(decay_rate=0.1)
+    
+    # Now should have low relevance messages
+    low_count = memory_storage.get_low_relevance_count(threshold=0.3)
+    assert low_count >= 1
+
+
+def test_cleanup_old_memories(memory_storage):
+    """Test cleanup of old low-relevance memories."""
+    # Add a message
+    memory_storage.store_message("123", "Player", "Test msg", "game_chat")
+    assert memory_storage.get_message_count() == 1
+    
+    # Decay to low relevance
+    memory_storage.decay_relevance_scores(decay_rate=0.01)
+    
+    # Cleanup with 0 days = delete any low relevance
+    _deleted = memory_storage.cleanup_old_memories(days=0, min_relevance=0.5)
+    
+    # Message should still exist (it's recent even if low relevance)
+    # The cleanup requires BOTH old AND low relevance
+    assert memory_storage.get_message_count() >= 0

@@ -128,6 +128,25 @@ memories = retrieval.retrieve_relevant(
 # Returns: [{"message": "I love driving buses!", "distance": 0.4, ...}]
 ```
 
+## Decay and Cleanup (Phase 1c)
+
+The memory system uses time-based relevance decay to prioritize recent memories:
+
+```python
+# Apply exponential decay (5% per day by default)
+updated = storage.decay_relevance_scores(decay_rate=0.95)
+
+# Get statistics about stored memories
+stats = storage.get_memory_stats()
+# Returns: {total_count, unique_players, bot_responses, avg_relevance, ...}
+
+# Check how many memories are candidates for cleanup
+low_relevance_count = storage.get_low_relevance_count(threshold=0.3)
+
+# Delete old memories with low relevance
+deleted = storage.cleanup_old_memories(days=90, min_relevance=0.3)
+```
+
 ## Testing
 
 ```bash

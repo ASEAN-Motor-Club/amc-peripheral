@@ -139,6 +139,57 @@ class MemoryStorage:
         self.conn.commit()
         return cursor.rowcount
 
+    def decay_relevance_scores(self, decay_rate: float = 0.95) -> int:
+        """Apply time-based decay to relevance scores. 
+        
+        Uses exponential decay: score *= decay_rate ^ days_since_last_update
+        Default 0.95 = 5% decay per day.
+        
+        Returns count of updated rows.
+        """
+        cursor = self.conn.execute(
+            """
+            UPDATE player_memory
+            SET relevance_score = relevance_score * POWER(?, 
+                MAX(1, julianday('now') - julianday(timestamp)))
+            WHERE relevance_score > 0.01
+            """,
+            (decay_rate,),
+        )
+        self.conn.commit()
+        return cursor.rowcount
+
+    def get_memory_stats(self) -> dict:
+        """Get statistics about stored memories."""
+        cursor = self.conn.execute("""
+            SELECT 
+                COUNT(*) as total_count,
+                COUNT(DISTINCT player_id) as unique_players,
+                SUM(CASE WHEN is_bot_response = 1 THEN 1 ELSE 0 END) as bot_responses,
+                AVG(relevance_score) as avg_relevance,
+                MIN(timestamp) as oldest_memory,
+                MAX(timestamp) as newest_memory
+            FROM player_memory
+        """)
+        row = cursor.fetchone()
+        return {
+            "total_count": row[0],
+            "unique_players": row[1],
+            "bot_responses": row[2],
+            "avg_relevance": row[3],
+            "oldest_memory": row[4],
+            "newest_memory": row[5],
+        }
+
+    def get_low_relevance_count(self, threshold: float = 0.3) -> int:
+        """Count memories below relevance threshold (candidates for cleanup)."""
+        cursor = self.conn.execute(
+            "SELECT COUNT(*) FROM player_memory WHERE relevance_score < ?",
+            (threshold,),
+        )
+        return cursor.fetchone()[0]
+
     def close(self):
         """Close the database connection."""
         self.conn.close()
+
