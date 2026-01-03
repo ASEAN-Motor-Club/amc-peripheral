@@ -83,7 +83,10 @@
           );
       in {
         # Pre-commit/pre-push hooks configuration
-        pre-commit.settings = {
+        pre-commit.settings = let
+          # Create virtualenv for hooks to use
+          hookVirtualenv = pythonSet.mkVirtualEnv "amc-peripheral-hook-env" workspace.deps.all;
+        in {
           hooks = {
             # Built-in ruff hooks
             ruff = {
@@ -96,7 +99,7 @@
               enable = true;
               name = "pyrefly";
               description = "Type check with pyrefly";
-              entry = "uv run pyrefly check .";
+              entry = "${hookVirtualenv}/bin/pyrefly check .";
               language = "system";
               pass_filenames = false;
               stages = ["pre-push"];
@@ -107,7 +110,7 @@
               enable = true;
               name = "pytest";
               description = "Run tests with pytest";
-              entry = "uv run pytest -q";
+              entry = "${hookVirtualenv}/bin/pytest -q";
               language = "system";
               pass_filenames = false;
               stages = ["pre-push"];
