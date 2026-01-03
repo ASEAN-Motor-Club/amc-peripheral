@@ -60,6 +60,16 @@
           root = "$REPO_ROOT";
         };
 
+        # Override for packages missing build-system metadata in uv.lock
+        # See: https://pyproject-nix.github.io/uv2nix/overriding/index.html
+        pyprojectOverrides = final: prev: {
+          pypika = prev.pypika.overrideAttrs (old: {
+            nativeBuildInputs = (old.nativeBuildInputs or []) ++ [
+              (final.resolveBuildSystem { setuptools = []; })
+            ];
+          });
+        };
+
         pythonSet =
           (pkgs.callPackage inputs.pyproject-nix.build.packages {
             python = pkgs.python312;
@@ -68,6 +78,7 @@
             lib.composeManyExtensions [
               inputs.pyproject-build-systems.overlays.wheel
               overlay
+              pyprojectOverrides
             ]
           );
       in {
@@ -212,7 +223,7 @@
                 RADIO_DB_PATH = "${cfg.dbPath}";
                 GAME_DB_PATH = "/var/lib/motortown/gamedata.db";
                 DEFAULT_AI_MODEL = "xiaomi/mimo-v2-flash:free";
-                TRANSLATION_AI_MODEL = "xiaomi/mimo-v2-flash:free";
+                #TRANSLATION_AI_MODEL = "xiaomi/mimo-v2-flash:free";
               };
               restartIfChanged = true;
               serviceConfig = {

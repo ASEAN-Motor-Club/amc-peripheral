@@ -33,6 +33,7 @@ dependencies = [
     "yt-dlp==2025.11.1.232827.dev0",
     "yt-dlp-ejs>=0.3.0",
     "sqlite-utils>=3.36",
+    "chromadb>=1.4",
 ]
 
 [project.scripts]
@@ -65,3 +66,5 @@ project_includes = ["amc_peripheral"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 
+[tool.uv.extra-build-dependencies]
+pypika = ["setuptools"]

@@ -30,6 +30,7 @@ from amc_peripheral.utils.game_utils import announce_in_game
 from amc_peripheral.utils.rate_limiter import RateLimiter
 from amc_peripheral.bot import game_db
 from amc_peripheral.memory.storage import MemoryStorage
+from amc_peripheral.memory.retrieval import MemoryRetrieval
 
 # --- Cog Implementation ---
 
@@ -64,6 +65,7 @@ class KnowledgeCog(commands.Cog):
         
         # Long-term memory storage
         self._memory_storage: Optional[MemoryStorage] = None
+        self._memory_retrieval: Optional[MemoryRetrieval] = None
 
     async def cog_load(self):
         # Initialize long-term memory storage
@@ -73,6 +75,14 @@ class KnowledgeCog(commands.Cog):
         except Exception as e:
             log.error(f"Failed to initialize memory storage: {e}")
             self._memory_storage = None
+        
+        # Initialize semantic retrieval (ChromaDB)
+        try:
+            self._memory_retrieval = MemoryRetrieval()
+            log.info("ChromaDB memory retrieval initialized")
+        except Exception as e:
+            log.warning(f"ChromaDB not available, semantic search disabled: {e}")
+            self._memory_retrieval = None
         
         # Context Menus
         self.ctx_menus = [
@@ -779,7 +789,7 @@ Results are limited to 100 rows. Database is read-only.""",
             timestamp = datetime.fromisoformat(event["timestamp"])
             discord_id = event.get("discord_id")
             
-            # Store in long-term memory
+            # Store in long-term memory (SQLite)
             if self._memory_storage:
                 try:
                     self._memory_storage.store_message(
@@ -792,6 +802,20 @@ Results are limited to 100 rows. Database is read-only.""",
                     )
                 except Exception as e:
                     log.warning(f"Failed to store message in memory: {e}")
+            
+            # Add to semantic search (ChromaDB)
+            if self._memory_retrieval:
+                try:
+                    self._memory_retrieval.add_memory(
+                        player_id=player_id,
+                        player_name=player_name,
+                        message=message,
+                        source="game_chat",
+                        timestamp=timestamp,
+                        discord_user_id=str(discord_id) if discord_id else None,
+                    )
+                except Exception as e:
+                    log.warning(f"Failed to add memory to ChromaDB: {e}")
             
             # Track message history per player (in-memory for quick access)
             if player_id not in self._player_message_history:
@@ -809,12 +833,30 @@ Results are limited to 100 rows. Database is read-only.""",
                 # Build context from recent messages (excluding the /bot command itself)
                 prev_messages = "\n".join(history[:-1]) if len(history) > 1 else ""
                 
+                # Retrieve semantically relevant memories
+                semantic_context = ""
+                if self._memory_retrieval:
+                    try:
+                        memories = self._memory_retrieval.retrieve_relevant(
+                            player_id=player_id,
+                            query=message,
+                            n_results=3,
+                        )
+                        if memories:
+                            semantic_context = "\n".join([
+                                f"[{m['timestamp'][:10]}] {m['player_name']}: {m['message']}"
+                                for m in memories
+                            ])
+                    except Exception as e:
+                        log.warning(f"Failed to retrieve semantic memories: {e}")
+                
                 await self._handle_ingame_bot_command(
                     player_name=player_name,
                     player_id=player_id,
                     discord_id=discord_id,
                     message=message,
                     prev_messages=prev_messages,
+                    semantic_context=semantic_context,
                 )
 
     async def _handle_ingame_bot_command(
@@ -824,6 +866,7 @@ Results are limited to 100 rows. Database is read-only.""",
         discord_id: int | None,
         message: str,
         prev_messages: str = "",
+        semantic_context: str = "",
     ):
         """Handle /bot command from in-game with full player context."""
         allowed, wait_time = self._ingame_bot_limiter.check()
@@ -834,10 +877,15 @@ Results are limited to 100 rows. Database is read-only.""",
                 f"I need some rest, please wait {wait_time.seconds} seconds, or #ask-bot on discord instead!",
             )
             return
+        
+        # Build full context with semantic memories
+        full_context = prev_messages
+        if semantic_context:
+            full_context = f"Relevant past conversations:\n{semantic_context}\n\nRecent messages:\n{prev_messages}"
 
         try:
-            # Now we have player_id, discord_id, AND message history!
-            answer = await self.ai_helper(player_name, message, prev_messages)
+            # Now we have player_id, discord_id, message history, AND semantic context!
+            answer = await self.ai_helper(player_name, message, full_context)
             await announce_in_game(self.bot.http_session, answer[:360])
             
             # Store bot response in long-term memory

@@ -101,17 +101,31 @@ game_only = storage.get_recent_messages("123", sources=["game_chat"])
 deleted = storage.cleanup_old_memories(days=90, min_relevance=0.3)
 ```
 
-## Future: Semantic Search (Phase 1b)
+## Semantic Search (ChromaDB)
 
-ChromaDB integration for similarity-based retrieval:
+ChromaDB provides similarity-based retrieval of past conversations:
 
 ```python
-# Query similar past conversations
-results = collection.query(
-    query_texts=["What vehicle should I buy?"],
-    n_results=5,
-    where={"player_id": "123"}
+from amc_peripheral.memory.retrieval import MemoryRetrieval
+
+retrieval = MemoryRetrieval()
+
+# Add memory (embedding auto-generated)
+retrieval.add_memory(
+    player_id="123",
+    player_name="PlayerName",
+    message="I love driving buses!",
+    source="game_chat",
 )
+
+# Query similar past conversations
+memories = retrieval.retrieve_relevant(
+    player_id="123",
+    query="What vehicle should I buy?",
+    n_results=5,
+    max_distance=1.5,  # Lower = more similar
+)
+# Returns: [{"message": "I love driving buses!", "distance": 0.4, ...}]
 ```
 
 ## Testing
