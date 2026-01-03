@@ -672,6 +672,13 @@ Results are limited to 100 rows. Database is read-only.""",
 
     async def fetch_forum_messages(self, forum_channel: discord.ForumChannel):
         acc = await self._fetch_thread_contents(forum_channel)
+        
+        # Validate knowledge base content
+        if not acc.strip():
+            log.error("CRITICAL: Knowledge base is EMPTY after fetching forum!")
+        elif len(acc) < 500:
+            log.warning(f"Knowledge base unusually short: {len(acc)} chars")
+        
         self.knowledge_system_message = acc
         file_stream = BytesIO(acc.encode("utf-8"))
         log_channel = self.bot.get_channel(KNOWLEDGE_LOG_CHANNEL_ID)
