@@ -6,7 +6,6 @@ from openai import AsyncOpenAI
 from amc_peripheral.settings import (
     OPENAI_API_KEY_OPENROUTER,
     TRANSLATION_AI_MODEL,
-    DEFAULT_AI_MODEL,
     GENERAL_CHANNEL_ID,
     GAME_CHAT_CHANNEL_ID,
     LANGUAGE_CHANNELS,
@@ -158,7 +157,7 @@ class TranslationCog(commands.Cog):
         """Translate message into English, Chinese, Indonesian, Thai, Vietnamese, and Japanese."""
         sender = f" (from {player_name})" if player_name else ""
         completion = await self.openai_client_openrouter.beta.chat.completions.parse(
-            model=DEFAULT_AI_MODEL,
+            model=TRANSLATION_AI_MODEL,
             messages=[
                 {
                     "role": "system",
