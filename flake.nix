@@ -94,16 +94,16 @@
               stages = ["pre-push"];
             };
 
-            # Custom hook for pyrefly type checking
-            pyrefly = {
-              enable = true;
-              name = "pyrefly";
-              description = "Type check with pyrefly";
-              entry = "${hookVirtualenv}/bin/pyrefly check .";
-              language = "system";
-              pass_filenames = false;
-              stages = ["pre-push"];
-            };
+            # pyrefly disabled due to interpreter path detection issues with Nix
+            # pyrefly = {
+            #   enable = true;
+            #   name = "pyrefly";
+            #   description = "Type check with pyrefly";
+            #   entry = "${hookVirtualenv}/bin/pyrefly check .";
+            #   language = "system";
+            #   pass_filenames = false;
+            #   stages = ["pre-push"];
+            # };
 
             # Custom hook for pytest
             pytest = {
@@ -225,7 +225,7 @@
                 FFPROBE_PATH = "${pkgs.ffmpeg}/bin/ffprobe";
                 RADIO_DB_PATH = "${cfg.dbPath}";
                 GAME_DB_PATH = "/var/lib/motortown/gamedata.db";
-                DEFAULT_AI_MODEL = "xiaomi/mimo-v2-flash:free";
+                # DEFAULT_AI_MODEL = "xiaomi/mimo-v2-flash:free";
                 #TRANSLATION_AI_MODEL = "xiaomi/mimo-v2-flash:free";
               };
               restartIfChanged = true;

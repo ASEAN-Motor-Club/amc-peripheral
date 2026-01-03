@@ -760,16 +760,23 @@ Results are limited to 100 rows. Database is read-only.""",
         
         while True:
             try:
+                log.info(f"Connecting to SSE at {BACKEND_API_URL}/api/bot_events/...")
                 async with aiohttp.ClientSession() as session:
                     async with session.get(
                         f"{BACKEND_API_URL}/api/bot_events/",
                         timeout=aiohttp.ClientTimeout(total=None)  # No timeout for SSE
                     ) as resp:
+                        log.info(f"SSE connected, status: {resp.status}")
                         async for line in resp.content:
                             line_str = line.decode('utf-8').strip()
                             if line_str.startswith("data: "):
                                 try:
                                     event = json.loads(line_str[6:])
+                                    event_type = event.get("type", "unknown")
+                                    if event_type == "heartbeat":
+                                        log.debug("SSE heartbeat received")
+                                    else:
+                                        log.info(f"SSE event received: type={event_type}, is_bot_command={event.get('is_bot_command')}")
                                     await self._handle_backend_event(event)
                                 except json.JSONDecodeError as e:
                                     log.warning(f"Failed to parse SSE event: {e}")
@@ -830,6 +837,7 @@ Results are limited to 100 rows. Database is read-only.""",
             
             # Handle /bot command if this is one
             if event.get("is_bot_command"):
+                log.info(f"Bot command detected from {player_name}: {message}")
                 # Build context from recent messages (excluding the /bot command itself)
                 prev_messages = "\n".join(history[:-1]) if len(history) > 1 else ""
                 
@@ -886,7 +894,7 @@ Results are limited to 100 rows. Database is read-only.""",
         try:
             # Now we have player_id, discord_id, message history, AND semantic context!
             answer = await self.ai_helper(player_name, message, full_context)
-            await announce_in_game(self.bot.http_session, answer[:360])
+            await announce_in_game(self.bot.http_session, answer[:520])
             
             # Store bot response in long-term memory
             if self._memory_storage:
