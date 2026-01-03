@@ -180,7 +180,7 @@ async def test_ai_helper_handles_tool_call():
         return_value={"filename": "/var/lib/radio/requests/DJ-Test_Song.mp3"}
     )
 
-    def mock_get_context(url):
+    def mock_get_context(url, **kwargs):
         async def aenter_mock():
             if "active_players" in url:
                 return mock_players_response
