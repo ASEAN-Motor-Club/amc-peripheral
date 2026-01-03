@@ -29,6 +29,7 @@ from amc_peripheral.utils.discord_utils import (
 from amc_peripheral.utils.game_utils import announce_in_game
 from amc_peripheral.utils.rate_limiter import RateLimiter
 from amc_peripheral.bot import game_db
+from amc_peripheral.memory.storage import MemoryStorage
 
 # --- Cog Implementation ---
 
@@ -60,8 +61,19 @@ class KnowledgeCog(commands.Cog):
         # Per-player message history for context (player_id -> list of recent messages)
         self._player_message_history: dict[str, list[str]] = {}
         self._max_history_per_player = 10
+        
+        # Long-term memory storage
+        self._memory_storage: Optional[MemoryStorage] = None
 
     async def cog_load(self):
+        # Initialize long-term memory storage
+        try:
+            self._memory_storage = MemoryStorage()
+            log.info(f"Memory storage initialized at {self._memory_storage.db_path}")
+        except Exception as e:
+            log.error(f"Failed to initialize memory storage: {e}")
+            self._memory_storage = None
+        
         # Context Menus
         self.ctx_menus = [
             app_commands.ContextMenu(
@@ -78,6 +90,11 @@ class KnowledgeCog(commands.Cog):
         # Cancel SSE listener
         if self._sse_task:
             self._sse_task.cancel()
+        
+        # Close memory storage
+        if self._memory_storage:
+            self._memory_storage.close()
+            log.info("Memory storage closed")
         
         for menu in getattr(self, "ctx_menus", []):
             try:
@@ -759,8 +776,24 @@ Results are limited to 100 rows. Database is read-only.""",
             player_id = event["player_id"]
             player_name = event["player_name"]
             message = event["message"]
+            timestamp = datetime.fromisoformat(event["timestamp"])
+            discord_id = event.get("discord_id")
             
-            # Track message history per player
+            # Store in long-term memory
+            if self._memory_storage:
+                try:
+                    self._memory_storage.store_message(
+                        player_id=player_id,
+                        player_name=player_name,
+                        message=message,
+                        source="game_chat",
+                        timestamp=timestamp,
+                        discord_user_id=str(discord_id) if discord_id else None,
+                    )
+                except Exception as e:
+                    log.warning(f"Failed to store message in memory: {e}")
+            
+            # Track message history per player (in-memory for quick access)
             if player_id not in self._player_message_history:
                 self._player_message_history[player_id] = []
             
@@ -779,7 +812,7 @@ Results are limited to 100 rows. Database is read-only.""",
                 await self._handle_ingame_bot_command(
                     player_name=player_name,
                     player_id=player_id,
-                    discord_id=event.get("discord_id"),
+                    discord_id=discord_id,
                     message=message,
                     prev_messages=prev_messages,
                 )
@@ -806,6 +839,20 @@ Results are limited to 100 rows. Database is read-only.""",
             # Now we have player_id, discord_id, AND message history!
             answer = await self.ai_helper(player_name, message, prev_messages)
             await announce_in_game(self.bot.http_session, answer[:360])
+            
+            # Store bot response in long-term memory
+            if self._memory_storage:
+                try:
+                    self._memory_storage.store_message(
+                        player_id=player_id,
+                        player_name="Bot",
+                        message=answer,
+                        source="game_chat",
+                        is_bot_response=True,
+                        discord_user_id=str(discord_id) if discord_id else None,
+                    )
+                except Exception as e:
+                    log.warning(f"Failed to store bot response: {e}")
         except Exception as e:
             log.error(f"Bot command error for {player_name}: {e}")
             await announce_in_game(self.bot.http_session, f"{e}")

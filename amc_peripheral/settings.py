@@ -90,6 +90,12 @@ DENO_PATH = os.environ.get(
 # Game Database
 GAME_DB_PATH = os.environ.get("GAME_DB_PATH", "/var/lib/motortown/gamedata.db")
 
+# Memory Storage (Long-term memory for bot)
+# NixOS: Set MEMORY_DATA_DIR=/var/lib/amc-peripheral via StateDirectory
+MEMORY_DATA_DIR = os.environ.get("MEMORY_DATA_DIR", "./data")
+MEMORY_DB_PATH = os.path.join(MEMORY_DATA_DIR, "player_memories.db")
+CHROMADB_PATH = os.path.join(MEMORY_DATA_DIR, "chromadb")
+
 
 # Mapping Helpers
 def get_env_dict(var_name, default):
