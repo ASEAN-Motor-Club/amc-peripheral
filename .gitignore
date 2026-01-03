@@ -113,3 +113,5 @@ ENV/
 .envrc
 .direnv/
 
+# Local data (memory storage for dev)
+data/
