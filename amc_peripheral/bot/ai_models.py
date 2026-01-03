@@ -1,5 +1,5 @@
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TranslationResponse(BaseModel):
@@ -7,20 +7,24 @@ class TranslationResponse(BaseModel):
 
 
 class MultiTranslation(BaseModel):
-    indonesian: str
-    thai: str
-    vietnamese: str
-    chinese: str
-    japanese: str
+    model_config = ConfigDict(populate_by_name=True)
+
+    indonesian: str = Field(alias="Indonesian")
+    thai: str = Field(alias="Thai")
+    vietnamese: str = Field(alias="Vietnamese")
+    chinese: str = Field(alias="Chinese")
+    japanese: str = Field(alias="Japanese")
 
 
 class MultiTranslationWithEnglish(BaseModel):
-    english: str
-    indonesian: str
-    thai: str
-    vietnamese: str
-    chinese: str
-    japanese: str
+    model_config = ConfigDict(populate_by_name=True)
+
+    english: str = Field(alias="English")
+    indonesian: str = Field(alias="Indonesian")
+    thai: str = Field(alias="Thai")
+    vietnamese: str = Field(alias="Vietnamese")
+    chinese: str = Field(alias="Chinese")
+    japanese: str = Field(alias="Japanese")
 
 
 class ModerationResponse(BaseModel):
