@@ -29,6 +29,7 @@ from amc_peripheral.utils.discord_utils import (
     actual_discord_event_creator,
 )
 from amc_peripheral.utils.game_utils import announce_in_game
+from amc_peripheral.utils.rate_limiter import RateLimiter
 from amc_peripheral.bot import game_db
 
 # --- Cog Implementation ---
@@ -49,6 +50,7 @@ class KnowledgeCog(commands.Cog):
         # state
         self.knowledge_system_message = ""
         self.game_schema_description = ""
+        self._ingame_bot_limiter = RateLimiter(max_calls=100, period_minutes=10)
         self.user_requests = {}
         self.messages = []
         self.moderation_cooldown = [20]
@@ -718,29 +720,17 @@ Results are limited to 100 rows. Database is read-only.""",
                 args = command_match.group("args")
 
                 if command == "bot":
-                    BOT_RATE_LIMIT_PERIOD = 10
-                    BOT_RATE_LIMIT_MAX = 100
-
-                    self.bot_calls = [
-                        call
-                        for call in self.bot_calls
-                        if call
-                        > datetime.now() - timedelta(minutes=BOT_RATE_LIMIT_PERIOD)
-                    ]
-                    if len(self.bot_calls) > BOT_RATE_LIMIT_MAX:
-                        time_to_next = (
-                            min(self.bot_calls)
-                            + timedelta(minutes=BOT_RATE_LIMIT_PERIOD)
-                        ) - datetime.now()
+                    allowed, wait_time = self._ingame_bot_limiter.check()
+                    if not allowed:
+                        assert wait_time is not None  # Type guard: wait_time is always set when rate limited
                         await announce_in_game(
                             self.bot.http_session,
-                            f"I need some rest, please wait {time_to_next.seconds} seconds, or #ask-bot on discord instead!",
+                            f"I need some rest, please wait {wait_time.seconds} seconds, or #ask-bot on discord instead!",
                         )
                         return
 
-                    self.bot_calls.append(datetime.now())
-
-                    prev_messages = "\n".join(self.messages[-10:])
+                    # Note: Previous message history is not currently tracked for in-game chat
+                    prev_messages = ""
                     try:
                         answer = await self.ai_helper(player_name, args, prev_messages)
                         await announce_in_game(self.bot.http_session, answer[:360])
