@@ -206,3 +206,155 @@ async def test_ai_helper_handles_tool_call():
     assert cog.openai_client_openrouter.chat.completions.create.call_count == 2
     assert result == "Currently playing: Test Song (requested by DJ)"
 
+
+# --- Global Chat Context Tests ---
+
+
+@pytest.mark.asyncio
+async def test_global_chat_history_tracks_all_players():
+    """Test that global chat history stores messages from all players."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+
+    # Simulate chat messages from different players
+    await cog._handle_backend_event({
+        "type": "chat_message",
+        "player_id": "player_a",
+        "player_name": "Alice",
+        "message": "Hello everyone!",
+        "timestamp": "2026-01-05T10:00:00",
+    })
+    await cog._handle_backend_event({
+        "type": "chat_message",
+        "player_id": "player_b",
+        "player_name": "Bob",
+        "message": "Hey Alice!",
+        "timestamp": "2026-01-05T10:00:01",
+    })
+    await cog._handle_backend_event({
+        "type": "chat_message",
+        "player_id": "player_c",
+        "player_name": "Charlie",
+        "message": "What's up?",
+        "timestamp": "2026-01-05T10:00:02",
+    })
+
+    # Verify global history contains all messages
+    assert len(cog._global_chat_history) == 3
+    assert cog._global_chat_history[0] == ("player_a", "Alice", "Hello everyone!")
+    assert cog._global_chat_history[1] == ("player_b", "Bob", "Hey Alice!")
+    assert cog._global_chat_history[2] == ("player_c", "Charlie", "What's up?")
+
+
+@pytest.mark.asyncio
+async def test_global_chat_history_rolling_window():
+    """Test that global chat history maintains a rolling window."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+    cog._max_global_history = 5  # Small window for testing
+
+    # Add more messages than the limit
+    for i in range(8):
+        await cog._handle_backend_event({
+            "type": "chat_message",
+            "player_id": f"player_{i}",
+            "player_name": f"Player{i}",
+            "message": f"Message {i}",
+            "timestamp": f"2026-01-05T10:00:0{i}",
+        })
+
+    # Verify only last 5 messages are kept
+    assert len(cog._global_chat_history) == 5
+    # Should have messages 3-7, not 0-2
+    assert cog._global_chat_history[0][2] == "Message 3"
+    assert cog._global_chat_history[4][2] == "Message 7"
+
+
+@pytest.mark.asyncio
+async def test_bot_command_receives_global_context():
+    """Test that /bot command receives context from all recent players' messages."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+    
+    # Mock _handle_ingame_bot_command to capture arguments
+    captured_args = {}
+    
+    async def mock_handler(**kwargs):
+        captured_args.update(kwargs)
+    
+    cog._handle_ingame_bot_command = mock_handler
+
+    # Simulate conversation between two players
+    await cog._handle_backend_event({
+        "type": "chat_message",
+        "player_id": "player_a",
+        "player_name": "Alice",
+        "message": "I think the factory is closed",
+        "timestamp": "2026-01-05T10:00:00",
+    })
+    await cog._handle_backend_event({
+        "type": "chat_message",
+        "player_id": "player_b",
+        "player_name": "Bob",
+        "message": "Really? Are you sure?",
+        "timestamp": "2026-01-05T10:00:01",
+    })
+    
+    # Now player B asks the bot a contextual question
+    await cog._handle_backend_event({
+        "type": "chat_message",
+        "player_id": "player_b",
+        "player_name": "Bob",
+        "message": "is it?",
+        "timestamp": "2026-01-05T10:00:02",
+        "is_bot_command": True,
+    })
+
+    # Verify the bot received context from BOTH players
+    prev_messages = captured_args.get("prev_messages", "")
+    assert "Alice: I think the factory is closed" in prev_messages
+    assert "Bob: Really? Are you sure?" in prev_messages
+
+
+@pytest.mark.asyncio
+async def test_bot_command_excludes_current_message():
+    """Test that the /bot command itself is NOT included in prev_messages."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+    
+    captured_args = {}
+    
+    async def mock_handler(**kwargs):
+        captured_args.update(kwargs)
+    
+    cog._handle_ingame_bot_command = mock_handler
+
+    # Add some chat context
+    await cog._handle_backend_event({
+        "type": "chat_message",
+        "player_id": "player_a",
+        "player_name": "Alice",
+        "message": "Some context",
+        "timestamp": "2026-01-05T10:00:00",
+    })
+    
+    # Bot command
+    await cog._handle_backend_event({
+        "type": "chat_message",
+        "player_id": "player_b",
+        "player_name": "Bob",
+        "message": "what do you think?",
+        "timestamp": "2026-01-05T10:00:01",
+        "is_bot_command": True,
+    })
+
+    # The bot's own query should NOT be in prev_messages
+    prev_messages = captured_args.get("prev_messages", "")
+    assert "what do you think?" not in prev_messages
+    # But Alice's message should be
+    assert "Alice: Some context" in prev_messages
+

@@ -59,9 +59,13 @@ class KnowledgeCog(commands.Cog):
         # SSE connection to backend
         self._sse_task: Optional[asyncio.Task] = None
         
-        # Per-player message history for context (player_id -> list of recent messages)
+        # Per-player message history for semantic search personalization
         self._player_message_history: dict[str, list[str]] = {}
         self._max_history_per_player = 10
+        
+        # Global chat history for cross-player context (all players' messages)
+        self._global_chat_history: list[tuple[str, str, str]] = []  # (player_id, player_name, message)
+        self._max_global_history = 30
         
         # Long-term memory storage
         self._memory_storage: Optional[MemoryStorage] = None
@@ -824,22 +828,29 @@ Results are limited to 100 rows. Database is read-only.""",
                 except Exception as e:
                     log.warning(f"Failed to add memory to ChromaDB: {e}")
             
-            # Track message history per player (in-memory for quick access)
+            # Track message history per player (for semantic search personalization)
             if player_id not in self._player_message_history:
                 self._player_message_history[player_id] = []
             
-            history = self._player_message_history[player_id]
-            history.append(f"{player_name}: {message}")
+            player_history = self._player_message_history[player_id]
+            player_history.append(f"{player_name}: {message}")
             
-            # Keep only recent messages
-            if len(history) > self._max_history_per_player:
-                self._player_message_history[player_id] = history[-self._max_history_per_player:]
+            # Keep only recent per-player messages
+            if len(player_history) > self._max_history_per_player:
+                self._player_message_history[player_id] = player_history[-self._max_history_per_player:]
+            
+            # Track global chat history (all players)
+            self._global_chat_history.append((player_id, player_name, message))
+            if len(self._global_chat_history) > self._max_global_history:
+                self._global_chat_history = self._global_chat_history[-self._max_global_history:]
             
             # Handle /bot command if this is one
             if event.get("is_bot_command"):
                 log.info(f"Bot command detected from {player_name}: {message}")
-                # Build context from recent messages (excluding the /bot command itself)
-                prev_messages = "\n".join(history[:-1]) if len(history) > 1 else ""
+                # Build context from global chat (excluding the /bot command itself)
+                prev_messages = "\n".join(
+                    f"{name}: {msg}" for _, name, msg in self._global_chat_history[:-1]
+                ) if len(self._global_chat_history) > 1 else ""
                 
                 # Retrieve semantically relevant memories
                 semantic_context = ""
