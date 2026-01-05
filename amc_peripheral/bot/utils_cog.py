@@ -13,8 +13,10 @@ from amc_peripheral.settings import (
     STATIC_PATH,
     GENERAL_CHANNEL_ID,
     TIMEZONES_CHANNEL_ID,
+    ADMIN_ROLE_ID,
 )
 from amc_peripheral.utils.game_utils import announce_in_game
+from amc_peripheral.announcements import AnnouncementsDB
 
 log = logging.getLogger(__name__)
 
@@ -26,7 +28,10 @@ class UtilsCog(commands.Cog):
 
         # State for announcements
         self.announcement_index = random.randint(0, 100)
-        self.announcements = [
+        self.announcements_db = AnnouncementsDB()
+        
+        # Seed database with default announcements if empty
+        default_announcements = [
             "Please despawn unused vehicles! Ask /bot if you do not know how.",
             "Did you know? The parking lots opposite the ASEAN HQ is the Showcase Spot, where you can showcase your liveries and car customisation",
             "Tune into Radio ASEAN! You can listen to music and news surrounding the community, and even submit song requests.",
@@ -58,6 +63,7 @@ class UtilsCog(commands.Cog):
             "Find out the jobs in demand on the server with /jobs. Do them solo or together and share the rewards.",
             "Check out the Cat Altar at Ryumi's house near Pyosun Fishing Village",
         ]
+        self.announcements_db.seed_announcements(default_announcements)
 
         # Timezone state
         self.last_timezone_embed_message = None
@@ -152,7 +158,9 @@ class UtilsCog(commands.Cog):
             for event in events
             if event.start_time > now
         ]
-        _announcements = [*self.announcements, *events]
+        # Fetch enabled announcements from database
+        db_announcements = [a["text"] for a in self.announcements_db.list_announcements(enabled_only=True)]
+        _announcements = [*db_announcements, *events]
         if not _announcements:
             return
         announcement = _announcements[self.announcement_index % len(_announcements)]
@@ -255,6 +263,106 @@ class UtilsCog(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         await self.rent_reminders()
         await interaction.followup.send("Done", ephemeral=True)
+
+    # --- Announcement Management Commands ---
+
+    def is_admin():
+        """Check if user has admin role."""
+        async def predicate(interaction: discord.Interaction) -> bool:
+            if not interaction.guild or not isinstance(interaction.user, discord.Member):
+                return False
+            if any(r.id == ADMIN_ROLE_ID for r in interaction.user.roles):
+                return True
+            await interaction.response.send_message(
+                "Only admins can manage announcements.", ephemeral=True
+            )
+            return False
+        return app_commands.check(predicate)
+
+    announcement_group = app_commands.Group(
+        name="announcement",
+        description="Manage in-game announcements (Admin only)",
+        default_permissions=discord.Permissions(administrator=True),
+    )
+
+    @announcement_group.command(name="add", description="Add a new announcement")
+    @is_admin()
+    @app_commands.describe(text="The announcement text to add")
+    async def announcement_add(self, interaction: discord.Interaction, text: str):
+        announcement_id = self.announcements_db.add_announcement(
+            text, str(interaction.user.id)
+        )
+        if announcement_id:
+            await interaction.response.send_message(
+                f"✅ Added announcement (ID: {announcement_id}): {text[:50]}...",
+                ephemeral=True,
+            )
+        else:
+            await interaction.response.send_message(
+                "❌ Failed to add announcement.", ephemeral=True
+            )
+
+    @announcement_group.command(name="remove", description="Remove an announcement by ID")
+    @is_admin()
+    @app_commands.describe(announcement_id="The ID of the announcement to remove")
+    async def announcement_remove(
+        self, interaction: discord.Interaction, announcement_id: int
+    ):
+        if self.announcements_db.remove_announcement(announcement_id):
+            await interaction.response.send_message(
+                f"✅ Removed announcement ID {announcement_id}.", ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                f"❌ Failed to remove announcement ID {announcement_id}.", ephemeral=True
+            )
+
+    @announcement_group.command(name="list", description="List all announcements")
+    async def announcement_list(self, interaction: discord.Interaction):
+        announcements = self.announcements_db.list_announcements()
+        if not announcements:
+            return await interaction.response.send_message(
+                "No announcements configured.", ephemeral=True
+            )
+
+        # Build embed with announcements
+        embed = discord.Embed(
+            title="📢 In-Game Announcements",
+            color=0x53EAFD,
+        )
+        for ann in announcements[:25]:  # Discord embed field limit
+            status = "✅" if ann["enabled"] else "❌"
+            embed.add_field(
+                name=f"{status} ID: {ann['id']}",
+                value=ann["text"][:100] + ("..." if len(ann["text"]) > 100 else ""),
+                inline=False,
+            )
+
+        if len(announcements) > 25:
+            embed.set_footer(text=f"Showing 25 of {len(announcements)} announcements")
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @announcement_group.command(
+        name="toggle", description="Enable or disable an announcement"
+    )
+    @app_commands.describe(
+        announcement_id="The ID of the announcement",
+        enabled="Whether the announcement should be enabled",
+    )
+    @is_admin()
+    async def announcement_toggle(
+        self, interaction: discord.Interaction, announcement_id: int, enabled: bool
+    ):
+        if self.announcements_db.toggle_announcement(announcement_id, enabled):
+            status = "enabled" if enabled else "disabled"
+            await interaction.response.send_message(
+                f"✅ Announcement ID {announcement_id} {status}.", ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                f"❌ Failed to toggle announcement ID {announcement_id}.", ephemeral=True
+            )
 
     # --- Context Menus ---
 

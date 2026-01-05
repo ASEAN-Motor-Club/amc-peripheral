@@ -74,6 +74,7 @@ RACE_SONGS_CHANNEL = int(os.environ.get("RACE_SONGS_CHANNEL", "13656194480563856
 
 # Roles
 DJ_ROLE_ID = int(os.environ.get("DJ_ROLE_ID", "1364484047447003248"))
+ADMIN_ROLE_ID = int(os.environ.get("ADMIN_ROLE_ID", "1395460420189421713"))
 
 # Radio Paths
 YT_COOKIES_PATH = os.environ.get("YT_COOKIES_PATH", "/var/lib/radio/cookies.txt")
