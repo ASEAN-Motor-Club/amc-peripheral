@@ -107,3 +107,33 @@ async def test_request_song_throttling(cog):
     # Actually, let's just manually populate throttling data to test the check logic
     pass
     # Skipping detailed logic test here for brevity, focused on structure verification.
+
+
+@pytest.mark.asyncio
+async def test_create_segment_command_exists(cog):
+    """Verify the create_segment command is registered."""
+    commands = [cmd.name for cmd in cog.__cog_app_commands__]
+    assert "create_segment" in commands
+
+
+@pytest.mark.asyncio
+async def test_generate_segment_removes_markdown(cog, monkeypatch):
+    """Test that generate_segment strips markdown from output."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "Hello **world** and *everyone*!"
+    mock_response.choices[0].message.tool_calls = None
+
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
+
+    # Mock TTS to return dummy bytes
+    monkeypatch.setattr(
+        "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"audio"
+    )
+
+    transcript, audio = await cog.generate_segment("test topic")
+    assert "**" not in transcript  # Markdown should be stripped
+    assert "*" not in transcript
+    assert audio == b"audio"

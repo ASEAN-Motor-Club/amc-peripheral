@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import asyncio
@@ -125,6 +126,7 @@ class RadioCog(commands.Cog):
             "LemurStreet",
         ]
         self.db = RadioDB(RADIO_DB_PATH)
+        self.game_schema_description = ""
 
     async def cog_load(self):
         self.post_gazette_task.start()
@@ -137,6 +139,14 @@ class RadioCog(commands.Cog):
             self.knowledge_system_message = await self.fetch_knowledge()
         except Exception as e:
             log.error(f"Failed to load initial knowledge: {e}")
+
+        # Load game schema for segment generation
+        try:
+            from amc_peripheral.bot import game_db
+
+            self.game_schema_description = game_db.get_schema_description()
+        except Exception as e:
+            log.error(f"Failed to load game schema: {e}")
 
     async def cog_unload(self):
         self.post_gazette_task.cancel()
@@ -359,6 +369,116 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
             answer = completion.choices[0].message.content
             return answer
         return "Failed, please try again."
+
+    async def generate_segment(self, topic: str) -> tuple[str, bytes]:
+        """Generate a radio segment transcript and audio for a given topic."""
+        knowledge = self.knowledge_system_message or ""
+        now = datetime.now(self.local_tz)
+
+        system_message = f"""You are DJ Annie, a charismatic host for Radio ASEAN in Motor Town.
+
+Use this knowledge about the game:
+{knowledge}"""
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "query_game_database",
+                    "description": f"""Query MotorTown game database with SQL.
+
+{self.game_schema_description}
+
+Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"sql": {"type": "string"}},
+                        "required": ["sql"],
+                    },
+                },
+            },
+        ]
+
+        messages = [
+            {"role": "system", "content": system_message},
+            {
+                "role": "user",
+                "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)",
+            },
+            {
+                "role": "user",
+                "content": f"""Create a short radio segment (~30 seconds when read aloud) for DJ Annie to say between songs.
+
+Topic: {topic}
+
+{TTS_SCRIPT_MARKUP_INSTRUCTIONS}
+
+CRITICAL: Do NOT use markdown formatting (asterisks, underscores, hashes, etc.) - they cannot be read by TTS.
+Output only the spoken words, as if transcribed from a live recording.""",
+            },
+        ]
+
+        # Use agentic loop for tool support
+        transcript = await self._call_llm_with_tools_internal(messages, tools)
+
+        # Remove any remaining markdown for safety
+        clean_transcript = discord.utils.remove_markdown(transcript)
+
+        # Generate TTS audio
+        audio_bytes = await asyncio.to_thread(
+            tts_google, clean_transcript, use_markup=True
+        )
+
+        return clean_transcript, audio_bytes
+
+    async def _call_llm_with_tools_internal(self, messages: list, tools: list) -> str:
+        """Simple agentic loop for LLM with tools. Returns final text response."""
+        max_iterations = 5
+
+        for _ in range(max_iterations):
+            # pyrefly: ignore [no-matching-overload]
+            completion = await self.openai_client_openrouter.chat.completions.create(
+                model=DEFAULT_AI_MODEL,
+                reasoning_effort="medium",
+                messages=messages,
+                tools=tools if tools else None,
+                tool_choice="auto" if tools else None,
+            )
+
+            response = completion.choices[0].message if completion.choices else None
+            if not response:
+                return "Failed to generate segment."
+
+            if not response.tool_calls:
+                return response.content or ""
+
+            messages.append(response)
+
+            for tool_call in response.tool_calls:
+                result = await self._execute_segment_tool(
+                    tool_call.function.name, json.loads(tool_call.function.arguments)
+                )
+                messages.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "role": "tool",
+                        "name": tool_call.function.name,
+                        "content": result,
+                    }
+                )
+
+        return "Failed to complete segment generation."
+
+    async def _execute_segment_tool(self, name: str, args: dict) -> str:
+        """Execute tools for segment generation."""
+        if name == "query_game_database":
+            from amc_peripheral.bot import game_db
+
+            result = game_db.execute_raw_query(args.get("sql", ""))
+            if "error" in result:
+                return f"Query error: {result['error']}"
+            return json.dumps(result.get("results", []), indent=2)
+        return f"Unknown tool: {name}"
 
     async def request_song(
         self,
@@ -643,6 +763,33 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
 
         for chunk in split_markdown(gazette):
             await interaction.followup.send(chunk)
+
+    @app_commands.command(
+        name="create_segment", description="Create a custom DJ Annie radio segment"
+    )
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @app_commands.checks.has_permissions(administrator=True)
+    async def create_segment_cmd(self, interaction: discord.Interaction, topic: str):
+        await interaction.response.defer()
+
+        try:
+            transcript, audio_bytes = await self.generate_segment(topic)
+        except Exception as e:
+            await interaction.followup.send(f"Failed to generate segment: {e}")
+            return
+
+        # Save to jingles directory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"segment_{timestamp}.mp3"
+        local_path = os.path.join(JINGLES_PATH, filename)
+        with open(local_path, "wb") as f:
+            f.write(audio_bytes)
+
+        # Upload to Discord and reply with both transcript and audio
+        await interaction.followup.send(
+            content=f"**Segment created!**\n\n{transcript[:1900]}",
+            file=discord.File(BytesIO(audio_bytes), filename=filename),
+        )
 
     @app_commands.command(name="song_request", description="Submit a song request")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
