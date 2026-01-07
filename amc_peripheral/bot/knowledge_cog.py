@@ -8,7 +8,7 @@ from io import BytesIO
 from discord import app_commands
 from discord.ext import commands
 from openai import AsyncOpenAI
-from typing import Optional
+from typing import Optional, Callable, Awaitable
 from amc_peripheral.settings import (
     OPENAI_API_KEY_OPENROUTER,
     KNOWLEDGE_LOG_CHANNEL_ID,
@@ -17,6 +17,9 @@ from amc_peripheral.settings import (
     KNOWLEDGE_FORUM_CHANNEL_ID,
     NEWS_CHANNEL_ID,
     BACKEND_API_URL,
+    BOT_MAX_ITERATIONS,
+    BOT_FEEDBACK_DELAY_SECONDS,
+    BOT_TOOL_STATUS_DELAY_SECONDS,
 )
 from amc_peripheral.bot.ai_models import (
     ModerationResponse,
@@ -161,9 +164,9 @@ class KnowledgeCog(commands.Cog):
     ):
         now = datetime.now(self.local_tz)
         if generic:
-            system_message = "You are a helpful assistant for the ASEAN MotorTown Club discord server."
+            system_message = "You are a helpful assistant for the ASEAN MotorTown Club discord server. Do not use markdown tables or emojis in your responses."
         else:
-            system_message = f"You are a helpful bot in Motor Town, an open world driving game, specifically in a dedicated server named 'ASEAN Motor Club'.\nOnly use the following information about the game to answer queries. If a user asks a question outside the scope of your knowledge, refer them to the discord channel and other players in the game.\n\n{self.knowledge_system_message}"
+            system_message = f"You are a helpful bot in Motor Town, an open world driving game, specifically in a dedicated server named 'ASEAN Motor Club'.\nOnly use the following information about the game to answer queries. If a user asks a question outside the scope of your knowledge, refer them to the discord channel and other players in the game.\nDo not use markdown tables or emojis in your responses.\n\n{self.knowledge_system_message}"
 
         model = DEFAULT_AI_MODEL
         tools = []
@@ -277,7 +280,13 @@ Results are limited to 100 rows. Database is read-only.""",
         return await self._call_llm_with_tools(messages, tools, model, interaction=interaction)
 
 
-    async def ai_helper(self, player_name, question, prev_messages):
+    async def ai_helper(
+        self,
+        player_name,
+        question,
+        prev_messages,
+        ingame_feedback_fn: Optional[Callable[[str], Awaitable[None]]] = None,
+    ):
         now = datetime.now(self.local_tz)
 
         # Fetch active players
@@ -295,7 +304,7 @@ Results are limited to 100 rows. Database is read-only.""",
         )
 
         system_message = (
-            "You are a helpful bot in Motor Town, an open world driving game, specifically in 'ASEAN Motor Club'.\nAnswer in a short sentence or paragraph since the game only allows short messages, and avoid using newlines.\nOnly use the following knowledge. Do not use markdown or emojis.\n\n"
+            "You are a helpful bot in Motor Town, an open world driving game, specifically in 'ASEAN Motor Club'.\nAnswer in a short sentence or paragraph since the game only allows short messages, and avoid using newlines.\nOnly use the following knowledge. Do not use markdown, tables, or emojis.\n\n"
             + self.knowledge_system_message
         )
 
@@ -381,7 +390,12 @@ Results are limited to 100 rows. Database is read-only.""",
             },
         ]
 
-        return await self._call_llm_with_tools(messages, tools, DEFAULT_AI_MODEL)
+        return await self._call_llm_with_tools(
+            messages, 
+            tools, 
+            DEFAULT_AI_MODEL,
+            ingame_feedback_fn=ingame_feedback_fn,
+        )
 
     async def moderation(self, prev_messages=[]):
         completion = await self.openai_client_openrouter.beta.chat.completions.parse(
@@ -459,24 +473,61 @@ Results are limited to 100 rows. Database is read-only.""",
     # --- Agentic Loop Infrastructure ---
 
     async def _call_llm_with_tools(
-        self, messages: list[dict], tools: list[dict], model: str, interaction: Optional[discord.Interaction] = None
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        model: str,
+        interaction: Optional[discord.Interaction] = None,
+        ingame_feedback_fn: Optional[Callable[[str], Awaitable[None]]] = None,
     ) -> str:
         """
         Call LLM with tool support and handle tool calls iteratively.
+        Provides user feedback for long-running operations.
 
         Args:
             messages: Conversation messages
             tools: Tool definitions
             model: AI model to use
+            interaction: Discord interaction for sending feedback (optional)
+            ingame_feedback_fn: Callback for sending in-game feedback (optional)
 
         Returns:
             Final response text
         """
-        max_iterations = 15  # Fewer than JARVIS since game queries are simpler
+        max_iterations = BOT_MAX_ITERATIONS
         iteration = 0
+        start_time = asyncio.get_event_loop().time()
+
+        # Feedback state
+        initial_feedback_sent = False
+        tool_feedback_sent = False
+        last_tool_name: Optional[str] = None
 
         while iteration < max_iterations:
             iteration += 1
+            elapsed = asyncio.get_event_loop().time() - start_time
+
+            # --- Progress Feedback Logic ---
+            if not initial_feedback_sent and elapsed >= BOT_FEEDBACK_DELAY_SECONDS:
+                await self._send_progress_feedback(
+                    message="Working on it...",
+                    interaction=interaction,
+                    ingame_feedback_fn=ingame_feedback_fn,
+                )
+                initial_feedback_sent = True
+
+            if (
+                not tool_feedback_sent
+                and elapsed >= BOT_TOOL_STATUS_DELAY_SECONDS
+                and last_tool_name
+            ):
+                tool_msg = self._get_tool_status_message(last_tool_name)
+                await self._send_progress_feedback(
+                    message=tool_msg,
+                    interaction=interaction,
+                    ingame_feedback_fn=ingame_feedback_fn,
+                )
+                tool_feedback_sent = True
 
             # Call LLM
             # pyrefly: ignore [no-matching-overload]
@@ -498,6 +549,9 @@ Results are limited to 100 rows. Database is read-only.""",
             # If no tool calls, return the content
             if not response_message.tool_calls:
                 return response_message.content or "I don't have a response."
+
+            # Track last tool called for status messages
+            last_tool_name = response_message.tool_calls[-1].function.name
 
             # Add assistant message to conversation
             messages.append(response_message)
@@ -527,6 +581,35 @@ Results are limited to 100 rows. Database is read-only.""",
             # Continue loop to get final response with tool results
 
         return "I'm sorry, I couldn't complete your request due to complexity. Please try simplifying your question."
+
+    async def _send_progress_feedback(
+        self,
+        message: str,
+        interaction: Optional[discord.Interaction] = None,
+        ingame_feedback_fn: Optional[Callable[[str], Awaitable[None]]] = None,
+    ) -> None:
+        """Send progress feedback to user via appropriate channel."""
+        try:
+            if interaction:
+                # Discord: edit the deferred response
+                await interaction.edit_original_response(content=message)
+            elif ingame_feedback_fn:
+                # In-game: use the provided callback
+                await ingame_feedback_fn(message)
+        except Exception as e:
+            log.warning(f"Failed to send progress feedback: {e}")
+
+    def _get_tool_status_message(self, tool_name: str) -> str:
+        """Return user-friendly status message for a tool."""
+        tool_messages = {
+            "query_game_database": "Crunching the numbers...",
+            "get_current_subsidies": "Checking subsidy rates...",
+            "get_server_commands": "Looking up commands...",
+            "get_currently_playing_song": "Checking the radio...",
+            "create_poll": "Creating your poll...",
+            "create_scheduled_event": "Setting up the event...",
+        }
+        return tool_messages.get(tool_name, f"Processing ({tool_name})...")
 
     async def _execute_tool(
         self, function_name: str, arguments: dict, interaction: Optional[discord.Interaction] = None
@@ -902,9 +985,18 @@ Results are limited to 100 rows. Database is read-only.""",
         if semantic_context:
             full_context = f"Relevant past conversations:\n{semantic_context}\n\nRecent messages:\n{prev_messages}"
 
+        # Define feedback callback for in-game status updates
+        async def ingame_status_fn(status_msg: str) -> None:
+            await announce_in_game(self.bot.http_session, status_msg)
+
         try:
             # Now we have player_id, discord_id, message history, AND semantic context!
-            answer = await self.ai_helper(player_name, message, full_context)
+            answer = await self.ai_helper(
+                player_name, 
+                message, 
+                full_context,
+                ingame_feedback_fn=ingame_status_fn,
+            )
             await announce_in_game(self.bot.http_session, answer[:520])
             
             # Store bot response in long-term memory

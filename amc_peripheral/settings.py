@@ -26,6 +26,11 @@ DEFAULT_AI_MODEL = os.environ.get("DEFAULT_AI_MODEL", "google/gemini-3-flash-pre
 TRANSLATION_AI_MODEL = os.environ.get("TRANSLATION_AI_MODEL", "openai/gpt-oss-20b")
 LOCAL_TIMEZONE = os.environ.get("LOCAL_TIMEZONE", "Asia/Bangkok")
 
+# Bot Agentic Loop Configuration
+BOT_MAX_ITERATIONS = int(os.environ.get("BOT_MAX_ITERATIONS", "25"))
+BOT_FEEDBACK_DELAY_SECONDS = float(os.environ.get("BOT_FEEDBACK_DELAY_SECONDS", "5.0"))
+BOT_TOOL_STATUS_DELAY_SECONDS = float(os.environ.get("BOT_TOOL_STATUS_DELAY_SECONDS", "15.0"))
+
 # Channels
 TEAMS_CHANNEL = int(os.environ.get("TEAMS_CHANNEL", "1373884428493000714"))
 STATUS_CHANNEL_ID = int(os.environ.get("STATUS_CHANNEL_ID", "1347246236234678423"))

@@ -358,3 +358,138 @@ async def test_bot_command_excludes_current_message():
     # But Alice's message should be
     assert "Alice: Some context" in prev_messages
 
+
+# --- Progress Feedback Tests ---
+
+
+@pytest.mark.asyncio
+async def test_tool_status_message_mapping():
+    """Test that tool names map to user-friendly status messages."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+
+    # Test known tools have friendly messages
+    assert "numbers" in cog._get_tool_status_message("query_game_database").lower()
+    assert "radio" in cog._get_tool_status_message("get_currently_playing_song").lower()
+    assert "subsidy" in cog._get_tool_status_message("get_current_subsidies").lower()
+    assert "commands" in cog._get_tool_status_message("get_server_commands").lower()
+    
+    # Test unknown tool gets generic message
+    unknown_msg = cog._get_tool_status_message("some_unknown_tool")
+    assert "Processing" in unknown_msg
+    assert "some_unknown_tool" in unknown_msg
+    
+    # Verify no emojis in messages (not supported in-game)
+    for tool in ["query_game_database", "get_current_subsidies", "get_server_commands"]:
+        msg = cog._get_tool_status_message(tool)
+        assert not any(ord(c) > 127 for c in msg), f"Emoji found in message: {msg}"
+
+
+@pytest.mark.asyncio
+async def test_send_progress_feedback_discord():
+    """Test that Discord interactions receive progress feedback via edit_original_response."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+
+    # Mock Discord interaction
+    mock_interaction = MagicMock()
+    mock_interaction.edit_original_response = AsyncMock()
+
+    # Call feedback method
+    await cog._send_progress_feedback(
+        message="Test progress message",
+        interaction=mock_interaction,
+    )
+
+    # Verify edit was called
+    mock_interaction.edit_original_response.assert_called_once_with(
+        content="Test progress message"
+    )
+
+
+@pytest.mark.asyncio
+async def test_send_progress_feedback_ingame():
+    """Test that in-game feedback uses the provided callback."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+
+    # Mock callback
+    callback_messages = []
+    async def mock_callback(msg):
+        callback_messages.append(msg)
+
+    # Call feedback method with callback
+    await cog._send_progress_feedback(
+        message="In-game status update",
+        ingame_feedback_fn=mock_callback,
+    )
+
+    # Verify callback was called
+    assert len(callback_messages) == 1
+    assert callback_messages[0] == "In-game status update"
+
+
+@pytest.mark.asyncio
+async def test_send_progress_feedback_handles_errors():
+    """Test that feedback errors are handled gracefully."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+
+    # Mock interaction that raises
+    mock_interaction = MagicMock()
+    mock_interaction.edit_original_response = AsyncMock(side_effect=Exception("Discord API error"))
+
+    # Should not raise
+    await cog._send_progress_feedback(
+        message="Test message",
+        interaction=mock_interaction,
+    )
+    # Test passes if no exception was raised
+
+
+@pytest.mark.asyncio
+async def test_ai_helper_accepts_feedback_callback():
+    """Test that ai_helper accepts and forwards the ingame_feedback_fn parameter."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+
+    # Mock completion to return immediately (no tool calls)
+    mock_message = MagicMock()
+    mock_message.content = "Quick response"
+    mock_message.tool_calls = None
+    mock_completion = MagicMock()
+    mock_completion.choices = [MagicMock(message=mock_message)]
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(return_value=mock_completion)
+
+    # Mock active players API
+    mock_response = AsyncMock()
+    mock_response.text = AsyncMock(return_value="Player1")
+    bot.http_session.get = MagicMock(
+        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
+    )
+
+    # Mock guilds
+    mock_guild = MagicMock()
+    mock_guild.scheduled_events = []
+    bot.guilds = [mock_guild]
+
+    # Define callback
+    feedback_received = []
+    async def feedback_fn(msg):
+        feedback_received.append(msg)
+
+    # Call ai_helper with callback (should not crash)
+    result = await cog.ai_helper(
+        "TestPlayer",
+        "Quick question",
+        "",
+        ingame_feedback_fn=feedback_fn,
+    )
+
+    assert result == "Quick response"
+    # Feedback may or may not be called depending on timing, but no crash should occur
