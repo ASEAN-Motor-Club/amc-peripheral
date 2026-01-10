@@ -282,8 +282,22 @@ async def test_bot_command_receives_global_context():
     # Mock _handle_ingame_bot_command to capture arguments
     captured_args = {}
     
-    async def mock_handler(**kwargs):
-        captured_args.update(kwargs)
+    async def mock_handler(
+        player_name: str,
+        player_id: str,
+        discord_id: int | None,
+        message: str,
+        prev_messages: str = "",
+        semantic_context: str = "",
+    ):
+        captured_args.update({
+            "player_name": player_name,
+            "player_id": player_id,
+            "discord_id": discord_id,
+            "message": message,
+            "prev_messages": prev_messages,
+            "semantic_context": semantic_context,
+        })
     
     cog._handle_ingame_bot_command = mock_handler
 
@@ -315,6 +329,7 @@ async def test_bot_command_receives_global_context():
 
     # Verify the bot received context from BOTH players
     prev_messages = captured_args.get("prev_messages", "")
+    assert isinstance(prev_messages, str)
     assert "Alice: I think the factory is closed" in prev_messages
     assert "Bob: Really? Are you sure?" in prev_messages
 
@@ -328,8 +343,22 @@ async def test_bot_command_excludes_current_message():
     
     captured_args = {}
     
-    async def mock_handler(**kwargs):
-        captured_args.update(kwargs)
+    async def mock_handler(
+        player_name: str,
+        player_id: str,
+        discord_id: int | None,
+        message: str,
+        prev_messages: str = "",
+        semantic_context: str = "",
+    ):
+        captured_args.update({
+            "player_name": player_name,
+            "player_id": player_id,
+            "discord_id": discord_id,
+            "message": message,
+            "prev_messages": prev_messages,
+            "semantic_context": semantic_context,
+        })
     
     cog._handle_ingame_bot_command = mock_handler
 
@@ -354,6 +383,7 @@ async def test_bot_command_excludes_current_message():
 
     # The bot's own query should NOT be in prev_messages
     prev_messages = captured_args.get("prev_messages", "")
+    assert isinstance(prev_messages, str)
     assert "what do you think?" not in prev_messages
     # But Alice's message should be
     assert "Alice: Some context" in prev_messages
