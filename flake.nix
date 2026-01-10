@@ -27,6 +27,11 @@
       inputs.uv2nix.follows = "uv2nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    sharry = {
+      url = "github:eikek/sharry";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = inputs @ {
@@ -159,7 +164,9 @@
         in {
           imports = [
             ./radio/liquidsoap.nix
+            inputs.sharry.nixosModules.default
           ];
+
           options.services.amc-peripheral = {
             enable = lib.mkEnableOption "AMC Peripheral Services";
             environmentFile = lib.mkOption {
@@ -184,10 +191,28 @@
               default = "anthropic/claude-3.7-sonnet";
               description = "Default AI model for JARVIS.";
             };
+
+            # Sharry file sharing service
+            sharry = {
+              enable = lib.mkEnableOption "Sharry file sharing service";
+              baseUrl = lib.mkOption {
+                type = lib.types.str;
+                default = "https://share.aseanmotorclub.com";
+                description = "External URL where Sharry is accessible.";
+              };
+              bindPort = lib.mkOption {
+                type = lib.types.port;
+                default = 9090;
+                description = "Port Sharry binds to locally.";
+              };
+            };
           };
 
 
           config = lib.mkIf cfg.enable {
+            # Apply Sharry's overlay to make pkgs.sharry available
+            nixpkgs.overlays = [ inputs.sharry.overlays.default ];
+
             systemd.services.amc-radio = {
               wantedBy = ["multi-user.target"];
               after = ["network.target" "motortown-server.service"];
@@ -263,6 +288,36 @@
                 ${self.packages.${pkgs.system}.default}/bin/amc_jarvis
               '';
             };
+
+            # Sharry file sharing service
+            services.sharry = lib.mkIf cfg.sharry.enable {
+              enable = true;
+              config = {
+                base-url = cfg.sharry.baseUrl;
+                bind = {
+                  address = "127.0.0.1";
+                  port = cfg.sharry.bindPort;
+                };
+                backend = {
+                  signup.mode = "open";
+                  files = {
+                    default-store = "filesystem";
+                    stores.filesystem = {
+                      enabled = true;
+                      type = "file-system";
+                      directory = "/var/lib/sharry/files";
+                    };
+                  };
+                };
+                webapp.chunk-size = "100M";
+              };
+            };
+
+            # Create data directory for Sharry
+            systemd.tmpfiles.rules = lib.mkIf cfg.sharry.enable [
+              "d /var/lib/sharry 0750 sharry sharry -"
+              "d /var/lib/sharry/files 0750 sharry sharry -"
+            ];
           };
         };
       };

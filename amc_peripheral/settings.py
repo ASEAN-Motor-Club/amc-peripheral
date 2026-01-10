@@ -172,3 +172,8 @@ JARVIS_ALLOWED_CHANNELS = get_env_dict(
     "JARVIS_ALLOWED_CHANNELS",
     [],  # Empty list = all channels allowed
 )
+
+# Sharry File Sharing
+SHARRY_API_URL = os.environ.get("SHARRY_API_URL", "http://127.0.0.1:9090")
+SHARRY_ACCOUNT = os.environ.get("SHARRY_ACCOUNT", "")
+SHARRY_PASSWORD = os.environ.get("SHARRY_PASSWORD", "")
