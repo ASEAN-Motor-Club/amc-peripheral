@@ -1076,9 +1076,9 @@ Output only the spoken words, as if transcribed from a live recording.""",
             log.warning(f"Last.fm fetch failed, using fallback: {e}")
             return f"ytsearch:{random.choice(self.FALLBACK_QUERIES)}"
 
-    @tasks.loop(minutes=30)
+    @tasks.loop(minutes=20)
     async def auto_queue_trending(self):
-        """Queue a trending song every 30 minutes to keep the radio fresh."""
+        """Queue a trending song every 20 minutes to keep the radio fresh."""
         try:
             song_query = await self._pick_trending_song()
             title, _ = await self.request_song(
