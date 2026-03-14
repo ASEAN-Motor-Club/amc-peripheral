@@ -253,6 +253,8 @@
                 FFPROBE_PATH = "${pkgs.ffmpeg}/bin/ffprobe";
                 RADIO_DB_PATH = "${cfg.dbPath}";
                 GAME_DB_PATH = "/var/lib/motortown/gamedata.db";
+                YT_COOKIES_PATH = "${cfg.cookiesPath}";
+                DENO_PATH = "${pkgs.deno}/bin/deno";
                 # DEFAULT_AI_MODEL = "xiaomi/mimo-v2-flash:free";
                 #TRANSLATION_AI_MODEL = "xiaomi/mimo-v2-flash:free";
               };
