@@ -920,6 +920,24 @@ Output only the spoken words, as if transcribed from a live recording.""",
         await self._update_news_logic()
         await interaction.followup.send("Updated")
 
+    @app_commands.command(name="queue_trending", description="Queue a trending song from the charts")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @app_commands.checks.has_permissions(administrator=True)
+    async def queue_trending_cmd(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        try:
+            song_query = await self._pick_trending_song()
+            title, _ = await self.request_song(
+                song_query,
+                requester="DJ Annie",
+                discord_id=None,
+                bypass_throttling=True,
+            )
+            self.db.add_auto_queue(song_title=str(title))
+            await interaction.followup.send(f"🎵 Auto-queued **{title}**!")
+        except Exception as e:
+            await interaction.followup.send(f"Failed: {e}")
+
     @app_commands.command(name="skip_radio_track", description="Skip a radio track")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def skip_radio_track(self, interaction: discord.Interaction):
