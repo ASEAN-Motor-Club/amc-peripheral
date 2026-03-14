@@ -1,0 +1,154 @@
+"""
+Discord Cog for automatic YouTube video transcript extraction and summarization.
+
+Listens for YouTube links in the #off-topic channel and creates a thread
+with the full transcript and an AI-generated summary.
+"""
+
+import asyncio
+import io
+import logging
+import re
+
+import discord
+from discord.ext import commands
+from openai import AsyncOpenAI
+
+from ..settings import (
+    DEFAULT_AI_MODEL,
+    OFF_TOPIC_CHANNEL_ID,
+    OPENAI_API_KEY_OPENROUTER,
+)
+from .youtube_transcript import get_youtube_transcript
+
+log = logging.getLogger(__name__)
+
+YOUTUBE_URL_PATTERN = re.compile(
+    r"(https?://)?(www\.)?(youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/)[\w-]+"
+)
+
+
+def _split_message(text: str, max_length: int = 2000) -> list[str]:
+    """Split a message into chunks that fit within Discord's character limit."""
+    if len(text) <= max_length:
+        return [text]
+
+    chunks = []
+    while text:
+        if len(text) <= max_length:
+            chunks.append(text)
+            break
+        # Find a good split point (newline or space)
+        split_at = text.rfind("\n", 0, max_length)
+        if split_at == -1:
+            split_at = text.rfind(" ", 0, max_length)
+        if split_at == -1:
+            split_at = max_length
+        chunks.append(text[:split_at])
+        text = text[split_at:].lstrip()
+    return chunks
+
+
+class YouTubeCog(commands.Cog):
+    """Auto-summarize YouTube videos shared in #off-topic."""
+
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        self.openai_client = AsyncOpenAI(
+            api_key=OPENAI_API_KEY_OPENROUTER,
+            base_url="https://openrouter.ai/api/v1",
+        )
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot:
+            return
+
+        # Only react in #off-topic
+        if message.channel.id != OFF_TOPIC_CHANNEL_ID:
+            return
+
+        youtube_match = YOUTUBE_URL_PATTERN.search(message.content)
+        if youtube_match:
+            await self.handle_youtube_link(message, youtube_match.group())
+
+    async def handle_youtube_link(self, message: discord.Message, url: str):
+        """Extract transcript, summarize, and post in a thread."""
+        try:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, lambda: get_youtube_transcript(url)
+            )
+
+            if not result.success:
+                return  # Silent fail if no transcript available
+
+            transcript_text = result.get_full_text()
+
+            # Truncate for summarization
+            transcript_for_summary = transcript_text
+            if len(transcript_for_summary) > 25000:
+                transcript_for_summary = (
+                    transcript_for_summary[:25000] + "... (truncated)"
+                )
+
+            async with message.channel.typing():
+                summary = await self._summarize_transcript(
+                    result.title, transcript_for_summary
+                )
+
+                # Create transcript file
+                safe_title = "".join(
+                    c for c in result.title if c.isalnum() or c in (" ", "-", "_")
+                ).strip()[:50]
+                filename = f"{safe_title}_transcript.txt"
+                transcript_file = discord.File(
+                    io.BytesIO(transcript_text.encode("utf-8")), filename=filename
+                )
+
+                # Create thread under the message
+                try:
+                    thread = await message.create_thread(
+                        name=f"📺 Video Summary: {result.title[:50]}",
+                        auto_archive_duration=60,
+                    )
+                    await thread.send(
+                        content="📄 **Full Transcript**", file=transcript_file
+                    )
+                    for chunk in _split_message(summary):
+                        await thread.send(chunk)
+                except Exception:
+                    # Fallback to reply if thread creation fails
+                    transcript_file = discord.File(
+                        io.BytesIO(transcript_text.encode("utf-8")), filename=filename
+                    )
+                    await message.reply(
+                        content=f"📺 **Transcript: {result.title}**",
+                        file=transcript_file,
+                    )
+                    for chunk in _split_message(
+                        f"📺 **Video Summary: {result.title}**\n\n{summary}"
+                    ):
+                        await message.reply(chunk)
+
+        except Exception as e:
+            log.exception(f"Error in handle_youtube_link: {e}")
+
+    async def _summarize_transcript(self, title: str, transcript: str) -> str:
+        """Call LLM to summarize transcript text."""
+        summary_prompt = (
+            f"Please provide a comprehensive summary of this YouTube video.\n"
+            f"Title: {title}\n\n"
+            f"Transcript:\n{transcript}\n\n"
+            f"Focus on the main ideas, key takeaways, and any specific details that seem important."
+        )
+
+        try:
+            response = await self.openai_client.chat.completions.create(
+                model=DEFAULT_AI_MODEL,
+                messages=[{"role": "user", "content": summary_prompt}],
+            )
+            return response.choices[0].message.content or "Summary not available"
+        except Exception as e:
+            log.exception(f"Error in _summarize_transcript: {e}")
+            return f"❌ Failed to summarize video: {str(e)}"

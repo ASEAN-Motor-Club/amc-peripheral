@@ -8,6 +8,7 @@ from .knowledge_cog import KnowledgeCog
 from .translation_cog import TranslationCog
 from .utils_cog import UtilsCog
 from .share_cog import ShareCog
+from .youtube_cog import YouTubeCog
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class AMCBot(commands.Bot):
         await self.add_cog(TranslationCog(self))
         await self.add_cog(UtilsCog(self))
         await self.add_cog(ShareCog(self))
+        await self.add_cog(YouTubeCog(self))
 
         # Sync tree
         guild = discord.Object(id=GUILD_ID)
