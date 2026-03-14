@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import random
 import asyncio
 import discord
 from io import BytesIO
@@ -44,6 +45,7 @@ from amc_peripheral.settings import (
     JINGLES_PATH,
     RADIO_DB_PATH,
     DENO_PATH,
+    LASTFM_API_KEY,
 )
 from amc_peripheral.db import RadioDB
 from amc_peripheral.utils.text_utils import split_markdown
@@ -132,6 +134,7 @@ class RadioCog(commands.Cog):
         self.update_jingles.start()
         self.update_news.start()
         self.update_current_song_embed.start()
+        self.auto_queue_trending.start()
 
         # Load knowledge on start
         try:
@@ -152,6 +155,7 @@ class RadioCog(commands.Cog):
         self.update_jingles.cancel()
         self.update_news.cancel()
         self.update_current_song_embed.cancel()
+        self.auto_queue_trending.cancel()
 
     # --- Helpers ---
 
@@ -992,6 +996,66 @@ Output only the spoken words, as if transcribed from a live recording.""",
 
     @post_gazette_task.before_loop
     async def before_post_gazette_task(self):
+        await self.bot.wait_until_ready()
+
+    # --- Auto-Queue Trending Songs ---
+
+    FALLBACK_QUERIES = [
+        "top driving songs", "best road trip songs",
+        "popular chill songs", "indie rock hits",
+        "classic rock driving", "summer hits playlist",
+        "feel good songs", "upbeat pop songs",
+    ]
+
+    async def _pick_trending_song(self) -> str:
+        """Pick a random song from Last.fm top tracks, with fallback to curated search."""
+        try:
+            url = "https://ws.audioscrobbler.com/2.0/"
+            params = {
+                "method": "chart.gettoptracks",
+                "api_key": LASTFM_API_KEY,
+                "format": "json",
+                "limit": 50,
+            }
+            async with self.bot.http_session.get(url, params=params) as resp:
+                data = await resp.json()
+
+            tracks = data["tracks"]["track"]
+
+            # Filter out songs auto-queued in the last 24 hours
+            recent_auto = self.db.get_recent_auto_queued(hours=24)
+            recent_titles = {r["song_title"].lower() for r in recent_auto}
+            candidates = [
+                t for t in tracks
+                if f"{t['artist']['name']} - {t['name']}".lower() not in recent_titles
+            ]
+            if not candidates:
+                candidates = tracks  # fallback to full list if all filtered
+
+            track = random.choice(candidates)
+            return f"{track['artist']['name']} - {track['name']}"
+        except Exception as e:
+            log.warning(f"Last.fm fetch failed, using fallback: {e}")
+            return f"ytsearch:{random.choice(self.FALLBACK_QUERIES)}"
+
+    @tasks.loop(minutes=30)
+    async def auto_queue_trending(self):
+        """Queue a trending song every 30 minutes to keep the radio fresh."""
+        try:
+            song_query = await self._pick_trending_song()
+            title, _ = await self.request_song(
+                song_query,
+                requester="DJ Annie",
+                discord_id=None,
+                bypass_throttling=True,
+            )
+            self.db.add_auto_queue(song_title=str(title))
+            log.info(f"Auto-queued trending song: {title}")
+        except Exception as e:
+            log.error(f"Failed to auto-queue trending song: {e}")
+
+    @auto_queue_trending.before_loop
+    async def before_auto_queue_trending(self):
         await self.bot.wait_until_ready()
 
     async def _update_news_logic(self):

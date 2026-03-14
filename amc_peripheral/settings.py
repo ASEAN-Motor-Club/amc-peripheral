@@ -2,6 +2,7 @@ import os
 import json
 
 OPENAI_API_KEY_OPENROUTER = os.environ.get("OPENAI_API_KEY_OPENROUTER")
+LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY", "")
 
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 DISCORD_TOKEN_RADIO = os.environ.get("DISCORD_TOKEN_RADIO")

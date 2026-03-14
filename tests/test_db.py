@@ -81,3 +81,32 @@ def test_add_dislike_new_song(db):
     bad_stat = next(s for s in stats if s["song_title"] == "Bad Song")
     assert bad_stat["like_count"] == 0
     assert bad_stat["dislike_count"] == 1
+
+
+def test_add_auto_queue(db):
+    """Test recording an auto-queued song."""
+    pk = db.add_auto_queue("Artist A - Song A")
+    assert pk is not None
+
+    recent = db.get_recent_auto_queued(hours=1)
+    assert len(recent) == 1
+    assert recent[0]["song_title"] == "Artist A - Song A"
+
+
+def test_get_recent_auto_queued_filtering(db):
+    """Test that get_recent_auto_queued respects the time window."""
+    db.add_auto_queue("Recent Song")
+
+    # Should appear in a 1-hour window
+    recent = db.get_recent_auto_queued(hours=1)
+    assert len(recent) == 1
+
+    # Should also appear in a 24-hour window
+    recent_24 = db.get_recent_auto_queued(hours=24)
+    assert len(recent_24) == 1
+
+    # Add another
+    db.add_auto_queue("Another Song")
+    recent = db.get_recent_auto_queued(hours=1)
+    assert len(recent) == 2
+

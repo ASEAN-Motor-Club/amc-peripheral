@@ -1,5 +1,5 @@
 from sqlite_utils import Database
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 class RadioDB:
     def __init__(self, db_path: str):
@@ -47,6 +47,17 @@ class RadioDB:
                 "language": str,  # English, Chinese, Indonesian, Thai, Vietnamese, Japanese
                 "updated_at": str
             }, pk="discord_id")
+
+        # Auto-Queued Songs Table (for dedup tracking)
+        if "auto_queued_songs" not in self.db.table_names():
+            # pyrefly: ignore [missing-attribute]
+            self.db["auto_queued_songs"].create({
+                "id": int,
+                "song_title": str,
+                "queued_at": str,
+            }, pk="id")
+            # pyrefly: ignore [missing-attribute]
+            self.db["auto_queued_songs"].create_index(["queued_at"])
 
     def add_request(self, discord_id: str | None, song_title: str, song_url: str | None, requester_name: str) -> int | None:
         """Record a song request."""
@@ -165,3 +176,23 @@ class RadioDB:
         if rows:
             return rows[0]["language"]
         return None
+
+    def add_auto_queue(self, song_title: str) -> int | None:
+        """Record an auto-queued song for dedup tracking."""
+        row = {
+            "song_title": song_title,
+            "queued_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            # pyrefly: ignore [missing-attribute]
+            return self.db["auto_queued_songs"].insert(row).last_pk
+        except Exception:
+            return None
+
+    def get_recent_auto_queued(self, hours: int = 24) -> list[dict]:
+        """Get auto-queued songs from the last N hours."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        return list(self.db["auto_queued_songs"].rows_where(
+            "queued_at > ?", [cutoff], order_by="queued_at desc"
+        ))
+

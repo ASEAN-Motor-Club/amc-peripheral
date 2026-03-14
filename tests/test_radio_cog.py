@@ -137,3 +137,115 @@ async def test_generate_segment_removes_markdown(cog, monkeypatch):
     assert "**" not in transcript  # Markdown should be stripped
     assert "*" not in transcript
     assert audio == b"audio"
+
+
+# --- Auto-Queue Trending Songs Tests ---
+
+
+@pytest.mark.asyncio
+async def test_auto_queue_trending_task_exists(cog):
+    """Verify that the auto_queue_trending task is defined as a Loop object."""
+    assert hasattr(cog, "auto_queue_trending")
+    assert isinstance(cog.auto_queue_trending, tasks.Loop)
+
+
+@pytest.mark.asyncio
+async def test_cog_load_starts_auto_queue(cog):
+    """Verify cog_load starts the auto_queue_trending task."""
+    cog.post_gazette_task.start = MagicMock()
+    cog.update_jingles.start = MagicMock()
+    cog.update_news.start = MagicMock()
+    cog.update_current_song_embed.start = MagicMock()
+    cog.auto_queue_trending.start = MagicMock()
+    cog.fetch_knowledge = AsyncMock(return_value="Mock Knowledge")
+
+    await cog.cog_load()
+
+    cog.auto_queue_trending.start.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_cog_unload_cancels_auto_queue(cog):
+    """Verify cog_unload cancels the auto_queue_trending task."""
+    cog.post_gazette_task.cancel = MagicMock()
+    cog.update_jingles.cancel = MagicMock()
+    cog.update_news.cancel = MagicMock()
+    cog.update_current_song_embed.cancel = MagicMock()
+    cog.auto_queue_trending.cancel = MagicMock()
+
+    await cog.cog_unload()
+
+    cog.auto_queue_trending.cancel.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_pick_trending_song_lastfm(cog):
+    """Test _pick_trending_song returns 'Artist - Title' from Last.fm data."""
+    mock_lastfm_response = {
+        "tracks": {
+            "track": [
+                {"name": "Song A", "artist": {"name": "Artist A"}},
+                {"name": "Song B", "artist": {"name": "Artist B"}},
+                {"name": "Song C", "artist": {"name": "Artist C"}},
+            ]
+        }
+    }
+
+    mock_resp = AsyncMock()
+    mock_resp.json = AsyncMock(return_value=mock_lastfm_response)
+    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+    cog.bot.http_session.get = MagicMock(return_value=mock_resp)
+
+    result = await cog._pick_trending_song()
+
+    # Should be one of the mock tracks
+    assert " - " in result
+    assert any(
+        result == f"{t['artist']['name']} - {t['name']}"
+        for t in mock_lastfm_response["tracks"]["track"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_pick_trending_song_fallback(cog):
+    """Test _pick_trending_song falls back to curated search when Last.fm fails."""
+    mock_resp = AsyncMock()
+    mock_resp.__aenter__ = AsyncMock(side_effect=Exception("API down"))
+    mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+    cog.bot.http_session.get = MagicMock(return_value=mock_resp)
+
+    result = await cog._pick_trending_song()
+
+    assert result.startswith("ytsearch:")
+
+
+@pytest.mark.asyncio
+async def test_pick_trending_song_dedup(cog):
+    """Test _pick_trending_song filters out recently auto-queued songs."""
+    mock_lastfm_response = {
+        "tracks": {
+            "track": [
+                {"name": "Already Queued", "artist": {"name": "Known Artist"}},
+                {"name": "Fresh Song", "artist": {"name": "New Artist"}},
+            ]
+        }
+    }
+
+    mock_resp = AsyncMock()
+    mock_resp.json = AsyncMock(return_value=mock_lastfm_response)
+    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+    cog.bot.http_session.get = MagicMock(return_value=mock_resp)
+
+    # Mark one song as recently auto-queued
+    cog.db.add_auto_queue("Known Artist - Already Queued")
+
+    result = await cog._pick_trending_song()
+
+    # Should pick the non-queued song
+    assert result == "New Artist - Fresh Song"
+
