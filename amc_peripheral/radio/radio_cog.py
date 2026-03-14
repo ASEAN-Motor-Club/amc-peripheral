@@ -695,6 +695,26 @@ Output only the spoken words, as if transcribed from a live recording.""",
         except Exception as e:
             await channel.send(f"Failed to queue {song_name} for {requester}: {e}")
 
+    async def game_queue_trending(self, requester):
+        channel = self.bot.get_channel(GAME_ANNOUNCEMENTS_CHANNEL_ID)
+        try:
+            song_query = await self._pick_trending_song()
+            title, _ = await self.request_song(
+                song_query,
+                requester="DJ Annie",
+                discord_id=None,
+                bypass_throttling=True,
+            )
+            self.db.add_auto_queue(song_title=str(title))
+            await channel.send(f'🎵 {requester} triggered a trending song: "{title}"!')
+            await announce_in_game(
+                self.bot.http_session,
+                f'Queued trending song "{title}" for you, {requester}!',
+                color="FEE75C",
+            )
+        except Exception as e:
+            await channel.send(f"Failed to queue trending song for {requester}: {e}")
+
     async def game_like_song(self, requester):
         metadata = await get_current_song_metadata(self.bot.http_session)
         if not metadata:
@@ -1246,6 +1266,8 @@ Output only the spoken words, as if transcribed from a live recording.""",
                     self.bot.loop.create_task(
                         asyncio.to_thread(self.lq.skip_current_track, "song_requests")
                     )
+                elif command == "queue_trending":
+                    self.bot.loop.create_task(self.game_queue_trending(name))
 
     @commands.Cog.listener()
     async def on_message_edit(
