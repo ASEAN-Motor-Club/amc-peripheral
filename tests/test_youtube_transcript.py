@@ -1,12 +1,13 @@
 """Tests for YouTube transcript extraction module."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from amc_peripheral.bot.youtube_transcript import (
     TranscriptResult,
     TranscriptSegment,
     _extract_video_id,
     _format_timestamp,
+    _parse_vtt,
     get_transcript_text,
     get_youtube_transcript,
 )
@@ -117,49 +118,100 @@ class TestTimestampFormatting:
         assert _format_timestamp(0) == "0:00"
 
 
+class TestParseVtt:
+    """Tests for VTT subtitle parsing."""
+
+    def test_parses_basic_vtt(self, tmp_path):
+        vtt_content = (
+            "WEBVTT\n\n"
+            "00:00:01.000 --> 00:00:04.000\n"
+            "Hello world\n\n"
+            "00:00:05.000 --> 00:00:08.000\n"
+            "Second line\n\n"
+        )
+        vtt_file = tmp_path / "test.vtt"
+        vtt_file.write_text(vtt_content)
+
+        segments = _parse_vtt(str(vtt_file))
+        assert len(segments) == 2
+        assert segments[0].text == "Hello world"
+        assert segments[0].timestamp == "0:01"
+        assert segments[1].text == "Second line"
+
+    def test_deduplicates_repeated_text(self, tmp_path):
+        vtt_content = (
+            "WEBVTT\n\n"
+            "00:00:01.000 --> 00:00:04.000\n"
+            "Hello world\n\n"
+            "00:00:04.000 --> 00:00:07.000\n"
+            "Hello world\n\n"
+            "00:00:07.000 --> 00:00:10.000\n"
+            "New text\n\n"
+        )
+        vtt_file = tmp_path / "test.vtt"
+        vtt_file.write_text(vtt_content)
+
+        segments = _parse_vtt(str(vtt_file))
+        assert len(segments) == 2  # Deduplicated
+
+
 class TestGetYoutubeTranscript:
-    """Tests for get_youtube_transcript function."""
+    """Tests for get_youtube_transcript function (dual-strategy)."""
 
     def test_invalid_url(self):
         result = get_youtube_transcript("https://example.com/not-youtube")
         assert result.success is False
         assert "Could not extract video ID" in result.error
 
-    def test_returns_transcript_result(self):
+    def test_returns_transcript_via_api(self):
         with patch(
-            "amc_peripheral.bot.youtube_transcript.YouTubeTranscriptApi"
+            "amc_peripheral.bot.youtube_transcript._fetch_via_transcript_api"
         ) as mock_api:
-            mock_instance = MagicMock()
-            mock_api.return_value = mock_instance
-
-            mock_snippet = MagicMock()
-            mock_snippet.text = "Hello"
-            mock_snippet.start = 0.0
-            mock_instance.fetch.return_value = [mock_snippet]
+            mock_api.return_value = [
+                TranscriptSegment(timestamp="0:00", text="Hello")
+            ]
 
             result = get_youtube_transcript(
                 "https://www.youtube.com/watch?v=test123"
             )
 
-            assert isinstance(result, TranscriptResult)
             assert result.success is True
             assert len(result.segments) == 1
             assert result.segments[0].text == "Hello"
 
-    def test_handles_api_exception(self):
+    def test_falls_back_to_ytdlp(self):
         with patch(
-            "amc_peripheral.bot.youtube_transcript.YouTubeTranscriptApi"
-        ) as mock_api:
-            mock_instance = MagicMock()
-            mock_api.return_value = mock_instance
-            mock_instance.fetch.side_effect = Exception("Transcripts are disabled")
+            "amc_peripheral.bot.youtube_transcript._fetch_via_transcript_api",
+            return_value=None,
+        ), patch(
+            "amc_peripheral.bot.youtube_transcript._fetch_via_ytdlp"
+        ) as mock_ytdlp:
+            mock_ytdlp.return_value = [
+                TranscriptSegment(timestamp="0:00", text="Fallback")
+            ]
 
+            result = get_youtube_transcript(
+                "https://www.youtube.com/watch?v=test123"
+            )
+
+            assert result.success is True
+            assert result.segments[0].text == "Fallback"
+            mock_ytdlp.assert_called_once()
+
+    def test_both_strategies_fail(self):
+        with patch(
+            "amc_peripheral.bot.youtube_transcript._fetch_via_transcript_api",
+            return_value=None,
+        ), patch(
+            "amc_peripheral.bot.youtube_transcript._fetch_via_ytdlp",
+            return_value=None,
+        ):
             result = get_youtube_transcript(
                 "https://www.youtube.com/watch?v=test123"
             )
 
             assert result.success is False
-            assert "disabled" in result.error.lower()
+            assert "both" in result.error.lower()
 
 
 class TestGetTranscriptText:

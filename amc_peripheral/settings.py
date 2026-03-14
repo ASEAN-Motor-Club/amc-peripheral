@@ -21,6 +21,8 @@ LIQUIDSOAP_TELNET_PORT = int(os.environ.get("LIQUIDSOAP_TELNET_PORT", "1234"))
 
 # Paths
 STATIC_PATH = os.environ.get("STATIC_PATH", "/srv/www")
+YT_COOKIES_PATH = os.environ.get("YT_COOKIES_PATH")
+DENO_PATH = os.environ.get("DENO_PATH")
 
 # AI Config
 DEFAULT_AI_MODEL = os.environ.get("DEFAULT_AI_MODEL", "google/gemini-3-flash-preview")

@@ -82,24 +82,35 @@ class YouTubeCog(commands.Cog):
         if message.author.bot:
             return
 
+        # Debug: log all messages to see if the listener is firing
+        log.info(
+            f"YouTubeCog.on_message: channel={message.channel.id} "
+            f"(expected={OFF_TOPIC_CHANNEL_ID}), content={message.content[:80]!r}"
+        )
+
         # Only react in #off-topic
         if message.channel.id != OFF_TOPIC_CHANNEL_ID:
             return
 
         youtube_match = YOUTUBE_URL_PATTERN.search(message.content)
         if youtube_match:
+            log.info(f"YouTube link detected: {youtube_match.group()}")
             await self.handle_youtube_link(message, youtube_match.group())
 
     async def handle_youtube_link(self, message: discord.Message, url: str):
         """Extract transcript, summarize, triage, and optionally critically analyze."""
         try:
+            log.info(f"handle_youtube_link: fetching transcript for {url}")
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(
                 None, lambda: get_youtube_transcript(url)
             )
 
+            log.info(f"Transcript result: success={result.success}, error={result.error}, segments={len(result.segments)}")
+
             if not result.success:
-                return  # Silent fail if no transcript available
+                log.warning(f"Transcript extraction failed for {url}: {result.error}")
+                return
 
             transcript_text = result.get_full_text()
 
