@@ -59,3 +59,23 @@ class ThreadTranslationResponse(BaseModel):
     """Response for translating a conversation thread in one go."""
     translated_thread: str
 
+
+class ContentTriageResult(BaseModel):
+    """Structured triage result for YouTube video content analysis."""
+    controversialness: int = Field(
+        description="How controversial or polarizing the claims are (0=neutral, 10=extremely controversial)"
+    )
+    confidence: int = Field(
+        description="How confident the speaker sounds about uncertain/unverified claims (0=hedged, 10=absolute certainty on dubious claims)"
+    )
+    info_quality: int = Field(
+        description="Overall quality as an information source — sourcing, nuance, accuracy (0=terrible, 10=excellent)"
+    )
+    needs_analysis: bool = Field(
+        description="Whether the content warrants a critical analysis (true if controversialness >= 5 or info_quality <= 4)"
+    )
+    topics: List[str] = Field(
+        description="Key claims or topics identified that may need fact-checking"
+    )
+
+

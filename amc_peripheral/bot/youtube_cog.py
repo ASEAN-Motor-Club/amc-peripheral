@@ -2,7 +2,8 @@
 Discord Cog for automatic YouTube video transcript extraction and summarization.
 
 Listens for YouTube links in the #off-topic channel and creates a thread
-with the full transcript and an AI-generated summary.
+with the full transcript, an AI-generated summary, and (when warranted)
+a critical analysis with fact-checks and information quality rating.
 """
 
 import asyncio
@@ -19,6 +20,7 @@ from ..settings import (
     OFF_TOPIC_CHANNEL_ID,
     OPENAI_API_KEY_OPENROUTER,
 )
+from .ai_models import ContentTriageResult
 from .youtube_transcript import get_youtube_transcript
 
 log = logging.getLogger(__name__)
@@ -49,6 +51,22 @@ def _split_message(text: str, max_length: int = 2000) -> list[str]:
     return chunks
 
 
+def _score_bar(score: int, max_score: int = 10) -> str:
+    """Render a score as an emoji bar. e.g. 7/10 → '🟩🟩🟩🟩🟩🟩🟩⬜⬜⬜'."""
+    filled = "🟩" if score <= 3 else ("🟨" if score <= 6 else "🟥")
+    return filled * score + "⬜" * (max_score - score)
+
+
+def _format_analysis_header(triage: ContentTriageResult) -> str:
+    """Format the triage scores into a readable header."""
+    return (
+        "## 🔍 Information Quality Report\n\n"
+        f"**Controversialness:** {_score_bar(triage.controversialness)} ({triage.controversialness}/10)\n"
+        f"**Speaker Confidence on Dubious Claims:** {_score_bar(triage.confidence)} ({triage.confidence}/10)\n"
+        f"**Information Quality:** {_score_bar(triage.info_quality)} ({triage.info_quality}/10)\n"
+    )
+
+
 class YouTubeCog(commands.Cog):
     """Auto-summarize YouTube videos shared in #off-topic."""
 
@@ -73,7 +91,7 @@ class YouTubeCog(commands.Cog):
             await self.handle_youtube_link(message, youtube_match.group())
 
     async def handle_youtube_link(self, message: discord.Message, url: str):
-        """Extract transcript, summarize, and post in a thread."""
+        """Extract transcript, summarize, triage, and optionally critically analyze."""
         try:
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(
@@ -85,17 +103,28 @@ class YouTubeCog(commands.Cog):
 
             transcript_text = result.get_full_text()
 
-            # Truncate for summarization
-            transcript_for_summary = transcript_text
-            if len(transcript_for_summary) > 25000:
-                transcript_for_summary = (
-                    transcript_for_summary[:25000] + "... (truncated)"
-                )
+            # Truncate for LLM calls
+            transcript_for_llm = transcript_text
+            if len(transcript_for_llm) > 25000:
+                transcript_for_llm = transcript_for_llm[:25000] + "... (truncated)"
 
             async with message.channel.typing():
+                # Phase 1: Summary
                 summary = await self._summarize_transcript(
-                    result.title, transcript_for_summary
+                    result.title, transcript_for_llm
                 )
+
+                # Phase 2: Triage — score controversialness & info quality
+                triage = await self._triage_content(
+                    result.title, transcript_for_llm
+                )
+
+                # Phase 3: Critical analysis (only if triage triggers it)
+                analysis = None
+                if triage and triage.needs_analysis:
+                    analysis = await self._critical_analysis(
+                        result.title, transcript_for_llm, triage
+                    )
 
                 # Create transcript file
                 safe_title = "".join(
@@ -117,6 +146,14 @@ class YouTubeCog(commands.Cog):
                     )
                     for chunk in _split_message(summary):
                         await thread.send(chunk)
+
+                    # Post analysis if triggered
+                    if triage and triage.needs_analysis and analysis:
+                        header = _format_analysis_header(triage)
+                        full_analysis = f"{header}\n{analysis}"
+                        for chunk in _split_message(full_analysis):
+                            await thread.send(chunk)
+
                 except Exception:
                     # Fallback to reply if thread creation fails
                     transcript_file = discord.File(
@@ -152,3 +189,62 @@ class YouTubeCog(commands.Cog):
         except Exception as e:
             log.exception(f"Error in _summarize_transcript: {e}")
             return f"❌ Failed to summarize video: {str(e)}"
+
+    async def _triage_content(
+        self, title: str, transcript: str
+    ) -> ContentTriageResult | None:
+        """Score the content for controversialness and information quality."""
+        triage_prompt = (
+            "Analyze the following YouTube video transcript and evaluate it.\n\n"
+            "Score each dimension 0-10:\n"
+            "- controversialness: how controversial or polarizing the claims are\n"
+            "- confidence: how confidently the speaker asserts uncertain/unverified claims\n"
+            "- info_quality: overall quality as an information source (sourcing, nuance, accuracy)\n"
+            "- needs_analysis: set to true if controversialness >= 5 OR info_quality <= 4\n"
+            "- topics: list the key claims or topics that may need fact-checking\n\n"
+            f"Title: {title}\n\n"
+            f"Transcript:\n{transcript}"
+        )
+
+        try:
+            response = await self.openai_client.beta.chat.completions.parse(
+                model=DEFAULT_AI_MODEL,
+                messages=[{"role": "user", "content": triage_prompt}],
+                response_format=ContentTriageResult,
+            )
+            return response.choices[0].message.parsed
+        except Exception as e:
+            log.exception(f"Error in _triage_content: {e}")
+            return None
+
+    async def _critical_analysis(
+        self, title: str, transcript: str, triage: ContentTriageResult
+    ) -> str:
+        """Produce a critical analysis with fact-checks and nuance."""
+        topics_list = "\n".join(f"- {t}" for t in triage.topics)
+
+        analysis_prompt = (
+            "You are a critical media analyst. Analyze the following YouTube video transcript.\n\n"
+            f"Title: {title}\n"
+            f"Controversialness Score: {triage.controversialness}/10\n"
+            f"Information Quality Score: {triage.info_quality}/10\n\n"
+            f"Key claims/topics to examine:\n{topics_list}\n\n"
+            f"Transcript:\n{transcript}\n\n"
+            "Provide:\n"
+            "1. **Fact Check** — verify or dispute the key claims. Be specific.\n"
+            "2. **Missing Nuance** — what perspectives, caveats, or context is the video leaving out?\n"
+            "3. **Source Quality** — how reliable is this video as a source? "
+            "Does the speaker cite sources? Are they an authority on the subject?\n"
+            "4. **Overall Assessment** — a brief verdict on the trustworthiness of this content.\n\n"
+            "Be fair and balanced. Acknowledge what the video gets right, not just what it gets wrong."
+        )
+
+        try:
+            response = await self.openai_client.chat.completions.create(
+                model=DEFAULT_AI_MODEL,
+                messages=[{"role": "user", "content": analysis_prompt}],
+            )
+            return response.choices[0].message.content or "Analysis not available"
+        except Exception as e:
+            log.exception(f"Error in _critical_analysis: {e}")
+            return f"❌ Failed to analyze video: {str(e)}"

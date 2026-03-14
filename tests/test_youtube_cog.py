@@ -1,10 +1,17 @@
-"""Tests for YouTubeCog - YouTube transcript auto-summarization."""
+"""Tests for YouTubeCog - YouTube transcript auto-summarization and content analysis."""
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from amc_peripheral.bot.youtube_cog import YouTubeCog, YOUTUBE_URL_PATTERN, _split_message
+from amc_peripheral.bot.youtube_cog import (
+    YouTubeCog,
+    YOUTUBE_URL_PATTERN,
+    _split_message,
+    _score_bar,
+    _format_analysis_header,
+)
 from amc_peripheral.bot.youtube_transcript import TranscriptResult, TranscriptSegment
+from amc_peripheral.bot.ai_models import ContentTriageResult
 
 
 class TestYoutubeUrlPattern:
@@ -40,6 +47,48 @@ class TestSplitMessage:
             assert len(chunk) <= 2000
 
 
+class TestScoreBar:
+    """Tests for score bar rendering."""
+
+    def test_low_score_green(self):
+        result = _score_bar(3)
+        assert "🟩" in result
+        assert result.count("🟩") == 3
+        assert result.count("⬜") == 7
+
+    def test_mid_score_yellow(self):
+        result = _score_bar(5)
+        assert "🟨" in result
+        assert result.count("🟨") == 5
+
+    def test_high_score_red(self):
+        result = _score_bar(9)
+        assert "🟥" in result
+        assert result.count("🟥") == 9
+
+    def test_zero_score(self):
+        result = _score_bar(0)
+        assert result == "⬜" * 10
+
+
+class TestFormatAnalysisHeader:
+    """Tests for analysis header formatting."""
+
+    def test_formats_all_scores(self):
+        triage = ContentTriageResult(
+            controversialness=7,
+            confidence=8,
+            info_quality=3,
+            needs_analysis=True,
+            topics=["claim 1", "claim 2"],
+        )
+        header = _format_analysis_header(triage)
+        assert "7/10" in header
+        assert "8/10" in header
+        assert "3/10" in header
+        assert "Information Quality Report" in header
+
+
 class TestYouTubeCog:
     """Tests for the YouTubeCog Discord cog."""
 
@@ -59,7 +108,6 @@ class TestYouTubeCog:
         message = MagicMock()
         message.author.bot = True
         await cog.on_message(message)
-        # No exception means it returned early
 
     @pytest.mark.asyncio
     async def test_on_message_ignores_wrong_channel(self, cog):
@@ -69,7 +117,6 @@ class TestYouTubeCog:
         message.channel.id = 999999999
         message.content = "https://www.youtube.com/watch?v=test123"
         await cog.on_message(message)
-        # No thread creation attempted
 
     @pytest.mark.asyncio
     async def test_on_message_detects_youtube_link(self, cog):
@@ -104,8 +151,8 @@ class TestYouTubeCog:
             message.create_thread.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_handle_youtube_link_creates_thread(self, cog):
-        """Should create thread with transcript file and summary on success."""
+    async def test_handle_youtube_link_creates_thread_no_analysis(self, cog):
+        """Should create thread without analysis when triage says not needed."""
         message = AsyncMock()
         message.channel.typing = MagicMock(return_value=AsyncMock())
         url = "https://www.youtube.com/watch?v=test123"
@@ -117,6 +164,14 @@ class TestYouTubeCog:
             success=True,
         )
 
+        benign_triage = ContentTriageResult(
+            controversialness=2,
+            confidence=1,
+            info_quality=8,
+            needs_analysis=False,
+            topics=[],
+        )
+
         mock_thread = AsyncMock()
         message.create_thread = AsyncMock(return_value=mock_thread)
 
@@ -124,13 +179,60 @@ class TestYouTubeCog:
             "amc_peripheral.bot.youtube_cog.get_youtube_transcript",
             return_value=success_result,
         ), patch.object(
-            cog, "_summarize_transcript", new_callable=AsyncMock, return_value="This is a summary."
+            cog, "_summarize_transcript", new_callable=AsyncMock, return_value="Summary."
+        ), patch.object(
+            cog, "_triage_content", new_callable=AsyncMock, return_value=benign_triage
+        ), patch.object(
+            cog, "_critical_analysis", new_callable=AsyncMock
+        ) as mock_analysis:
+            await cog.handle_youtube_link(message, url)
+
+            message.create_thread.assert_called_once()
+            # Should NOT call critical analysis
+            mock_analysis.assert_not_called()
+            # Thread gets transcript file + summary only (2 sends)
+            assert mock_thread.send.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_handle_youtube_link_creates_thread_with_analysis(self, cog):
+        """Should create thread with analysis when triage triggers it."""
+        message = AsyncMock()
+        message.channel.typing = MagicMock(return_value=AsyncMock())
+        url = "https://www.youtube.com/watch?v=test123"
+
+        success_result = TranscriptResult(
+            url=url,
+            title="Controversial Video",
+            segments=[TranscriptSegment(timestamp="0:00", text="The earth is flat")],
+            success=True,
+        )
+
+        controversial_triage = ContentTriageResult(
+            controversialness=9,
+            confidence=10,
+            info_quality=1,
+            needs_analysis=True,
+            topics=["flat earth claim"],
+        )
+
+        mock_thread = AsyncMock()
+        message.create_thread = AsyncMock(return_value=mock_thread)
+
+        with patch(
+            "amc_peripheral.bot.youtube_cog.get_youtube_transcript",
+            return_value=success_result,
+        ), patch.object(
+            cog, "_summarize_transcript", new_callable=AsyncMock, return_value="Summary."
+        ), patch.object(
+            cog, "_triage_content", new_callable=AsyncMock, return_value=controversial_triage
+        ), patch.object(
+            cog, "_critical_analysis", new_callable=AsyncMock, return_value="This is debunked."
         ):
             await cog.handle_youtube_link(message, url)
 
             message.create_thread.assert_called_once()
-            # Thread should receive transcript file and summary
-            assert mock_thread.send.call_count >= 2
+            # Thread gets: transcript file + summary + analysis (3+ sends)
+            assert mock_thread.send.call_count >= 3
 
     @pytest.mark.asyncio
     async def test_summarize_transcript(self, cog):
@@ -143,3 +245,55 @@ class TestYouTubeCog:
 
         result = await cog._summarize_transcript("Test Video", "Hello world transcript")
         assert result == "This is a summary."
+
+    @pytest.mark.asyncio
+    async def test_triage_content_returns_result(self, cog):
+        """Should return a ContentTriageResult from structured output."""
+        triage = ContentTriageResult(
+            controversialness=7,
+            confidence=8,
+            info_quality=3,
+            needs_analysis=True,
+            topics=["dubious claim"],
+        )
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.parsed = triage
+
+        cog.openai_client.beta.chat.completions.parse = AsyncMock(return_value=mock_response)
+
+        result = await cog._triage_content("Test", "transcript")
+        assert result is not None
+        assert result.controversialness == 7
+        assert result.needs_analysis is True
+
+    @pytest.mark.asyncio
+    async def test_triage_content_returns_none_on_error(self, cog):
+        """Should return None if triage LLM call fails."""
+        cog.openai_client.beta.chat.completions.parse = AsyncMock(
+            side_effect=Exception("API error")
+        )
+
+        result = await cog._triage_content("Test", "transcript")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_critical_analysis(self, cog):
+        """Should call OpenAI and return analysis text."""
+        triage = ContentTriageResult(
+            controversialness=8,
+            confidence=9,
+            info_quality=2,
+            needs_analysis=True,
+            topics=["claim A", "claim B"],
+        )
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "Critical analysis here."
+
+        cog.openai_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        result = await cog._critical_analysis("Test", "transcript", triage)
+        assert result == "Critical analysis here."
