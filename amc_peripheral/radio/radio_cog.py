@@ -25,7 +25,6 @@ from amc_peripheral.settings import (
     DEFAULT_AI_MODEL,
     GENERAL_CHANNEL_ID,
     GAME_CHAT_CHANNEL_ID,
-    NEWS_CHANNEL_ID,
     EDITORIAL_CHANNEL_ID,
     GAME_ANNOUNCEMENTS_CHANNEL_ID,
     JINGLES_CHANNEL_ID,
@@ -986,7 +985,7 @@ Output only the spoken words, as if transcribed from a live recording.""",
     @tasks.loop(time=dt_time(hour=0, minute=30, tzinfo=timezone.utc))
     async def post_gazette_task(self):
         gazette = await self.generate_gazette_content()
-        chan = self.bot.get_channel(NEWS_CHANNEL_ID)
+        chan = self.bot.get_channel(GENERAL_CHANNEL_ID)
         if chan:
             for chunk in split_markdown(gazette):
                 await chan.send(chunk)
