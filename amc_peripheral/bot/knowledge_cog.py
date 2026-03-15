@@ -32,6 +32,7 @@ from amc_peripheral.utils.discord_utils import (
 from amc_peripheral.utils.game_utils import announce_in_game
 from amc_peripheral.utils.rate_limiter import RateLimiter
 from amc_peripheral.bot import game_db
+from amc_peripheral.bot import backend_db
 from amc_peripheral.memory.storage import MemoryStorage
 from amc_peripheral.memory.retrieval import MemoryRetrieval
 
@@ -53,6 +54,7 @@ class KnowledgeCog(commands.Cog):
         # state
         self.knowledge_system_message = ""
         self.game_schema_description = ""
+        self.backend_schema_description = ""
         self._ingame_bot_limiter = RateLimiter(max_calls=100, period_minutes=10)
 
         # Debounced knowledge reload
@@ -133,6 +135,10 @@ class KnowledgeCog(commands.Cog):
         # Load game schema description for LLM tool
         self.game_schema_description = game_db.get_schema_description()
         log.info(f"Game schema loaded: {len(self.game_schema_description)} characters")
+        
+        # Load backend schema description for LLM tool
+        self.backend_schema_description = backend_db.get_schema_description()
+        log.info(f"Backend schema loaded: {len(self.backend_schema_description)} characters")
         
         forum_channel = self.bot.get_channel(KNOWLEDGE_FORUM_CHANNEL_ID)
         if forum_channel is None:
@@ -388,6 +394,29 @@ Results are limited to 100 rows. Database is read-only.""",
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "query_backend_database",
+                    "description": f"""Query the AMC backend PostgreSQL database with SQL.
+
+{self.backend_schema_description}
+
+Use standard PostgreSQL SQL with SELECT. Supports JOINs, GROUP BY, aggregates, CTEs, window functions.
+Results limited to 100 rows. Read-only access. Finance tables (balances, transactions) are restricted.
+Use this for player stats, deliveries, race results, teams, jobs, ministry data, and game analytics.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "sql": {
+                                "type": "string",
+                                "description": "PostgreSQL SELECT query to execute"
+                            }
+                        },
+                        "required": ["sql"],
+                    },
+                },
+            },
         ]
 
         return await self._call_llm_with_tools(
@@ -603,6 +632,7 @@ Results are limited to 100 rows. Database is read-only.""",
         """Return user-friendly status message for a tool."""
         tool_messages = {
             "query_game_database": "Crunching the numbers...",
+            "query_backend_database": "Querying the backend database...",
             "get_current_subsidies": "Checking subsidy rates...",
             "get_server_commands": "Looking up commands...",
             "get_currently_playing_song": "Checking the radio...",
@@ -716,6 +746,18 @@ Results are limited to 100 rows. Database is read-only.""",
                         formatted += "\n"
                     
                     return formatted
+
+            elif function_name == "query_backend_database":
+                sql = arguments.get("sql")
+                if not sql:
+                    return "Backend database query failed: sql parameter required"
+                
+                result = await asyncio.to_thread(backend_db.execute_query, sql)
+                
+                if "error" in result:
+                    return f"Backend database query failed: {result['error']}"
+                
+                return backend_db.format_results(result)
 
             else:
                 return json.dumps({"error": f"Unknown function: {function_name}"})

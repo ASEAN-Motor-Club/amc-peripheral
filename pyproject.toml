@@ -35,6 +35,7 @@ dependencies = [
     "sqlite-utils>=3.36",
     "chromadb>=1.4",
     "youtube-transcript-api>=1.0.0",
+    "psycopg2-binary>=2.9.9",
 ]
 
 [project.scripts]

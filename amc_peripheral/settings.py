@@ -181,3 +181,6 @@ JARVIS_ALLOWED_CHANNELS = get_env_dict(
 SHARRY_API_URL = os.environ.get("SHARRY_API_URL", "http://127.0.0.1:9090")
 SHARRY_ACCOUNT = os.environ.get("SHARRY_ACCOUNT", "")
 SHARRY_PASSWORD = os.environ.get("SHARRY_PASSWORD", "")
+
+# Backend Database (read-only PostgreSQL access via Tailscale)
+BACKEND_DB_URL = os.environ.get("BACKEND_DB_URL")
