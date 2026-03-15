@@ -45,7 +45,7 @@ GAME_SERVER_API_URL = os.environ.get(
     "GAME_SERVER_API_URL", "http://asean-mt-server:8080"
 )
 BACKEND_API_URL = os.environ.get(
-    "BACKEND_API_URL", "http://asean-mt-server"
+    "BACKEND_API_URL", "http://asean-mt-server:9000"
 )
 GAME_CHAT_CHANNEL_ID = int(
     os.environ.get("GAME_CHAT_CHANNEL_ID", "1344219722886938626")
