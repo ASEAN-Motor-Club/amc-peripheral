@@ -844,6 +844,10 @@ Results are limited to 100 rows. Database is read-only.""",
     async def _listen_backend_events(self):
         """Listen to backend SSE for game events with rich context."""
         import aiohttp
+        import random
+        
+        retry_delay = 5
+        max_retry_delay = 60
         
         while True:
             try:
@@ -851,9 +855,10 @@ Results are limited to 100 rows. Database is read-only.""",
                 async with aiohttp.ClientSession() as session:
                     async with session.get(
                         f"{BACKEND_API_URL}/api/bot_events/",
-                        timeout=aiohttp.ClientTimeout(total=None)  # No timeout for SSE
+                        timeout=aiohttp.ClientTimeout(total=None, sock_connect=10)
                     ) as resp:
                         log.info(f"SSE connected, status: {resp.status}")
+                        retry_delay = 5  # Reset backoff on successful connection
                         async for line in resp.content:
                             line_str = line.decode('utf-8').strip()
                             if line_str.startswith("data: "):
@@ -872,7 +877,11 @@ Results are limited to 100 rows. Database is read-only.""",
                 break
             except Exception as e:
                 log.error(f"SSE connection error: {e}")
-                await asyncio.sleep(5)  # Reconnect delay
+                jitter = random.uniform(0, retry_delay * 0.1)
+                log.info(f"SSE reconnecting in {retry_delay:.0f}s...")
+                await asyncio.sleep(retry_delay + jitter)
+                retry_delay = min(retry_delay * 2, max_retry_delay)
+
 
     async def _handle_backend_event(self, event: dict):
         """Handle events from backend SSE stream."""
