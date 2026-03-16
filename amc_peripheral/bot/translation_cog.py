@@ -265,42 +265,42 @@ class TranslationCog(commands.Cog):
                         english_channel = self.bot.get_channel(LANGUAGE_CHANNELS.get("english"))
                         if english_channel:
                             formatted = self.format_with_username(player_name, str(result.english))
-                            await english_channel.send(formatted)
+                            await english_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     
                     # pyrefly: ignore [missing-attribute]
                     if result.chinese:
                         chinese_channel = self.bot.get_channel(LANGUAGE_CHANNELS.get("chinese"))
                         if chinese_channel:
                             formatted = self.format_with_username(player_name, str(result.chinese))
-                            await chinese_channel.send(formatted)
+                            await chinese_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     
                     # pyrefly: ignore [missing-attribute]
                     if result.indonesian:
                         indonesian_channel = self.bot.get_channel(LANGUAGE_CHANNELS.get("indonesian"))
                         if indonesian_channel:
                             formatted = self.format_with_username(player_name, str(result.indonesian))
-                            await indonesian_channel.send(formatted)
+                            await indonesian_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     
                     # pyrefly: ignore [missing-attribute]
                     if result.thai:
                         thai_channel = self.bot.get_channel(LANGUAGE_CHANNELS.get("thai"))
                         if thai_channel:
                             formatted = self.format_with_username(player_name, str(result.thai))
-                            await thai_channel.send(formatted)
+                            await thai_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     
                     # pyrefly: ignore [missing-attribute]
                     if result.vietnamese:
                         vietnamese_channel = self.bot.get_channel(LANGUAGE_CHANNELS.get("vietnamese"))
                         if vietnamese_channel:
                             formatted = self.format_with_username(player_name, str(result.vietnamese))
-                            await vietnamese_channel.send(formatted)
+                            await vietnamese_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     
                     # pyrefly: ignore [missing-attribute]
                     if result.japanese:
                         japanese_channel = self.bot.get_channel(LANGUAGE_CHANNELS.get("japanese"))
                         if japanese_channel:
                             formatted = self.format_with_username(player_name, str(result.japanese))
-                            await japanese_channel.send(formatted)
+                            await japanese_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     
                 except Exception as e:
                     log.error(f"Error translating game message: {e}")
@@ -367,7 +367,7 @@ class TranslationCog(commands.Cog):
                                             res_target.translation,
                                             is_bot=(message.author == self.bot.user)
                                         )
-                                        await target_channel.send(formatted)
+                                        await target_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                             except Exception as e:
                                 log.error(f"Error translating from {lang} to {target_lang}: {e}")
                     
@@ -397,7 +397,7 @@ class TranslationCog(commands.Cog):
                             translation,
                             is_bot=(message.author == self.bot.user)
                         )
-                        await gen_chan.send(formatted)
+                        await gen_chan.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     # Track context for future translations
                     username, content = self.extract_username_and_content(message.content)
                     self.general_messages.append(f"{username or message.author.display_name}: {content}")
@@ -424,7 +424,7 @@ class TranslationCog(commands.Cog):
                                     res.translation,
                                     is_bot=(message.author == self.bot.user)
                                 )
-                                await target_channel.send(formatted)
+                                await target_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     except Exception as e:
                         log.error(f"Error translating from general to {lang}: {e}")
                 # Track context for future translations
@@ -454,7 +454,7 @@ class TranslationCog(commands.Cog):
                         formatted = self.format_with_username(
                             username, result.translation, is_bot=(message.author == self.bot.user and not username)
                         )
-                        await chinese_channel.send(formatted)
+                        await chinese_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
 
                     # Track context for future translations
                     context_msg = f"{username}: {content}" if username else content
@@ -486,7 +486,7 @@ class TranslationCog(commands.Cog):
                         formatted = self.format_with_username(
                             username, result.translation, is_bot=(message.author == self.bot.user and not username)
                         )
-                        await eco_channel.send(formatted)
+                        await eco_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     
                     # Track context for future translations
                     context_msg = f"{username}: {content}" if username else content
