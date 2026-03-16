@@ -56,6 +56,22 @@ class AMCBot(commands.Bot):
             log.info(f" - {guild.name} (ID: {guild.id})")
         log.info("------")
 
+        # Tell systemd we're ready (Type=notify)
+        import os
+        import socket as sock_mod
+        addr = os.environ.get("NOTIFY_SOCKET")
+        if addr:
+            if addr[0] == "@":
+                addr = "\0" + addr[1:]
+            try:
+                s = sock_mod.socket(sock_mod.AF_UNIX, sock_mod.SOCK_DGRAM)
+                s.connect(addr)
+                s.sendall(b"READY=1")
+                s.close()
+                log.info("Sent READY=1 to systemd")
+            except Exception as e:
+                log.warning(f"Failed to send READY=1: {e}")
+
 
 async def _async_main():
     bot = AMCBot()

@@ -883,6 +883,24 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
 
     # --- SSE Backend Connection ---
 
+    @staticmethod
+    def _notify_watchdog():
+        """Send systemd watchdog heartbeat via NOTIFY_SOCKET (no python-systemd needed)."""
+        import os
+        import socket
+        addr = os.environ.get("NOTIFY_SOCKET")
+        if not addr:
+            return
+        if addr[0] == "@":
+            addr = "\0" + addr[1:]
+        try:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+            sock.connect(addr)
+            sock.sendall(b"WATCHDOG=1")
+            sock.close()
+        except Exception:
+            pass
+
     async def _listen_backend_events(self):
         """Listen to backend SSE for game events with rich context."""
         import aiohttp
@@ -911,6 +929,7 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
                                         log.debug("SSE heartbeat received")
                                     else:
                                         log.info(f"SSE event received: type={event_type}, is_bot_command={event.get('is_bot_command')}")
+                                    self._notify_watchdog()
                                     await self._handle_backend_event(event)
                                 except json.JSONDecodeError as e:
                                     log.warning(f"Failed to parse SSE event: {e}")
