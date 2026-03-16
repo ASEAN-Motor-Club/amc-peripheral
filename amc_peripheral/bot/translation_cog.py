@@ -150,6 +150,7 @@ class TranslationCog(commands.Cog):
                 {"role": "user", "content": f"### MESSAGE TO TRANSLATE{sender_info}:\n{message}"},
             ],
             response_format=TranslationResponse,
+            max_tokens=2048,
         )
         return completion.choices[0].message.parsed
 
@@ -179,6 +180,7 @@ class TranslationCog(commands.Cog):
                 },
             ],
             response_format=MultiTranslationWithEnglish,
+            max_tokens=2048,
         )
         return completion.choices[0].message.parsed
 
@@ -203,6 +205,7 @@ class TranslationCog(commands.Cog):
                 {"role": "user", "content": f"### MESSAGE TO TRANSLATE{sender_info}:\n{message}"},
             ],
             response_format=MultiTranslation,
+            max_tokens=2048,
         )
         return completion.choices[0].message.parsed
 
@@ -228,6 +231,7 @@ class TranslationCog(commands.Cog):
                 {"role": "user", "content": f"### MESSAGE TO TRANSLATE{sender_info}:\n{message}"},
             ],
             response_format=TranslationResponse,
+            max_tokens=2048,
         )
         return completion.choices[0].message.parsed
 
@@ -258,6 +262,10 @@ class TranslationCog(commands.Cog):
                     result = await self.translate_multi_with_english(
                         player_name, message_content, self.messages[-10:]
                     )
+                    
+                    if not result:
+                        log.warning("Translation returned None for game message")
+                        return
                     
                     # Send to each language channel with player name
                     # pyrefly: ignore [missing-attribute]
@@ -609,6 +617,7 @@ class TranslationCog(commands.Cog):
                     },
                 ],
                 response_format=ThreadTranslationResponse,
+                max_tokens=4096,
             )
             
             result = completion.choices[0].message.parsed

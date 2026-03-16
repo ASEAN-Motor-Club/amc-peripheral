@@ -256,7 +256,7 @@
                 YT_COOKIES_PATH = "${cfg.cookiesPath}";
                 DENO_PATH = "${pkgs.deno}/bin/deno";
                 # DEFAULT_AI_MODEL = "xiaomi/mimo-v2-flash:free";
-                #TRANSLATION_AI_MODEL = "xiaomi/mimo-v2-flash:free";
+                TRANSLATION_AI_MODEL = "qwen/qwen3.5-flash-02-23";
               };
               restartIfChanged = true;
               serviceConfig = {
