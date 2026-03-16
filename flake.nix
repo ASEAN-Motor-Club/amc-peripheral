@@ -260,12 +260,14 @@
               };
               restartIfChanged = true;
               serviceConfig = {
-                Type = "simple";
+                Type = "notify";
+                NotifyAccess = "all";
                 Restart = "always";
                 RestartSec = "10";
                 CPUQuota = "80%";
                 WatchdogSec = "120";
                 TimeoutStopSec = "30";
+                TimeoutStartSec = "120";
                 EnvironmentFile = "${cfg.environmentFile}";
               };
               script = ''
