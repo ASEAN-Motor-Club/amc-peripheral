@@ -524,3 +524,117 @@ async def test_ai_helper_accepts_feedback_callback():
 
     assert result == "Quick response"
     # Feedback may or may not be called depending on timing, but no crash should occur
+
+
+# --- Ask-Bot Channel & @Mention Tests ---
+
+
+@pytest.fixture
+def knowledge_cog_with_ai():
+    """Create a KnowledgeCog with mocked ai_helper_discord."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    bot.user = MagicMock()
+    bot.user.id = 999
+    bot.user.mentioned_in = MagicMock(return_value=False)
+    cog = KnowledgeCog(bot)
+    cog.ai_helper_discord = AsyncMock(return_value="Bot response")
+    return cog, bot
+
+
+@pytest.mark.asyncio
+async def test_on_message_responds_in_ask_bot_channel(knowledge_cog_with_ai):
+    """Test that the bot responds to any message in #ask-bot channel."""
+    cog, bot = knowledge_cog_with_ai
+
+    msg = MagicMock(spec=discord.Message)
+    msg.author = MagicMock()
+    msg.author.display_name = "TestUser"
+    msg.content = "How do I deliver cargo?"
+    msg.id = 12345
+    msg.mentions = []
+    msg.channel = MagicMock()
+    msg.channel.id = 1349258054599835740  # ASK_BOT_CHANNEL_ID
+    msg.reply = AsyncMock()
+
+    # Mock channel.history
+    async def mock_history(limit=20):
+        return
+        yield  # empty async generator
+
+    msg.channel.history = mock_history
+    msg.channel.typing = MagicMock(return_value=AsyncMock())
+
+    await cog.on_message(msg)
+
+    cog.ai_helper_discord.assert_called_once()
+    call_args = cog.ai_helper_discord.call_args
+    assert call_args[0][0] == "TestUser"
+    assert call_args[0][1] == "How do I deliver cargo?"
+    msg.reply.assert_called_once_with("Bot response", mention_author=False)
+
+
+@pytest.mark.asyncio
+async def test_on_message_responds_to_mention(knowledge_cog_with_ai):
+    """Test that the bot responds when @mentioned in any channel."""
+    cog, bot = knowledge_cog_with_ai
+
+    msg = MagicMock(spec=discord.Message)
+    msg.author = MagicMock()
+    msg.author.display_name = "Mentioner"
+    msg.content = f"<@{bot.user.id}> what is UBI?"
+    msg.id = 67890
+    msg.mentions = [bot.user]
+    msg.channel = MagicMock()
+    msg.channel.id = 111111  # Some random channel
+    msg.reply = AsyncMock()
+
+    async def mock_history(limit=20):
+        return
+        yield
+
+    msg.channel.history = mock_history
+    msg.channel.typing = MagicMock(return_value=AsyncMock())
+
+    await cog.on_message(msg)
+
+    cog.ai_helper_discord.assert_called_once()
+    call_args = cog.ai_helper_discord.call_args
+    assert call_args[0][0] == "Mentioner"
+    assert call_args[0][1] == "what is UBI?"  # Mention stripped
+    assert call_args.kwargs.get("generic") or call_args[0][3]  # generic=True for mentions
+    msg.reply.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_on_message_ignores_non_ask_bot_channel(knowledge_cog_with_ai):
+    """Test that the bot does NOT respond in unrelated channels without a mention."""
+    cog, bot = knowledge_cog_with_ai
+
+    msg = MagicMock(spec=discord.Message)
+    msg.author = MagicMock()
+    msg.content = "Just chatting"
+    msg.mentions = []
+    msg.channel = MagicMock()
+    msg.channel.id = 111111  # Not the ask-bot channel
+
+    await cog.on_message(msg)
+
+    cog.ai_helper_discord.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_on_message_ignores_own_messages(knowledge_cog_with_ai):
+    """Test that the bot does not respond to its own messages."""
+    cog, bot = knowledge_cog_with_ai
+
+    msg = MagicMock(spec=discord.Message)
+    msg.author = bot.user  # Message from the bot itself
+    msg.content = "I said something"
+    msg.channel = MagicMock()
+    msg.channel.id = 1349258054599835740  # Even in #ask-bot
+
+    await cog.on_message(msg)
+
+    cog.ai_helper_discord.assert_not_called()
+

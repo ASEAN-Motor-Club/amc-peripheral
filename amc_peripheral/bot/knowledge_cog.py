@@ -20,6 +20,7 @@ from amc_peripheral.settings import (
     BOT_MAX_ITERATIONS,
     BOT_FEEDBACK_DELAY_SECONDS,
     BOT_TOOL_STATUS_DELAY_SECONDS,
+    ASK_BOT_CHANNEL_ID,
 )
 from amc_peripheral.bot.ai_models import (
     ModerationResponse,
@@ -1098,10 +1099,48 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
 
         message_channel = message.channel
 
+        # 1. Auto-respond in #ask-bot channel or when @mentioned
+        is_ask_bot_channel = message_channel.id == ASK_BOT_CHANNEL_ID
+        is_mentioned = self.bot.user in message.mentions
+
+        if (is_ask_bot_channel or is_mentioned) and message.content:
+            # Strip the mention from the message content if present
+            question = message.content
+            if is_mentioned:
+                question = question.replace(f"<@{self.bot.user.id}>", "").replace(f"<@!{self.bot.user.id}>", "").strip()
+            if not question:
+                return
+
+            # Gather channel history (same pattern as /bot slash command)
+            prev = ""
+            async for m in message_channel.history(limit=20):
+                if m.id == message.id:
+                    continue
+                ms = f"### {m.author.display_name}:\n{m.content}\n"
+                if m.reactions:
+                    ms += "**Reactions**\n" + "\n".join(
+                        [
+                            f"{r.emoji}: {', '.join([u.display_name async for u in r.users()])}"
+                            for r in m.reactions
+                        ]
+                    )
+                prev = ms + "\n" + prev
+
+            async with message_channel.typing():
+                ans = await self.ai_helper_discord(
+                    message.author.display_name,
+                    question,
+                    prev,
+                    generic=is_mentioned,  # Use generic mode outside #ask-bot
+                )
+            for line in split_markdown(ans):
+                await message.reply(line, mention_author=False)
+            return
+
         # Note: In-game /bot commands are now handled via SSE backend connection
         # which provides richer player context (player_id, discord_id, character_guid)
 
-        # 3. Knowledge Update (Forum/News)
+        # 2. Knowledge Update (Forum/News)
         # Forum channel knowledge update
         if isinstance(message_channel, discord.Thread) and message_channel.parent:
             if message_channel.parent.id == KNOWLEDGE_FORUM_CHANNEL_ID:
