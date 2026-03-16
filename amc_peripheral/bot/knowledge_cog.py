@@ -76,6 +76,8 @@ class KnowledgeCog(commands.Cog):
         self._memory_storage: Optional[MemoryStorage] = None
         self._memory_retrieval: Optional[MemoryRetrieval] = None
 
+        self._active_tasks = set()
+
     async def cog_load(self):
         # Initialize long-term memory storage
         try:
@@ -930,7 +932,10 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
                                     else:
                                         log.info(f"SSE event received: type={event_type}, is_bot_command={event.get('is_bot_command')}")
                                     self._notify_watchdog()
-                                    await self._handle_backend_event(event)
+                                    
+                                    task = asyncio.create_task(self._handle_backend_event(event))
+                                    self._active_tasks.add(task)
+                                    task.add_done_callback(self._active_tasks.discard)
                                 except json.JSONDecodeError as e:
                                     log.warning(f"Failed to parse SSE event: {e}")
             except asyncio.CancelledError:
