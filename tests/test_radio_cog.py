@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from unittest.mock import MagicMock, AsyncMock
 
@@ -248,4 +249,83 @@ async def test_pick_trending_song_dedup(cog):
 
     # Should pick the non-queued song
     assert result == "New Artist - Fresh Song"
+
+
+# --- Download Serialization & Timeout Tests ---
+
+
+@pytest.mark.asyncio
+async def test_download_semaphore_exists(cog):
+    """Verify that the download semaphore is initialized as Semaphore(1)."""
+    assert hasattr(cog, "_download_semaphore")
+    assert isinstance(cog._download_semaphore, asyncio.Semaphore)
+    # Semaphore(1) means value starts at 1 (one slot available)
+    assert cog._download_semaphore._value == 1
+
+
+@pytest.mark.asyncio
+async def test_download_serialization(cog, monkeypatch):
+    """Verify that only one download runs at a time — concurrent requests wait."""
+    download_count = {"active": 0, "max_active": 0}
+
+    async def slow_do_download(youtube_link, requester):
+        download_count["active"] += 1
+        download_count["max_active"] = max(
+            download_count["max_active"], download_count["active"]
+        )
+        await asyncio.sleep(0.1)
+        download_count["active"] -= 1
+        return "Test Song", 120, "test_file", "https://example.com"
+
+    monkeypatch.setattr(cog, "_do_download", slow_do_download)
+    # Mock lq.push_to_queue to avoid telnet calls
+    cog.lq.push_to_queue = lambda *args: None
+
+    # Launch 3 concurrent requests (all bypass throttling)
+    tasks = [
+        asyncio.create_task(
+            cog.request_song(f"song{i}", f"User{i}", bypass_throttling=True)
+        )
+        for i in range(3)
+    ]
+    await asyncio.gather(*tasks)
+
+    # At most 1 download should have been active at any time
+    assert download_count["max_active"] == 1
+
+
+@pytest.mark.asyncio
+async def test_download_timeout_raises_friendly_error(cog, monkeypatch):
+    """Verify that a download exceeding DOWNLOAD_TIMEOUT raises a user-friendly error."""
+    from amc_peripheral.radio import radio_cog
+
+    monkeypatch.setattr(radio_cog, "DOWNLOAD_TIMEOUT", 0.1)  # 100ms timeout
+
+    async def hanging_download(youtube_link, requester):
+        await asyncio.sleep(10)  # Hang forever (well, 10s)
+        return "Never", 0, "never", None
+
+    monkeypatch.setattr(cog, "_do_download", hanging_download)
+
+    with pytest.raises(Exception, match="Download timed out"):
+        await cog.request_song("test", "TestUser", bypass_throttling=True)
+
+
+@pytest.mark.asyncio
+async def test_queue_timeout_raises_busy_error(cog, monkeypatch):
+    """Verify that waiting too long for the semaphore raises a 'busy' error."""
+    from amc_peripheral.radio import radio_cog
+
+    monkeypatch.setattr(radio_cog, "DOWNLOAD_QUEUE_TIMEOUT", 0.1)  # 100ms
+
+    # Acquire the semaphore so new requests can't get it
+    await cog._download_semaphore.acquire()
+
+    try:
+        with pytest.raises(
+            Exception, match="The radio is busy downloading another song"
+        ):
+            await cog.request_song("test", "TestUser", bypass_throttling=True)
+    finally:
+        cog._download_semaphore.release()
 

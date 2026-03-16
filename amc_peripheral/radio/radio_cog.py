@@ -109,6 +109,11 @@ class LinkView(discord.ui.View):
         )
 
 
+# Download guard constants
+DOWNLOAD_TIMEOUT = 120  # Max seconds for a single download+transcode
+DOWNLOAD_QUEUE_TIMEOUT = 30  # Max seconds to wait in download queue
+
+
 class RadioCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -128,6 +133,7 @@ class RadioCog(commands.Cog):
         ]
         self.db = RadioDB(RADIO_DB_PATH)
         self.game_schema_description = ""
+        self._download_semaphore = asyncio.Semaphore(1)
 
     async def cog_load(self):
         self.post_gazette_task.start()
@@ -483,44 +489,8 @@ Output only the spoken words, as if transcribed from a live recording.""",
             return json.dumps(result.get("results", []), indent=2)
         return f"Unknown tool: {name}"
 
-    async def request_song(
-        self,
-        youtube_link: str,
-        requester: str,
-        discord_id: str | None = None,
-        bypass_throttling=False,
-    ):
-        now = datetime.now(self.local_tz)
-
-        # --- Throttling Logic ---
-        ten_minutes_ago = now - timedelta(minutes=10)
-        self.user_requests.setdefault(requester, [])
-        self.user_requests[requester] = [
-            t for t in self.user_requests[requester] if t > ten_minutes_ago
-        ]
-
-        five_minutes_ago = now - timedelta(minutes=5)
-        requests_last_5_min = sum(
-            1 for t in self.user_requests[requester] if t > five_minutes_ago
-        )
-        requests_last_10_min = len(self.user_requests[requester])
-
-        if not bypass_throttling:
-            if requests_last_5_min >= 3:
-                raise Exception(
-                    "You have queued too many songs. Please wait a moment. (Limit: 3 songs per 5 minutes)"
-                )
-            if requests_last_10_min >= 5:
-                raise Exception(
-                    "You have queued too many songs. Please wait a moment. (Limit: 5 songs per 10 minutes)"
-                )
-
-        if "chips" in requester.lower().strip():
-            raise Exception("User not allowed to request songs.")
-        if "give you up" in youtube_link.lower().strip():
-            raise Exception("No, just no")
-
-        # --- Extract Metadata ---
+    async def _do_download(self, youtube_link: str, requester: str):
+        """Extract metadata and download a song. Returns (title, duration, base_filename)."""
         search_query = youtube_link
         if "youtube.com" not in search_query and "youtu.be" not in search_query:
             search_query = f"ytsearch:{search_query}"
@@ -596,10 +566,6 @@ Output only the spoken words, as if transcribed from a live recording.""",
             "js_runtimes": {"deno": {"path": DENO_PATH}},
         }
 
-        # We need to find if file already exists to avoid re-downloading if we wanted,
-        # but logic says "request" implies playing it now, so downloading is safer to ensure it gets to the folder.
-        # But we can check if we want optim. For now, following original logic (download).
-
         try:
             # pyrefly: ignore [bad-argument-type]
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -607,6 +573,68 @@ Output only the spoken words, as if transcribed from a live recording.""",
                 await asyncio.to_thread(ydl.download, [webpage_url])
         except Exception as e:
             raise Exception(f"Failed to download audio: {e}")
+
+        return title, duration, base_filename, webpage_url
+
+    async def request_song(
+        self,
+        youtube_link: str,
+        requester: str,
+        discord_id: str | None = None,
+        bypass_throttling=False,
+    ):
+        now = datetime.now(self.local_tz)
+
+        # --- Throttling Logic ---
+        ten_minutes_ago = now - timedelta(minutes=10)
+        self.user_requests.setdefault(requester, [])
+        self.user_requests[requester] = [
+            t for t in self.user_requests[requester] if t > ten_minutes_ago
+        ]
+
+        five_minutes_ago = now - timedelta(minutes=5)
+        requests_last_5_min = sum(
+            1 for t in self.user_requests[requester] if t > five_minutes_ago
+        )
+        requests_last_10_min = len(self.user_requests[requester])
+
+        if not bypass_throttling:
+            if requests_last_5_min >= 3:
+                raise Exception(
+                    "You have queued too many songs. Please wait a moment. (Limit: 3 songs per 5 minutes)"
+                )
+            if requests_last_10_min >= 5:
+                raise Exception(
+                    "You have queued too many songs. Please wait a moment. (Limit: 5 songs per 10 minutes)"
+                )
+
+        if "chips" in requester.lower().strip():
+            raise Exception("User not allowed to request songs.")
+        if "give you up" in youtube_link.lower().strip():
+            raise Exception("No, just no")
+
+        # --- Serialized download (1 at a time) with timeout ---
+        try:
+            await asyncio.wait_for(
+                self._download_semaphore.acquire(),
+                timeout=DOWNLOAD_QUEUE_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            raise Exception(
+                "The radio is busy downloading another song. Please try again in a moment."
+            )
+
+        try:
+            title, duration, base_filename, webpage_url = await asyncio.wait_for(
+                self._do_download(youtube_link, requester),
+                timeout=DOWNLOAD_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            raise Exception(
+                "Download timed out. The song may be too large or the server is under load. Please try again."
+            )
+        finally:
+            self._download_semaphore.release()
 
         # --- Push to Queue ---
         local_path = f"{REQUESTS_PATH}/{base_filename}.mp3"
@@ -1131,6 +1159,13 @@ Output only the spoken words, as if transcribed from a live recording.""",
 
     @tasks.loop(seconds=10)
     async def update_current_song_embed(self):
+        # Send systemd watchdog heartbeat (proves the event loop is alive)
+        try:
+            import systemd.daemon  # type: ignore[import-untyped]
+            systemd.daemon.notify("WATCHDOG=1")
+        except ImportError:
+            pass
+
         radio_channel = self.bot.get_channel(RADIO_CHANNEL_ID)
         if not radio_channel:
             # log.warning(f'Radio channel cannot be found from channel id: {RADIO_CHANNEL_ID}')

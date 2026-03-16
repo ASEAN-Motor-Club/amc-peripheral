@@ -261,8 +261,11 @@
               restartIfChanged = true;
               serviceConfig = {
                 Type = "simple";
-                Restart = "on-failure";
+                Restart = "always";
                 RestartSec = "10";
+                CPUQuota = "80%";
+                WatchdogSec = "120";
+                TimeoutStopSec = "30";
                 EnvironmentFile = "${cfg.environmentFile}";
               };
               script = ''
