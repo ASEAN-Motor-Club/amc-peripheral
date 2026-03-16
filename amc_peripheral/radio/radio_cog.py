@@ -1052,6 +1052,14 @@ Output only the spoken words, as if transcribed from a live recording.""",
     async def update_jingles(self):
         await self._update_jingles_logic()
 
+    @update_jingles.before_loop
+    async def before_update_jingles(self):
+        await self.bot.wait_until_ready()
+
+    @update_jingles.error
+    async def update_jingles_error(self, error):
+        log.error(f"update_jingles task error: {error}", exc_info=error)
+
     @tasks.loop(time=dt_time(hour=0, minute=30, tzinfo=timezone.utc))
     async def post_gazette_task(self):
         gazette = await self.generate_gazette_content()
@@ -1156,6 +1164,10 @@ Output only the spoken words, as if transcribed from a live recording.""",
     @update_news.before_loop
     async def before_update_news(self):
         await self.bot.wait_until_ready()
+
+    @update_news.error
+    async def update_news_error(self, error):
+        log.error(f"update_news task error: {error}", exc_info=error)
 
     @tasks.loop(seconds=10)
     async def update_current_song_embed(self):
