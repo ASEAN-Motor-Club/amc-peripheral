@@ -788,16 +788,21 @@ async def test_playlist_play_queues_songs(cog, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_playlist_commands_exist(cog):
-    """Verify all new playlist slash commands are registered."""
-    commands = [cmd.name for cmd in cog.__cog_app_commands__]
-    assert "playlist_create" in commands
-    assert "playlist_delete" in commands
-    assert "playlist_add" in commands
-    assert "playlist_remove" in commands
-    assert "playlist_view" in commands
-    assert "playlist_list" in commands
-    assert "playlist_play" in commands
-    assert "playlist_elevate" in commands
+    """Verify all playlist subcommands are registered under the /playlist group."""
+    # Find the playlist group among cog app commands
+    groups = {cmd.name: cmd for cmd in cog.__cog_app_commands__}
+    assert "playlist" in groups, "Missing 'playlist' command group"
+
+    playlist_group = groups["playlist"]
+    subcommand_names = [cmd.name for cmd in playlist_group.commands]
+    assert "create" in subcommand_names
+    assert "delete" in subcommand_names
+    assert "add" in subcommand_names
+    assert "remove" in subcommand_names
+    assert "view" in subcommand_names
+    assert "list" in subcommand_names
+    assert "play" in subcommand_names
+    assert "elevate" in subcommand_names
 
 
 # --- Download Cache Tests ---
@@ -876,6 +881,68 @@ async def test_annie_elevate_tool_defined(cog):
     tools = cog._get_annie_tools()
     tool_names = [t["function"]["name"] for t in tools]
     assert "elevate_to_playlist" in tool_names
+
+
+# --- Like Button / Top Likes Tests ---
+
+
+@pytest.mark.asyncio
+async def test_now_playing_view_has_like_button(cog):
+    """Verify NowPlayingView contains a button with custom_id='radio_like'."""
+    from amc_peripheral.radio.radio_cog import NowPlayingView
+
+    view = NowPlayingView(cog)
+    custom_ids = [
+        child.custom_id
+        for child in view.children
+        if hasattr(child, "custom_id") and child.custom_id
+    ]
+    assert "radio_like" in custom_ids
+
+
+@pytest.mark.asyncio
+async def test_like_song_annie_tool_defined(cog):
+    """Verify like_song is in Annie's tool list."""
+    tools = cog._get_annie_tools()
+    tool_names = [t["function"]["name"] for t in tools]
+    assert "like_song" in tool_names
+
+
+@pytest.mark.asyncio
+async def test_get_top_liked_songs_annie_tool_defined(cog):
+    """Verify get_top_liked_songs is in Annie's tool list."""
+    tools = cog._get_annie_tools()
+    tool_names = [t["function"]["name"] for t in tools]
+    assert "get_top_liked_songs" in tool_names
+
+
+@pytest.mark.asyncio
+async def test_top_likes_command_exists(cog):
+    """Verify /top_likes slash command is registered."""
+    commands = [cmd.name for cmd in cog.__cog_app_commands__]
+    assert "top_likes" in commands
+
+
+@pytest.mark.asyncio
+async def test_get_song_like_count(cog):
+    """Verify db.get_song_like_count returns correct count."""
+    assert cog.db.get_song_like_count("Unknown Song") == 0
+
+    cog.db.add_like(discord_id="user1", song_title="Cool Song")
+    cog.db.add_like(discord_id="user2", song_title="Cool Song")
+    cog.db.add_like(discord_id="user3", song_title="Other Song")
+
+    assert cog.db.get_song_like_count("Cool Song") == 2
+    assert cog.db.get_song_like_count("Other Song") == 1
+
+
+@pytest.mark.asyncio
+async def test_get_song_like_count_excludes_dislikes(cog):
+    """Verify get_song_like_count only counts is_liked=1."""
+    cog.db.add_like(discord_id="user1", song_title="Mixed Song")
+    cog.db.add_dislike(discord_id="user2", song_title="Mixed Song")
+
+    assert cog.db.get_song_like_count("Mixed Song") == 1
 
 
 

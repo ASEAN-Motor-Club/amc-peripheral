@@ -80,15 +80,15 @@ Do not use emojis excessively. One or two per message max.
 Listeners can create and manage their own playlists to queue multiple songs at once. Here's how it works:
 
 **Creating & managing playlists (Discord or via you):**
-- `/playlist_create <name>` — Create a new playlist (e.g., "chill vibes", "road trip")
-- `/playlist_add <playlist> <song>` — Add a song by name, artist, or YouTube URL
-- `/playlist_remove <playlist> <song_title>` — Remove a song from a playlist
-- `/playlist_view <name>` — See all songs in a playlist
-- `/playlist_list` — See all your playlists
-- `/playlist_delete <name>` — Delete a playlist and all its songs
+- `/playlist create <name>` — Create a new playlist (e.g., "chill vibes", "road trip")
+- `/playlist add <playlist> <song>` — Add a song by name, artist, or YouTube URL
+- `/playlist remove <playlist> <song_title>` — Remove a song from a playlist
+- `/playlist view <name>` — See all songs in a playlist
+- `/playlist list` — See all your playlists
+- `/playlist delete <name>` — Delete a playlist and all its songs
 
 **Playing playlists:**
-- `/playlist_play <name>` — Queue all songs from a playlist (works in Discord AND in-game chat)
+- `/playlist play <name>` — Queue all songs from a playlist (works in Discord AND in-game chat)
 - Max 10 songs are queued per play — songs are downloaded and queued one by one
 
 **Via you (Annie):**
@@ -150,12 +150,50 @@ class LinkView(discord.ui.View):
         )
 
 
+class NowPlayingView(discord.ui.View):
+    """Persistent view on the radio embed with a Like button and Listen link."""
+
+    def __init__(self, cog: "RadioCog"):
+        super().__init__(timeout=None)
+        self.cog = cog
+        self.add_item(
+            discord.ui.Button(
+                label="Listen to Radio",
+                style=discord.ButtonStyle.url,
+                url="https://www.aseanmotorclub.com/radio",
+            )
+        )
+
+    @discord.ui.button(
+        label="Like", style=discord.ButtonStyle.secondary,
+        custom_id="radio_like", emoji="❤️",
+    )
+    async def like_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        metadata = await get_current_song_metadata(self.cog.bot.http_session)
+        if not metadata:
+            await interaction.followup.send("No song is currently playing.", ephemeral=True)
+            return
+        song_info = parse_song_info(metadata)
+        if not song_info:
+            await interaction.followup.send("Could not identify the current song.", ephemeral=True)
+            return
+        song_title = song_info["song_title"]
+        self.cog.db.add_like(discord_id=str(interaction.user.id), song_title=song_title)
+        like_count = self.cog.db.get_song_like_count(song_title)
+        await interaction.followup.send(
+            f"❤️ Liked **{song_title}**! ({like_count} total)", ephemeral=True
+        )
+
+
 # Download guard constants
 DOWNLOAD_TIMEOUT = 120  # Max seconds for a single download+transcode
 DOWNLOAD_QUEUE_TIMEOUT = 30  # Max seconds to wait in download queue
 
 
 class RadioCog(commands.Cog):
+    playlist_group = app_commands.Group(name="playlist", description="Manage your playlists", guild_ids=[GUILD_ID])
+
     def __init__(self, bot):
         self.bot = bot
         self.openai_client_openrouter = AsyncOpenAI(
@@ -182,6 +220,10 @@ class RadioCog(commands.Cog):
         self.update_news.start()
         self.update_current_song_embed.start()
         self.auto_queue_trending.start()
+
+        # Register persistent view for the radio embed like button
+        self._now_playing_view = NowPlayingView(self)
+        self.bot.add_view(self._now_playing_view)
 
         # Load knowledge on start
         try:
@@ -780,6 +822,28 @@ Output only the spoken words, as if transcribed from a live recording.""",
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "like_song",
+                    "description": "Like the currently playing song on the radio on behalf of the listener.",
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_top_liked_songs",
+                    "description": "Get the most liked songs on the radio, ranked by number of likes.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "limit": {"type": "integer", "description": "Number of songs to return (default 10)"},
+                        },
+                        "required": [],
+                    },
+                },
+            },
         ]
 
     async def _execute_annie_tool(self, name: str, args: dict, requester: str, notify_fn) -> str:
@@ -908,6 +972,26 @@ Output only the spoken words, as if transcribed from a live recording.""",
                     self._fire_and_forget_playlist_add(song_query, notify_fn)
                 )
                 return f"Elevating '{song_query}' to the base playlist. I'll let you know when it's done!"
+
+            elif name == "like_song":
+                metadata = await get_current_song_metadata(self.bot.http_session)
+                if not metadata:
+                    return "No song is currently playing."
+                song_info = parse_song_info(metadata)
+                if not song_info:
+                    return "Could not identify the current song."
+                song_title = song_info["song_title"]
+                self.db.add_like(discord_id=requester, song_title=song_title)
+                like_count = self.db.get_song_like_count(song_title)
+                return f"Liked '{song_title}'! It now has {like_count} like(s)."
+
+            elif name == "get_top_liked_songs":
+                limit = args.get("limit", 10)
+                top = self.db.get_top_liked_songs(limit=limit)
+                if not top:
+                    return "No songs have been liked yet."
+                lines = [f"- {s['song_title']}: ❤️ {s['like_count']}" for s in top]
+                return "Top liked songs:\n" + "\n".join(lines)
 
             return f"Unknown tool: {name}"
         except Exception as e:
@@ -1805,6 +1889,19 @@ Output only the spoken words, as if transcribed from a live recording.""",
         for chunk in split_markdown(content):
             await interaction.followup.send(chunk, ephemeral=True)
 
+    @app_commands.command(name="top_likes", description="See the most liked songs on the radio")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def top_likes_cmd(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        top = self.db.get_top_liked_songs(limit=10)
+        if not top:
+            await interaction.followup.send("No songs have been liked yet.", ephemeral=True)
+            return
+        lines = ["**❤️ Most Liked Songs**\n"]
+        for i, s in enumerate(top, 1):
+            lines.append(f"{i}. **{s['song_title']}** — ❤️ {s['like_count']}")
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
+
     @app_commands.command(
         name="recompile_playlist", description="Recompile radio playlist"
     )
@@ -1849,10 +1946,9 @@ Output only the spoken words, as if transcribed from a live recording.""",
             self.lq.skip_current_track(self.bot.http_session, "song_requests")
         )
 
-    # --- Playlist Commands ---
+    # --- Playlist Commands (group: /playlist <subcommand>) ---
 
-    @app_commands.command(name="playlist_create", description="Create a new playlist")
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @playlist_group.command(name="create", description="Create a new playlist")
     async def playlist_create_cmd(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer(ephemeral=True)
         try:
@@ -1861,8 +1957,7 @@ Output only the spoken words, as if transcribed from a live recording.""",
         except Exception as e:
             await interaction.followup.send(f"Failed: {e}", ephemeral=True)
 
-    @app_commands.command(name="playlist_delete", description="Delete one of your playlists")
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @playlist_group.command(name="delete", description="Delete one of your playlists")
     async def playlist_delete_cmd(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer(ephemeral=True)
         deleted = self.db.delete_playlist(discord_id=str(interaction.user.id), name=name)
@@ -1871,19 +1966,17 @@ Output only the spoken words, as if transcribed from a live recording.""",
         else:
             await interaction.followup.send(f"Playlist '{name}' not found.", ephemeral=True)
 
-    @app_commands.command(name="playlist_add", description="Add a song to one of your playlists")
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @playlist_group.command(name="add", description="Add a song to one of your playlists")
     async def playlist_add_cmd(self, interaction: discord.Interaction, playlist: str, song: str):
         await interaction.response.defer(ephemeral=True)
         pl = self.db.get_playlist_by_name(discord_id=str(interaction.user.id), name=playlist)
         if not pl:
-            await interaction.followup.send(f"Playlist '{playlist}' not found. Create it first with `/playlist_create`.", ephemeral=True)
+            await interaction.followup.send(f"Playlist '{playlist}' not found. Create it first with `/playlist create`.", ephemeral=True)
             return
         self.db.add_song_to_playlist(pl["id"], song_query=song, song_title=song)
         await interaction.followup.send(f"🎵 Added **{song}** to playlist **{pl['name']}**!", ephemeral=True)
 
-    @app_commands.command(name="playlist_remove", description="Remove a song from one of your playlists")
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @playlist_group.command(name="remove", description="Remove a song from one of your playlists")
     async def playlist_remove_cmd(self, interaction: discord.Interaction, playlist: str, song_title: str):
         await interaction.response.defer(ephemeral=True)
         pl = self.db.get_playlist_by_name(discord_id=str(interaction.user.id), name=playlist)
@@ -1896,8 +1989,7 @@ Output only the spoken words, as if transcribed from a live recording.""",
         else:
             await interaction.followup.send(f"Song '{song_title}' not found in playlist '{pl['name']}'.", ephemeral=True)
 
-    @app_commands.command(name="playlist_view", description="View songs in one of your playlists")
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @playlist_group.command(name="view", description="View songs in one of your playlists")
     async def playlist_view_cmd(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer(ephemeral=True)
         pl = self.db.get_playlist_by_name(discord_id=str(interaction.user.id), name=name)
@@ -1911,19 +2003,17 @@ Output only the spoken words, as if transcribed from a live recording.""",
         lines = [f"{s['position']}. {s['song_title']}" for s in songs]
         await interaction.followup.send(f"📋 **{pl['name']}** ({len(songs)} songs):\n" + "\n".join(lines), ephemeral=True)
 
-    @app_commands.command(name="playlist_list", description="List all your playlists")
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @playlist_group.command(name="list", description="List all your playlists")
     async def playlist_list_cmd(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         playlists = self.db.get_playlists(discord_id=str(interaction.user.id))
         if not playlists:
-            await interaction.followup.send("You don't have any playlists yet. Use `/playlist_create` to make one!", ephemeral=True)
+            await interaction.followup.send("You don't have any playlists yet. Use `/playlist create` to make one!", ephemeral=True)
             return
         lines = [f"- **{p['name']}** ({p['song_count']} songs)" for p in playlists]
         await interaction.followup.send("📻 **Your Playlists:**\n" + "\n".join(lines), ephemeral=True)
 
-    @app_commands.command(name="playlist_play", description="Queue all songs from one of your playlists")
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @playlist_group.command(name="play", description="Queue all songs from one of your playlists")
     async def playlist_play_cmd(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer(ephemeral=True)
         pl = self.db.get_playlist_by_name(discord_id=str(interaction.user.id), name=name)
@@ -1944,8 +2034,7 @@ Output only the spoken words, as if transcribed from a live recording.""",
             self._play_user_playlist(songs, interaction.user.display_name, discord_notify)
         )
 
-    @app_commands.command(name="playlist_elevate", description="Promote a song to the permanent base radio playlist")
-    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @playlist_group.command(name="elevate", description="Promote a song to the permanent base radio playlist")
     async def playlist_elevate_cmd(self, interaction: discord.Interaction, song: str):
         # Check DJ role
         if not any(r.id == DJ_ROLE_ID for r in interaction.user.roles):
@@ -2198,7 +2287,14 @@ Output only the spoken words, as if transcribed from a live recording.""",
             inline=False,
         )
 
-        view = LinkView("https://www.aseanmotorclub.com/radio", "Listen to Radio")
+        # Show like count if any
+        like_count = self.db.get_song_like_count(song_title)
+        if like_count > 0:
+            embed.add_field(
+                name="❤️ Likes", value=str(like_count), inline=True,
+            )
+
+        view = self._now_playing_view
 
         if self.embed_message_id:
             try:

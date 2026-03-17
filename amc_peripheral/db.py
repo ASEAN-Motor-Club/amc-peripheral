@@ -208,6 +208,14 @@ class RadioDB:
         """
         return list(self.db.query(query, [limit]))
 
+    def get_song_like_count(self, song_title: str) -> int:
+        """Get the number of active likes for a specific song."""
+        result = list(self.db.query(
+            "SELECT COUNT(*) as cnt FROM song_likes WHERE song_title = ? AND is_liked = 1",
+            [song_title],
+        ))
+        return result[0]["cnt"] if result else 0
+
     def get_all_song_stats(self) -> list[dict]:
         """Get stats for all songs that have any likes or unlikes."""
         query = """
