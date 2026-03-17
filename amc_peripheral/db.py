@@ -5,6 +5,7 @@ class RadioDB:
     def __init__(self, db_path: str):
         """Initialize the database and ensure tables exist."""
         self.db = Database(db_path)
+        self.db.conn.execute("PRAGMA busy_timeout = 5000")
         self._ensure_tables()
 
     def _ensure_tables(self):

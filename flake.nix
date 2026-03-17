@@ -246,7 +246,7 @@
 
             systemd.services.amc-bot = {
               wantedBy = ["multi-user.target"];
-              after = ["network.target" "motortown-server.service"];
+              after = ["network.target" "motortown-server.service" "amc-radio.service"];
               description = "AMC Bot";
               environment = {
                 FFMPEG_PATH = "${pkgs.ffmpeg}/bin/ffmpeg";
