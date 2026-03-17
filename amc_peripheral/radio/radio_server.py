@@ -48,6 +48,19 @@ def parse_song_info(metadata: dict) -> Optional[dict]:
             "song_title": song_title,
         }
     except ValueError:
+        # Fallback for cache/playlist files without requester-title format
+        # (e.g. cache/VdQY7BusJNU.mp3 or playlist/SomeFile.mp3)
+        title = metadata.get("title")
+        if title:
+            try:
+                folder = filename.split("/")[0]
+            except (ValueError, IndexError):
+                folder = "unknown"
+            return {
+                "folder": folder,
+                "requester": "Radio",
+                "song_title": title,
+            }
         return None
 
 

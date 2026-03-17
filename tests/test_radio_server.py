@@ -41,12 +41,39 @@ class TestParseFileInfo:
         assert result["requester"] == "Bob"
         assert result["song_title"] == "Song-With-Hyphens"
 
-    def test_parse_invalid_format_missing_hyphen(self):
-        """Test parsing fails gracefully for invalid format."""
+    def test_parse_missing_hyphen_with_metadata_title(self):
+        """Test fallback to metadata title when filename has no hyphen."""
+        metadata = {
+            "filename": "/var/lib/radio/requests/InvalidNoHyphen.mp3",
+            "title": "Some Song Title",
+        }
+        result = parse_song_info(metadata)
+
+        assert result is not None
+        assert result["folder"] == "requests"
+        assert result["requester"] == "Radio"
+        assert result["song_title"] == "Some Song Title"
+
+    def test_parse_missing_hyphen_no_metadata_title(self):
+        """Test parsing fails when filename has no hyphen and no metadata title."""
         metadata = {"filename": "/var/lib/radio/requests/InvalidNoHyphen.mp3"}
         result = parse_song_info(metadata)
 
         assert result is None
+
+    def test_parse_cache_directory_with_video_id(self):
+        """Test parsing a cached song with YouTube video ID filename."""
+        metadata = {
+            "filename": "/var/lib/radio/cache/VdQY7BusJNU.mp3",
+            "title": "Cyndi Lauper - Time After Time (Official HD Video)",
+            "artist": "Cyndi Lauper",
+        }
+        result = parse_song_info(metadata)
+
+        assert result is not None
+        assert result["folder"] == "cache"
+        assert result["requester"] == "Radio"
+        assert result["song_title"] == "Cyndi Lauper - Time After Time (Official HD Video)"
 
     def test_parse_invalid_format_missing_folder(self):
         """Test parsing fails gracefully for missing folder structure."""
