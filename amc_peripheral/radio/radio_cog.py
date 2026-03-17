@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 import re
 import random
 import asyncio
@@ -41,6 +42,8 @@ from amc_peripheral.settings import (
     RADIO_PATH,
     PLAYLIST_PATH,
     REQUESTS_PATH,
+    SONG_CACHE_PATH,
+    SONG_CACHE_MAX_MB,
     SONGS_PATH,
     JINGLES_PATH,
     RADIO_DB_PATH,
@@ -72,7 +75,27 @@ You have access to tools to manage the radio. If someone wants music, USE the to
 When queuing songs, the download may take a moment; let the listener know you're on it.
 
 Do not use emojis excessively. One or two per message max.
+
+## Playlist Management
+Listeners can create and manage their own playlists to queue multiple songs at once. Here's how it works:
+
+**Creating & managing playlists (Discord or via you):**
+- `/playlist_create <name>` — Create a new playlist (e.g., "chill vibes", "road trip")
+- `/playlist_add <playlist> <song>` — Add a song by name, artist, or YouTube URL
+- `/playlist_remove <playlist> <song_title>` — Remove a song from a playlist
+- `/playlist_view <name>` — See all songs in a playlist
+- `/playlist_list` — See all your playlists
+- `/playlist_delete <name>` — Delete a playlist and all its songs
+
+**Playing playlists:**
+- `/playlist_play <name>` — Queue all songs from a playlist (works in Discord AND in-game chat)
+- Max 10 songs are queued per play — songs are downloaded and queued one by one
+
+**Via you (Annie):**
+Listeners can also ask you directly to create playlists, add songs, view their lists, or play them. \
+Use your playlist tools when they do — don't tell them to use slash commands if they're already chatting with you.
 """
+
 
 
 # Pydantic Models
@@ -173,6 +196,12 @@ class RadioCog(commands.Cog):
             self.game_schema_description = game_db.get_schema_description()
         except Exception as e:
             log.error(f"Failed to load game schema: {e}")
+
+        # Ensure cache directory exists
+        Path(SONG_CACHE_PATH).mkdir(parents=True, exist_ok=True)
+
+        # Clean up legacy request files (one-time migration)
+        self._cleanup_legacy_requests()
 
     async def cog_unload(self):
         self.post_gazette_task.cancel()
@@ -654,6 +683,103 @@ Output only the spoken words, as if transcribed from a live recording.""",
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "create_user_playlist",
+                    "description": "Create a new empty playlist for the user.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Name for the new playlist (e.g. 'chill vibes', 'road trip')",
+                            },
+                        },
+                        "required": ["name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "add_to_user_playlist",
+                    "description": "Add a song to one of the user's playlists. The song is stored as a search query/URL for later playback.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "playlist_name": {
+                                "type": "string",
+                                "description": "Name of the playlist to add to",
+                            },
+                            "song_query": {
+                                "type": "string",
+                                "description": "Song name, artist, or YouTube URL",
+                            },
+                        },
+                        "required": ["playlist_name", "song_query"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "view_user_playlist",
+                    "description": "View all songs in one of the user's playlists.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "playlist_name": {
+                                "type": "string",
+                                "description": "Name of the playlist to view",
+                            },
+                        },
+                        "required": ["playlist_name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "list_user_playlists",
+                    "description": "List all playlists belonging to the user.",
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "play_user_playlist",
+                    "description": "Queue all songs from one of the user's playlists on the radio. Songs are downloaded and queued one by one. Max 10 songs per play.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "playlist_name": {
+                                "type": "string",
+                                "description": "Name of the playlist to play",
+                            },
+                        },
+                        "required": ["playlist_name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "elevate_to_playlist",
+                    "description": "Promote a song to the permanent base radio playlist. The song will be downloaded (or fetched from cache) and added to the main rotation. DJ use only.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "song_query": {
+                                "type": "string",
+                                "description": "Song name, artist, or YouTube URL to add to the base playlist",
+                            },
+                        },
+                        "required": ["song_query"],
+                    },
+                },
+            },
         ]
 
     async def _execute_annie_tool(self, name: str, args: dict, requester: str, notify_fn) -> str:
@@ -727,9 +853,81 @@ Output only the spoken words, as if transcribed from a live recording.""",
                 filename = args.get("filename", "")
                 return await self._tool_remove_from_playlist(filename)
 
+            elif name == "create_user_playlist":
+                playlist_name = args.get("name", "")
+                try:
+                    self.db.create_playlist(discord_id=requester, name=playlist_name)
+                    return f"Created playlist '{playlist_name.strip().lower()}'!"
+                except Exception as e:
+                    return str(e)
+
+            elif name == "add_to_user_playlist":
+                playlist_name = args.get("playlist_name", "")
+                song_query = args.get("song_query", "")
+                playlist = self.db.get_playlist_by_name(discord_id=requester, name=playlist_name)
+                if not playlist:
+                    return f"Playlist '{playlist_name}' not found. Create it first!"
+                self.db.add_song_to_playlist(playlist["id"], song_query=song_query, song_title=song_query)
+                return f"Added '{song_query}' to playlist '{playlist['name']}'."
+
+            elif name == "view_user_playlist":
+                playlist_name = args.get("playlist_name", "")
+                playlist = self.db.get_playlist_by_name(discord_id=requester, name=playlist_name)
+                if not playlist:
+                    return f"Playlist '{playlist_name}' not found."
+                songs = self.db.get_playlist_songs(playlist["id"])
+                if not songs:
+                    return f"Playlist '{playlist['name']}' is empty."
+                lines = [f"{s['position']}. {s['song_title']}" for s in songs]
+                return f"Playlist '{playlist['name']}' ({len(songs)} songs):\n" + "\n".join(lines)
+
+            elif name == "list_user_playlists":
+                playlists = self.db.get_playlists(discord_id=requester)
+                if not playlists:
+                    return "You don't have any playlists yet. Create one!"
+                lines = [f"- {p['name']} ({p['song_count']} songs)" for p in playlists]
+                return "Your playlists:\n" + "\n".join(lines)
+
+            elif name == "play_user_playlist":
+                playlist_name = args.get("playlist_name", "")
+                playlist = self.db.get_playlist_by_name(discord_id=requester, name=playlist_name)
+                if not playlist:
+                    return f"Playlist '{playlist_name}' not found."
+                songs = self.db.get_playlist_songs(playlist["id"])
+                if not songs:
+                    return f"Playlist '{playlist['name']}' is empty."
+                self.bot.loop.create_task(
+                    self._play_user_playlist(songs, requester, notify_fn)
+                )
+                capped = min(len(songs), 10)
+                return f"Queueing {capped} song(s) from '{playlist['name']}'. Each song takes about 30-60 seconds to download, so sit tight — I'll update you as each one lands!"
+
+            elif name == "elevate_to_playlist":
+                song_query = args.get("song_query", "")
+                self.bot.loop.create_task(
+                    self._fire_and_forget_playlist_add(song_query, notify_fn)
+                )
+                return f"Elevating '{song_query}' to the base playlist. I'll let you know when it's done!"
+
             return f"Unknown tool: {name}"
         except Exception as e:
             return f"Tool error ({name}): {e}"
+
+    PLAYLIST_PLAY_CAP = 10
+
+    async def _play_user_playlist(self, songs: list[dict], requester: str, notify_fn):
+        """Queue songs from a user playlist one by one (fire-and-forget)."""
+        capped = songs[:self.PLAYLIST_PLAY_CAP]
+        for i, song in enumerate(capped, 1):
+            try:
+                title, _ = await self.request_song(
+                    song["song_query"], requester, bypass_throttling=True
+                )
+                await notify_fn(f"🎵 [{i}/{len(capped)}] Queued **{title}**")
+            except Exception as e:
+                await notify_fn(f"⚠️ [{i}/{len(capped)}] Failed to queue '{song['song_title']}': {e}")
+        if len(songs) > self.PLAYLIST_PLAY_CAP:
+            await notify_fn(f"ℹ️ Only the first {self.PLAYLIST_PLAY_CAP} songs were queued (playlist has {len(songs)}).")
 
     async def _fire_and_forget_queue(self, query: str, requester: str, notify_fn, bypass_throttling=False):
         """Download and queue a song in the background, then notify."""
@@ -1041,10 +1239,13 @@ Output only the spoken words, as if transcribed from a live recording.""",
         return f"Could not find '{filename}' in the playlist. Use search_playlist to check the exact filename."
 
     async def _fire_and_forget_playlist_add(self, query: str, notify_fn):
-        """Download a song and add it to the playlist channel in the background."""
+        """Download a song (cache-aware) and add it to the playlist channel in the background."""
         try:
-            async with asyncio.timeout(DOWNLOAD_TIMEOUT):
-                title, filepath = await self._download_to_path(query, PLAYLIST_PATH)
+            # Use cache-aware download
+            title, duration, local_path, webpage_url = await asyncio.wait_for(
+                self._get_or_download(query),
+                timeout=DOWNLOAD_TIMEOUT,
+            )
 
             playlist_channel = self.bot.get_channel(PLAYLIST_CHANNEL)
             if not playlist_channel:
@@ -1052,7 +1253,7 @@ Output only the spoken words, as if transcribed from a live recording.""",
                 return
 
             await playlist_channel.send(
-                file=discord.File(filepath)
+                file=discord.File(local_path)
             )
             await notify_fn(f'🎵 Added **{title}** to the playlist!')
         except Exception as e:
@@ -1107,8 +1308,8 @@ Output only the spoken words, as if transcribed from a live recording.""",
             )
 
         try:
-            title, duration, base_filename, webpage_url = await asyncio.wait_for(
-                self._do_download(youtube_link, requester),
+            title, duration, local_path, webpage_url = await asyncio.wait_for(
+                self._get_or_download(youtube_link),
                 timeout=DOWNLOAD_TIMEOUT,
             )
         except asyncio.TimeoutError:
@@ -1118,8 +1319,23 @@ Output only the spoken words, as if transcribed from a live recording.""",
         finally:
             self._download_semaphore.release()
 
+        # --- Checks that need resolved metadata ---
+        normalized_title = title.lower().strip()
+        normalized_queue = [t.lower().strip() for t in self.recent_song_queue]
+        if normalized_title in normalized_queue:
+            raise Exception(
+                f'"{ title}" has been queued recently. Please choose a different song.'
+            )
+
+        # pyrefly: ignore [unsupported-operation]
+        if duration > 600:
+            # pyrefly: ignore [unsupported-operation]
+            raise Exception(
+                # pyrefly: ignore [unsupported-operation]
+                f'"{ title}" is too long ({duration // 60}m). Max duration is 10 minutes.'
+            )
+
         # --- Push to Queue ---
-        local_path = f"{REQUESTS_PATH}/{base_filename}.mp3"
         try:
             await self.lq.push_to_queue(self.bot.http_session, "song_requests", local_path)
         except Exception as e:
@@ -1141,6 +1357,129 @@ Output only the spoken words, as if transcribed from a live recording.""",
             log.error(f"Failed to persist song request: {e}")
 
         return title, duration
+
+    async def _get_or_download(self, query: str) -> tuple:
+        """Resolve metadata and return cached file or download fresh. Returns (title, duration, local_path, webpage_url)."""
+        search_query = query
+        if "youtube.com" not in search_query and "youtu.be" not in search_query:
+            search_query = f"ytsearch:{search_query}"
+
+        ydl_info_opts = {
+            "noplaylist": True,
+            "quiet": True,
+            "default_search": "ytsearch",
+            "cookiefile": YT_COOKIES_PATH,
+            "js_runtimes": {"deno": {"path": DENO_PATH}},
+        }
+
+        try:
+            # pyrefly: ignore [bad-argument-type]
+            with yt_dlp.YoutubeDL(ydl_info_opts) as ydl:
+                info_dict = await asyncio.to_thread(
+                    ydl.extract_info, search_query, download=False
+                )
+            # pyrefly: ignore [bad-typed-dict-key]
+            if "entries" in info_dict and info_dict["entries"]:
+                # pyrefly: ignore [bad-typed-dict-key]
+                info_dict = info_dict["entries"][0]
+        except Exception as e:
+            raise Exception(
+                "Could not find that song. Please try a different name or link."
+            ) from e
+
+        title = info_dict.get("title", "Unknown")
+        duration = info_dict.get("duration", 0)
+        webpage_url = info_dict.get("webpage_url")
+        video_id = info_dict.get("id", "")
+
+        if not video_id:
+            raise Exception("Could not resolve video ID for this song.")
+
+        # Check cache
+        cached = self.db.get_cached_song(video_id)
+        cache_path = f"{SONG_CACHE_PATH}/{video_id}.mp3"
+
+        if cached and os.path.exists(cached["local_path"]):
+            log.info(f"Cache hit for '{title}' (video_id={video_id})")
+            return title, duration, cached["local_path"], webpage_url
+
+        # Cache miss — evict if needed, then download
+        log.info(f"Cache miss for '{title}' (video_id={video_id}), downloading...")
+        self._evict_cache()
+
+        ydl_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": f"{SONG_CACHE_PATH}/{video_id}.%(ext)s",
+            "cookiefile": YT_COOKIES_PATH,
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192",
+                },
+                {
+                    "key": "FFmpegMetadata",
+                    "add_metadata": True,
+                },
+            ],
+            "ffmpeg_location": os.environ.get("FFMPEG_PATH"),
+            "prefer_ffmpeg": True,
+            "retries": 5,
+            "js_runtimes": {"deno": {"path": DENO_PATH}},
+        }
+
+        try:
+            # pyrefly: ignore [bad-argument-type]
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # pyrefly: ignore [bad-argument-type]
+                await asyncio.to_thread(ydl.download, [webpage_url])
+        except Exception as e:
+            raise Exception(f"Failed to download audio: {e}")
+
+        # Record in cache
+        file_size = os.path.getsize(cache_path) if os.path.exists(cache_path) else 0
+        self.db.cache_song(
+            video_id=video_id,
+            title=title,
+            duration=duration,
+            local_path=cache_path,
+            webpage_url=webpage_url or "",
+            file_size=file_size,
+        )
+
+        return title, duration, cache_path, webpage_url
+
+    def _evict_cache(self):
+        """Evict least-recently-used cache entries to stay under the size cap."""
+        max_bytes = SONG_CACHE_MAX_MB * 1024 * 1024
+        stats = self.db.get_cache_stats()
+
+        while stats["total_bytes"] > max_bytes or stats["total_files"] > 500:
+            oldest = self.db.get_oldest_cached_songs(limit=5)
+            if not oldest:
+                break
+            for entry in oldest:
+                try:
+                    p = Path(entry["local_path"])
+                    if p.exists():
+                        p.unlink()
+                    self.db.delete_cached_song(entry["video_id"])
+                    log.info(f"Evicted cached song: {entry['title']} ({entry['video_id']})")
+                except Exception as e:
+                    log.error(f"Failed to evict cache entry {entry['video_id']}: {e}")
+            stats = self.db.get_cache_stats()
+
+    def _cleanup_legacy_requests(self):
+        """Remove old per-requester mp3 files from REQUESTS_PATH (one-time migration)."""
+        requests_dir = Path(REQUESTS_PATH)
+        if not requests_dir.exists():
+            return
+        count = 0
+        for f in requests_dir.glob("*.mp3"):
+            f.unlink(missing_ok=True)
+            count += 1
+        if count:
+            log.info(f"Cleaned up {count} legacy request files from {REQUESTS_PATH}")
 
     async def compile_playlist(self):
         os.makedirs(PLAYLIST_PATH, exist_ok=True)
@@ -1263,7 +1602,41 @@ Output only the spoken words, as if transcribed from a live recording.""",
             color="FEE75C",
         )
 
+    async def game_playlist_play(self, requester: str, playlist_name: str):
+        """Handle /playlist_play from in-game chat."""
+        channel = self.bot.get_channel(GAME_ANNOUNCEMENTS_CHANNEL_ID)
+        # In-game users are identified by player name (same as game_like_song)
+        playlist = self.db.get_playlist_by_name(discord_id=requester, name=playlist_name)
+        if not playlist:
+            msg = f"Playlist '{playlist_name}' not found, {requester}."
+            if channel:
+                await channel.send(msg)
+            await announce_in_game(self.bot.http_session, msg, color="FEE75C")
+            return
+
+        songs = self.db.get_playlist_songs(playlist["id"])
+        if not songs:
+            msg = f"Playlist '{playlist['name']}' is empty, {requester}."
+            if channel:
+                await channel.send(msg)
+            await announce_in_game(self.bot.http_session, msg, color="FEE75C")
+            return
+
+        capped = min(len(songs), self.PLAYLIST_PLAY_CAP)
+        msg = f"Queueing {capped} song(s) from '{playlist['name']}' for {requester}. Each download takes ~30-60s, hang tight!"
+        if channel:
+            await channel.send(msg)
+        await announce_in_game(self.bot.http_session, msg, color="FEE75C")
+
+        async def ingame_notify(msg: str):
+            if channel:
+                await channel.send(msg)
+            await announce_in_game(self.bot.http_session, msg[:520])
+
+        await self._play_user_playlist(songs, requester, ingame_notify)
+
     # --- Commands ---
+
 
     @app_commands.command(name="update_jingles", description="Update jingles")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
@@ -1475,6 +1848,118 @@ Output only the spoken words, as if transcribed from a live recording.""",
         self.bot.loop.create_task(
             self.lq.skip_current_track(self.bot.http_session, "song_requests")
         )
+
+    # --- Playlist Commands ---
+
+    @app_commands.command(name="playlist_create", description="Create a new playlist")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def playlist_create_cmd(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            self.db.create_playlist(discord_id=str(interaction.user.id), name=name)
+            await interaction.followup.send(f"✅ Created playlist **{name.strip().lower()}**!", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"Failed: {e}", ephemeral=True)
+
+    @app_commands.command(name="playlist_delete", description="Delete one of your playlists")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def playlist_delete_cmd(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=True)
+        deleted = self.db.delete_playlist(discord_id=str(interaction.user.id), name=name)
+        if deleted:
+            await interaction.followup.send(f"🗑️ Deleted playlist **{name.strip().lower()}** and all its songs.", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Playlist '{name}' not found.", ephemeral=True)
+
+    @app_commands.command(name="playlist_add", description="Add a song to one of your playlists")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def playlist_add_cmd(self, interaction: discord.Interaction, playlist: str, song: str):
+        await interaction.response.defer(ephemeral=True)
+        pl = self.db.get_playlist_by_name(discord_id=str(interaction.user.id), name=playlist)
+        if not pl:
+            await interaction.followup.send(f"Playlist '{playlist}' not found. Create it first with `/playlist_create`.", ephemeral=True)
+            return
+        self.db.add_song_to_playlist(pl["id"], song_query=song, song_title=song)
+        await interaction.followup.send(f"🎵 Added **{song}** to playlist **{pl['name']}**!", ephemeral=True)
+
+    @app_commands.command(name="playlist_remove", description="Remove a song from one of your playlists")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def playlist_remove_cmd(self, interaction: discord.Interaction, playlist: str, song_title: str):
+        await interaction.response.defer(ephemeral=True)
+        pl = self.db.get_playlist_by_name(discord_id=str(interaction.user.id), name=playlist)
+        if not pl:
+            await interaction.followup.send(f"Playlist '{playlist}' not found.", ephemeral=True)
+            return
+        removed = self.db.remove_song_from_playlist(pl["id"], song_title=song_title)
+        if removed:
+            await interaction.followup.send(f"Removed **{song_title}** from **{pl['name']}**.", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Song '{song_title}' not found in playlist '{pl['name']}'.", ephemeral=True)
+
+    @app_commands.command(name="playlist_view", description="View songs in one of your playlists")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def playlist_view_cmd(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=True)
+        pl = self.db.get_playlist_by_name(discord_id=str(interaction.user.id), name=name)
+        if not pl:
+            await interaction.followup.send(f"Playlist '{name}' not found.", ephemeral=True)
+            return
+        songs = self.db.get_playlist_songs(pl["id"])
+        if not songs:
+            await interaction.followup.send(f"Playlist **{pl['name']}** is empty.", ephemeral=True)
+            return
+        lines = [f"{s['position']}. {s['song_title']}" for s in songs]
+        await interaction.followup.send(f"📋 **{pl['name']}** ({len(songs)} songs):\n" + "\n".join(lines), ephemeral=True)
+
+    @app_commands.command(name="playlist_list", description="List all your playlists")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def playlist_list_cmd(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        playlists = self.db.get_playlists(discord_id=str(interaction.user.id))
+        if not playlists:
+            await interaction.followup.send("You don't have any playlists yet. Use `/playlist_create` to make one!", ephemeral=True)
+            return
+        lines = [f"- **{p['name']}** ({p['song_count']} songs)" for p in playlists]
+        await interaction.followup.send("📻 **Your Playlists:**\n" + "\n".join(lines), ephemeral=True)
+
+    @app_commands.command(name="playlist_play", description="Queue all songs from one of your playlists")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def playlist_play_cmd(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=True)
+        pl = self.db.get_playlist_by_name(discord_id=str(interaction.user.id), name=name)
+        if not pl:
+            await interaction.followup.send(f"Playlist '{name}' not found.", ephemeral=True)
+            return
+        songs = self.db.get_playlist_songs(pl["id"])
+        if not songs:
+            await interaction.followup.send(f"Playlist **{pl['name']}** is empty.", ephemeral=True)
+            return
+        capped = min(len(songs), self.PLAYLIST_PLAY_CAP)
+        await interaction.followup.send(f"🎶 Queueing {capped} song(s) from **{pl['name']}**. Each download takes ~30-60s — I'll notify you as each one is ready!", ephemeral=True)
+
+        async def discord_notify(msg: str):
+            await interaction.followup.send(msg, ephemeral=True)
+
+        self.bot.loop.create_task(
+            self._play_user_playlist(songs, interaction.user.display_name, discord_notify)
+        )
+
+    @app_commands.command(name="playlist_elevate", description="Promote a song to the permanent base radio playlist")
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def playlist_elevate_cmd(self, interaction: discord.Interaction, song: str):
+        # Check DJ role
+        if not any(r.id == DJ_ROLE_ID for r in interaction.user.roles):
+            await interaction.response.send_message("Only DJs can elevate songs to the base playlist.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+
+        async def discord_notify(msg: str):
+            await interaction.followup.send(msg, ephemeral=True)
+
+        self.bot.loop.create_task(
+            self._fire_and_forget_playlist_add(song, discord_notify)
+        )
+        await interaction.followup.send(f"Elevating **{song}** to the base playlist...", ephemeral=True)
 
     @app_commands.command(name="set_event_mode", description="Set event mode")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
@@ -1818,6 +2303,8 @@ Output only the spoken words, as if transcribed from a live recording.""",
                     )
                 elif command == "queue_trending":
                     self.bot.loop.create_task(self.game_queue_trending(name))
+                elif command == "playlist_play" and args:
+                    self.bot.loop.create_task(self.game_playlist_play(name, args))
 
             # In-game @annie mention → Annie agentic chat
             elif annie_match := re.match(

@@ -34,6 +34,8 @@ def mock_bot():
 def cog(mock_bot, tmp_path, monkeypatch):
     db_path = str(tmp_path / "radio.db")
     monkeypatch.setattr("amc_peripheral.radio.radio_cog.RADIO_DB_PATH", db_path)
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.SONG_CACHE_PATH", str(tmp_path / "cache"))
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.REQUESTS_PATH", str(tmp_path / "requests"))
     return RadioCog(mock_bot)
 
 
@@ -64,6 +66,8 @@ async def test_radio_cog_load_starts_tasks(cog):
 
     # Mock fetch_knowledge to avoid error
     cog.fetch_knowledge = AsyncMock(return_value="Mock Knowledge")
+    # Mock cleanup to avoid filesystem errors
+    cog._cleanup_legacy_requests = MagicMock()
 
     await cog.cog_load()
 
@@ -159,6 +163,7 @@ async def test_cog_load_starts_auto_queue(cog):
     cog.update_current_song_embed.start = MagicMock()
     cog.auto_queue_trending.start = MagicMock()
     cog.fetch_knowledge = AsyncMock(return_value="Mock Knowledge")
+    cog._cleanup_legacy_requests = MagicMock()
 
     await cog.cog_load()
 
@@ -268,16 +273,20 @@ async def test_download_serialization(cog, monkeypatch):
     """Verify that only one download runs at a time — concurrent requests wait."""
     download_count = {"active": 0, "max_active": 0}
 
-    async def slow_do_download(youtube_link, requester):
+    counter = {"n": 0}
+
+    async def slow_get_or_download(query):
+        counter["n"] += 1
+        n = counter["n"]
         download_count["active"] += 1
         download_count["max_active"] = max(
             download_count["max_active"], download_count["active"]
         )
         await asyncio.sleep(0.1)
         download_count["active"] -= 1
-        return "Test Song", 120, "test_file", "https://example.com"
+        return f"Test Song {n}", 120, f"/tmp/test{n}.mp3", f"https://example.com/{n}"
 
-    monkeypatch.setattr(cog, "_do_download", slow_do_download)
+    monkeypatch.setattr(cog, "_get_or_download", slow_get_or_download)
     # Mock lq.push_to_queue to avoid telnet calls
     cog.lq.push_to_queue = lambda *args: None
 
@@ -301,11 +310,11 @@ async def test_download_timeout_raises_friendly_error(cog, monkeypatch):
 
     monkeypatch.setattr(radio_cog, "DOWNLOAD_TIMEOUT", 0.1)  # 100ms timeout
 
-    async def hanging_download(youtube_link, requester):
+    async def hanging_download(query):
         await asyncio.sleep(10)  # Hang forever (well, 10s)
-        return "Never", 0, "never", None
+        return "Never", 0, "/tmp/never.mp3", None
 
-    monkeypatch.setattr(cog, "_do_download", hanging_download)
+    monkeypatch.setattr(cog, "_get_or_download", hanging_download)
 
     with pytest.raises(Exception, match="Download timed out"):
         await cog.request_song("test", "TestUser", bypass_throttling=True)
@@ -608,7 +617,7 @@ async def test_fire_and_forget_playlist_add(cog, mock_bot, monkeypatch, tmp_path
     fake_mp3 = tmp_path / "Cool_Song.mp3"
     fake_mp3.write_bytes(b"fake audio data")
 
-    cog._download_to_path = AsyncMock(return_value=("Cool Song", str(fake_mp3)))
+    cog._get_or_download = AsyncMock(return_value=("Cool Song", 120, str(fake_mp3), "https://example.com"))
 
     mock_channel = MagicMock()
     mock_channel.send = AsyncMock()
@@ -618,7 +627,7 @@ async def test_fire_and_forget_playlist_add(cog, mock_bot, monkeypatch, tmp_path
 
     await cog._fire_and_forget_playlist_add("cool song query", notify_fn)
 
-    cog._download_to_path.assert_called_once()
+    cog._get_or_download.assert_called_once()
     mock_channel.send.assert_called_once()
     notify_fn.assert_called_once()
     assert "Cool Song" in notify_fn.call_args[0][0]
@@ -627,13 +636,247 @@ async def test_fire_and_forget_playlist_add(cog, mock_bot, monkeypatch, tmp_path
 @pytest.mark.asyncio
 async def test_fire_and_forget_playlist_add_error(cog, monkeypatch):
     """Verify fire-and-forget playlist add handles errors gracefully."""
-    cog._download_to_path = AsyncMock(side_effect=Exception("Download failed"))
+    cog._get_or_download = AsyncMock(side_effect=Exception("Download failed"))
     notify_fn = AsyncMock()
 
     await cog._fire_and_forget_playlist_add("bad query", notify_fn)
 
     notify_fn.assert_called_once()
     assert "Couldn't add" in notify_fn.call_args[0][0]
+
+
+# --- User Playlist Curation Tests ---
+
+
+@pytest.mark.asyncio
+async def test_create_playlist(cog):
+    """Test creating a playlist and retrieving it."""
+    playlist_id = cog.db.create_playlist(discord_id="user1", name="Chill Vibes")
+    assert playlist_id is not None
+
+    playlist = cog.db.get_playlist_by_name(discord_id="user1", name="chill vibes")
+    assert playlist is not None
+    assert playlist["name"] == "chill vibes"
+    assert playlist["discord_id"] == "user1"
+
+
+@pytest.mark.asyncio
+async def test_create_duplicate_playlist_fails(cog):
+    """Test that creating a duplicate playlist raises an exception."""
+    cog.db.create_playlist(discord_id="user1", name="Road Trip")
+    with pytest.raises(Exception, match="already exists"):
+        cog.db.create_playlist(discord_id="user1", name="road trip")
+
+
+@pytest.mark.asyncio
+async def test_add_and_list_playlist_songs(cog):
+    """Test adding songs and listing them in order."""
+    playlist_id = cog.db.create_playlist(discord_id="user1", name="my mix")
+    cog.db.add_song_to_playlist(playlist_id, "Tame Impala Let It Happen", "Tame Impala Let It Happen")
+    cog.db.add_song_to_playlist(playlist_id, "Daft Punk Get Lucky", "Daft Punk Get Lucky")
+    cog.db.add_song_to_playlist(playlist_id, "LCD Soundsystem All My Friends", "LCD Soundsystem All My Friends")
+
+    songs = cog.db.get_playlist_songs(playlist_id)
+    assert len(songs) == 3
+    assert songs[0]["song_title"] == "Tame Impala Let It Happen"
+    assert songs[0]["position"] == 1
+    assert songs[1]["position"] == 2
+    assert songs[2]["position"] == 3
+
+
+@pytest.mark.asyncio
+async def test_remove_song_from_playlist(cog):
+    """Test removing a song leaves others intact."""
+    playlist_id = cog.db.create_playlist(discord_id="user1", name="test rm")
+    cog.db.add_song_to_playlist(playlist_id, "Song A", "Song A")
+    cog.db.add_song_to_playlist(playlist_id, "Song B", "Song B")
+
+    removed = cog.db.remove_song_from_playlist(playlist_id, "Song A")
+    assert removed is True
+
+    songs = cog.db.get_playlist_songs(playlist_id)
+    assert len(songs) == 1
+    assert songs[0]["song_title"] == "Song B"
+
+
+@pytest.mark.asyncio
+async def test_delete_playlist_cascades(cog):
+    """Test deleting a playlist removes its songs too."""
+    playlist_id = cog.db.create_playlist(discord_id="user1", name="doomed")
+    cog.db.add_song_to_playlist(playlist_id, "Song X", "Song X")
+
+    deleted = cog.db.delete_playlist(discord_id="user1", name="doomed")
+    assert deleted is True
+
+    # Playlist gone
+    assert cog.db.get_playlist_by_name(discord_id="user1", name="doomed") is None
+    # Songs gone
+    songs = cog.db.get_playlist_songs(playlist_id)
+    assert len(songs) == 0
+
+
+@pytest.mark.asyncio
+async def test_get_playlists_by_user(cog):
+    """Test user isolation — only own playlists returned."""
+    cog.db.create_playlist(discord_id="userA", name="playlist1")
+    cog.db.create_playlist(discord_id="userB", name="playlist2")
+
+    playlists_a = cog.db.get_playlists(discord_id="userA")
+    assert len(playlists_a) == 1
+    assert playlists_a[0]["name"] == "playlist1"
+
+    playlists_b = cog.db.get_playlists(discord_id="userB")
+    assert len(playlists_b) == 1
+    assert playlists_b[0]["name"] == "playlist2"
+
+
+@pytest.mark.asyncio
+async def test_annie_playlist_tools_defined(cog):
+    """Verify all new playlist tools are in Annie's tool list."""
+    tools = cog._get_annie_tools()
+    tool_names = [t["function"]["name"] for t in tools]
+    assert "create_user_playlist" in tool_names
+    assert "add_to_user_playlist" in tool_names
+    assert "view_user_playlist" in tool_names
+    assert "list_user_playlists" in tool_names
+    assert "play_user_playlist" in tool_names
+
+
+@pytest.mark.asyncio
+async def test_playlist_play_caps_at_10(cog, monkeypatch):
+    """Verify _play_user_playlist caps at PLAYLIST_PLAY_CAP songs."""
+    queued_songs = []
+
+    async def mock_request_song(query, requester, **kwargs):
+        queued_songs.append(query)
+        return query, 120
+
+    monkeypatch.setattr(cog, "request_song", mock_request_song)
+    notify_fn = AsyncMock()
+
+    # Create 15 songs
+    songs = [{"song_query": f"song_{i}", "song_title": f"Song {i}"} for i in range(15)]
+    await cog._play_user_playlist(songs, "TestUser", notify_fn)
+
+    assert len(queued_songs) == 10
+    # Should notify about the cap
+    cap_msg = [call for call in notify_fn.call_args_list if "Only the first" in str(call)]
+    assert len(cap_msg) == 1
+
+
+@pytest.mark.asyncio
+async def test_playlist_play_queues_songs(cog, monkeypatch):
+    """Verify _play_user_playlist queues songs sequentially."""
+    queued_songs = []
+
+    async def mock_request_song(query, requester, **kwargs):
+        queued_songs.append(query)
+        return query, 120
+
+    monkeypatch.setattr(cog, "request_song", mock_request_song)
+    notify_fn = AsyncMock()
+
+    songs = [
+        {"song_query": "Tame Impala", "song_title": "Tame Impala"},
+        {"song_query": "Daft Punk", "song_title": "Daft Punk"},
+    ]
+    await cog._play_user_playlist(songs, "TestUser", notify_fn)
+
+    assert queued_songs == ["Tame Impala", "Daft Punk"]
+    assert notify_fn.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_playlist_commands_exist(cog):
+    """Verify all new playlist slash commands are registered."""
+    commands = [cmd.name for cmd in cog.__cog_app_commands__]
+    assert "playlist_create" in commands
+    assert "playlist_delete" in commands
+    assert "playlist_add" in commands
+    assert "playlist_remove" in commands
+    assert "playlist_view" in commands
+    assert "playlist_list" in commands
+    assert "playlist_play" in commands
+    assert "playlist_elevate" in commands
+
+
+# --- Download Cache Tests ---
+
+
+@pytest.mark.asyncio
+async def test_cache_song_and_retrieve(cog):
+    """Test caching a song and retrieving it by video_id."""
+    cog.db.cache_song(
+        video_id="dQw4w9WgXcQ", title="Never Gonna Give You Up",
+        duration=213, local_path="/tmp/cache/dQw4w9WgXcQ.mp3",
+        webpage_url="https://youtube.com/watch?v=dQw4w9WgXcQ", file_size=5000000,
+    )
+    cached = cog.db.get_cached_song("dQw4w9WgXcQ")
+    assert cached is not None
+    assert cached["title"] == "Never Gonna Give You Up"
+    assert cached["video_id"] == "dQw4w9WgXcQ"
+
+
+@pytest.mark.asyncio
+async def test_cache_miss_returns_none(cog):
+    """Test that a cache miss returns None."""
+    assert cog.db.get_cached_song("nonexistent") is None
+
+
+@pytest.mark.asyncio
+async def test_cache_hit_updates_last_used(cog):
+    """Test that get_cached_song updates last_used_at."""
+    import time
+    cog.db.cache_song(
+        video_id="abc123", title="Test Song", duration=180,
+        local_path="/tmp/test.mp3", webpage_url="https://example.com", file_size=3000000,
+    )
+    first = cog.db.get_cached_song("abc123")
+    time.sleep(0.01)
+    second = cog.db.get_cached_song("abc123")
+    assert second["last_used_at"] >= first["last_used_at"]
+
+
+@pytest.mark.asyncio
+async def test_cache_stats(cog):
+    """Test get_cache_stats returns correct totals."""
+    cog.db.cache_song("v1", "Song1", 120, "/tmp/s1.mp3", "http://a", 1000)
+    cog.db.cache_song("v2", "Song2", 120, "/tmp/s2.mp3", "http://b", 2000)
+    stats = cog.db.get_cache_stats()
+    assert stats["total_files"] == 2
+    assert stats["total_bytes"] == 3000
+
+
+@pytest.mark.asyncio
+async def test_evict_cache_removes_oldest(cog, tmp_path, monkeypatch):
+    """Test _evict_cache removes LRU entries when over the cap."""
+    from amc_peripheral.radio import radio_cog
+    # Set tiny cap: 1 byte so everything gets evicted
+    monkeypatch.setattr(radio_cog, "SONG_CACHE_MAX_MB", 0)
+
+    # Create cached files
+    for i in range(3):
+        f = tmp_path / "cache" / f"v{i}.mp3"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"x" * 100)
+        cog.db.cache_song(f"v{i}", f"Song{i}", 120, str(f), f"http://{i}", 100)
+
+    stats = cog.db.get_cache_stats()
+    assert stats["total_files"] == 3
+
+    cog._evict_cache()
+
+    stats = cog.db.get_cache_stats()
+    assert stats["total_files"] == 0
+
+
+@pytest.mark.asyncio
+async def test_annie_elevate_tool_defined(cog):
+    """Verify the elevate_to_playlist tool is in Annie's tool list."""
+    tools = cog._get_annie_tools()
+    tool_names = [t["function"]["name"] for t in tools]
+    assert "elevate_to_playlist" in tool_names
+
 
 
 # Helpers for async iteration/context mocking
