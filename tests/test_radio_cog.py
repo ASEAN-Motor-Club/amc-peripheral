@@ -256,16 +256,14 @@ async def test_pick_trending_song_dedup(cog):
     assert result == "New Artist - Fresh Song"
 
 
-# --- Download Serialization & Timeout Tests ---
+# --- Download Queue & Serialization Tests ---
 
 
 @pytest.mark.asyncio
-async def test_download_semaphore_exists(cog):
-    """Verify that the download semaphore is initialized as Semaphore(1)."""
-    assert hasattr(cog, "_download_semaphore")
-    assert isinstance(cog._download_semaphore, asyncio.Semaphore)
-    # Semaphore(1) means value starts at 1 (one slot available)
-    assert cog._download_semaphore._value == 1
+async def test_download_queue_exists(cog):
+    """Verify that the download queue is initialized."""
+    assert hasattr(cog, "_download_queue")
+    assert isinstance(cog._download_queue, asyncio.Queue)
 
 
 @pytest.mark.asyncio
@@ -288,19 +286,25 @@ async def test_download_serialization(cog, monkeypatch):
 
     monkeypatch.setattr(cog, "_get_or_download", slow_get_or_download)
     # Mock lq.push_to_queue to avoid telnet calls
-    cog.lq.push_to_queue = lambda *args: None
+    cog.lq.push_to_queue = AsyncMock()
 
-    # Launch 3 concurrent requests (all bypass throttling)
-    tasks = [
-        asyncio.create_task(
-            cog.request_song(f"song{i}", f"User{i}", bypass_throttling=True)
-        )
-        for i in range(3)
-    ]
-    await asyncio.gather(*tasks)
+    # Start the download worker
+    worker = asyncio.create_task(cog._download_worker())
 
-    # At most 1 download should have been active at any time
-    assert download_count["max_active"] == 1
+    try:
+        # Launch 3 concurrent requests (all bypass throttling)
+        tasks = [
+            asyncio.create_task(
+                cog.request_song(f"song{i}", f"User{i}", bypass_throttling=True)
+            )
+            for i in range(3)
+        ]
+        await asyncio.gather(*tasks)
+
+        # At most 1 download should have been active at any time
+        assert download_count["max_active"] == 1
+    finally:
+        worker.cancel()
 
 
 @pytest.mark.asyncio
@@ -316,27 +320,51 @@ async def test_download_timeout_raises_friendly_error(cog, monkeypatch):
 
     monkeypatch.setattr(cog, "_get_or_download", hanging_download)
 
-    with pytest.raises(Exception, match="Download timed out"):
-        await cog.request_song("test", "TestUser", bypass_throttling=True)
+    # Start the download worker
+    worker = asyncio.create_task(cog._download_worker())
+
+    try:
+        with pytest.raises(Exception, match="Download timed out"):
+            await cog.request_song("test", "TestUser", bypass_throttling=True)
+    finally:
+        worker.cancel()
 
 
 @pytest.mark.asyncio
-async def test_queue_timeout_raises_busy_error(cog, monkeypatch):
-    """Verify that waiting too long for the semaphore raises a 'busy' error."""
-    from amc_peripheral.radio import radio_cog
+async def test_download_queue_does_not_reject(cog, monkeypatch):
+    """Verify that concurrent requests queue up instead of being rejected."""
+    counter = {"n": 0}
 
-    monkeypatch.setattr(radio_cog, "DOWNLOAD_QUEUE_TIMEOUT", 0.1)  # 100ms
+    async def slow_get_or_download(query):
+        counter["n"] += 1
+        n = counter["n"]
+        await asyncio.sleep(0.2)  # Simulate slow download
+        return f"Test Song {n}", 120, f"/tmp/test{n}.mp3", f"https://example.com/{n}"
 
-    # Acquire the semaphore so new requests can't get it
-    await cog._download_semaphore.acquire()
+    monkeypatch.setattr(cog, "_get_or_download", slow_get_or_download)
+    cog.lq.push_to_queue = AsyncMock()
+
+    # Start the download worker
+    worker = asyncio.create_task(cog._download_worker())
 
     try:
-        with pytest.raises(
-            Exception, match="The radio is busy downloading another song"
-        ):
-            await cog.request_song("test", "TestUser", bypass_throttling=True)
+        # Launch 3 concurrent requests — none should raise "busy"
+        tasks = [
+            asyncio.create_task(
+                cog.request_song(f"song{i}", f"User{i}", bypass_throttling=True)
+            )
+            for i in range(3)
+        ]
+        results = await asyncio.gather(*tasks)
+
+        # All 3 should succeed
+        assert len(results) == 3
+        titles = [r[0] for r in results]
+        assert "Test Song 1" in titles
+        assert "Test Song 2" in titles
+        assert "Test Song 3" in titles
     finally:
-        cog._download_semaphore.release()
+        worker.cancel()
 
 
 # --- Annie Agentic Chat Tests ---
@@ -943,6 +971,45 @@ async def test_get_song_like_count_excludes_dislikes(cog):
     cog.db.add_dislike(discord_id="user2", song_title="Mixed Song")
 
     assert cog.db.get_song_like_count("Mixed Song") == 1
+
+
+# --- In-Game /current_song Tests ---
+
+
+@pytest.mark.asyncio
+async def test_game_current_song_announces(cog, monkeypatch):
+    """Verify game_current_song announces the currently playing song."""
+
+    mock_metadata = {"filename": "/var/lib/radio/requests/TestPlayer-Cool_Song.mp3"}
+    monkeypatch.setattr(
+        "amc_peripheral.radio.radio_cog.get_current_song_metadata",
+        AsyncMock(return_value=mock_metadata),
+    )
+    mock_announce = AsyncMock()
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.announce_in_game", mock_announce)
+
+    await cog.game_current_song("SomePlayer")
+
+    mock_announce.assert_called_once()
+    args = mock_announce.call_args
+    assert "Cool_Song" in args[0][1]
+    assert "TestPlayer" in args[0][1]
+
+
+@pytest.mark.asyncio
+async def test_game_current_song_no_metadata(cog, monkeypatch):
+    """Verify game_current_song announces fallback when no metadata."""
+    monkeypatch.setattr(
+        "amc_peripheral.radio.radio_cog.get_current_song_metadata",
+        AsyncMock(return_value=None),
+    )
+    mock_announce = AsyncMock()
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.announce_in_game", mock_announce)
+
+    await cog.game_current_song("SomePlayer")
+
+    mock_announce.assert_called_once()
+    assert "No song info" in mock_announce.call_args[0][1]
 
 
 

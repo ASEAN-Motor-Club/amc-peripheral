@@ -187,8 +187,7 @@ class NowPlayingView(discord.ui.View):
 
 
 # Download guard constants
-DOWNLOAD_TIMEOUT = 120  # Max seconds for a single download+transcode
-DOWNLOAD_QUEUE_TIMEOUT = 30  # Max seconds to wait in download queue
+DOWNLOAD_TIMEOUT = 60  # Max seconds for a queued download (queue wait + download)
 
 
 class RadioCog(commands.Cog):
@@ -212,7 +211,8 @@ class RadioCog(commands.Cog):
         ]
         self.db = RadioDB(RADIO_DB_PATH)
         self.game_schema_description = ""
-        self._download_semaphore = asyncio.Semaphore(1)
+        self._download_queue: asyncio.Queue = asyncio.Queue()
+        self._download_worker_task: asyncio.Task | None = None
 
     async def cog_load(self):
         self.post_gazette_task.start()
@@ -220,6 +220,9 @@ class RadioCog(commands.Cog):
         self.update_news.start()
         self.update_current_song_embed.start()
         self.auto_queue_trending.start()
+
+        # Start the download worker
+        self._download_worker_task = asyncio.create_task(self._download_worker())
 
         # Register persistent view for the radio embed like button
         self._now_playing_view = NowPlayingView(self)
@@ -251,6 +254,24 @@ class RadioCog(commands.Cog):
         self.update_news.cancel()
         self.update_current_song_embed.cancel()
         self.auto_queue_trending.cancel()
+        if self._download_worker_task:
+            self._download_worker_task.cancel()
+
+    # --- Download Worker ---
+
+    async def _download_worker(self):
+        """Background worker that processes download jobs one at a time."""
+        while True:
+            query, future = await self._download_queue.get()
+            try:
+                result = await self._get_or_download(query)
+                if not future.cancelled():
+                    future.set_result(result)
+            except Exception as e:
+                if not future.cancelled():
+                    future.set_exception(e)
+            finally:
+                self._download_queue.task_done()
 
     # --- Helpers ---
 
@@ -1380,28 +1401,23 @@ Output only the spoken words, as if transcribed from a live recording.""",
         if "give you up" in youtube_link.lower().strip():
             raise Exception("No, just no")
 
-        # --- Serialized download (1 at a time) with timeout ---
-        try:
-            await asyncio.wait_for(
-                self._download_semaphore.acquire(),
-                timeout=DOWNLOAD_QUEUE_TIMEOUT,
-            )
-        except asyncio.TimeoutError:
-            raise Exception(
-                "The radio is busy downloading another song. Please try again in a moment."
-            )
+        # --- Queued download (processed by background worker) ---
+        future: asyncio.Future = asyncio.get_event_loop().create_future()
+        await self._download_queue.put((youtube_link, future))
+        queue_pos = self._download_queue.qsize()
+        if queue_pos > 0:
+            log.info(f"Song '{youtube_link}' queued at position {queue_pos}")
 
         try:
             title, duration, local_path, webpage_url = await asyncio.wait_for(
-                self._get_or_download(youtube_link),
+                future,
                 timeout=DOWNLOAD_TIMEOUT,
             )
         except asyncio.TimeoutError:
+            future.cancel()
             raise Exception(
                 "Download timed out. The song may be too large or the server is under load. Please try again."
             )
-        finally:
-            self._download_semaphore.release()
 
         # --- Checks that need resolved metadata ---
         normalized_title = title.lower().strip()
@@ -1683,6 +1699,33 @@ Output only the spoken words, as if transcribed from a live recording.""",
         await announce_in_game(
             self.bot.http_session,
             f'{requester} disliked "{song_title}" (requested by {original_requester}).',
+            color="FEE75C",
+        )
+
+    async def game_current_song(self, requester):
+        metadata = await get_current_song_metadata(self.bot.http_session)
+        if not metadata:
+            await announce_in_game(
+                self.bot.http_session,
+                "No song info available right now.",
+                color="FEE75C",
+            )
+            return
+
+        song_info = parse_song_info(metadata)
+        if not song_info:
+            await announce_in_game(
+                self.bot.http_session,
+                "No song info available right now.",
+                color="FEE75C",
+            )
+            return
+
+        song_title = song_info["song_title"]
+        original_requester = song_info.get("requester", "Unknown")
+        await announce_in_game(
+            self.bot.http_session,
+            f'Now playing: "{song_title}" (requested by {original_requester})',
             color="FEE75C",
         )
 
@@ -2397,6 +2440,8 @@ Output only the spoken words, as if transcribed from a live recording.""",
                     self.bot.loop.create_task(
                         self.lq.skip_current_track(self.bot.http_session, "song_requests")
                     )
+                elif command == "current_song":
+                    self.bot.loop.create_task(self.game_current_song(name))
                 elif command == "queue_trending":
                     self.bot.loop.create_task(self.game_queue_trending(name))
                 elif command == "playlist_play" and args:
