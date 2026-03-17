@@ -10,7 +10,6 @@ in {
     services.liquidsoap.streams = {
       radio = pkgs.writeText "radio.liq" ''
       log.level := 5
-      server.telnet()
       default_playlist = blank()
       settings.encoder.metadata.export := ["filename", "artist", "title", "album", "genre", "date", "tracknumber", "comment", "track", "year", "dj", "next", "apic", "metadata_url", "metadata_block_picture", "coverart"]
       queue = request.queue(id="song_requests")
@@ -85,6 +84,8 @@ in {
         [radio, default_playlist]
       )
 
+      # --- Harbor HTTP API (port 6001) ---
+
       last_metadata = ref([])
       q_or_songs.on_track(fun (m) -> last_metadata := m)
       def show_metadata(_)
@@ -94,6 +95,44 @@ in {
         )
       end
       harbor.http.register.simple(port=6001, "/metadata", show_metadata)
+
+      def handle_push(req)
+        uri = req.query["uri"]
+        if uri == "" then
+          http.response(status_code=400, content_type="application/json", data='{"error":"missing uri param"}')
+        else
+          queue.push(request.create(uri))
+          http.response(content_type="application/json", data='{"ok":true}')
+        end
+      end
+      harbor.http.register.simple(port=6001, method="POST", "/push", handle_push)
+
+      def handle_queue_length(_)
+        n = list.length(queue.queue())
+        http.response(content_type="application/json", data='{"length":#{n}}')
+      end
+      harbor.http.register.simple(port=6001, "/queue_length", handle_queue_length)
+
+      def handle_skip(_)
+        source.skip(q_or_songs)
+        http.response(content_type="application/json", data='{"ok":true}')
+      end
+      harbor.http.register.simple(port=6001, method="POST", "/skip", handle_skip)
+
+      def handle_set_var(req)
+        name = req.query["name"]
+        value = req.query["value"]
+        if name == "event_mode" then
+          event_mode.set(value == "true")
+          http.response(content_type="application/json", data='{"ok":true}')
+        elsif name == "race_mode" then
+          race_mode.set(value == "true")
+          http.response(content_type="application/json", data='{"ok":true}')
+        else
+          http.response(status_code=400, content_type="application/json", data='{"error":"unknown var"}')
+        end
+      end
+      harbor.http.register.simple(port=6001, method="POST", "/set_var", handle_set_var)
 
       radio = source.drop.metadata(radio)
 
