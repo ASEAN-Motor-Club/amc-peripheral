@@ -329,3 +329,332 @@ async def test_queue_timeout_raises_busy_error(cog, monkeypatch):
     finally:
         cog._download_semaphore.release()
 
+
+# --- Annie Agentic Chat Tests ---
+
+
+@pytest.mark.asyncio
+async def test_on_message_annie_discord_mention(cog, mock_bot):
+    """Verify that @mentioning the bot triggers _handle_annie_chat_discord."""
+    message = MagicMock()
+    message.author = MagicMock()
+    message.author.id = 99999
+    message.author.display_name = "TestPlayer"
+    message.content = f"<@{mock_bot.user.id}> play some jazz"
+    message.mentions = [mock_bot.user]
+    message.channel = MagicMock()
+    message.channel.id = 0  # Not a special channel
+
+    cog._handle_annie_chat_discord = AsyncMock()
+
+    await cog.on_message(message)
+
+    mock_bot.loop.create_task.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_on_message_ignores_non_mention(cog, mock_bot):
+    """Verify normal messages don't trigger Annie."""
+    message = MagicMock()
+    message.author = MagicMock()
+    message.author.id = 99999
+    message.content = "just chatting"
+    message.mentions = []
+    message.channel = MagicMock()
+    message.channel.id = 0
+
+    cog._handle_annie_chat_discord = AsyncMock()
+
+    await cog.on_message(message)
+
+    cog._handle_annie_chat_discord.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_on_message_annie_ingame(cog, mock_bot, monkeypatch):
+    """Verify in-game @annie triggers _handle_annie_chat_ingame."""
+    from amc_peripheral.radio import radio_cog
+    monkeypatch.setattr(radio_cog, "GAME_CHAT_CHANNEL_ID", 42)
+
+    message = MagicMock()
+    message.author = MagicMock()
+    message.author.id = 99999
+    message.content = "**CoolDriver:** @annie what's playing right now?"
+    message.mentions = []
+    message.channel = MagicMock()
+    message.channel.id = 42
+
+    cog._handle_annie_chat_ingame = AsyncMock()
+
+    await cog.on_message(message)
+
+    mock_bot.loop.create_task.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_annie_chat_strips_mention(cog, mock_bot):
+    """Verify that the bot mention is stripped from the question."""
+    message = MagicMock()
+    message.author = MagicMock()
+    message.author.id = 99999
+    message.author.display_name = "TestPlayer"
+    message.content = f"<@{mock_bot.user.id}> play some chill music"
+    message.mentions = [mock_bot.user]
+    message.channel = MagicMock()
+    message.channel.id = 0
+    message.channel.history = MagicMock(return_value=AsyncIteratorMock([]))
+    message.channel.typing = MagicMock(return_value=AsyncContextManagerMock())
+    message.reply = AsyncMock()
+
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "Let me queue that up!"
+    mock_response.choices[0].message.tool_calls = None
+
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
+
+    await cog._handle_annie_chat_discord(message, "play some chill music")
+
+    # Verify the reply was sent
+    message.reply.assert_called_once()
+    args = message.reply.call_args
+    assert "Let me queue that up!" in args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_fire_and_forget_queue(cog, monkeypatch):
+    """Verify fire-and-forget download calls request_song and notifies."""
+    cog.request_song = AsyncMock(return_value=("Cool Song", 180))
+    notify_fn = AsyncMock()
+
+    await cog._fire_and_forget_queue("cool song query", "TestUser", notify_fn)
+
+    cog.request_song.assert_called_once_with("cool song query", "TestUser", bypass_throttling=False)
+    notify_fn.assert_called_once()
+    assert "Cool Song" in notify_fn.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_fire_and_forget_queue_error(cog, monkeypatch):
+    """Verify fire-and-forget handles download errors gracefully."""
+    cog.request_song = AsyncMock(side_effect=Exception("Download failed"))
+    notify_fn = AsyncMock()
+
+    await cog._fire_and_forget_queue("bad query", "TestUser", notify_fn)
+
+    notify_fn.assert_called_once()
+    assert "Couldn't queue" in notify_fn.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_annie_tools_defined(cog):
+    """Verify all expected Annie tools are defined."""
+    tools = cog._get_annie_tools()
+    tool_names = [t["function"]["name"] for t in tools]
+    assert "search_and_queue_song" in tool_names
+    assert "get_currently_playing" in tool_names
+    assert "get_recent_requests" in tool_names
+    assert "get_song_stats" in tool_names
+    assert "get_recent_news" in tool_names
+    assert "get_recent_jingles" in tool_names
+    assert "skip_current_track" in tool_names
+    assert "queue_trending_song" in tool_names
+    assert "search_playlist" in tool_names
+    assert "add_to_playlist" in tool_names
+    assert "remove_from_playlist" in tool_names
+
+
+# --- Playlist Management Tool Tests ---
+
+
+@pytest.mark.asyncio
+async def test_search_playlist_returns_matches(cog, mock_bot, monkeypatch):
+    """Verify search_playlist returns matching filenames from the playlist channel."""
+    from amc_peripheral.radio import radio_cog
+    monkeypatch.setattr(radio_cog, "PLAYLIST_CHANNEL", 99999)
+
+    # Create mock attachments
+    att1 = MagicMock()
+    att1.filename = "Rock_Anthem.mp3"
+    att2 = MagicMock()
+    att2.filename = "Jazz_Ballad.mp3"
+    att3 = MagicMock()
+    att3.filename = "Rock_Classic.mp3"
+
+    msg1 = MagicMock()
+    msg1.attachments = [att1]
+    msg2 = MagicMock()
+    msg2.attachments = [att2]
+    msg3 = MagicMock()
+    msg3.attachments = [att3]
+
+    mock_channel = MagicMock()
+    mock_channel.history = MagicMock(return_value=AsyncIteratorMock([msg1, msg2, msg3]))
+    mock_bot.get_channel = MagicMock(return_value=mock_channel)
+
+    result = await cog._tool_search_playlist("rock")
+
+    assert "Rock_Anthem.mp3" in result
+    assert "Rock_Classic.mp3" in result
+    assert "Jazz_Ballad.mp3" not in result
+    assert "2 song(s)" in result
+
+
+@pytest.mark.asyncio
+async def test_search_playlist_no_matches(cog, mock_bot, monkeypatch):
+    """Verify search_playlist returns appropriate message when no matches found."""
+    from amc_peripheral.radio import radio_cog
+    monkeypatch.setattr(radio_cog, "PLAYLIST_CHANNEL", 99999)
+
+    att1 = MagicMock()
+    att1.filename = "Rock_Anthem.mp3"
+    msg1 = MagicMock()
+    msg1.attachments = [att1]
+
+    mock_channel = MagicMock()
+    mock_channel.history = MagicMock(return_value=AsyncIteratorMock([msg1]))
+    mock_bot.get_channel = MagicMock(return_value=mock_channel)
+
+    result = await cog._tool_search_playlist("classical")
+
+    assert "No songs found" in result
+
+
+@pytest.mark.asyncio
+async def test_search_playlist_empty_query_lists_all(cog, mock_bot, monkeypatch):
+    """Verify search_playlist with empty query lists all songs."""
+    from amc_peripheral.radio import radio_cog
+    monkeypatch.setattr(radio_cog, "PLAYLIST_CHANNEL", 99999)
+
+    att1 = MagicMock()
+    att1.filename = "Song_A.mp3"
+    att2 = MagicMock()
+    att2.filename = "Song_B.mp3"
+
+    msg1 = MagicMock()
+    msg1.attachments = [att1]
+    msg2 = MagicMock()
+    msg2.attachments = [att2]
+
+    mock_channel = MagicMock()
+    mock_channel.history = MagicMock(return_value=AsyncIteratorMock([msg1, msg2]))
+    mock_bot.get_channel = MagicMock(return_value=mock_channel)
+
+    result = await cog._tool_search_playlist("")
+
+    assert "Song_A.mp3" in result
+    assert "Song_B.mp3" in result
+    assert "2 song(s)" in result
+
+
+@pytest.mark.asyncio
+async def test_remove_from_playlist_deletes_message(cog, mock_bot, monkeypatch):
+    """Verify remove_from_playlist finds and deletes the correct message."""
+    from amc_peripheral.radio import radio_cog
+    monkeypatch.setattr(radio_cog, "PLAYLIST_CHANNEL", 99999)
+
+    att1 = MagicMock()
+    att1.filename = "Target_Song.mp3"
+    msg1 = MagicMock()
+    msg1.attachments = [att1]
+    msg1.delete = AsyncMock()
+
+    att2 = MagicMock()
+    att2.filename = "Other_Song.mp3"
+    msg2 = MagicMock()
+    msg2.attachments = [att2]
+    msg2.delete = AsyncMock()
+
+    mock_channel = MagicMock()
+    mock_channel.history = MagicMock(return_value=AsyncIteratorMock([msg1, msg2]))
+    mock_bot.get_channel = MagicMock(return_value=mock_channel)
+
+    result = await cog._tool_remove_from_playlist("Target_Song.mp3")
+
+    assert "Removed" in result
+    msg1.delete.assert_called_once()
+    msg2.delete.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_remove_from_playlist_not_found(cog, mock_bot, monkeypatch):
+    """Verify remove_from_playlist returns error when filename not found."""
+    from amc_peripheral.radio import radio_cog
+    monkeypatch.setattr(radio_cog, "PLAYLIST_CHANNEL", 99999)
+
+    att1 = MagicMock()
+    att1.filename = "Other_Song.mp3"
+    msg1 = MagicMock()
+    msg1.attachments = [att1]
+
+    mock_channel = MagicMock()
+    mock_channel.history = MagicMock(return_value=AsyncIteratorMock([msg1]))
+    mock_bot.get_channel = MagicMock(return_value=mock_channel)
+
+    result = await cog._tool_remove_from_playlist("Nonexistent.mp3")
+
+    assert "Could not find" in result
+
+
+@pytest.mark.asyncio
+async def test_fire_and_forget_playlist_add(cog, mock_bot, monkeypatch, tmp_path):
+    """Verify fire-and-forget playlist add downloads and uploads to channel."""
+    from amc_peripheral.radio import radio_cog
+    monkeypatch.setattr(radio_cog, "PLAYLIST_CHANNEL", 99999)
+
+    # Create a real temp file so discord.File can open it
+    fake_mp3 = tmp_path / "Cool_Song.mp3"
+    fake_mp3.write_bytes(b"fake audio data")
+
+    cog._download_to_path = AsyncMock(return_value=("Cool Song", str(fake_mp3)))
+
+    mock_channel = MagicMock()
+    mock_channel.send = AsyncMock()
+    mock_bot.get_channel = MagicMock(return_value=mock_channel)
+
+    notify_fn = AsyncMock()
+
+    await cog._fire_and_forget_playlist_add("cool song query", notify_fn)
+
+    cog._download_to_path.assert_called_once()
+    mock_channel.send.assert_called_once()
+    notify_fn.assert_called_once()
+    assert "Cool Song" in notify_fn.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_fire_and_forget_playlist_add_error(cog, monkeypatch):
+    """Verify fire-and-forget playlist add handles errors gracefully."""
+    cog._download_to_path = AsyncMock(side_effect=Exception("Download failed"))
+    notify_fn = AsyncMock()
+
+    await cog._fire_and_forget_playlist_add("bad query", notify_fn)
+
+    notify_fn.assert_called_once()
+    assert "Couldn't add" in notify_fn.call_args[0][0]
+
+
+# Helpers for async iteration/context mocking
+
+class AsyncIteratorMock:
+    def __init__(self, items):
+        self.items = iter(items)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self.items)
+        except StopIteration:
+            raise StopAsyncIteration
+
+
+class AsyncContextManagerMock:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass

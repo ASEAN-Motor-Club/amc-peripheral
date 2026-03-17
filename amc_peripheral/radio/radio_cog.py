@@ -51,10 +51,28 @@ from amc_peripheral.db import RadioDB
 from amc_peripheral.utils.text_utils import split_markdown
 from amc_peripheral.radio.tts import tts as tts_google
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
-from amc_peripheral.radio.radio_server import get_current_song_metadata, parse_song_info
+from amc_peripheral.radio.radio_server import get_current_song_metadata, get_current_song, parse_song_info
 from amc_peripheral.utils.game_utils import announce_in_game
 
 log = logging.getLogger(__name__)
+
+ANNIE_SYSTEM_PROMPT = """\
+You are DJ Annie, the charismatic and hilarious host of Radio ASEAN in Motor Town — an open-world driving game.
+You're known for your sharp wit, playful sarcasm, and genuinely warm personality.
+You love music, you love your listeners, and you're not afraid to roast them (lovingly).
+
+Your style:
+- Funny and witty — you crack jokes, make puns, and have a flair for the dramatic
+- Warm and approachable — you genuinely care about the community
+- Music-obsessed — you have strong (sometimes ridiculous) opinions about songs
+- Self-aware — you know you're a radio DJ in a driving game and you lean into the absurdity
+- Brief — keep responses punchy unless someone really wants to chat
+
+You have access to tools to manage the radio. If someone wants music, USE the tools — don't just suggest things.
+When queuing songs, the download may take a moment; let the listener know you're on it.
+
+Do not use emojis excessively. One or two per message max.
+"""
 
 
 # Pydantic Models
@@ -489,6 +507,344 @@ Output only the spoken words, as if transcribed from a live recording.""",
             return json.dumps(result.get("results", []), indent=2)
         return f"Unknown tool: {name}"
 
+    # --- Annie Agentic Chat ---
+
+    def _get_annie_tools(self):
+        """Tool definitions for Annie's agentic chat."""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_and_queue_song",
+                    "description": "Search for a song on YouTube and queue it on the radio. The download happens in the background and may take a moment. Accepts a song name, artist, or YouTube URL.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Song name, artist, or YouTube URL",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_currently_playing",
+                    "description": "Get the song currently playing on the radio.",
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_recent_requests",
+                    "description": "Get recently requested songs.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "limit": {"type": "integer", "description": "Number of requests to fetch (default 10)"},
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_song_stats",
+                    "description": "Get like/dislike stats for songs on the radio.",
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_recent_news",
+                    "description": "Get recent news segments that Annie has generated for the radio.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "limit": {"type": "integer", "description": "Number of news items (default 5)"},
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_recent_jingles",
+                    "description": "Get recent jingles/radio segments that Annie has generated.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "limit": {"type": "integer", "description": "Number of jingles (default 10)"},
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "skip_current_track",
+                    "description": "Skip the currently playing track on the radio.",
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "queue_trending_song",
+                    "description": "Pick and queue a trending song from the charts.",
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_playlist",
+                    "description": "Search the base radio playlist for songs by keyword. Returns matching filenames from the permanent playlist library.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Search term to match against song filenames. Leave empty to list all songs.",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "add_to_playlist",
+                    "description": "Download a song and add it permanently to the base radio playlist. This adds it to the rotation library, not the request queue.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Song name, artist, or YouTube URL",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "remove_from_playlist",
+                    "description": "Remove a song from the base radio playlist by filename. Use search_playlist first to find the exact filename.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "filename": {
+                                "type": "string",
+                                "description": "Exact filename of the song to remove (e.g. 'Cool_Song.mp3')",
+                            },
+                        },
+                        "required": ["filename"],
+                    },
+                },
+            },
+        ]
+
+    async def _execute_annie_tool(self, name: str, args: dict, requester: str, notify_fn) -> str:
+        """Execute a tool call from Annie's agentic loop."""
+        try:
+            if name == "search_and_queue_song":
+                query = args.get("query", "")
+                # Fire-and-forget: launch download in background
+                self.bot.loop.create_task(
+                    self._fire_and_forget_queue(query, requester, notify_fn)
+                )
+                return f"Download started for '{query}'. I'll notify the listener when it's ready."
+
+            elif name == "get_currently_playing":
+                current = await get_current_song(self.bot.http_session)
+                return current or "Nothing is playing right now, or I can't reach the radio server."
+
+            elif name == "get_recent_requests":
+                limit = args.get("limit", 10)
+                requests = self.db.get_top_requested_songs(limit=limit)
+                if not requests:
+                    return "No song requests recorded yet."
+                lines = [f"- {r['song_title']} (requested {r['request_count']}x)" for r in requests]
+                return "Recent popular requests:\n" + "\n".join(lines)
+
+            elif name == "get_song_stats":
+                stats = self.db.get_all_song_stats()
+                if not stats:
+                    return "No song stats yet."
+                lines = [f"- {s['song_title']}: ❤️ {s['like_count']} | 👎 {s['dislike_count']}" for s in stats[:15]]
+                return "Song stats:\n" + "\n".join(lines)
+
+            elif name == "get_recent_news":
+                limit = args.get("limit", 5)
+                news = self.db.get_recent_news(limit=limit)
+                if not news:
+                    return "No news segments generated yet."
+                lines = [f"### {n['generated_at'][:10]}\n{n['content'][:300]}..." for n in news]
+                return "\n\n".join(lines)
+
+            elif name == "get_recent_jingles":
+                limit = args.get("limit", 10)
+                jingles = self.db.get_recent_jingles(limit=limit)
+                if not jingles:
+                    return "No jingles generated yet."
+                lines = [f"- [{j['generated_at'][:10]}] {j['script'][:100]}..." for j in jingles]
+                return "Recent jingles:\n" + "\n".join(lines)
+
+            elif name == "skip_current_track":
+                await self.lq.skip_current_track(self.bot.http_session, "song_requests")
+                return "Skipped the current track."
+
+            elif name == "queue_trending_song":
+                song_query = await self._pick_trending_song()
+                self.bot.loop.create_task(
+                    self._fire_and_forget_queue(song_query, "DJ Annie", notify_fn, bypass_throttling=True)
+                )
+                return "Queueing a trending song for you..."
+
+            elif name == "search_playlist":
+                return await self._tool_search_playlist(args.get("query", ""))
+
+            elif name == "add_to_playlist":
+                query = args.get("query", "")
+                self.bot.loop.create_task(
+                    self._fire_and_forget_playlist_add(query, notify_fn)
+                )
+                return f"Download started for '{query}'. I'll add it to the playlist once it's ready."
+
+            elif name == "remove_from_playlist":
+                filename = args.get("filename", "")
+                return await self._tool_remove_from_playlist(filename)
+
+            return f"Unknown tool: {name}"
+        except Exception as e:
+            return f"Tool error ({name}): {e}"
+
+    async def _fire_and_forget_queue(self, query: str, requester: str, notify_fn, bypass_throttling=False):
+        """Download and queue a song in the background, then notify."""
+        try:
+            title, _ = await self.request_song(
+                query, requester, bypass_throttling=bypass_throttling
+            )
+            if bypass_throttling:
+                self.db.add_auto_queue(song_title=str(title))
+            await notify_fn(f'🎵 Queued **{title}** — coming up next!')
+        except Exception as e:
+            await notify_fn(f"Couldn't queue that song: {e}")
+
+    async def _handle_annie_chat_discord(self, message: discord.Message, question: str):
+        """Handle an @mention of Annie on Discord."""
+        now = datetime.now(self.local_tz)
+        knowledge = self.knowledge_system_message or ""
+
+        # Gather channel history for context
+        prev = ""
+        async for m in message.channel.history(limit=20):
+            if m.id == message.id:
+                continue
+            prev = f"{m.author.display_name}: {m.content}\n" + prev
+
+        messages = [
+            {"role": "system", "content": ANNIE_SYSTEM_PROMPT + "\n\nGame knowledge:\n" + knowledge},
+            {"role": "user", "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)"},
+        ]
+        if prev:
+            messages.append({"role": "user", "content": f"Recent chat history:\n{prev}"})
+        messages.append({"role": "user", "content": f"{message.author.display_name}: {question}"})
+
+        tools = self._get_annie_tools()
+
+        # Notify callback for fire-and-forget downloads on Discord
+        async def discord_notify(msg: str):
+            await message.channel.send(msg)
+
+        async with message.channel.typing():
+            response = await self._call_annie_llm(messages, tools, message.author.display_name, discord_notify)
+
+        for chunk in split_markdown(response):
+            await message.reply(chunk, mention_author=False)
+
+    async def _handle_annie_chat_ingame(self, player_name: str, question: str):
+        """Handle @annie mention from in-game chat."""
+        now = datetime.now(self.local_tz)
+        knowledge = self.knowledge_system_message or ""
+
+        # Gather recent game chat from Discord channel
+        prev = ""
+        game_chat = self.bot.get_channel(GAME_CHAT_CHANNEL_ID)
+        if game_chat:
+            async for m in game_chat.history(limit=20):
+                prev = f"{m.content}\n" + prev
+
+        messages = [
+            {"role": "system", "content": ANNIE_SYSTEM_PROMPT + "\nRespond briefly — game chat has a character limit. Keep it under 500 chars.\n\nGame knowledge:\n" + knowledge},
+            {"role": "user", "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)"},
+        ]
+        if prev:
+            messages.append({"role": "user", "content": f"Recent in-game chat:\n{prev}"})
+        messages.append({"role": "user", "content": f"{player_name}: {question}"})
+
+        tools = self._get_annie_tools()
+        channel = self.bot.get_channel(GAME_ANNOUNCEMENTS_CHANNEL_ID)
+
+        async def ingame_notify(msg: str):
+            if channel:
+                await channel.send(msg)
+            await announce_in_game(self.bot.http_session, msg[:520])
+
+        response = await self._call_annie_llm(messages, tools, player_name, ingame_notify)
+        await announce_in_game(self.bot.http_session, response[:520])
+
+    async def _call_annie_llm(self, messages: list, tools: list, requester: str, notify_fn) -> str:
+        """Agentic loop for Annie — calls LLM with tools until a final response."""
+        max_iterations = 8
+
+        for _ in range(max_iterations):
+            # pyrefly: ignore [no-matching-overload]
+            completion = await self.openai_client_openrouter.chat.completions.create(
+                model=DEFAULT_AI_MODEL,
+                reasoning_effort="medium",
+                messages=messages,
+                tools=tools if tools else None,
+                tool_choice="auto" if tools else None,
+            )
+
+            response = completion.choices[0].message if completion.choices else None
+            if not response:
+                return "My brain just short-circuited. Try again?"
+
+            if not response.tool_calls:
+                return response.content or "..."
+
+            messages.append(response)
+
+            for tool_call in response.tool_calls:
+                result = await self._execute_annie_tool(
+                    tool_call.function.name,
+                    json.loads(tool_call.function.arguments),
+                    requester,
+                    notify_fn,
+                )
+                messages.append({
+                    "tool_call_id": tool_call.id,
+                    "role": "tool",
+                    "name": tool_call.function.name,
+                    "content": result,
+                })
+
+        return "Okay I got a bit carried away there. What were we talking about?"
+
     async def _do_download(self, youtube_link: str, requester: str):
         """Extract metadata and download a song. Returns (title, duration, base_filename)."""
         search_query = youtube_link
@@ -576,6 +932,132 @@ Output only the spoken words, as if transcribed from a live recording.""",
 
         return title, duration, base_filename, webpage_url
 
+    async def _download_to_path(self, query: str, output_dir: str) -> tuple[str, str]:
+        """Download a song to a specific directory. Returns (title, filepath).
+
+        Unlike _do_download, this has no dedup or duration checks — intended
+        for playlist curation rather than user requests.
+        """
+        search_query = query
+        if "youtube.com" not in search_query and "youtu.be" not in search_query:
+            search_query = f"ytsearch:{search_query}"
+
+        ydl_info_opts = {
+            "noplaylist": True,
+            "quiet": True,
+            "default_search": "ytsearch",
+            "cookiefile": YT_COOKIES_PATH,
+            "js_runtimes": {"deno": {"path": DENO_PATH}},
+        }
+
+        try:
+            # pyrefly: ignore [bad-argument-type]
+            with yt_dlp.YoutubeDL(ydl_info_opts) as ydl:
+                info_dict = await asyncio.to_thread(
+                    ydl.extract_info, search_query, download=False
+                )
+            # pyrefly: ignore [bad-typed-dict-key]
+            if "entries" in info_dict and info_dict["entries"]:
+                # pyrefly: ignore [bad-typed-dict-key]
+                info_dict = info_dict["entries"][0]
+        except Exception as e:
+            raise Exception(
+                "Could not find that song. Please try a different name or link."
+            ) from e
+
+        title = info_dict.get("title", "Unknown")
+        webpage_url = info_dict.get("webpage_url")
+        # pyrefly: ignore [no-matching-overload]
+        safe_title = re.sub(r"[^a-zA-Z0-9]", "_", title)
+        base_filename = safe_title
+
+        ydl_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": f"{output_dir}/{base_filename}.%(ext)s",
+            "cookiefile": YT_COOKIES_PATH,
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192",
+                },
+                {
+                    "key": "FFmpegMetadata",
+                    "add_metadata": True,
+                },
+            ],
+            "ffmpeg_location": os.environ.get("FFMPEG_PATH"),
+            "prefer_ffmpeg": True,
+            "retries": 5,
+            "js_runtimes": {"deno": {"path": DENO_PATH}},
+        }
+
+        try:
+            # pyrefly: ignore [bad-argument-type]
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # pyrefly: ignore [bad-argument-type]
+                await asyncio.to_thread(ydl.download, [webpage_url])
+        except Exception as e:
+            raise Exception(f"Failed to download audio: {e}")
+
+        filepath = f"{output_dir}/{base_filename}.mp3"
+        return title, filepath
+
+    async def _tool_search_playlist(self, query: str) -> str:
+        """Search the base playlist channel for songs matching a query."""
+        playlist_channel = self.bot.get_channel(PLAYLIST_CHANNEL)
+        if not playlist_channel:
+            return "Could not access the playlist channel."
+
+        matches = []
+        async for message in playlist_channel.history(limit=None):
+            for attachment in message.attachments:
+                if not query or query.lower() in attachment.filename.lower():
+                    matches.append(attachment.filename)
+
+        if not matches:
+            return f"No songs found matching '{query}'." if query else "The playlist is empty."
+
+        matches.sort()
+        lines = [f"- {name}" for name in matches[:50]]
+        header = f"Found {len(matches)} song(s)" + (f" matching '{query}'" if query else "") + ":\n"
+        return header + "\n".join(lines)
+
+    async def _tool_remove_from_playlist(self, filename: str) -> str:
+        """Remove a song from the playlist channel by filename."""
+        if not filename:
+            return "Please provide a filename to remove. Use search_playlist to find the exact name."
+
+        playlist_channel = self.bot.get_channel(PLAYLIST_CHANNEL)
+        if not playlist_channel:
+            return "Could not access the playlist channel."
+
+        async for message in playlist_channel.history(limit=None):
+            for attachment in message.attachments:
+                if attachment.filename.lower() == filename.lower():
+                    await message.delete()
+                    return f"Removed '{attachment.filename}' from the playlist."
+
+        return f"Could not find '{filename}' in the playlist. Use search_playlist to check the exact filename."
+
+    async def _fire_and_forget_playlist_add(self, query: str, notify_fn):
+        """Download a song and add it to the playlist channel in the background."""
+        try:
+            async with asyncio.timeout(DOWNLOAD_TIMEOUT):
+                title, filepath = await self._download_to_path(query, PLAYLIST_PATH)
+
+            playlist_channel = self.bot.get_channel(PLAYLIST_CHANNEL)
+            if not playlist_channel:
+                await notify_fn("Could not access the playlist channel.")
+                return
+
+            await playlist_channel.send(
+                file=discord.File(filepath)
+            )
+            await notify_fn(f'🎵 Added **{title}** to the playlist!')
+        except Exception as e:
+            await notify_fn(f"Couldn't add that song to the playlist: {e}")
+
     async def request_song(
         self,
         youtube_link: str,
@@ -639,9 +1121,9 @@ Output only the spoken words, as if transcribed from a live recording.""",
         # --- Push to Queue ---
         local_path = f"{REQUESTS_PATH}/{base_filename}.mp3"
         try:
-            await asyncio.to_thread(self.lq.push_to_queue, "song_requests", local_path)
+            await self.lq.push_to_queue(self.bot.http_session, "song_requests", local_path)
         except Exception as e:
-            log.error(f"Failed to push song to queue via telnet, but continuing: {e}")
+            log.error(f"Failed to push song to queue: {e}")
 
         # Update throttling
         self.user_requests[requester].append(now)
@@ -991,7 +1473,7 @@ Output only the spoken words, as if transcribed from a live recording.""",
     async def skip_radio_track(self, interaction: discord.Interaction):
         await interaction.response.send_message("Skipping", ephemeral=True)
         self.bot.loop.create_task(
-            asyncio.to_thread(self.lq.skip_current_track, "song_requests")
+            self.lq.skip_current_track(self.bot.http_session, "song_requests")
         )
 
     @app_commands.command(name="set_event_mode", description="Set event mode")
@@ -1001,12 +1483,10 @@ Output only the spoken words, as if transcribed from a live recording.""",
         await interaction.response.send_message("Setting event mode")
         state_str = "true" if state else "false"
         self.bot.loop.create_task(
-            asyncio.to_thread(
-                self.lq._send_command, f"var.set event_mode = {state_str}"
-            )
+            self.lq.set_var(self.bot.http_session, "event_mode", state_str)
         )
         self.bot.loop.create_task(
-            asyncio.to_thread(self.lq._send_command, "var.set race_mode = false")
+            self.lq.set_var(self.bot.http_session, "race_mode", "false")
         )
 
     @app_commands.command(name="set_race_mode", description="Set race mode")
@@ -1016,7 +1496,7 @@ Output only the spoken words, as if transcribed from a live recording.""",
         await interaction.response.send_message("Setting race mode")
         state_str = "true" if state else "false"
         self.bot.loop.create_task(
-            asyncio.to_thread(self.lq._send_command, f"var.set race_mode = {state_str}")
+            self.lq.set_var(self.bot.http_session, "race_mode", state_str)
         )
 
     # --- Tasks ---
@@ -1025,15 +1505,19 @@ Output only the spoken words, as if transcribed from a live recording.""",
         channel = self.bot.get_channel(JINGLES_CHANNEL_ID)
         i = 0
         async for jingle, jingle_audio in self.generate_jingles_gen():
-            with open(os.path.join(JINGLES_PATH, f"jingle{i}.mp3"), "wb") as f:
+            filename = f"jingle{i}.mp3"
+            with open(os.path.join(JINGLES_PATH, filename), "wb") as f:
                 f.write(jingle_audio)
+
+            # Persist to DB
+            self.db.add_jingle(script=jingle, audio_filename=filename)
 
             if channel:
                 self.bot.loop.create_task(
                     channel.send(
                         jingle[:2000],
                         file=discord.File(
-                            BytesIO(jingle_audio), filename=f"jingle{i}.mp3"
+                            BytesIO(jingle_audio), filename=filename
                         ),
                     )
                 )
@@ -1114,8 +1598,17 @@ Output only the spoken words, as if transcribed from a live recording.""",
 
     @tasks.loop(minutes=20)
     async def auto_queue_trending(self):
-        """Queue a trending song every 20 minutes to keep the radio fresh."""
+        """Queue a trending song only if the request queue is empty."""
         try:
+            queue_len = await self.lq.get_queue_length(
+                self.bot.http_session, "song_requests"
+            )
+            if queue_len is not None and queue_len > 0:
+                log.info(
+                    f"Skipping auto-queue: {queue_len} song(s) already in queue"
+                )
+                return
+
             song_query = await self._pick_trending_song()
             title, _ = await self.request_song(
                 song_query,
@@ -1144,10 +1637,15 @@ Output only the spoken words, as if transcribed from a live recording.""",
             news[:2000], file=discord.File(BytesIO(news_audio), filename="news.mp3")
         )
 
+        # Persist to DB
+        audio_filename = None
         if message.attachments:
             attachment = message.attachments[0]
+            audio_filename = attachment.filename
             local_path = os.path.join(JINGLES_PATH, attachment.filename)
             await attachment.save(local_path)
+
+        self.db.add_news(content=news, audio_filename=audio_filename)
 
     @tasks.loop(
         time=[
@@ -1257,6 +1755,13 @@ Output only the spoken words, as if transcribed from a live recording.""",
 
         channel_id = message.channel.id
 
+        # Discord @mention → Annie agentic chat
+        if self.bot.user in message.mentions and message.content:
+            question = message.content.replace(f"<@{self.bot.user.id}>", "").replace(f"<@!{self.bot.user.id}>", "").strip()
+            if question:
+                self.bot.loop.create_task(self._handle_annie_chat_discord(message, question))
+                return
+
         if channel_id == RADIO_CHANNEL_ID:
             if message.type != discord.MessageType.chat_input_command:
                 await message.delete()
@@ -1305,16 +1810,25 @@ Output only the spoken words, as if transcribed from a live recording.""",
                     self.bot.loop.create_task(self.game_dislike_song(name))
                 elif command == "event_mode" and args:
                     self.bot.loop.create_task(
-                        asyncio.to_thread(
-                            self.lq._send_command, f"var.set event_mode = {args}"
-                        )
+                        self.lq.set_var(self.bot.http_session, "event_mode", args)
                     )
                 elif command == "skip":
                     self.bot.loop.create_task(
-                        asyncio.to_thread(self.lq.skip_current_track, "song_requests")
+                        self.lq.skip_current_track(self.bot.http_session, "song_requests")
                     )
                 elif command == "queue_trending":
                     self.bot.loop.create_task(self.game_queue_trending(name))
+
+            # In-game @annie mention → Annie agentic chat
+            elif annie_match := re.match(
+                r"\*\*(?P<name>.+):\*\* @annie\s+(?P<question>.+)",
+                message.content,
+                re.IGNORECASE,
+            ):
+                name = annie_match.group("name")
+                question = annie_match.group("question")
+                if name not in self.banned_requesters:
+                    self.bot.loop.create_task(self._handle_annie_chat_ingame(name, question))
 
     @commands.Cog.listener()
     async def on_message_edit(
