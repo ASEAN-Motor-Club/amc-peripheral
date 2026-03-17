@@ -32,7 +32,7 @@ def cog(mock_bot, tmp_path, monkeypatch):
     with patch("amc_peripheral.radio.radio_cog.LiquidsoapController"):
         with patch("amc_peripheral.radio.radio_cog.AsyncOpenAI"):
             cog = RadioCog(mock_bot)
-            cog.lq = MagicMock()
+            cog.lq = AsyncMock()
             return cog
 
 @pytest.mark.asyncio
@@ -63,11 +63,11 @@ async def test_request_song_pushes_to_queue(cog):
         # Verify push_to_queue was called
         # safe_requester = "TestUser", safe_title = "Test_Song_Title"
         expected_path = f"{REQUESTS_PATH}/TestUser-Test_Song_Title.mp3"
-        cog.lq.push_to_queue.assert_called_once_with("song_requests", expected_path)
+        cog.lq.push_to_queue.assert_called_once_with(cog.bot.http_session, "song_requests", expected_path)
 
 @pytest.mark.asyncio
-async def test_request_song_handles_telnet_exception(cog):
-    """Test that request_song survives a telnet exception."""
+async def test_request_song_handles_push_exception(cog):
+    """Test that request_song survives a push exception."""
     requester = "TestUser"
     song_name = "Test Song"
     
