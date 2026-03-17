@@ -59,6 +59,30 @@ class RadioDB:
             # pyrefly: ignore [missing-attribute]
             self.db["auto_queued_songs"].create_index(["queued_at"])
 
+        # Generated News Table
+        if "generated_news" not in self.db.table_names():
+            # pyrefly: ignore [missing-attribute]
+            self.db["generated_news"].create({
+                "id": int,
+                "content": str,
+                "audio_filename": str,
+                "generated_at": str,
+            }, pk="id")
+            # pyrefly: ignore [missing-attribute]
+            self.db["generated_news"].create_index(["generated_at"])
+
+        # Generated Jingles Table
+        if "generated_jingles" not in self.db.table_names():
+            # pyrefly: ignore [missing-attribute]
+            self.db["generated_jingles"].create({
+                "id": int,
+                "script": str,
+                "audio_filename": str,
+                "generated_at": str,
+            }, pk="id")
+            # pyrefly: ignore [missing-attribute]
+            self.db["generated_jingles"].create_index(["generated_at"])
+
     def add_request(self, discord_id: str | None, song_title: str, song_url: str | None, requester_name: str) -> int | None:
         """Record a song request."""
         row = {
@@ -194,5 +218,43 @@ class RadioDB:
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
         return list(self.db["auto_queued_songs"].rows_where(
             "queued_at > ?", [cutoff], order_by="queued_at desc"
+        ))
+
+    def add_news(self, content: str, audio_filename: str | None = None) -> int | None:
+        """Record a generated news segment."""
+        row = {
+            "content": content,
+            "audio_filename": audio_filename,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            # pyrefly: ignore [missing-attribute]
+            return self.db["generated_news"].insert(row).last_pk
+        except Exception:
+            return None
+
+    def get_recent_news(self, limit: int = 5) -> list[dict]:
+        """Get recent generated news segments."""
+        return list(self.db["generated_news"].rows_where(
+            order_by="generated_at desc", limit=limit
+        ))
+
+    def add_jingle(self, script: str, audio_filename: str | None = None) -> int | None:
+        """Record a generated jingle."""
+        row = {
+            "script": script,
+            "audio_filename": audio_filename,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            # pyrefly: ignore [missing-attribute]
+            return self.db["generated_jingles"].insert(row).last_pk
+        except Exception:
+            return None
+
+    def get_recent_jingles(self, limit: int = 10) -> list[dict]:
+        """Get recent generated jingles."""
+        return list(self.db["generated_jingles"].rows_where(
+            order_by="generated_at desc", limit=limit
         ))
 

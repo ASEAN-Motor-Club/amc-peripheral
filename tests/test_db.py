@@ -110,3 +110,47 @@ def test_get_recent_auto_queued_filtering(db):
     recent = db.get_recent_auto_queued(hours=1)
     assert len(recent) == 2
 
+
+def test_add_and_get_news(db):
+    """Test recording and retrieving generated news segments."""
+    pk = db.add_news("Breaking news: Gangjung traffic jam reaches record levels!", "news_20260317.mp3")
+    assert pk is not None
+
+    news = db.get_recent_news(limit=5)
+    assert len(news) == 1
+    assert "Gangjung traffic jam" in news[0]["content"]
+    assert news[0]["audio_filename"] == "news_20260317.mp3"
+
+    # Add another and verify ordering (most recent first)
+    db.add_news("Second news segment about racing.", "news2.mp3")
+    news = db.get_recent_news(limit=5)
+    assert len(news) == 2
+    assert "Second news" in news[0]["content"]
+
+
+def test_add_and_get_jingles(db):
+    """Test recording and retrieving generated jingles."""
+    pk = db.add_jingle("You're listening to Radio ASEAN, where the roads are long and the songs are longer!", "jingle0.mp3")
+    assert pk is not None
+
+    jingles = db.get_recent_jingles(limit=10)
+    assert len(jingles) == 1
+    assert "Radio ASEAN" in jingles[0]["script"]
+    assert jingles[0]["audio_filename"] == "jingle0.mp3"
+
+    # Add more and test limit
+    for i in range(5):
+        db.add_jingle(f"Jingle number {i}", f"jingle{i+1}.mp3")
+
+    jingles = db.get_recent_jingles(limit=3)
+    assert len(jingles) == 3
+
+
+def test_add_news_no_audio(db):
+    """Test adding news without audio filename."""
+    pk = db.add_news("Text-only news segment")
+    assert pk is not None
+
+    news = db.get_recent_news(limit=1)
+    assert news[0]["audio_filename"] is None
+    assert "Text-only" in news[0]["content"]
