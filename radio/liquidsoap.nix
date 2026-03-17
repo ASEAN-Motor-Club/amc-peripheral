@@ -157,7 +157,7 @@ in {
       fallback = pkgs.writeText "fallback.liq" ''
         output.icecast(
           %mp3(bitrate=128),
-          blank(),
+          mksafe(playlist(reload_mode="watch", "/var/lib/radio/prev_requests")),
           host = "localhost",
           port = 8000,
           password = "hackme",

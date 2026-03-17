@@ -788,7 +788,7 @@ Output only the spoken words, as if transcribed from a live recording.""",
                 prev = f"{m.content}\n" + prev
 
         messages = [
-            {"role": "system", "content": ANNIE_SYSTEM_PROMPT + "\nRespond briefly — game chat has a character limit. Keep it under 500 chars.\n\nGame knowledge:\n" + knowledge},
+            {"role": "system", "content": ANNIE_SYSTEM_PROMPT + "\nRespond briefly — game chat has a character limit. Keep it under 500 chars.\nDo NOT use any emojis — the game client cannot render them.\n\nGame knowledge:\n" + knowledge},
             {"role": "user", "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)"},
         ]
         if prev:
