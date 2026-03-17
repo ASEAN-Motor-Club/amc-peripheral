@@ -130,6 +130,12 @@ class YouTubeCog(commands.Cog):
                     result.title, transcript_for_llm
                 )
 
+                # Override LLM's needs_analysis with deterministic threshold
+                # Only trigger on controversialness — info_quality can be 0
+                # for videos with no speech (music, gameplay, etc.)
+                if triage:
+                    triage.needs_analysis = triage.controversialness >= 5
+
                 # Phase 3: Critical analysis (only if triage triggers it)
                 analysis = None
                 if triage and triage.needs_analysis:
