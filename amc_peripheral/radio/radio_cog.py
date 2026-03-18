@@ -1569,7 +1569,7 @@ Script:
 
     async def _call_annie_llm(self, messages: list, tools: list, requester: str, notify_fn) -> str:
         """Agentic loop for Annie — calls LLM with tools until a final response."""
-        max_iterations = 8
+        max_iterations = 20
 
         for _ in range(max_iterations):
             # pyrefly: ignore [no-matching-overload]
