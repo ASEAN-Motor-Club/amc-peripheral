@@ -22,24 +22,39 @@ class LiquidsoapController:
         self.base_url = base_url
         self.timeout = aiohttp.ClientTimeout(total=timeout)
 
+    @staticmethod
+    def _sanitize_annotation(value: str) -> str:
+        """Remove chars that break Liquidsoap annotate: syntax.
+
+        Double-quotes in values cause Liquidsoap to misparse the URI
+        (e.g., requester="freeman":/path is read as protocol "freeman").
+        """
+        return value.replace('"', '').replace(',', ' ').replace(':', ' ')
+
     async def push_to_queue(
         self, session: aiohttp.ClientSession, queue_name: str, uri: str,
         title: str | None = None, requester: str | None = None,
     ) -> bool:
-        """Push a URI to the Liquidsoap request queue via HTTP."""
-        # Annotate URI with metadata if provided
+        """Push a URI to the Liquidsoap request queue via HTTP.
+
+        Metadata is sent via Liquidsoap's annotate: protocol. The annotated
+        URI is URL-encoded so that '=' signs in annotations don't confuse
+        Liquidsoap's query-string parser (which would split on them).
+        """
         annotated_uri = uri
         annotations = []
         if title:
-            safe_title = title.replace('"', '\\"')
+            safe_title = self._sanitize_annotation(title)
             annotations.append(f'title="{safe_title}"')
         if requester:
-            safe_requester = requester.replace('"', '\\"')
+            safe_requester = self._sanitize_annotation(requester)
             annotations.append(f'requester="{safe_requester}"')
         if annotations:
             annotated_uri = f"annotate:{','.join(annotations)}:{uri}"
 
-        url = f"{self.base_url}/push?uri={quote(annotated_uri, safe='/:\"=,')}"
+        # Do NOT include '=' in safe chars — Liquidsoap's harbor query
+        # parser splits on bare '=' and corrupts annotate key=value pairs.
+        url = f"{self.base_url}/push?uri={quote(annotated_uri, safe='/:')}"
         try:
             async with session.post(url, timeout=self.timeout) as resp:
                 if resp.status == 200:
