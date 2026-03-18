@@ -75,6 +75,42 @@ class TestParseFileInfo:
         assert result["requester"] == "Radio"
         assert result["song_title"] == "Cyndi Lauper - Time After Time (Official HD Video)"
 
+    def test_parse_cache_with_hyphenated_video_id(self):
+        """Test parsing a cached song whose video ID contains hyphens."""
+        metadata = {
+            "filename": "/var/lib/radio/cache/sM-0Eh4b0Ge.mp3",
+            "title": "Rick Astley - Never Gonna Give You Up",
+        }
+        result = parse_song_info(metadata)
+
+        assert result is not None
+        assert result["folder"] == "cache"
+        assert result["requester"] == "Radio"
+        assert result["song_title"] == "Rick Astley - Never Gonna Give You Up"
+
+    def test_parse_cache_with_requester_metadata(self):
+        """Test that requester from metadata is used for cache files."""
+        metadata = {
+            "filename": "/var/lib/radio/cache/abc123.mp3",
+            "title": "Some Song",
+            "requester": "CoolPlayer",
+        }
+        result = parse_song_info(metadata)
+
+        assert result is not None
+        assert result["folder"] == "cache"
+        assert result["requester"] == "CoolPlayer"
+        assert result["song_title"] == "Some Song"
+
+    def test_parse_cache_no_title_returns_none(self):
+        """Test that cache files without metadata title return None."""
+        metadata = {
+            "filename": "/var/lib/radio/cache/xyz789.mp3",
+        }
+        result = parse_song_info(metadata)
+
+        assert result is None
+
     def test_parse_invalid_format_missing_folder(self):
         """Test parsing fails gracefully for missing folder structure."""
         metadata = {"filename": "just_a_file.mp3"}

@@ -1437,7 +1437,10 @@ Output only the spoken words, as if transcribed from a live recording.""",
 
         # --- Push to Queue ---
         try:
-            await self.lq.push_to_queue(self.bot.http_session, "song_requests", local_path)
+            await self.lq.push_to_queue(
+                self.bot.http_session, "song_requests", local_path,
+                title=str(title), requester=requester,
+            )
         except Exception as e:
             log.error(f"Failed to push song to queue: {e}")
 

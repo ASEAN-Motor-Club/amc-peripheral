@@ -40,6 +40,18 @@ def parse_song_info(metadata: dict) -> Optional[dict]:
     filename = filename.removeprefix("/var/lib/radio/")
     try:
         folder, filepath = filename.split("/")
+
+        # Cache files use video IDs as filenames — don't try requester-title parsing
+        if folder == "cache":
+            title = metadata.get("title")
+            if title:
+                return {
+                    "folder": folder,
+                    "requester": metadata.get("requester", "Radio"),
+                    "song_title": title,
+                }
+            return None
+
         requester, song_path = filepath.split("-", 1)
         song_title = song_path.removesuffix(".mp3")
         return {

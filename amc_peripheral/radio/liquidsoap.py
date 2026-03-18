@@ -23,10 +23,23 @@ class LiquidsoapController:
         self.timeout = aiohttp.ClientTimeout(total=timeout)
 
     async def push_to_queue(
-        self, session: aiohttp.ClientSession, queue_name: str, uri: str
+        self, session: aiohttp.ClientSession, queue_name: str, uri: str,
+        title: str | None = None, requester: str | None = None,
     ) -> bool:
         """Push a URI to the Liquidsoap request queue via HTTP."""
-        url = f"{self.base_url}/push?uri={quote(uri, safe='/:')}"
+        # Annotate URI with metadata if provided
+        annotated_uri = uri
+        annotations = []
+        if title:
+            safe_title = title.replace('"', '\\"')
+            annotations.append(f'title="{safe_title}"')
+        if requester:
+            safe_requester = requester.replace('"', '\\"')
+            annotations.append(f'requester="{safe_requester}"')
+        if annotations:
+            annotated_uri = f"annotate:{','.join(annotations)}:{uri}"
+
+        url = f"{self.base_url}/push?uri={quote(annotated_uri, safe='/:\"=,')}"
         try:
             async with session.post(url, timeout=self.timeout) as resp:
                 if resp.status == 200:
