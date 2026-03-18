@@ -1114,6 +1114,7 @@ async def test_execute_annie_tool_add_tts_track_expired(cog):
     assert "not found" in result
 
 
+
 @pytest.mark.asyncio
 async def test_create_track_command_exists(cog):
     """Verify /create_track slash command is registered."""
@@ -1121,6 +1122,151 @@ async def test_create_track_command_exists(cog):
     assert "create_track" in commands
 
 
+# --- Multi-Speaker Talkshow Tests ---
+
+
+@pytest.mark.asyncio
+async def test_create_talkshow_command_exists(cog):
+    """Verify /create_talkshow slash command is registered."""
+    commands = [cmd.name for cmd in cog.__cog_app_commands__]
+    assert "create_talkshow" in commands
+
+
+@pytest.mark.asyncio
+async def test_generate_talkshow_returns_transcript_and_audio(cog, monkeypatch):
+    """Test that generate_talkshow returns a formatted transcript and audio bytes."""
+    from amc_peripheral.radio.radio_cog import TalkshowScript, TalkshowTurn
+
+    # First LLM call: raw script via _call_llm_with_tools_internal
+    raw_response = MagicMock()
+    raw_response.choices = [MagicMock()]
+    raw_response.choices[0].message.content = "Host: Welcome to the show!\nGuest: Thanks for having me!"
+    raw_response.choices[0].message.tool_calls = None
+
+    # Second LLM call: structured parse
+    parsed_script = TalkshowScript(
+        turns=[
+            TalkshowTurn(speaker="Host", text="Welcome to the show!"),
+            TalkshowTurn(speaker="Guest", text="Thanks for having me!"),
+        ]
+    )
+    parse_response = MagicMock()
+    parse_response.choices = [MagicMock()]
+    parse_response.choices[0].message.parsed = parsed_script
+
+    call_count = {"n": 0}
+
+    async def mock_create(*args, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return raw_response
+        return None
+
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(side_effect=mock_create)
+    cog.openai_client_openrouter.beta.chat.completions.parse = AsyncMock(return_value=parse_response)
+
+    # Mock tts_gemini_multi
+    monkeypatch.setattr(
+        "amc_peripheral.radio.radio_cog.tts_gemini_multi",
+        lambda *args, **kwargs: b"talkshow_audio",
+    )
+
+    transcript, audio = await cog.generate_talkshow("road safety tips")
+
+    assert "Host" in transcript
+    assert "Guest" in transcript
+    assert "Welcome to the show!" in transcript
+    assert "Thanks for having me!" in transcript
+    assert audio == b"talkshow_audio"
+
+
+@pytest.mark.asyncio
+async def test_generate_talkshow_formats_transcript_as_dialogue(cog, monkeypatch):
+    """Test that the transcript is formatted as Speaker: text lines."""
+    from amc_peripheral.radio.radio_cog import TalkshowScript, TalkshowTurn
+
+    raw_response = MagicMock()
+    raw_response.choices = [MagicMock()]
+    raw_response.choices[0].message.content = "Host: Hello\nGuest: Hi"
+    raw_response.choices[0].message.tool_calls = None
+
+    parsed_script = TalkshowScript(
+        turns=[
+            TalkshowTurn(speaker="Host", text="Hello listeners"),
+            TalkshowTurn(speaker="Guest", text="Great to be here"),
+            TalkshowTurn(speaker="Host", text="Lets talk about racing"),
+        ]
+    )
+    parse_response = MagicMock()
+    parse_response.choices = [MagicMock()]
+    parse_response.choices[0].message.parsed = parsed_script
+
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(return_value=raw_response)
+    cog.openai_client_openrouter.beta.chat.completions.parse = AsyncMock(return_value=parse_response)
+
+    monkeypatch.setattr(
+        "amc_peripheral.radio.radio_cog.tts_gemini_multi",
+        lambda *args, **kwargs: b"audio",
+    )
+
+    transcript, _ = await cog.generate_talkshow("racing")
+
+    lines = transcript.split("\n")
+    assert len(lines) == 3
+    assert lines[0].startswith("**Host:**")
+    assert lines[1].startswith("**Guest:**")
+    assert lines[2].startswith("**Host:**")
+
+
+# --- Agent Talkshow Tool Tests ---
+
+
+@pytest.mark.asyncio
+async def test_generate_talkshow_segment_tool_defined(cog):
+    """Verify generate_talkshow_segment is in Annie's tool list."""
+    tools = cog._get_annie_tools()
+    tool_names = [t["function"]["name"] for t in tools]
+    assert "generate_talkshow_segment" in tool_names
+
+
+@pytest.mark.asyncio
+async def test_execute_annie_tool_generate_talkshow_segment(cog, monkeypatch):
+    """Test generate_talkshow_segment tool stores pending track and notifies."""
+    monkeypatch.setattr(
+        cog, "generate_talkshow", AsyncMock(return_value=("**Host:** Hello\n**Guest:** Hi", b"talkshow_audio"))
+    )
+    notify_fn = AsyncMock()
+
+    result = await cog._execute_annie_tool(
+        "generate_talkshow_segment",
+        {"topic": "best driving routes", "duration": "1 minute"},
+        "TestUser",
+        notify_fn,
+    )
+
+    assert "track_id" in result
+    assert len(cog._pending_tracks) == 1
+    notify_fn.assert_called_once()
+    assert "Talkshow preview" in notify_fn.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_execute_annie_tool_generate_talkshow_segment_error(cog, monkeypatch):
+    """Test generate_talkshow_segment handles errors gracefully."""
+    monkeypatch.setattr(
+        cog, "generate_talkshow", AsyncMock(side_effect=Exception("TTS failed"))
+    )
+    notify_fn = AsyncMock()
+
+    result = await cog._execute_annie_tool(
+        "generate_talkshow_segment",
+        {"topic": "broken topic"},
+        "TestUser",
+        notify_fn,
+    )
+
+    assert "Failed to generate talkshow segment" in result
+    assert len(cog._pending_tracks) == 0
 
 
 class AsyncIteratorMock:

@@ -53,7 +53,7 @@ from amc_peripheral.settings import (
 )
 from amc_peripheral.db import RadioDB
 from amc_peripheral.utils.text_utils import split_markdown
-from amc_peripheral.radio.tts import tts as tts_google
+from amc_peripheral.radio.tts import tts as tts_google, tts_gemini_multi
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
 from amc_peripheral.radio.radio_server import get_current_song_metadata, get_current_song, parse_song_info
 from amc_peripheral.utils.game_utils import announce_in_game
@@ -95,6 +95,12 @@ Listeners can create and manage their own playlists to queue multiple songs at o
 **Via you (Annie):**
 Listeners can also ask you directly to create playlists, add songs, view their lists, or play them. \
 Use your playlist tools when they do — don't tell them to use slash commands if they're already chatting with you.
+
+## Talkshow Segments
+You can create multi-speaker talkshow segments featuring a Host (you), a Guest, and optionally a Caller. \
+Use the generate_talkshow_segment tool when a listener asks a question that would make a fun radio discussion, \
+or when someone wants a conversational segment — like simulating a caller phoning in with a question. \
+These segments use multiple AI voices for a natural talk-show feel.
 """
 
 
@@ -119,6 +125,15 @@ class Talkshows(BaseModel):
     sketches: list[str]
 
 
+class TalkshowTurn(BaseModel):
+    speaker: str
+    text: str
+
+
+class TalkshowScript(BaseModel):
+    turns: list[TalkshowTurn]
+
+
 # Constants
 TTS_SCRIPT_MARKUP_INSTRUCTIONS = """\
 ### Markup
@@ -141,6 +156,12 @@ For example:
 
 Use pauses sparingly in your speech, for comedic, theatrical, and other effects.
 """
+
+DEFAULT_TALKSHOW_VOICES = {
+    "Host": "Leda",
+    "Guest": "Charon",
+    "Caller": "Kore",
+}
 
 
 class LinkView(discord.ui.View):
@@ -644,6 +665,114 @@ Make it engaging, fun, and in Annie's signature style — witty, warm, and enter
 
         return clean_transcript, audio_bytes
 
+    async def generate_talkshow(self, topic: str, duration_hint: str = "1-2 minutes") -> tuple[str, bytes]:
+        """Generate a multi-speaker talkshow segment using Gemini TTS."""
+        knowledge = self.knowledge_system_message or ""
+        now = datetime.now(self.local_tz)
+
+        system_message = f"""You are a scriptwriter for Radio ASEAN in Motor Town.
+
+Use this knowledge about the game:
+{knowledge}"""
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "query_game_database",
+                    "description": f"""Query MotorTown game database with SQL.
+
+{self.game_schema_description}
+
+Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"sql": {"type": "string"}},
+                        "required": ["sql"],
+                    },
+                },
+            },
+        ]
+
+        messages = [
+            {"role": "system", "content": system_message},
+            {
+                "role": "user",
+                "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)",
+            },
+            {
+                "role": "user",
+                "content": f"""Write a multi-speaker radio talkshow script for Radio ASEAN. The segment should be approximately {duration_hint} long when read aloud.
+
+Topic: {topic}
+
+The script is a conversation between speakers. Use exactly these speaker names:
+- "Host" — the main radio host, DJ Annie, witty and warm
+- "Guest" — a guest speaker or co-host with their own personality
+- "Caller" — (optional) a listener calling in
+
+{TTS_SCRIPT_MARKUP_INSTRUCTIONS}
+
+CRITICAL:
+- Do NOT use markdown formatting (asterisks, underscores, hashes, etc.) — they cannot be read by TTS.
+- Output ONLY the dialogue lines. No stage directions, sound effects, or narration.
+- Make it feel natural, with back-and-forth banter, reactions, and interruptions.
+- Keep it fun, engaging, and in the style of a lively radio talk show.""",
+            },
+        ]
+
+        # Use agentic loop for tool support, then parse structured output
+        raw_script = await self._call_llm_with_tools_internal(messages, tools)
+
+        # Second pass: parse the raw script into structured turns
+        parse_completion = await self.openai_client_openrouter.beta.chat.completions.parse(
+            model=DEFAULT_AI_MODEL,
+            response_format=TalkshowScript,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""Parse the following radio talkshow script into structured speaker turns.
+Each turn has a "speaker" (one of: Host, Guest, Caller) and "text" (the spoken words).
+Preserve the exact words but remove any speaker labels or colons from the text.
+
+Script:
+{raw_script}""",
+                },
+            ],
+        )
+
+        if not parse_completion.choices or not parse_completion.choices[0].message.parsed:
+            raise Exception("Failed to parse talkshow script into structured turns.")
+
+        script = parse_completion.choices[0].message.parsed
+
+        # Build turns for TTS
+        turns = [(turn.text, turn.speaker) for turn in script.turns]
+
+        # Only include voices for speakers that appear in the script
+        speakers_used = {turn.speaker for turn in script.turns}
+        speaker_voices = {
+            alias: voice
+            for alias, voice in DEFAULT_TALKSHOW_VOICES.items()
+            if alias in speakers_used
+        }
+
+        # Build readable transcript
+        transcript = "\n".join(
+            f"**{turn.speaker}:** {turn.text}" for turn in script.turns
+        )
+
+        # Generate multi-speaker audio
+        audio_bytes = await asyncio.to_thread(
+            tts_gemini_multi,
+            turns,
+            speaker_voices,
+            prompt="Say this as a lively British radio talk show with natural pacing and personality.",
+            voice_language_code="en-GB",
+        )
+
+        return transcript, audio_bytes
+
     async def _call_llm_with_tools_internal(self, messages: list, tools: list) -> str:
         """Simple agentic loop for LLM with tools. Returns final text response."""
         max_iterations = 5
@@ -983,14 +1112,35 @@ Make it engaging, fun, and in Annie's signature style — witty, warm, and enter
             {
                 "type": "function",
                 "function": {
+                    "name": "generate_talkshow_segment",
+                    "description": "Generate a multi-speaker radio talkshow segment on a given topic, featuring a Host (DJ Annie), a Guest, and optionally a Caller. Uses multiple AI voices for a natural conversation feel. Great for answering listener questions as a fun talk-show discussion, simulating a caller phoning in, or creating a banter segment between hosts. The segment is sent back for review before being added to the playlist.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "topic": {
+                                "type": "string",
+                                "description": "The topic or question for the talkshow segment",
+                            },
+                            "duration": {
+                                "type": "string",
+                                "description": "Approximate spoken duration (e.g. '1-2 minutes', '30 seconds'). Default: '1-2 minutes'",
+                            },
+                        },
+                        "required": ["topic"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "add_tts_track_to_playlist",
-                    "description": "Add a previously generated TTS track to the permanent radio playlist. Only call this AFTER the user has confirmed they want to add the track. Requires the track_id returned by generate_radio_track.",
+                    "description": "Add a previously generated TTS track to the permanent radio playlist. Only call this AFTER the user has confirmed they want to add the track. Requires the track_id returned by generate_radio_track or generate_talkshow_segment.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "track_id": {
                                 "type": "string",
-                                "description": "The track ID returned by generate_radio_track",
+                                "description": "The track ID returned by generate_radio_track or generate_talkshow_segment",
                             },
                         },
                         "required": ["track_id"],
@@ -1161,6 +1311,18 @@ Make it engaging, fun, and in Annie's signature style — witty, warm, and enter
                     return f"Track generated (track_id: {track_id}). I've sent the script above. Ask the user if they'd like to add it to the playlist. If yes, call add_tts_track_to_playlist with track_id '{track_id}'."
                 except Exception as e:
                     return f"Failed to generate track: {e}"
+
+            elif name == "generate_talkshow_segment":
+                topic = args.get("topic", "")
+                duration = args.get("duration", "1-2 minutes")
+                try:
+                    transcript, audio_bytes = await self.generate_talkshow(topic, duration)
+                    track_id = str(uuid.uuid4())
+                    self._pending_tracks[track_id] = (transcript, audio_bytes)
+                    await notify_fn(f"🎙️ **Talkshow preview:**\n\n{transcript[:1500]}")
+                    return f"Talkshow segment generated (track_id: {track_id}). I've sent the script above. Ask the user if they'd like to add it to the playlist. If yes, call add_tts_track_to_playlist with track_id '{track_id}'."
+                except Exception as e:
+                    return f"Failed to generate talkshow segment: {e}"
 
             elif name == "add_tts_track_to_playlist":
                 track_id = args.get("track_id", "")
@@ -2020,6 +2182,45 @@ Make it engaging, fun, and in Annie's signature style — witty, warm, and enter
         view = TrackConfirmView(self, track_id, filename)
         await interaction.followup.send(
             content=f"**Track preview:**\n\n{transcript[:1800]}\n\n*Click Confirm to add to the playlist, or Cancel to discard.*",
+            file=discord.File(BytesIO(audio_bytes), filename=filename),
+            view=view,
+        )
+
+    @app_commands.command(
+        name="create_talkshow", description="Generate a multi-speaker radio talkshow segment"
+    )
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def create_talkshow_cmd(
+        self, interaction: discord.Interaction, topic: str, duration: str = "1-2 minutes"
+    ):
+        # Allow admins or DJ role
+        member = interaction.user
+        is_admin = member.guild_permissions.administrator if hasattr(member, "guild_permissions") else False
+        is_dj = any(r.id == DJ_ROLE_ID for r in member.roles) if hasattr(member, "roles") else False
+        if not is_admin and not is_dj:
+            await interaction.response.send_message(
+                "Only admins and DJs can create talkshow segments.", ephemeral=True
+            )
+            return
+
+        await interaction.response.defer()
+
+        try:
+            transcript, audio_bytes = await self.generate_talkshow(topic, duration)
+        except Exception as e:
+            await interaction.followup.send(f"Failed to generate talkshow: {e}")
+            return
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"talkshow_{timestamp}.mp3"
+
+        # Store pending for confirmation (reuse track confirm flow)
+        track_id = str(uuid.uuid4())
+        self._pending_tracks[track_id] = (transcript, audio_bytes)
+
+        view = TrackConfirmView(self, track_id, filename)
+        await interaction.followup.send(
+            content=f"**Talkshow preview:**\n\n{transcript[:1800]}\n\n*Click Confirm to add to the playlist, or Cancel to discard.*",
             file=discord.File(BytesIO(audio_bytes), filename=filename),
             view=view,
         )
