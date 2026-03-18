@@ -1012,8 +1012,116 @@ async def test_game_current_song_no_metadata(cog, monkeypatch):
     assert "No song info" in mock_announce.call_args[0][1]
 
 
+# --- TTS Track Generation Tests ---
 
-# Helpers for async iteration/context mocking
+
+@pytest.mark.asyncio
+async def test_generate_track_returns_transcript_and_audio(cog, monkeypatch):
+    """Test that generate_track strips markdown and returns audio bytes."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "Hello **Motor Town** and *everyone*! Welcome to a special segment."
+    mock_response.choices[0].message.tool_calls = None
+
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
+
+    monkeypatch.setattr(
+        "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"track_audio"
+    )
+
+    transcript, audio = await cog.generate_track("traffic safety tips")
+    assert "**" not in transcript
+    assert "*" not in transcript
+    assert audio == b"track_audio"
+
+
+@pytest.mark.asyncio
+async def test_generate_radio_track_tool_defined(cog):
+    """Verify generate_radio_track is in Annie's tool list."""
+    tools = cog._get_annie_tools()
+    tool_names = [t["function"]["name"] for t in tools]
+    assert "generate_radio_track" in tool_names
+
+
+@pytest.mark.asyncio
+async def test_add_tts_track_to_playlist_tool_defined(cog):
+    """Verify add_tts_track_to_playlist is in Annie's tool list."""
+    tools = cog._get_annie_tools()
+    tool_names = [t["function"]["name"] for t in tools]
+    assert "add_tts_track_to_playlist" in tool_names
+
+
+@pytest.mark.asyncio
+async def test_execute_annie_tool_generate_radio_track(cog, monkeypatch):
+    """Test generate_radio_track tool stores pending track and notifies."""
+    monkeypatch.setattr(
+        cog, "generate_track", AsyncMock(return_value=("Test transcript", b"audio_data"))
+    )
+    notify_fn = AsyncMock()
+
+    result = await cog._execute_annie_tool(
+        "generate_radio_track",
+        {"topic": "motor town tips", "duration": "30 seconds"},
+        "TestUser",
+        notify_fn,
+    )
+
+    assert "track_id" in result
+    assert len(cog._pending_tracks) == 1
+    notify_fn.assert_called_once()
+    assert "Track preview" in notify_fn.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_execute_annie_tool_add_tts_track_to_playlist(cog, mock_bot, monkeypatch):
+    """Test add_tts_track_to_playlist uploads audio to playlist channel."""
+    from amc_peripheral.radio import radio_cog
+    monkeypatch.setattr(radio_cog, "PLAYLIST_CHANNEL", 99999)
+
+    # Pre-populate a pending track
+    track_id = "test-uuid-1234"
+    cog._pending_tracks[track_id] = ("Test transcript content", b"audio_bytes")
+
+    mock_channel = MagicMock()
+    mock_channel.send = AsyncMock()
+    mock_bot.get_channel = MagicMock(return_value=mock_channel)
+
+    notify_fn = AsyncMock()
+    result = await cog._execute_annie_tool(
+        "add_tts_track_to_playlist",
+        {"track_id": track_id},
+        "TestUser",
+        notify_fn,
+    )
+
+    assert "Added track" in result
+    assert track_id not in cog._pending_tracks
+    mock_channel.send.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_execute_annie_tool_add_tts_track_expired(cog):
+    """Test add_tts_track_to_playlist returns error for expired track."""
+    notify_fn = AsyncMock()
+    result = await cog._execute_annie_tool(
+        "add_tts_track_to_playlist",
+        {"track_id": "nonexistent-uuid"},
+        "TestUser",
+        notify_fn,
+    )
+    assert "not found" in result
+
+
+@pytest.mark.asyncio
+async def test_create_track_command_exists(cog):
+    """Verify /create_track slash command is registered."""
+    commands = [cmd.name for cmd in cog.__cog_app_commands__]
+    assert "create_track" in commands
+
+
+
 
 class AsyncIteratorMock:
     def __init__(self, items):

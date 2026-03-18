@@ -1,4 +1,5 @@
 import json
+import uuid
 import os
 from pathlib import Path
 import re
@@ -186,6 +187,40 @@ class NowPlayingView(discord.ui.View):
         )
 
 
+class TrackConfirmView(discord.ui.View):
+    """Confirm / Cancel view for adding a generated TTS track to the playlist."""
+
+    def __init__(self, cog: "RadioCog", track_id: str, filename: str):
+        super().__init__(timeout=300)  # 5 minute timeout
+        self.cog = cog
+        self.track_id = track_id
+        self.filename = filename
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, emoji="✅")
+    async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        pending = self.cog._pending_tracks.pop(self.track_id, None)
+        if not pending:
+            await interaction.followup.send("Track expired or already added.", ephemeral=True)
+            return
+        transcript, audio_bytes = pending
+        playlist_channel = self.cog.bot.get_channel(PLAYLIST_CHANNEL)
+        if not playlist_channel:
+            await interaction.followup.send("Could not access the playlist channel.", ephemeral=True)
+            return
+        await playlist_channel.send(
+            file=discord.File(BytesIO(audio_bytes), filename=self.filename)
+        )
+        await interaction.followup.send(f"✅ Added **{self.filename}** to the playlist!")
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, emoji="❌")
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.cog._pending_tracks.pop(self.track_id, None)
+        await interaction.response.send_message("Track discarded.", ephemeral=True)
+        self.stop()
+
+
 # Download guard constants
 DOWNLOAD_TIMEOUT = 60  # Max seconds for a queued download (queue wait + download)
 
@@ -213,6 +248,7 @@ class RadioCog(commands.Cog):
         self.game_schema_description = ""
         self._download_queue: asyncio.Queue = asyncio.Queue()
         self._download_worker_task: asyncio.Task | None = None
+        self._pending_tracks: dict[str, tuple[str, bytes]] = {}
 
     async def cog_load(self):
         self.post_gazette_task.start()
@@ -550,6 +586,64 @@ Output only the spoken words, as if transcribed from a live recording.""",
 
         return clean_transcript, audio_bytes
 
+    async def generate_track(self, topic: str, duration_hint: str = "1-2 minutes") -> tuple[str, bytes]:
+        """Generate a long-form TTS audio track for a given topic."""
+        knowledge = self.knowledge_system_message or ""
+        now = datetime.now(self.local_tz)
+
+        system_message = f"""You are DJ Annie, a charismatic host for Radio ASEAN in Motor Town.
+
+Use this knowledge about the game:
+{knowledge}"""
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "query_game_database",
+                    "description": f"""Query MotorTown game database with SQL.
+
+{self.game_schema_description}
+
+Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"sql": {"type": "string"}},
+                        "required": ["sql"],
+                    },
+                },
+            },
+        ]
+
+        messages = [
+            {"role": "system", "content": system_message},
+            {
+                "role": "user",
+                "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)",
+            },
+            {
+                "role": "user",
+                "content": f"""Create a radio track script for DJ Annie to record. The track should be approximately {duration_hint} long when read aloud.
+
+Topic: {topic}
+
+{TTS_SCRIPT_MARKUP_INSTRUCTIONS}
+
+CRITICAL: Do NOT use markdown formatting (asterisks, underscores, hashes, etc.) - they cannot be read by TTS.
+Output only the spoken words, as if transcribed from a live recording.
+Make it engaging, fun, and in Annie's signature style — witty, warm, and entertaining.""",
+            },
+        ]
+
+        transcript = await self._call_llm_with_tools_internal(messages, tools)
+        clean_transcript = discord.utils.remove_markdown(transcript)
+
+        audio_bytes = await asyncio.to_thread(
+            tts_google, clean_transcript, use_markup=True
+        )
+
+        return clean_transcript, audio_bytes
+
     async def _call_llm_with_tools_internal(self, messages: list, tools: list) -> str:
         """Simple agentic loop for LLM with tools. Returns final text response."""
         max_iterations = 5
@@ -865,6 +959,44 @@ Output only the spoken words, as if transcribed from a live recording.""",
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_radio_track",
+                    "description": "Generate a custom TTS audio track on a given topic. The track is generated by DJ Annie and sent back for review before being added to the playlist. Use this when a user asks to create a new audio segment or talk track.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "topic": {
+                                "type": "string",
+                                "description": "The topic or prompt for the audio track",
+                            },
+                            "duration": {
+                                "type": "string",
+                                "description": "Approximate spoken duration (e.g. '1-2 minutes', '30 seconds'). Default: '1-2 minutes'",
+                            },
+                        },
+                        "required": ["topic"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "add_tts_track_to_playlist",
+                    "description": "Add a previously generated TTS track to the permanent radio playlist. Only call this AFTER the user has confirmed they want to add the track. Requires the track_id returned by generate_radio_track.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "track_id": {
+                                "type": "string",
+                                "description": "The track ID returned by generate_radio_track",
+                            },
+                        },
+                        "required": ["track_id"],
+                    },
+                },
+            },
         ]
 
     async def _execute_annie_tool(self, name: str, args: dict, requester: str, notify_fn) -> str:
@@ -1013,6 +1145,41 @@ Output only the spoken words, as if transcribed from a live recording.""",
                     return "No songs have been liked yet."
                 lines = [f"- {s['song_title']}: ❤️ {s['like_count']}" for s in top]
                 return "Top liked songs:\n" + "\n".join(lines)
+
+            elif name == "generate_radio_track":
+                topic = args.get("topic", "")
+                duration = args.get("duration", "1-2 minutes")
+                try:
+                    transcript, audio_bytes = await self.generate_track(topic, duration)
+                    track_id = str(uuid.uuid4())
+                    self._pending_tracks[track_id] = (transcript, audio_bytes)
+                    # Send the audio preview to the user
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"track_{timestamp}.mp3"
+                    await notify_fn(f"🎙️ **Track preview:**\n\n{transcript[:1500]}")
+                    # Send audio as a separate message via the channel
+                    return f"Track generated (track_id: {track_id}). I've sent the script above. Ask the user if they'd like to add it to the playlist. If yes, call add_tts_track_to_playlist with track_id '{track_id}'."
+                except Exception as e:
+                    return f"Failed to generate track: {e}"
+
+            elif name == "add_tts_track_to_playlist":
+                track_id = args.get("track_id", "")
+                pending = self._pending_tracks.pop(track_id, None)
+                if not pending:
+                    return "Track not found or already added. It may have expired."
+                transcript, audio_bytes = pending
+                playlist_channel = self.bot.get_channel(PLAYLIST_CHANNEL)
+                if not playlist_channel:
+                    return "Could not access the playlist channel."
+                try:
+                    safe_title = re.sub(r"[^a-zA-Z0-9]", "_", transcript[:40])
+                    filename = f"Annie_{safe_title}.mp3"
+                    await playlist_channel.send(
+                        file=discord.File(BytesIO(audio_bytes), filename=filename)
+                    )
+                    return f"Added track '{filename}' to the playlist! It will be in rotation after the next playlist compile."
+                except Exception as e:
+                    return f"Failed to add track to playlist: {e}"
 
             return f"Unknown tool: {name}"
         except Exception as e:
@@ -1825,6 +1992,36 @@ Output only the spoken words, as if transcribed from a live recording.""",
         await interaction.followup.send(
             content=f"**Segment created!**\n\n{transcript[:1900]}",
             file=discord.File(BytesIO(audio_bytes), filename=filename),
+        )
+
+    @app_commands.command(
+        name="create_track", description="Generate a custom TTS audio track for the radio playlist"
+    )
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @app_commands.checks.has_permissions(administrator=True)
+    async def create_track_cmd(
+        self, interaction: discord.Interaction, topic: str, duration: str = "1-2 minutes"
+    ):
+        await interaction.response.defer()
+
+        try:
+            transcript, audio_bytes = await self.generate_track(topic, duration)
+        except Exception as e:
+            await interaction.followup.send(f"Failed to generate track: {e}")
+            return
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"track_{timestamp}.mp3"
+
+        # Store pending for confirmation
+        track_id = str(uuid.uuid4())
+        self._pending_tracks[track_id] = (transcript, audio_bytes)
+
+        view = TrackConfirmView(self, track_id, filename)
+        await interaction.followup.send(
+            content=f"**Track preview:**\n\n{transcript[:1800]}\n\n*Click Confirm to add to the playlist, or Cancel to discard.*",
+            file=discord.File(BytesIO(audio_bytes), filename=filename),
+            view=view,
         )
 
     @app_commands.command(name="song_request", description="Submit a song request")
