@@ -98,6 +98,45 @@ class LiquidsoapController:
             logger.error(f"Error skipping track on {source_name}: {e}")
             return False
 
+    async def push_announcement(
+        self, session: aiohttp.ClientSession, uri: str,
+    ) -> bool:
+        """Push a URI to the Liquidsoap announcements queue via HTTP.
+
+        This queue is overlaid on top of the main radio using smooth_add,
+        ducking the music volume while the announcement plays.
+        """
+        url = f"{self.base_url}/push_announcement?uri={quote(uri, safe='/:')}"
+        try:
+            async with session.post(url, timeout=self.timeout) as resp:
+                if resp.status == 200:
+                    logger.info(f"Pushed announcement: {uri}")
+                    return True
+                body = await resp.text()
+                logger.warning(
+                    f"Failed to push announcement: {resp.status} {body}"
+                )
+                return False
+        except Exception as e:
+            logger.error(f"Error pushing announcement: {e}")
+            return False
+
+    async def get_current_source(
+        self, session: aiohttp.ClientSession,
+    ) -> str | None:
+        """Get the current source type ('music' or 'talking').
+
+        Returns None on error.
+        """
+        url = f"{self.base_url}/current_source"
+        try:
+            async with session.get(url, timeout=self.timeout) as resp:
+                data = await resp.json()
+                return data.get("source_type")
+        except Exception as e:
+            logger.error(f"Error getting current source: {e}")
+            return None
+
     async def set_var(
         self, session: aiohttp.ClientSession, name: str, value: str
     ) -> bool:

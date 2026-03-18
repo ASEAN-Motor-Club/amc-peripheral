@@ -1269,6 +1269,149 @@ async def test_execute_annie_tool_generate_talkshow_segment_error(cog, monkeypat
     assert len(cog._pending_tracks) == 0
 
 
+# --- TTS Voice-Over Insertion Tests ---
+
+
+@pytest.mark.asyncio
+async def test_voice_reply_tool_defined(cog):
+    """Verify voice_reply_on_radio is in Annie's tool list."""
+    tools = cog._get_annie_tools()
+    tool_names = [t["function"]["name"] for t in tools]
+    assert "voice_reply_on_radio" in tool_names
+
+
+@pytest.mark.asyncio
+async def test_voice_announce_command_exists(cog):
+    """Verify the voice_announce command is registered."""
+    commands = [cmd.name for cmd in cog.__cog_app_commands__]
+    assert "voice_announce" in commands
+
+
+@pytest.mark.asyncio
+async def test_insert_tts_waits_for_music(cog, monkeypatch, tmp_path):
+    """Test _insert_tts_on_radio waits for talking segment to end."""
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.JINGLES_PATH", str(tmp_path))
+    monkeypatch.setattr(
+        "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"audio"
+    )
+
+    # First two calls return "talking", third returns "music"
+    call_count = {"n": 0}
+
+    async def mock_get_current_source(session):
+        call_count["n"] += 1
+        return "talking" if call_count["n"] <= 2 else "music"
+
+    cog.lq.get_current_source = mock_get_current_source
+    cog.lq.push_announcement = AsyncMock(return_value=True)
+    # Speed up retries for test
+    cog.TTS_INSERTION_RETRY_DELAY = 0.01
+
+    result = await cog._insert_tts_on_radio("Hello listeners!")
+
+    assert result is True
+    assert call_count["n"] == 3  # Called 3 times: talking, talking, music
+    cog.lq.push_announcement.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_insert_tts_timeout_inserts_anyway(cog, monkeypatch, tmp_path):
+    """Test _insert_tts_on_radio inserts even after max retries."""
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.JINGLES_PATH", str(tmp_path))
+    monkeypatch.setattr(
+        "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"audio"
+    )
+
+    # Always return "talking"
+    async def mock_get_current_source(session):
+        return "talking"
+
+    cog.lq.get_current_source = mock_get_current_source
+    cog.lq.push_announcement = AsyncMock(return_value=True)
+    cog.TTS_INSERTION_MAX_RETRIES = 3
+    cog.TTS_INSERTION_RETRY_DELAY = 0.01
+
+    result = await cog._insert_tts_on_radio("Hello!")
+
+    assert result is True
+    cog.lq.push_announcement.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_insert_tts_push_failure(cog, monkeypatch, tmp_path):
+    """Test _insert_tts_on_radio returns False when push fails."""
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.JINGLES_PATH", str(tmp_path))
+    monkeypatch.setattr(
+        "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"audio"
+    )
+
+    async def mock_get_current_source(session):
+        return "music"
+
+    cog.lq.get_current_source = mock_get_current_source
+    cog.lq.push_announcement = AsyncMock(return_value=False)
+    cog.TTS_INSERTION_RETRY_DELAY = 0.01
+
+    result = await cog._insert_tts_on_radio("Hello!")
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_insert_tts_tts_failure(cog, monkeypatch, tmp_path):
+    """Test _insert_tts_on_radio returns False when TTS generation fails."""
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.JINGLES_PATH", str(tmp_path))
+    monkeypatch.setattr(
+        "amc_peripheral.radio.radio_cog.tts_google",
+        lambda *args, **kwargs: (_ for _ in ()).throw(Exception("TTS error")),
+    )
+
+    result = await cog._insert_tts_on_radio("Hello!")
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_execute_annie_tool_voice_reply(cog, monkeypatch, tmp_path):
+    """Test voice_reply_on_radio tool fires background task."""
+    cog._insert_tts_on_radio = AsyncMock(return_value=True)
+    notify_fn = AsyncMock()
+
+    result = await cog._execute_annie_tool(
+        "voice_reply_on_radio",
+        {"message": "Hey there, listeners!"},
+        "TestUser",
+        notify_fn,
+    )
+
+    assert "Voice reply is being generated" in result
+    cog.bot.loop.create_task.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_voice_reply_background_success(cog, monkeypatch):
+    """Test _voice_reply_background notifies on success."""
+    cog._insert_tts_on_radio = AsyncMock(return_value=True)
+    notify_fn = AsyncMock()
+
+    await cog._voice_reply_background("Hello!", notify_fn)
+
+    notify_fn.assert_called_once()
+    assert "playing on the radio" in notify_fn.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_voice_reply_background_failure(cog, monkeypatch):
+    """Test _voice_reply_background notifies on failure."""
+    cog._insert_tts_on_radio = AsyncMock(return_value=False)
+    notify_fn = AsyncMock()
+
+    await cog._voice_reply_background("Hello!", notify_fn)
+
+    notify_fn.assert_called_once()
+    assert "Failed" in notify_fn.call_args[0][0]
+
+
 class AsyncIteratorMock:
     def __init__(self, items):
         self.items = iter(items)

@@ -1,6 +1,7 @@
 import json
 import uuid
 import os
+import tempfile
 from pathlib import Path
 import re
 import random
@@ -96,11 +97,21 @@ Listeners can create and manage their own playlists to queue multiple songs at o
 Listeners can also ask you directly to create playlists, add songs, view their lists, or play them. \
 Use your playlist tools when they do — don't tell them to use slash commands if they're already chatting with you.
 
+## Voice Replies
+You can speak directly on the radio! When someone asks you a question in-game and you want to reply on-air, \
+use the voice_reply_on_radio tool. This will generate TTS audio of your reply and overlay it on the radio stream, \
+ducking the music volume. The system will automatically wait if a talking segment (jingle/news) is playing \
+to avoid overlapping voices. Use this sparingly for fun interactions — not every message needs a voice reply.
+
 ## Talkshow Segments
 You can create multi-speaker talkshow segments featuring a Host (you), a Guest, and optionally a Caller. \
 Use the generate_talkshow_segment tool when a listener asks a question that would make a fun radio discussion, \
 or when someone wants a conversational segment — like simulating a caller phoning in with a question. \
 These segments use multiple AI voices for a natural talk-show feel.
+
+## Game Knowledge
+If a listener asks about game mechanics, vehicles, cargo, player stats, subsidies, commands, or anything \
+game-related, use the `ask_game_knowledge` tool to get accurate information. Do NOT guess or make up game facts.
 """
 
 
@@ -1133,6 +1144,23 @@ Script:
             {
                 "type": "function",
                 "function": {
+                    "name": "ask_game_knowledge",
+                    "description": "Ask the game knowledge subagent a question about Motor Town gameplay, vehicles, cargo, player stats, subsidies, server commands, or any other game-related topic. Always use this instead of guessing game facts.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "question": {
+                                "type": "string",
+                                "description": "The game-related question to research",
+                            },
+                        },
+                        "required": ["question"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "add_tts_track_to_playlist",
                     "description": "Add a previously generated TTS track to the permanent radio playlist. Only call this AFTER the user has confirmed they want to add the track. Requires the track_id returned by generate_radio_track or generate_talkshow_segment.",
                     "parameters": {
@@ -1147,7 +1175,74 @@ Script:
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "voice_reply_on_radio",
+                    "description": "Speak a message on the radio via TTS. The audio will be overlaid on top of the current music, ducking its volume. Use this to reply to listeners on-air. The system will wait if a talking segment is playing to avoid overlap. Use sparingly for fun interactions.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "message": {
+                                "type": "string",
+                                "description": "The message to speak on the radio. Should be conversational and in Annie's voice.",
+                            },
+                        },
+                        "required": ["message"],
+                    },
+                },
+            },
         ]
+
+    # --- TTS Voice-Over Insertion ---
+
+    TTS_INSERTION_MAX_RETRIES = 15
+    TTS_INSERTION_RETRY_DELAY = 4  # seconds
+
+    async def _insert_tts_on_radio(self, text: str) -> bool:
+        """Generate TTS audio and insert it on the radio via the announcements queue.
+
+        Waits until no talking segment is active to avoid overlapping voices.
+        Returns True on success, False on failure.
+        """
+        # Generate TTS audio
+        try:
+            audio_bytes = await asyncio.to_thread(
+                tts_google, discord.utils.remove_markdown(text), use_markup=True
+            )
+        except Exception as e:
+            log.error(f"TTS generation failed: {e}")
+            return False
+
+        # Write to a temp file in the radio path so Liquidsoap can access it
+        try:
+            fd, tmp_path = tempfile.mkstemp(suffix=".mp3", prefix="voice_", dir=JINGLES_PATH)
+            with os.fdopen(fd, "wb") as f:
+                f.write(audio_bytes)
+        except Exception as e:
+            log.error(f"Failed to write TTS temp file: {e}")
+            return False
+
+        # Wait until no talking segment is active
+        for attempt in range(self.TTS_INSERTION_MAX_RETRIES):
+            source_type = await self.lq.get_current_source(self.bot.http_session)
+            if source_type != "talking":
+                break
+            log.info(f"Talking segment active, waiting to insert TTS (attempt {attempt + 1})")
+            await asyncio.sleep(self.TTS_INSERTION_RETRY_DELAY)
+        else:
+            log.warning("Timed out waiting for talking segment to end, inserting anyway")
+
+        # Push to announcements queue
+        success = await self.lq.push_announcement(self.bot.http_session, tmp_path)
+        if not success:
+            # Clean up temp file on failure
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+        # Note: temp file cleanup after playback is left to the OS/radio path cleanup
+        return success
 
     async def _execute_annie_tool(self, name: str, args: dict, requester: str, notify_fn) -> str:
         """Execute a tool call from Annie's agentic loop."""
@@ -1343,11 +1438,47 @@ Script:
                 except Exception as e:
                     return f"Failed to add track to playlist: {e}"
 
+            elif name == "voice_reply_on_radio":
+                message_text = args.get("message", "")
+                if not message_text:
+                    return "No message provided."
+                self.bot.loop.create_task(
+                    self._voice_reply_background(message_text, notify_fn)
+                )
+                return "Voice reply is being generated and will play on the radio shortly."
+
+            elif name == "ask_game_knowledge":
+                from amc_peripheral.radio.game_knowledge import ask_game_knowledge
+
+                question = args.get("question", "")
+                try:
+                    answer = await ask_game_knowledge(
+                        openai_client=self.openai_client_openrouter,
+                        knowledge_text=self.knowledge_system_message or "",
+                        game_schema=self.game_schema_description,
+                        question=question,
+                        http_session=self.bot.http_session,
+                    )
+                    return answer
+                except Exception as e:
+                    return f"Failed to get game knowledge: {e}"
+
             return f"Unknown tool: {name}"
         except Exception as e:
             return f"Tool error ({name}): {e}"
 
     PLAYLIST_PLAY_CAP = 10
+
+    async def _voice_reply_background(self, text: str, notify_fn):
+        """Generate and insert TTS voice reply in the background."""
+        try:
+            success = await self._insert_tts_on_radio(text)
+            if success:
+                await notify_fn("🎙️ Voice reply is now playing on the radio!")
+            else:
+                await notify_fn("Failed to play voice reply on the radio.")
+        except Exception as e:
+            await notify_fn(f"Voice reply failed: {e}")
 
     async def _play_user_playlist(self, songs: list[dict], requester: str, notify_fn):
         """Queue songs from a user playlist one by one (fire-and-forget)."""
@@ -1378,7 +1509,6 @@ Script:
     async def _handle_annie_chat_discord(self, message: discord.Message, question: str):
         """Handle an @mention of Annie on Discord."""
         now = datetime.now(self.local_tz)
-        knowledge = self.knowledge_system_message or ""
 
         # Gather channel history for context
         prev = ""
@@ -1388,7 +1518,7 @@ Script:
             prev = f"{m.author.display_name}: {m.content}\n" + prev
 
         messages = [
-            {"role": "system", "content": ANNIE_SYSTEM_PROMPT + "\n\nGame knowledge:\n" + knowledge},
+            {"role": "system", "content": ANNIE_SYSTEM_PROMPT},
             {"role": "user", "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)"},
         ]
         if prev:
@@ -1410,7 +1540,6 @@ Script:
     async def _handle_annie_chat_ingame(self, player_name: str, question: str):
         """Handle @annie mention from in-game chat."""
         now = datetime.now(self.local_tz)
-        knowledge = self.knowledge_system_message or ""
 
         # Gather recent game chat from Discord channel
         prev = ""
@@ -1420,7 +1549,7 @@ Script:
                 prev = f"{m.content}\n" + prev
 
         messages = [
-            {"role": "system", "content": ANNIE_SYSTEM_PROMPT + "\nRespond briefly — game chat has a character limit. Keep it under 500 chars.\nDo NOT use any emojis — the game client cannot render them.\n\nGame knowledge:\n" + knowledge},
+            {"role": "system", "content": ANNIE_SYSTEM_PROMPT + "\nRespond briefly — game chat has a character limit. Keep it under 500 chars.\nDo NOT use any emojis — the game client cannot render them."},
             {"role": "user", "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)"},
         ]
         if prev:
@@ -2224,6 +2353,24 @@ Script:
             file=discord.File(BytesIO(audio_bytes), filename=filename),
             view=view,
         )
+
+    @app_commands.command(
+        name="voice_announce", description="Speak a message over the radio via TTS (Admin only)"
+    )
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @app_commands.checks.has_permissions(administrator=True)
+    async def voice_announce_cmd(self, interaction: discord.Interaction, message: str):
+        await interaction.response.defer()
+        try:
+            success = await self._insert_tts_on_radio(message)
+            if success:
+                await interaction.followup.send(
+                    f"🎙️ Voice announcement queued! It will play on the radio shortly.\n\n> {message[:500]}"
+                )
+            else:
+                await interaction.followup.send("Failed to insert voice announcement.")
+        except Exception as e:
+            await interaction.followup.send(f"Failed: {e}")
 
     @app_commands.command(name="song_request", description="Submit a song request")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
