@@ -1046,11 +1046,15 @@ async def test_generate_radio_track_tool_defined(cog):
 
 
 @pytest.mark.asyncio
-async def test_execute_annie_tool_generate_radio_track(cog, monkeypatch):
-    """Test generate_radio_track tool stores pending track and notifies."""
+async def test_execute_annie_tool_generate_radio_track(cog, monkeypatch, tmp_path):
+    """Test generate_radio_track tool writes file and queues for playback."""
+    from amc_peripheral.radio import radio_cog
+    monkeypatch.setattr(radio_cog, "JINGLES_PATH", str(tmp_path))
+
     monkeypatch.setattr(
         cog, "generate_track", AsyncMock(return_value=("Test transcript", b"audio_data"))
     )
+    cog.lq.push_to_queue = AsyncMock()
     notify_fn = AsyncMock()
 
     result = await cog._execute_annie_tool(
@@ -1060,10 +1064,8 @@ async def test_execute_annie_tool_generate_radio_track(cog, monkeypatch):
         notify_fn,
     )
 
-    assert "track_id" in result
-    assert len(cog._pending_tracks) == 1
-    notify_fn.assert_called_once()
-    assert "Track preview" in notify_fn.call_args[0][0]
+    assert "queued" in result.lower()
+    cog.lq.push_to_queue.assert_called_once()
 
 
 
