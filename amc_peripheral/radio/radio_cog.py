@@ -11,7 +11,10 @@ from io import BytesIO
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, timezone, time as dt_time
 from collections import deque
-from typing import List
+from typing import List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from amc_peripheral.knowledge_store import KnowledgeStore
 
 from discord.ext import tasks, commands
 from discord import app_commands
@@ -1559,9 +1562,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     with open(tmp_path, "wb") as f:
                         f.write(audio_bytes)
                     os.chmod(tmp_path, 0o644)
-                    await self.lq.push_to_queue(
-                        self.bot.http_session, "song_requests", tmp_path,
-                        title=f"Track: {topic[:60]}",
+                    await self.lq.push_segment(
+                        self.bot.http_session, tmp_path,
                     )
                     self.bot.loop.create_task(self._deferred_cleanup(tmp_path))
                     return "Track generated and queued for playback. It will play after the current track."
@@ -1581,9 +1583,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     with open(tmp_path, "wb") as f:
                         f.write(audio_bytes)
                     os.chmod(tmp_path, 0o644)
-                    await self.lq.push_to_queue(
-                        self.bot.http_session, "song_requests", tmp_path,
-                        title=f"Talkshow: {topic[:60]}",
+                    await self.lq.push_segment(
+                        self.bot.http_session, tmp_path,
                     )
                     self.bot.loop.create_task(self._deferred_cleanup(tmp_path))
                     return "Talkshow segment generated and queued for playback. It will play after the current track."

@@ -1155,7 +1155,7 @@ async def test_execute_annie_tool_generate_radio_track(cog, monkeypatch, tmp_pat
     monkeypatch.setattr(
         cog, "generate_track", AsyncMock(return_value=("Test transcript", b"audio_data"))
     )
-    cog.lq.push_to_queue = AsyncMock()
+    cog.lq.push_segment = AsyncMock()
     notify_fn = AsyncMock()
 
     result = await cog._execute_annie_tool(
@@ -1166,7 +1166,7 @@ async def test_execute_annie_tool_generate_radio_track(cog, monkeypatch, tmp_pat
     )
 
     assert "queued" in result.lower()
-    cog.lq.push_to_queue.assert_called_once()
+    cog.lq.push_segment.assert_called_once()
 
 
 
@@ -1433,7 +1433,7 @@ async def test_execute_annie_tool_generate_talkshow_segment(cog, monkeypatch, tm
     monkeypatch.setattr(
         cog, "generate_talkshow", AsyncMock(return_value=("**Host:** Hello\n**Guest:** Hi", b"talkshow_audio"))
     )
-    cog.lq.push_to_queue = AsyncMock()
+    cog.lq.push_segment = AsyncMock()
     notify_fn = AsyncMock()
 
     result = await cog._execute_annie_tool(
@@ -1444,7 +1444,7 @@ async def test_execute_annie_tool_generate_talkshow_segment(cog, monkeypatch, tm
     )
 
     assert "queued" in result.lower()
-    cog.lq.push_to_queue.assert_called_once()
+    cog.lq.push_segment.assert_called_once()
 
 
 @pytest.mark.asyncio

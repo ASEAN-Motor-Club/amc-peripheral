@@ -136,6 +136,29 @@ class LiquidsoapController:
             logger.error(f"Error pushing announcement: {e}")
             return False
 
+    async def push_segment(
+        self, session: aiohttp.ClientSession, uri: str,
+    ) -> bool:
+        """Push a URI to the Liquidsoap segments queue via HTTP.
+
+        This queue takes priority over the talkshows_or_jingles rotation,
+        ensuring generated segments play in the talking slot (not the music slot).
+        """
+        url = f"{self.base_url}/push_segment?uri={quote(uri, safe='/:')}"
+        try:
+            async with self._fresh_post(url) as resp:
+                if resp.status == 200:
+                    logger.info(f"Pushed segment: {uri}")
+                    return True
+                body = await resp.text()
+                logger.warning(
+                    f"Failed to push segment: {resp.status} {body}"
+                )
+                return False
+        except Exception as e:
+            logger.error(f"Error pushing segment: {e}")
+            return False
+
     async def get_current_source(
         self, session: aiohttp.ClientSession,
     ) -> str | None:

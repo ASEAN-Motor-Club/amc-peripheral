@@ -13,6 +13,7 @@ in {
       default_playlist = blank()
       settings.encoder.metadata.export := ["filename", "artist", "title", "album", "genre", "date", "tracknumber", "comment", "track", "year", "dj", "next", "apic", "metadata_url", "metadata_block_picture", "coverart"]
       queue = request.queue(id="song_requests")
+      segments = request.queue(id="segments")
 
       race_mode = interactive.bool("race_mode", false)
       event_mode = interactive.bool("event_mode", false)
@@ -55,10 +56,11 @@ in {
       race_songs = crossfade(playlist(reload_mode="watch", "/var/lib/radio/race_songs"))
       current_source_type = ref("music")
       talkshows_or_jingles = rotate(weights=[1, 2], [talkshows, jingles])
-      talkshows_or_jingles.on_track(fun (_) -> current_source_type := "talking")
+      segments_or_talking = fallback(track_sensitive=true, [segments, talkshows_or_jingles])
+      segments_or_talking.on_track(fun (_) -> current_source_type := "talking")
       q_or_songs.on_track(fun (_) -> current_source_type := "music")
       prog = rotate(weights=[1,1,3], [
-        talkshows_or_jingles,
+        segments_or_talking,
         blank(duration=2.0),
         q_or_songs,
       ])
@@ -132,6 +134,17 @@ in {
         end
       end
       harbor.http.register.simple(port=6001, method="POST", "/push_announcement", handle_push_announcement)
+
+      def handle_push_segment(req)
+        uri = req.query["uri"]
+        if uri == "" then
+          http.response(status_code=400, content_type="application/json", data='{"error":"missing uri param"}')
+        else
+          segments.push(request.create(uri))
+          http.response(content_type="application/json", data='{"ok":true}')
+        end
+      end
+      harbor.http.register.simple(port=6001, method="POST", "/push_segment", handle_push_segment)
 
       def handle_current_source(_)
         http.response(
