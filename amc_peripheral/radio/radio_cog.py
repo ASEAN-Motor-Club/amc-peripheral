@@ -115,11 +115,15 @@ Use the generate_talkshow_segment tool when a listener asks a question that woul
 or when someone wants a conversational segment — like simulating a caller phoning in with a question. \
 These segments use multiple AI voices for a natural talk-show feel.
 
-## Game Knowledge
 You have access to a knowledge base about the game via the `ask_game_knowledge` tool. \
 When a listener asks about game mechanics, vehicles, cargo, locations, player stats, subsidies, commands, \
 or anything game-related, you MUST call `ask_game_knowledge` first. Do NOT guess or make up game facts. \
 Even if you think you know the answer, always verify with the tool.
+
+## Remembering Knowledge
+When players share useful tips, preferences, or facts (e.g., "the Micky is our favourite car", \
+"Steel Coils are the hardest cargo to deliver"), use `save_knowledge` to remember it. \
+Use keys like 'community:favourite-vehicles', 'tip:steel-coil-delivery', 'player:username-prefs', etc.
 
 {knowledge_index}
 """
@@ -323,7 +327,8 @@ class TrackConfirmView(discord.ui.View):
 
 
 # Download guard constants
-DOWNLOAD_TIMEOUT = 60  # Max seconds for a queued download (queue wait + download)
+METADATA_TIMEOUT = 45   # Max seconds for YouTube metadata extraction (search + info)
+DOWNLOAD_TIMEOUT = 120  # Max seconds for the actual audio download + ffmpeg conversion
 
 
 class RadioCog(commands.Cog):
@@ -407,17 +412,9 @@ class RadioCog(commands.Cog):
         while True:
             query, future = await self._download_queue.get()
             try:
-                result = await asyncio.wait_for(
-                    self._get_or_download(query),
-                    timeout=DOWNLOAD_TIMEOUT,
-                )
+                result = await self._get_or_download(query)
                 if not future.cancelled():
                     future.set_result(result)
-            except asyncio.TimeoutError:
-                if not future.cancelled():
-                    future.set_exception(Exception(
-                        "Download timed out. The song may be too large or the server is under load. Please try again."
-                    ))
             except Exception as e:
                 if not future.cancelled():
                     future.set_exception(e)
@@ -1334,6 +1331,27 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "save_knowledge",
+                    "description": "Save useful information to the knowledge base. Use this when players share tips, preferences, community facts, or anything worth remembering. Key format: '{type}:{id}' e.g., 'community:favourite-vehicles', 'tip:delivery-tips', 'player:username-prefs'.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "key": {
+                                "type": "string",
+                                "description": "Knowledge key in '{type}:{id}' format",
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "The knowledge content to save",
+                            },
+                        },
+                        "required": ["key", "content"],
+                    },
+                },
+            },
         ]
 
     # --- TTS Voice-Over Insertion ---
@@ -1596,6 +1614,19 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     return answer
                 except Exception as e:
                     return f"Failed to get game knowledge: {e}"
+
+            elif name == "save_knowledge":
+                key = args.get("key", "")
+                content = args.get("content", "")
+                if not key or not content:
+                    return "Error: both 'key' and 'content' are required."
+                if ":" not in key:
+                    return "Error: key must be in '{type}:{id}' format."
+                if self.knowledge_store:
+                    self.knowledge_store.save(key, content, source="agent")
+                    log.info(f"Knowledge saved by Annie: {key} ({len(content)} chars)")
+                    return f"Saved knowledge entry '{key}'."
+                return "Knowledge store not available."
 
             return f"Unknown tool: {name}"
         except Exception as e:
@@ -2061,13 +2092,20 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         try:
             # pyrefly: ignore [bad-argument-type]
             with yt_dlp.YoutubeDL(ydl_info_opts) as ydl:
-                info_dict = await asyncio.to_thread(
-                    ydl.extract_info, search_query, download=False
+                info_dict = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        ydl.extract_info, search_query, download=False
+                    ),
+                    timeout=METADATA_TIMEOUT,
                 )
             # pyrefly: ignore [bad-typed-dict-key]
             if "entries" in info_dict and info_dict["entries"]:
                 # pyrefly: ignore [bad-typed-dict-key]
                 info_dict = info_dict["entries"][0]
+        except asyncio.TimeoutError:
+            raise Exception(
+                "Song search timed out. YouTube may be slow — please try again."
+            )
         except Exception as e:
             raise Exception(
                 "Could not find that song. Please try a different name or link."
@@ -2118,7 +2156,14 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             # pyrefly: ignore [bad-argument-type]
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 # pyrefly: ignore [bad-argument-type]
-                await asyncio.to_thread(ydl.download, [webpage_url])
+                await asyncio.wait_for(
+                    asyncio.to_thread(ydl.download, [webpage_url]),
+                    timeout=DOWNLOAD_TIMEOUT,
+                )
+        except asyncio.TimeoutError:
+            raise Exception(
+                "Download timed out. The song may be too large or the server is under load. Please try again."
+            )
         except Exception as e:
             raise Exception(f"Failed to download audio: {e}")
 
