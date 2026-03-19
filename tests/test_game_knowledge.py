@@ -1,5 +1,5 @@
 import sys
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 
 # Mock google.cloud.texttospeech BEFORE importing module that uses it
 mock_texttospeech = MagicMock()
@@ -13,6 +13,24 @@ from amc_peripheral.radio.game_knowledge import (  # noqa: E402
     ask_game_knowledge,
     _execute_tool,
     _build_tools,
+    _extract_heading,
+    _lookup_knowledge,
+)
+
+
+SAMPLE_TOPICS = {
+    "Vehicles > Kira Van": "## Kira Van\nThe Kira Van is a mid-size delivery van.\nMax cargo: 5000kg.",
+    "Vehicles > Gosan Trucks": "## Gosan Trucks\nGosan manufactures heavy-duty trucks.\nThe G7 can carry up to 24000kg.",
+    "Locations > Gangjung": "## Gangjung\nGangjung is the capital city.\nIt has the main port and train station.",
+    "Economy > Subsidies": "## Subsidies\nThe government provides delivery subsidies.\nCheck /subsidies for current rates.",
+}
+
+SAMPLE_INDEX = (
+    "Available game knowledge topics (call `ask_game_knowledge` for details on any of these):\n"
+    "- Vehicles > Kira Van\n"
+    "- Vehicles > Gosan Trucks\n"
+    "- Locations > Gangjung\n"
+    "- Economy > Subsidies"
 )
 
 
@@ -26,86 +44,69 @@ def mock_http_session():
     return AsyncMock()
 
 
-@pytest.mark.asyncio
-async def test_ask_game_knowledge_returns_answer(mock_openai, mock_http_session):
-    """Test subagent returns the LLM's text answer."""
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = "The heaviest cargo is Steel Coil at 24000kg."
-    mock_response.choices[0].message.tool_calls = None
-
-    mock_openai.chat.completions.create = AsyncMock(return_value=mock_response)
-
-    answer = await ask_game_knowledge(
-        openai_client=mock_openai,
-        knowledge_text="Some game knowledge",
-        game_schema="TABLE: cargos\n  Columns: id, name, weight",
-        question="What is the heaviest cargo?",
-        http_session=mock_http_session,
-    )
-
-    assert "Steel Coil" in answer
-    assert "24000" in answer
+# --- _extract_heading tests ---
 
 
-@pytest.mark.asyncio
-async def test_ask_game_knowledge_handles_empty_response(mock_openai, mock_http_session):
-    """Test subagent handles empty LLM response gracefully."""
-    mock_response = MagicMock()
-    mock_response.choices = []
-
-    mock_openai.chat.completions.create = AsyncMock(return_value=mock_response)
-
-    answer = await ask_game_knowledge(
-        openai_client=mock_openai,
-        knowledge_text="",
-        game_schema="",
-        question="test",
-        http_session=mock_http_session,
-    )
-
-    assert "could not" in answer.lower() or "no answer" in answer.lower()
+def test_extract_heading_markdown():
+    """Extract heading from markdown content."""
+    assert _extract_heading("## Kira Van\nSome details") == "Kira Van"
+    assert _extract_heading("### Gosan G7\nSpecs") == "Gosan G7"
+    assert _extract_heading("# Top Level\nContent") == "Top Level"
 
 
-@pytest.mark.asyncio
-async def test_ask_game_knowledge_with_tool_call(mock_openai, mock_http_session):
-    """Test subagent handles a tool call loop: LLM calls tool, then gives final answer."""
-    # First call: LLM wants to use a tool
-    tool_call = MagicMock()
-    tool_call.id = "call_123"
-    tool_call.function.name = "query_game_database"
-    tool_call.function.arguments = '{"sql": "SELECT name FROM cargos LIMIT 1"}'
+def test_extract_heading_no_markdown():
+    """Falls back to first non-empty line."""
+    assert _extract_heading("Just a plain message\nwith more text") == "Just a plain message"
 
-    first_response = MagicMock()
-    first_response.choices = [MagicMock()]
-    first_response.choices[0].message.content = None
-    first_response.choices[0].message.tool_calls = [tool_call]
 
-    # Second call: LLM gives final answer
-    second_response = MagicMock()
-    second_response.choices = [MagicMock()]
-    second_response.choices[0].message.content = "Based on the query, the cargo is Steel."
-    second_response.choices[0].message.tool_calls = None
+def test_extract_heading_empty():
+    """Returns 'Untitled' for empty content."""
+    assert _extract_heading("") == "Untitled"
+    assert _extract_heading("   \n\n   ") == "Untitled"
 
-    mock_openai.chat.completions.create = AsyncMock(
-        side_effect=[first_response, second_response]
-    )
 
-    with patch(
-        "amc_peripheral.radio.game_knowledge._execute_tool",
-        new_callable=AsyncMock,
-        return_value='[{"name": "Steel"}]',
-    ):
-        answer = await ask_game_knowledge(
-            openai_client=mock_openai,
-            knowledge_text="Game knowledge",
-            game_schema="TABLE: cargos",
-            question="What cargo exists?",
-            http_session=mock_http_session,
-        )
+# --- _lookup_knowledge tests ---
 
-    assert "Steel" in answer
-    assert mock_openai.chat.completions.create.call_count == 2
+
+def test_lookup_exact_match():
+    """Exact topic match returns content."""
+    result = _lookup_knowledge("Kira Van", SAMPLE_TOPICS)
+    assert "Kira Van is a mid-size delivery van" in result
+
+
+def test_lookup_partial_match():
+    """Partial keyword match works."""
+    result = _lookup_knowledge("gosan", SAMPLE_TOPICS)
+    assert "heavy-duty trucks" in result
+
+
+def test_lookup_multiple_matches():
+    """Multiple matches are returned together."""
+    result = _lookup_knowledge("Vehicles", SAMPLE_TOPICS)
+    assert "Kira Van" in result
+    assert "Gosan" in result
+
+
+def test_lookup_no_match_shows_available():
+    """No match returns available topics."""
+    result = _lookup_knowledge("nonexistent", SAMPLE_TOPICS)
+    assert "No knowledge found" in result
+    assert "Kira Van" in result  # Lists available topics
+
+
+def test_lookup_content_fallback():
+    """Falls back to searching content if key doesn't match."""
+    result = _lookup_knowledge("24000kg", SAMPLE_TOPICS)
+    assert "Gosan" in result
+
+
+def test_lookup_empty():
+    """Empty query or empty topics returns no knowledge."""
+    assert "No knowledge available" in _lookup_knowledge("", SAMPLE_TOPICS)
+    assert "No knowledge available" in _lookup_knowledge("test", {})
+
+
+# --- _build_tools tests ---
 
 
 @pytest.mark.asyncio
@@ -114,6 +115,7 @@ async def test_build_tools_includes_all_tools():
     tools = _build_tools("TABLE: cargos\n  Columns: id, name")
     tool_names = [t["function"]["name"] for t in tools]
 
+    assert "lookup_knowledge" in tool_names
     assert "query_game_database" in tool_names
     assert "get_current_subsidies" in tool_names
     assert "get_server_commands" in tool_names
@@ -123,7 +125,22 @@ async def test_build_tools_includes_all_tools():
 async def test_build_tools_empty_schema():
     """Test tools build with empty schema."""
     tools = _build_tools("")
-    assert len(tools) == 3  # All 3 tools still defined
+    assert len(tools) == 4  # lookup_knowledge + 3 others
+
+
+# --- _execute_tool tests ---
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_lookup_knowledge():
+    """Test lookup_knowledge tool execution."""
+    result = await _execute_tool(
+        "lookup_knowledge",
+        {"topic": "Kira Van"},
+        AsyncMock(),
+        knowledge_topics=SAMPLE_TOPICS,
+    )
+    assert "mid-size delivery van" in result
 
 
 @pytest.mark.asyncio
@@ -180,3 +197,92 @@ async def test_execute_tool_unknown():
     """Test unknown tool returns error."""
     result = await _execute_tool("nonexistent_tool", {}, AsyncMock())
     assert "Unknown tool" in result
+
+
+# --- ask_game_knowledge integration tests ---
+
+
+@pytest.mark.asyncio
+async def test_ask_game_knowledge_returns_answer(mock_openai, mock_http_session):
+    """Test subagent returns the LLM's text answer."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "The heaviest cargo is Steel Coil at 24000kg."
+    mock_response.choices[0].message.tool_calls = None
+
+    mock_openai.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    answer = await ask_game_knowledge(
+        openai_client=mock_openai,
+        knowledge_topics=SAMPLE_TOPICS,
+        knowledge_index=SAMPLE_INDEX,
+        game_schema="TABLE: cargos\n  Columns: id, name, weight",
+        question="What is the heaviest cargo?",
+        http_session=mock_http_session,
+    )
+
+    assert "Steel Coil" in answer
+    assert "24000" in answer
+
+    # Verify system prompt uses index, not full knowledge
+    call_args = mock_openai.chat.completions.create.call_args
+    system_msg = call_args.kwargs["messages"][0]["content"]
+    assert "Kira Van" in system_msg  # Index is included
+    assert "mid-size delivery van" not in system_msg  # Full content is NOT included
+
+
+@pytest.mark.asyncio
+async def test_ask_game_knowledge_handles_empty_response(mock_openai, mock_http_session):
+    """Test subagent handles empty LLM response gracefully."""
+    mock_response = MagicMock()
+    mock_response.choices = []
+
+    mock_openai.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    answer = await ask_game_knowledge(
+        openai_client=mock_openai,
+        knowledge_topics={},
+        knowledge_index="",
+        game_schema="",
+        question="test",
+        http_session=mock_http_session,
+    )
+
+    assert "could not" in answer.lower() or "no answer" in answer.lower()
+
+
+@pytest.mark.asyncio
+async def test_ask_game_knowledge_with_tool_call(mock_openai, mock_http_session):
+    """Test subagent handles a tool call loop: LLM calls tool, then gives final answer."""
+    # First call: LLM wants to use lookup_knowledge
+    tool_call = MagicMock()
+    tool_call.id = "call_123"
+    tool_call.function.name = "lookup_knowledge"
+    tool_call.function.arguments = '{"topic": "Kira Van"}'
+
+    first_response = MagicMock()
+    first_response.choices = [MagicMock()]
+    first_response.choices[0].message.content = None
+    first_response.choices[0].message.tool_calls = [tool_call]
+
+    # Second call: LLM gives final answer
+    second_response = MagicMock()
+    second_response.choices = [MagicMock()]
+    second_response.choices[0].message.content = "The Kira Van is a mid-size delivery van that can carry up to 5000kg."
+    second_response.choices[0].message.tool_calls = None
+
+    mock_openai.chat.completions.create = AsyncMock(
+        side_effect=[first_response, second_response]
+    )
+
+    answer = await ask_game_knowledge(
+        openai_client=mock_openai,
+        knowledge_topics=SAMPLE_TOPICS,
+        knowledge_index=SAMPLE_INDEX,
+        game_schema="TABLE: cargos",
+        question="What is the Kira Van?",
+        http_session=mock_http_session,
+    )
+
+    assert "Kira Van" in answer
+    assert mock_openai.chat.completions.create.call_count == 2

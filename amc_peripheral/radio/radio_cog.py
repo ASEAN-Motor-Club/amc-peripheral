@@ -305,7 +305,7 @@ class RadioCog(commands.Cog):
         self.lq = LiquidsoapController()
 
         # State
-        self.knowledge_system_message = None
+        self.knowledge_topics: dict[str, str] = {}  # "Thread > Subtopic" → content
         self.knowledge_index = ""  # Compact topic list for prompts
         self.embed_message_id = None
         self.user_requests = {}
@@ -335,10 +335,11 @@ class RadioCog(commands.Cog):
 
         # Load knowledge from forum channel (same source as KnowledgeCog)
         try:
-            self.knowledge_system_message, self.knowledge_index = await self._fetch_forum_knowledge()
+            self.knowledge_topics, self.knowledge_index = await self._fetch_forum_knowledge()
+            total_chars = sum(len(v) for v in self.knowledge_topics.values())
             log.info(
-                f"Radio knowledge loaded: {len(self.knowledge_system_message)} chars, "
-                f"index: {len(self.knowledge_index)} chars"
+                f"Radio knowledge loaded: {len(self.knowledge_topics)} topics, "
+                f"{total_chars} chars total, index: {len(self.knowledge_index)} chars"
             )
         except Exception as e:
             log.error(f"Failed to load initial knowledge: {e}")
@@ -392,30 +393,32 @@ class RadioCog(commands.Cog):
 
     # --- Helpers ---
 
-    async def _fetch_forum_knowledge(self) -> tuple[str, str]:
-        """Load knowledge from the forum channel (same source as KnowledgeCog).
+    async def _fetch_forum_knowledge(self) -> tuple[dict[str, str], str]:
+        """Load knowledge from the forum channel, chunked per message.
 
         Returns:
-            (full_knowledge_text, knowledge_index) where the index is a compact
+            (knowledge_topics, knowledge_index) where topics is a dict mapping
+            "Thread Name > Subtopic" to message content, and index is a compact
             topic list for embedding in prompts.
         """
+        from amc_peripheral.radio.game_knowledge import _extract_heading
+
         forum_channel = self.bot.get_channel(KNOWLEDGE_FORUM_CHANNEL_ID)
         if forum_channel is None:
             log.warning(
                 f"Knowledge forum channel {KNOWLEDGE_FORUM_CHANNEL_ID} not found. "
                 "Knowledge base will be empty."
             )
-            return "", ""
+            return {}, ""
 
         if not isinstance(forum_channel, discord.ForumChannel):
             log.warning(
                 f"Channel {KNOWLEDGE_FORUM_CHANNEL_ID} is not a ForumChannel, "
                 f"it is a {type(forum_channel).__name__}"
             )
-            return "", ""
+            return {}, ""
 
-        acc = ""
-        thread_names: list[str] = []
+        topics: dict[str, str] = {}
 
         # Fetch active + archived threads
         threads = list(forum_channel.threads)
@@ -423,21 +426,38 @@ class RadioCog(commands.Cog):
             threads.append(archived)
 
         for thread in threads:
-            thread_names.append(thread.name)
-            acc += f"## {thread.name}\n"
             async for msg in thread.history(oldest_first=True):
-                acc += f"{msg.content}\n\n"
+                content = msg.content.strip()
+                if not content and not msg.attachments:
+                    continue
+
+                # Include text attachments in the content
                 for attachment in msg.attachments:
                     if attachment.filename.lower().endswith(".txt"):
                         try:
-                            content = (await attachment.read()).decode("utf-8")
-                            acc += f"--- Attachment: {attachment.filename} ---\n{content}\n\n"
+                            text = (await attachment.read()).decode("utf-8")
+                            content += f"\n\n--- {attachment.filename} ---\n{text}"
                         except Exception:
                             pass
 
+                if not content.strip():
+                    continue
+
+                heading = _extract_heading(content)
+                key = f"{thread.name} > {heading}"
+
+                # Deduplicate keys by appending a counter
+                if key in topics:
+                    i = 2
+                    while f"{key} ({i})" in topics:
+                        i += 1
+                    key = f"{key} ({i})"
+
+                topics[key] = content
+
         # Build compact index for prompts
-        if thread_names:
-            topic_list = "\n".join(f"- {name}" for name in thread_names)
+        if topics:
+            topic_list = "\n".join(f"- {name}" for name in topics)
             index = (
                 "Available game knowledge topics (call `ask_game_knowledge` for details on any of these):\n"
                 + topic_list
@@ -445,7 +465,7 @@ class RadioCog(commands.Cog):
         else:
             index = ""
 
-        return acc, index
+        return topics, index
 
     async def fetch_forum_messages(
         self, forum_channel: discord.ForumChannel, include_dates=False, **history_kwargs
@@ -915,7 +935,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             try:
                 return await ask_game_knowledge(
                     openai_client=self.openai_client_openrouter,
-                    knowledge_text=self.knowledge_system_message or "",
+                    knowledge_topics=self.knowledge_topics,
+                    knowledge_index=self.knowledge_index,
                     game_schema=self.game_schema_description,
                     question=question,
                     http_session=self.bot.http_session,
@@ -1512,7 +1533,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 try:
                     answer = await ask_game_knowledge(
                         openai_client=self.openai_client_openrouter,
-                        knowledge_text=self.knowledge_system_message or "",
+                        knowledge_topics=self.knowledge_topics,
+                        knowledge_index=self.knowledge_index,
                         game_schema=self.game_schema_description,
                         question=question,
                         http_session=self.bot.http_session,

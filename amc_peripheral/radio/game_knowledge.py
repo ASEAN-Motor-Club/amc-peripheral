@@ -2,7 +2,7 @@
 Game Knowledge Subagent for DJ Annie.
 
 A lightweight agentic module that answers game-related questions using:
-- Knowledge text (from the Discord knowledge forum, shared via knowledge.txt)
+- Knowledge topics (per-message chunks from the Discord knowledge forum)
 - Game database queries (SQLite)
 - Backend API calls (subsidies, server commands)
 
@@ -12,6 +12,7 @@ so Annie's main prompt stays lean and radio-focused.
 
 import json
 import logging
+import re
 from typing import Optional
 
 import aiohttp
@@ -28,6 +29,27 @@ MAX_ITERATIONS = 5
 def _build_tools(game_schema: str) -> list[dict]:
     """Build tool definitions for the game knowledge subagent."""
     tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "lookup_knowledge",
+                "description": (
+                    "Look up detailed knowledge about a topic. "
+                    "Pass a topic name from the index, or a keyword to search for. "
+                    "You can call this multiple times for different topics."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {
+                            "type": "string",
+                            "description": "Topic name or keyword to search for",
+                        }
+                    },
+                    "required": ["topic"],
+                },
+            },
+        },
         {
             "type": "function",
             "function": {
@@ -78,14 +100,45 @@ Results are limited to 100 rows. Database is read-only.""",
     return tools
 
 
+def _lookup_knowledge(topic: str, knowledge_topics: dict[str, str]) -> str:
+    """Look up knowledge chunks matching a topic query.
+
+    Uses case-insensitive substring matching against dict keys.
+    Returns all matching chunks concatenated.
+    """
+    if not topic or not knowledge_topics:
+        return "No knowledge available."
+
+    query = topic.lower()
+    matches = []
+    for key, content in knowledge_topics.items():
+        if query in key.lower():
+            matches.append(f"### {key}\n{content}")
+
+    if not matches:
+        # Try matching against content itself as fallback
+        for key, content in knowledge_topics.items():
+            if query in content.lower():
+                matches.append(f"### {key}\n{content}")
+        if not matches:
+            available = ", ".join(knowledge_topics.keys())
+            return f"No knowledge found for '{topic}'. Available topics: {available}"
+
+    return "\n\n".join(matches)
+
+
 async def _execute_tool(
     name: str,
     args: dict,
     http_session: aiohttp.ClientSession,
+    knowledge_topics: dict[str, str] | None = None,
 ) -> str:
     """Execute a game knowledge tool call."""
     try:
-        if name == "query_game_database":
+        if name == "lookup_knowledge":
+            return _lookup_knowledge(args.get("topic", ""), knowledge_topics or {})
+
+        elif name == "query_game_database":
             from amc_peripheral.bot import game_db
 
             sql = args.get("sql", "")
@@ -149,9 +202,25 @@ async def _execute_tool(
         return f"Tool error: {e}"
 
 
+def _extract_heading(content: str) -> str:
+    """Extract the first markdown heading from content, or first non-empty line."""
+    for line in content.strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        # Match markdown headings
+        match = re.match(r"^#{1,4}\s+(.+)", line)
+        if match:
+            return match.group(1).strip()
+        # Use first non-empty line as fallback
+        return line[:80]
+    return "Untitled"
+
+
 async def ask_game_knowledge(
     openai_client: AsyncOpenAI,
-    knowledge_text: str,
+    knowledge_topics: dict[str, str],
+    knowledge_index: str,
     game_schema: str,
     question: str,
     http_session: aiohttp.ClientSession,
@@ -160,13 +229,13 @@ async def ask_game_knowledge(
     """
     Subagent: answer a game question using knowledge context + tools.
 
-    Makes a separate LLM call with the full knowledge blob and database
-    tools, then returns the final answer text. This is designed to be
-    called from Annie's tool executor when she encounters a game question.
+    Uses a compact knowledge index in the system prompt and a
+    lookup_knowledge tool for targeted retrieval of specific topics.
 
     Args:
         openai_client: OpenAI-compatible async client (e.g. OpenRouter)
-        knowledge_text: Full game knowledge text (from knowledge.txt)
+        knowledge_topics: Dict mapping topic keys to content chunks
+        knowledge_index: Compact topic list for the system prompt
         game_schema: Game database schema description for SQL tool
         question: The game-related question to answer
         http_session: aiohttp session for API calls
@@ -180,9 +249,10 @@ async def ask_game_knowledge(
     system_message = (
         "You are a game knowledge assistant for Motor Town, an open world driving game, "
         "specifically in a dedicated server named 'ASEAN Motor Club'.\n"
-        "Answer questions accurately and concisely using the knowledge and tools provided.\n"
+        "Answer questions accurately and concisely using the tools provided.\n"
+        "ALWAYS use lookup_knowledge first to retrieve relevant information before answering.\n"
         "Do not use markdown tables or emojis.\n\n"
-        f"{knowledge_text}"
+        f"{knowledge_index}"
     )
 
     messages: list[dict] = [
@@ -216,6 +286,7 @@ async def ask_game_knowledge(
                 tool_call.function.name,
                 json.loads(tool_call.function.arguments),
                 http_session,
+                knowledge_topics=knowledge_topics,
             )
             messages.append(
                 {
