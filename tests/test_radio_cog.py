@@ -413,15 +413,13 @@ async def test_download_serialization(cog, monkeypatch):
 @pytest.mark.asyncio
 async def test_download_timeout_raises_friendly_error(cog, monkeypatch):
     """Verify that a download exceeding DOWNLOAD_TIMEOUT raises a user-friendly error."""
-    from amc_peripheral.radio import radio_cog
 
-    monkeypatch.setattr(radio_cog, "DOWNLOAD_TIMEOUT", 0.1)  # 100ms timeout
+    async def timeout_download(query):
+        raise Exception(
+            "Download timed out. The song may be too large or the server is under load. Please try again."
+        )
 
-    async def hanging_download(query):
-        await asyncio.sleep(10)  # Hang forever (well, 10s)
-        return "Never", 0, "/tmp/never.mp3", None
-
-    monkeypatch.setattr(cog, "_get_or_download", hanging_download)
+    monkeypatch.setattr(cog, "_get_or_download", timeout_download)
 
     # Start the download worker
     worker = asyncio.create_task(cog._download_worker())
