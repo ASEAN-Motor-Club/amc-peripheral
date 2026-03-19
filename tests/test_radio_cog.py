@@ -1046,14 +1046,6 @@ async def test_generate_radio_track_tool_defined(cog):
 
 
 @pytest.mark.asyncio
-async def test_add_tts_track_to_playlist_tool_defined(cog):
-    """Verify add_tts_track_to_playlist is in Annie's tool list."""
-    tools = cog._get_annie_tools()
-    tool_names = [t["function"]["name"] for t in tools]
-    assert "add_tts_track_to_playlist" in tool_names
-
-
-@pytest.mark.asyncio
 async def test_execute_annie_tool_generate_radio_track(cog, monkeypatch):
     """Test generate_radio_track tool stores pending track and notifies."""
     monkeypatch.setattr(
@@ -1072,46 +1064,6 @@ async def test_execute_annie_tool_generate_radio_track(cog, monkeypatch):
     assert len(cog._pending_tracks) == 1
     notify_fn.assert_called_once()
     assert "Track preview" in notify_fn.call_args[0][0]
-
-
-@pytest.mark.asyncio
-async def test_execute_annie_tool_add_tts_track_to_playlist(cog, mock_bot, monkeypatch):
-    """Test add_tts_track_to_playlist uploads audio to playlist channel."""
-    from amc_peripheral.radio import radio_cog
-    monkeypatch.setattr(radio_cog, "PLAYLIST_CHANNEL", 99999)
-
-    # Pre-populate a pending track
-    track_id = "test-uuid-1234"
-    cog._pending_tracks[track_id] = ("Test transcript content", b"audio_bytes")
-
-    mock_channel = MagicMock()
-    mock_channel.send = AsyncMock()
-    mock_bot.get_channel = MagicMock(return_value=mock_channel)
-
-    notify_fn = AsyncMock()
-    result = await cog._execute_annie_tool(
-        "add_tts_track_to_playlist",
-        {"track_id": track_id},
-        "TestUser",
-        notify_fn,
-    )
-
-    assert "Added track" in result
-    assert track_id not in cog._pending_tracks
-    mock_channel.send.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_execute_annie_tool_add_tts_track_expired(cog):
-    """Test add_tts_track_to_playlist returns error for expired track."""
-    notify_fn = AsyncMock()
-    result = await cog._execute_annie_tool(
-        "add_tts_track_to_playlist",
-        {"track_id": "nonexistent-uuid"},
-        "TestUser",
-        notify_fn,
-    )
-    assert "not found" in result
 
 
 
@@ -1230,11 +1182,15 @@ async def test_generate_talkshow_segment_tool_defined(cog):
 
 
 @pytest.mark.asyncio
-async def test_execute_annie_tool_generate_talkshow_segment(cog, monkeypatch):
-    """Test generate_talkshow_segment tool stores pending track and notifies."""
+async def test_execute_annie_tool_generate_talkshow_segment(cog, monkeypatch, tmp_path):
+    """Test generate_talkshow_segment queues audio for playback."""
+    from amc_peripheral.radio import radio_cog
+    monkeypatch.setattr(radio_cog, "JINGLES_PATH", str(tmp_path))
+
     monkeypatch.setattr(
         cog, "generate_talkshow", AsyncMock(return_value=("**Host:** Hello\n**Guest:** Hi", b"talkshow_audio"))
     )
+    cog.lq.push_to_queue = AsyncMock()
     notify_fn = AsyncMock()
 
     result = await cog._execute_annie_tool(
@@ -1244,10 +1200,8 @@ async def test_execute_annie_tool_generate_talkshow_segment(cog, monkeypatch):
         notify_fn,
     )
 
-    assert "track_id" in result
-    assert len(cog._pending_tracks) == 1
-    notify_fn.assert_called_once()
-    assert "Talkshow preview" in notify_fn.call_args[0][0]
+    assert "queued" in result.lower()
+    cog.lq.push_to_queue.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -1266,7 +1220,6 @@ async def test_execute_annie_tool_generate_talkshow_segment_error(cog, monkeypat
     )
 
     assert "Failed to generate talkshow segment" in result
-    assert len(cog._pending_tracks) == 0
 
 
 # --- TTS Voice-Over Insertion Tests ---
@@ -1289,28 +1242,17 @@ async def test_voice_announce_command_exists(cog):
 
 @pytest.mark.asyncio
 async def test_insert_tts_waits_for_music(cog, monkeypatch, tmp_path):
-    """Test _insert_tts_on_radio waits for talking segment to end."""
+    """Test _insert_tts_on_radio generates TTS and pushes announcement."""
     monkeypatch.setattr("amc_peripheral.radio.radio_cog.JINGLES_PATH", str(tmp_path))
     monkeypatch.setattr(
         "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"audio"
     )
 
-    # First two calls return "talking", third returns "music"
-    call_count = {"n": 0}
-
-    async def mock_get_current_source(session):
-        call_count["n"] += 1
-        return "talking" if call_count["n"] <= 2 else "music"
-
-    cog.lq.get_current_source = mock_get_current_source
     cog.lq.push_announcement = AsyncMock(return_value=True)
-    # Speed up retries for test
-    cog.TTS_INSERTION_RETRY_DELAY = 0.01
 
     result = await cog._insert_tts_on_radio("Hello listeners!")
 
     assert result is True
-    assert call_count["n"] == 3  # Called 3 times: talking, talking, music
     cog.lq.push_announcement.assert_called_once()
 
 
@@ -1390,14 +1332,13 @@ async def test_execute_annie_tool_voice_reply(cog, monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_voice_reply_background_success(cog, monkeypatch):
-    """Test _voice_reply_background notifies on success."""
+    """Test _voice_reply_background does not notify on success."""
     cog._insert_tts_on_radio = AsyncMock(return_value=True)
     notify_fn = AsyncMock()
 
     await cog._voice_reply_background("Hello!", notify_fn)
 
-    notify_fn.assert_called_once()
-    assert "playing on the radio" in notify_fn.call_args[0][0]
+    notify_fn.assert_not_called()
 
 
 @pytest.mark.asyncio

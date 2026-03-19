@@ -32,7 +32,6 @@ from amc_peripheral.settings import (
     EDITORIAL_CHANNEL_ID,
     GAME_ANNOUNCEMENTS_CHANNEL_ID,
     JINGLES_CHANNEL_ID,
-    FILES_CHANNEL_ID,
     RADIO_CHANNEL_ID,
     DYNAMIC_NEWS_CHANNEL,
     PLAYLIST_CHANNEL,
@@ -51,6 +50,7 @@ from amc_peripheral.settings import (
     RADIO_DB_PATH,
     DENO_PATH,
     LASTFM_API_KEY,
+    KNOWLEDGE_FORUM_CHANNEL_ID,
 )
 from amc_peripheral.db import RadioDB
 from amc_peripheral.utils.text_utils import split_markdown
@@ -110,8 +110,12 @@ or when someone wants a conversational segment — like simulating a caller phon
 These segments use multiple AI voices for a natural talk-show feel.
 
 ## Game Knowledge
-If a listener asks about game mechanics, vehicles, cargo, player stats, subsidies, commands, or anything \
-game-related, use the `ask_game_knowledge` tool to get accurate information. Do NOT guess or make up game facts.
+You have access to a knowledge base about the game via the `ask_game_knowledge` tool. \
+When a listener asks about game mechanics, vehicles, cargo, locations, player stats, subsidies, commands, \
+or anything game-related, you MUST call `ask_game_knowledge` first. Do NOT guess or make up game facts. \
+Even if you think you know the answer, always verify with the tool.
+
+{knowledge_index}
 """
 
 
@@ -166,6 +170,38 @@ For example:
 "He even said he was 'sweating trying to stop!' [pause] Well, the server certainly helped with that, didn't it? [pause] Perhaps a little too much help. Stay tuned, because the chaos is always just a song away!".
 
 Use pauses sparingly in your speech, for comedic, theatrical, and other effects.
+"""
+
+GEMINI_TTS_MARKUP_INSTRUCTIONS = """\
+### Markup
+Produce clean text that will be read aloud by TTS (text-to-speech) to generate audio.
+Only include spoken words, as if it were transcribed from a live recording.
+Do not include any sound effects, musical cues, or stage directions.
+
+Bad example: [Sound of a cheering crowd] 'You are listening to Radio ASEAN!'
+Good example: 'You are listening to Radio ASEAN!'
+
+Do not use markdown formatting such as asterisks to make text bold or italic, they are not supported by the TTS.
+
+#### Inline tags
+You can use bracketed tags in the script to control delivery. Use them sparingly for natural effect.
+
+**Non-speech sounds** — replaced by a vocalization, not spoken as words:
+[sigh], [laughing], [uhm], [clearing throat]
+
+**Style modifiers** — not spoken, but change the delivery of the following text:
+[whispering], [sarcasm], [extremely fast]
+
+**Pacing and pauses** — insert silence for rhythm and timing:
+[short pause], [medium pause], [long pause]
+
+#### Examples
+
+Good: 'So I checked, and [uhm] yeah, it turns out the speed limit was always there. [laughing] Nobody reads the signs.'
+Good: '[whispering] Don't tell anyone, but the shortcut through the factory is way faster. [medium pause] Okay maybe everyone knows.'
+Good: 'He even said he was sweating trying to stop! [short pause] Well, the server certainly helped with that, didn't it?'
+
+Do NOT overuse tags. Most sentences need no tags at all — only add them where a real person would naturally pause, laugh, hesitate, or shift tone.
 """
 
 DEFAULT_TALKSHOW_VOICES = {
@@ -270,6 +306,7 @@ class RadioCog(commands.Cog):
 
         # State
         self.knowledge_system_message = None
+        self.knowledge_index = ""  # Compact topic list for prompts
         self.embed_message_id = None
         self.user_requests = {}
         self.recent_song_queue = deque(maxlen=10)
@@ -296,9 +333,13 @@ class RadioCog(commands.Cog):
         self._now_playing_view = NowPlayingView(self)
         self.bot.add_view(self._now_playing_view)
 
-        # Load knowledge on start
+        # Load knowledge from forum channel (same source as KnowledgeCog)
         try:
-            self.knowledge_system_message = await self.fetch_knowledge()
+            self.knowledge_system_message, self.knowledge_index = await self._fetch_forum_knowledge()
+            log.info(
+                f"Radio knowledge loaded: {len(self.knowledge_system_message)} chars, "
+                f"index: {len(self.knowledge_index)} chars"
+            )
         except Exception as e:
             log.error(f"Failed to load initial knowledge: {e}")
 
@@ -332,9 +373,17 @@ class RadioCog(commands.Cog):
         while True:
             query, future = await self._download_queue.get()
             try:
-                result = await self._get_or_download(query)
+                result = await asyncio.wait_for(
+                    self._get_or_download(query),
+                    timeout=DOWNLOAD_TIMEOUT,
+                )
                 if not future.cancelled():
                     future.set_result(result)
+            except asyncio.TimeoutError:
+                if not future.cancelled():
+                    future.set_exception(Exception(
+                        "Download timed out. The song may be too large or the server is under load. Please try again."
+                    ))
             except Exception as e:
                 if not future.cancelled():
                     future.set_exception(e)
@@ -343,23 +392,60 @@ class RadioCog(commands.Cog):
 
     # --- Helpers ---
 
-    async def fetch_knowledge(self):
-        files_channel = self.bot.get_channel(FILES_CHANNEL_ID)
-        if not files_channel:
-            # Fallback/Retry logic could be here, or just raise
-            return ""
+    async def _fetch_forum_knowledge(self) -> tuple[str, str]:
+        """Load knowledge from the forum channel (same source as KnowledgeCog).
 
-        files_messages = [
-            m async for m in files_channel.history(limit=4) if m.attachments
-        ]
-        for m in files_messages:
-            if m.attachments[0].filename == "knowledge.txt":
-                file_bytes = await m.attachments[0].read()
-                try:
-                    return file_bytes.decode("utf-8")
-                except UnicodeDecodeError:
-                    log.error("Failed to extract knowledge")
-        raise Exception("Failed to find knowledge")
+        Returns:
+            (full_knowledge_text, knowledge_index) where the index is a compact
+            topic list for embedding in prompts.
+        """
+        forum_channel = self.bot.get_channel(KNOWLEDGE_FORUM_CHANNEL_ID)
+        if forum_channel is None:
+            log.warning(
+                f"Knowledge forum channel {KNOWLEDGE_FORUM_CHANNEL_ID} not found. "
+                "Knowledge base will be empty."
+            )
+            return "", ""
+
+        if not isinstance(forum_channel, discord.ForumChannel):
+            log.warning(
+                f"Channel {KNOWLEDGE_FORUM_CHANNEL_ID} is not a ForumChannel, "
+                f"it is a {type(forum_channel).__name__}"
+            )
+            return "", ""
+
+        acc = ""
+        thread_names: list[str] = []
+
+        # Fetch active + archived threads
+        threads = list(forum_channel.threads)
+        async for archived in forum_channel.archived_threads(limit=None):
+            threads.append(archived)
+
+        for thread in threads:
+            thread_names.append(thread.name)
+            acc += f"## {thread.name}\n"
+            async for msg in thread.history(oldest_first=True):
+                acc += f"{msg.content}\n\n"
+                for attachment in msg.attachments:
+                    if attachment.filename.lower().endswith(".txt"):
+                        try:
+                            content = (await attachment.read()).decode("utf-8")
+                            acc += f"--- Attachment: {attachment.filename} ---\n{content}\n\n"
+                        except Exception:
+                            pass
+
+        # Build compact index for prompts
+        if thread_names:
+            topic_list = "\n".join(f"- {name}" for name in thread_names)
+            index = (
+                "Available game knowledge topics (call `ask_game_knowledge` for details on any of these):\n"
+                + topic_list
+            )
+        else:
+            index = ""
+
+        return acc, index
 
     async def fetch_forum_messages(
         self, forum_channel: discord.ForumChannel, include_dates=False, **history_kwargs
@@ -559,32 +645,15 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
 
     async def generate_segment(self, topic: str) -> tuple[str, bytes]:
         """Generate a radio segment transcript and audio for a given topic."""
-        knowledge = self.knowledge_system_message or ""
         now = datetime.now(self.local_tz)
 
         system_message = f"""You are DJ Annie, a charismatic host for Radio ASEAN in Motor Town.
 
-Use this knowledge about the game:
-{knowledge}"""
+{self.knowledge_index}
 
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "query_game_database",
-                    "description": f"""Query MotorTown game database with SQL.
+If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
 
-{self.game_schema_description}
-
-Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {"sql": {"type": "string"}},
-                        "required": ["sql"],
-                    },
-                },
-            },
-        ]
+        tools = self._get_segment_tools()
 
         messages = [
             {"role": "system", "content": system_message},
@@ -620,32 +689,15 @@ Output only the spoken words, as if transcribed from a live recording.""",
 
     async def generate_track(self, topic: str, duration_hint: str = "1-2 minutes") -> tuple[str, bytes]:
         """Generate a long-form TTS audio track for a given topic."""
-        knowledge = self.knowledge_system_message or ""
         now = datetime.now(self.local_tz)
 
         system_message = f"""You are DJ Annie, a charismatic host for Radio ASEAN in Motor Town.
 
-Use this knowledge about the game:
-{knowledge}"""
+{self.knowledge_index}
 
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "query_game_database",
-                    "description": f"""Query MotorTown game database with SQL.
+If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
 
-{self.game_schema_description}
-
-Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {"sql": {"type": "string"}},
-                        "required": ["sql"],
-                    },
-                },
-            },
-        ]
+        tools = self._get_segment_tools()
 
         messages = [
             {"role": "system", "content": system_message},
@@ -678,32 +730,15 @@ Make it engaging, fun, and in Annie's signature style — witty, warm, and enter
 
     async def generate_talkshow(self, topic: str, duration_hint: str = "1-2 minutes") -> tuple[str, bytes]:
         """Generate a multi-speaker talkshow segment using Gemini TTS."""
-        knowledge = self.knowledge_system_message or ""
         now = datetime.now(self.local_tz)
 
         system_message = f"""You are a scriptwriter for Radio ASEAN in Motor Town.
 
-Use this knowledge about the game:
-{knowledge}"""
+{self.knowledge_index}
 
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "query_game_database",
-                    "description": f"""Query MotorTown game database with SQL.
+If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
 
-{self.game_schema_description}
-
-Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {"sql": {"type": "string"}},
-                        "required": ["sql"],
-                    },
-                },
-            },
-        ]
+        tools = self._get_segment_tools()
 
         messages = [
             {"role": "system", "content": system_message},
@@ -718,17 +753,20 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 Topic: {topic}
 
 The script is a conversation between speakers. Use exactly these speaker names:
-- "Host" — the main radio host, DJ Annie, witty and warm
+- "Host" — the main radio host, DJ Annie, friendly and easygoing
 - "Guest" — a guest speaker or co-host with their own personality
 - "Caller" — (optional) a listener calling in
 
-{TTS_SCRIPT_MARKUP_INSTRUCTIONS}
+{GEMINI_TTS_MARKUP_INSTRUCTIONS}
 
 CRITICAL:
 - Do NOT use markdown formatting (asterisks, underscores, hashes, etc.) — they cannot be read by TTS.
 - Output ONLY the dialogue lines. No stage directions, sound effects, or narration.
-- Make it feel natural, with back-and-forth banter, reactions, and interruptions.
-- Keep it fun, engaging, and in the style of a lively radio talk show.""",
+- Write dialogue that sounds like a real, relaxed conversation between people — not a scripted performance.
+- Avoid over-the-top excitement, exaggerated reactions, or theatrical delivery. Keep the energy natural and grounded.
+- Speakers can agree, disagree, think out loud, or trail off — just like real people talking.
+- A little humor is fine, but it should come naturally from the topic, not forced punchlines.
+- Use inline markup tags like [laughing], [sigh], [uhm], [whispering], [short pause] etc. where a real person would naturally react. Don't overuse them — most lines need no tags.""",
             },
         ]
 
@@ -778,7 +816,7 @@ Script:
             tts_gemini_multi,
             turns,
             speaker_voices,
-            prompt="Say this as a lively British radio talk show with natural pacing and personality.",
+            prompt="Say this as a calm, natural conversation between radio hosts. Relaxed pacing, no exaggerated excitement or overly dramatic delivery.",
             voice_language_code="en-GB",
         )
 
@@ -822,6 +860,44 @@ Script:
 
         return "Failed to complete segment generation."
 
+    def _get_segment_tools(self) -> list:
+        """Tool definitions for segment/track/talkshow generation."""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "query_game_database",
+                    "description": f"""Query MotorTown game database with SQL.
+
+{self.game_schema_description}
+
+Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"sql": {"type": "string"}},
+                        "required": ["sql"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "ask_game_knowledge",
+                    "description": "Ask the game knowledge subagent a question about Motor Town gameplay, vehicles, cargo, player stats, subsidies, server commands, or any other game-related topic. Use this to get accurate game facts before writing scripts.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "question": {
+                                "type": "string",
+                                "description": "The game-related question to research",
+                            },
+                        },
+                        "required": ["question"],
+                    },
+                },
+            },
+        ]
+
     async def _execute_segment_tool(self, name: str, args: dict) -> str:
         """Execute tools for segment generation."""
         if name == "query_game_database":
@@ -831,6 +907,22 @@ Script:
             if "error" in result:
                 return f"Query error: {result['error']}"
             return json.dumps(result.get("results", []), indent=2)
+
+        elif name == "ask_game_knowledge":
+            from amc_peripheral.radio.game_knowledge import ask_game_knowledge
+
+            question = args.get("question", "")
+            try:
+                return await ask_game_knowledge(
+                    openai_client=self.openai_client_openrouter,
+                    knowledge_text=self.knowledge_system_message or "",
+                    game_schema=self.game_schema_description,
+                    question=question,
+                    http_session=self.bot.http_session,
+                )
+            except Exception as e:
+                return f"Knowledge lookup failed: {e}"
+
         return f"Unknown tool: {name}"
 
     # --- Annie Agentic Chat ---
@@ -1124,7 +1216,7 @@ Script:
                 "type": "function",
                 "function": {
                     "name": "generate_talkshow_segment",
-                    "description": "Generate a multi-speaker radio talkshow segment on a given topic, featuring a Host (DJ Annie), a Guest, and optionally a Caller. Uses multiple AI voices for a natural conversation feel. Great for answering listener questions as a fun talk-show discussion, simulating a caller phoning in, or creating a banter segment between hosts. The segment is sent back for review before being added to the playlist.",
+                    "description": "Generate a multi-speaker radio talkshow segment on a given topic, featuring a Host (DJ Annie), a Guest, and optionally a Caller. Uses multiple AI voices for a natural conversation feel. Great for answering listener questions as a fun talk-show discussion, simulating a caller phoning in, or creating a banter segment between hosts. The segment is automatically added to the playlist after generation.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -1158,23 +1250,7 @@ Script:
                     },
                 },
             },
-            {
-                "type": "function",
-                "function": {
-                    "name": "add_tts_track_to_playlist",
-                    "description": "Add a previously generated TTS track to the permanent radio playlist. Only call this AFTER the user has confirmed they want to add the track. Requires the track_id returned by generate_radio_track or generate_talkshow_segment.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "track_id": {
-                                "type": "string",
-                                "description": "The track ID returned by generate_radio_track or generate_talkshow_segment",
-                            },
-                        },
-                        "required": ["track_id"],
-                    },
-                },
-            },
+
             {
                 "type": "function",
                 "function": {
@@ -1196,13 +1272,9 @@ Script:
 
     # --- TTS Voice-Over Insertion ---
 
-    TTS_INSERTION_MAX_RETRIES = 15
-    TTS_INSERTION_RETRY_DELAY = 4  # seconds
-
     async def _insert_tts_on_radio(self, text: str) -> bool:
         """Generate TTS audio and insert it on the radio via the announcements queue.
 
-        Waits until no talking segment is active to avoid overlapping voices.
         Returns True on success, False on failure.
         """
         # Generate TTS audio
@@ -1219,29 +1291,22 @@ Script:
             fd, tmp_path = tempfile.mkstemp(suffix=".mp3", prefix="voice_", dir=JINGLES_PATH)
             with os.fdopen(fd, "wb") as f:
                 f.write(audio_bytes)
+            os.chmod(tmp_path, 0o644)  # Liquidsoap runs as a different user
         except Exception as e:
             log.error(f"Failed to write TTS temp file: {e}")
             return False
 
-        # Wait until no talking segment is active
-        for attempt in range(self.TTS_INSERTION_MAX_RETRIES):
-            source_type = await self.lq.get_current_source(self.bot.http_session)
-            if source_type != "talking":
-                break
-            log.info(f"Talking segment active, waiting to insert TTS (attempt {attempt + 1})")
-            await asyncio.sleep(self.TTS_INSERTION_RETRY_DELAY)
-        else:
-            log.warning("Timed out waiting for talking segment to end, inserting anyway")
-
-        # Push to announcements queue
+        # Push to announcements queue (smooth_add overlay ducks the music)
         success = await self.lq.push_announcement(self.bot.http_session, tmp_path)
+        if success:
+            # Wait for the audio to actually reach listeners (streaming buffer delay)
+            await asyncio.sleep(10)
         if not success:
             # Clean up temp file on failure
             try:
                 os.unlink(tmp_path)
             except OSError:
                 pass
-        # Note: temp file cleanup after playback is left to the OS/radio path cleanup
         return success
 
     async def _execute_annie_tool(self, name: str, args: dict, requester: str, notify_fn) -> str:
@@ -1412,31 +1477,20 @@ Script:
                 duration = args.get("duration", "1-2 minutes")
                 try:
                     transcript, audio_bytes = await self.generate_talkshow(topic, duration)
-                    track_id = str(uuid.uuid4())
-                    self._pending_tracks[track_id] = (transcript, audio_bytes)
-                    await notify_fn(f"🎙️ **Talkshow preview:**\n\n{transcript[:1500]}")
-                    return f"Talkshow segment generated (track_id: {track_id}). I've sent the script above. Ask the user if they'd like to add it to the playlist. If yes, call add_tts_track_to_playlist with track_id '{track_id}'."
+                    # Write to temp file and push to request queue for immediate playback
+                    safe_title = re.sub(r"[^a-zA-Z0-9]", "_", transcript[:40])
+                    filename = f"talkshow_{safe_title}.mp3"
+                    tmp_path = os.path.join(JINGLES_PATH, filename)
+                    with open(tmp_path, "wb") as f:
+                        f.write(audio_bytes)
+                    os.chmod(tmp_path, 0o644)
+                    await self.lq.push_to_queue(
+                        self.bot.http_session, "song_requests", tmp_path,
+                        title=f"Talkshow: {topic[:60]}",
+                    )
+                    return "Talkshow segment generated and queued for playback. It will play after the current track."
                 except Exception as e:
                     return f"Failed to generate talkshow segment: {e}"
-
-            elif name == "add_tts_track_to_playlist":
-                track_id = args.get("track_id", "")
-                pending = self._pending_tracks.pop(track_id, None)
-                if not pending:
-                    return "Track not found or already added. It may have expired."
-                transcript, audio_bytes = pending
-                playlist_channel = self.bot.get_channel(PLAYLIST_CHANNEL)
-                if not playlist_channel:
-                    return "Could not access the playlist channel."
-                try:
-                    safe_title = re.sub(r"[^a-zA-Z0-9]", "_", transcript[:40])
-                    filename = f"Annie_{safe_title}.mp3"
-                    await playlist_channel.send(
-                        file=discord.File(BytesIO(audio_bytes), filename=filename)
-                    )
-                    return f"Added track '{filename}' to the playlist! It will be in rotation after the next playlist compile."
-                except Exception as e:
-                    return f"Failed to add track to playlist: {e}"
 
             elif name == "voice_reply_on_radio":
                 message_text = args.get("message", "")
@@ -1473,9 +1527,7 @@ Script:
         """Generate and insert TTS voice reply in the background."""
         try:
             success = await self._insert_tts_on_radio(text)
-            if success:
-                await notify_fn("🎙️ Voice reply is now playing on the radio!")
-            else:
+            if not success:
                 await notify_fn("Failed to play voice reply on the radio.")
         except Exception as e:
             await notify_fn(f"Voice reply failed: {e}")
@@ -1518,7 +1570,7 @@ Script:
             prev = f"{m.author.display_name}: {m.content}\n" + prev
 
         messages = [
-            {"role": "system", "content": ANNIE_SYSTEM_PROMPT},
+            {"role": "system", "content": ANNIE_SYSTEM_PROMPT.format(knowledge_index=self.knowledge_index)},
             {"role": "user", "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)"},
         ]
         if prev:
@@ -1549,7 +1601,7 @@ Script:
                 prev = f"{m.content}\n" + prev
 
         messages = [
-            {"role": "system", "content": ANNIE_SYSTEM_PROMPT + "\nRespond briefly — game chat has a character limit. Keep it under 500 chars.\nDo NOT use any emojis — the game client cannot render them."},
+            {"role": "system", "content": ANNIE_SYSTEM_PROMPT.format(knowledge_index=self.knowledge_index) + "\nRespond briefly — game chat has a character limit. Keep it under 500 chars.\nDo NOT use any emojis — the game client cannot render them."},
             {"role": "user", "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)"},
         ]
         if prev:
@@ -1866,16 +1918,9 @@ Script:
         if queue_pos > 0:
             log.info(f"Song '{youtube_link}' queued at position {queue_pos}")
 
-        try:
-            title, duration, local_path, webpage_url = await asyncio.wait_for(
-                future,
-                timeout=DOWNLOAD_TIMEOUT,
-            )
-        except asyncio.TimeoutError:
-            future.cancel()
-            raise Exception(
-                "Download timed out. The song may be too large or the server is under load. Please try again."
-            )
+        # Worker applies DOWNLOAD_TIMEOUT when it picks up the job,
+        # so we just await the future here — no caller-side timeout.
+        title, duration, local_path, webpage_url = await future
 
         # --- Checks that need resolved metadata ---
         normalized_title = title.lower().strip()
