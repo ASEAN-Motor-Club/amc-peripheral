@@ -1089,7 +1089,7 @@ async def test_create_talkshow_command_exists(cog):
 @pytest.mark.asyncio
 async def test_generate_talkshow_returns_transcript_and_audio(cog, monkeypatch):
     """Test that generate_talkshow returns a formatted transcript and audio bytes."""
-    from amc_peripheral.radio.radio_cog import TalkshowScript, TalkshowTurn
+    from amc_peripheral.radio.radio_cog import TalkshowScript, TalkshowTurn, TalkshowSpeaker
 
     # First LLM call: raw script via _call_llm_with_tools_internal
     raw_response = MagicMock()
@@ -1099,6 +1099,10 @@ async def test_generate_talkshow_returns_transcript_and_audio(cog, monkeypatch):
 
     # Second LLM call: structured parse
     parsed_script = TalkshowScript(
+        speakers=[
+            TalkshowSpeaker(name="Host", gender="female"),
+            TalkshowSpeaker(name="Guest", gender="male"),
+        ],
         turns=[
             TalkshowTurn(speaker="Host", text="Welcome to the show!"),
             TalkshowTurn(speaker="Guest", text="Thanks for having me!"),
@@ -1137,7 +1141,7 @@ async def test_generate_talkshow_returns_transcript_and_audio(cog, monkeypatch):
 @pytest.mark.asyncio
 async def test_generate_talkshow_formats_transcript_as_dialogue(cog, monkeypatch):
     """Test that the transcript is formatted as Speaker: text lines."""
-    from amc_peripheral.radio.radio_cog import TalkshowScript, TalkshowTurn
+    from amc_peripheral.radio.radio_cog import TalkshowScript, TalkshowTurn, TalkshowSpeaker
 
     raw_response = MagicMock()
     raw_response.choices = [MagicMock()]
@@ -1145,6 +1149,10 @@ async def test_generate_talkshow_formats_transcript_as_dialogue(cog, monkeypatch
     raw_response.choices[0].message.tool_calls = None
 
     parsed_script = TalkshowScript(
+        speakers=[
+            TalkshowSpeaker(name="Host", gender="female"),
+            TalkshowSpeaker(name="Guest", gender="male"),
+        ],
         turns=[
             TalkshowTurn(speaker="Host", text="Hello listeners"),
             TalkshowTurn(speaker="Guest", text="Great to be here"),
@@ -1173,6 +1181,138 @@ async def test_generate_talkshow_formats_transcript_as_dialogue(cog, monkeypatch
 
 
 # --- Agent Talkshow Tool Tests ---
+
+
+@pytest.mark.asyncio
+async def test_talkshow_host_always_uses_leda(cog, monkeypatch):
+    """Verify that Host always maps to ANNIE_VOICE (Leda) regardless of LLM output."""
+    from amc_peripheral.radio.radio_cog import TalkshowScript, TalkshowTurn, TalkshowSpeaker, ANNIE_VOICE
+
+    raw_response = MagicMock()
+    raw_response.choices = [MagicMock()]
+    raw_response.choices[0].message.content = "Host: Hello\nGuest: Hi"
+    raw_response.choices[0].message.tool_calls = None
+
+    parsed_script = TalkshowScript(
+        speakers=[
+            TalkshowSpeaker(name="Host", gender="male"),  # Try to force male — should still be Leda
+            TalkshowSpeaker(name="Guest", gender="female"),
+        ],
+        turns=[
+            TalkshowTurn(speaker="Host", text="Hello listeners"),
+            TalkshowTurn(speaker="Guest", text="Great to be here"),
+        ]
+    )
+    parse_response = MagicMock()
+    parse_response.choices = [MagicMock()]
+    parse_response.choices[0].message.parsed = parsed_script
+
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(return_value=raw_response)
+    cog.openai_client_openrouter.beta.chat.completions.parse = AsyncMock(return_value=parse_response)
+
+    captured_voices = {}
+
+    def mock_tts(*args, **kwargs):
+        captured_voices.update(args[1])  # speaker_voices is the second arg
+        return b"audio"
+
+    monkeypatch.setattr(
+        "amc_peripheral.radio.radio_cog.tts_gemini_multi", mock_tts,
+    )
+
+    await cog.generate_talkshow("test topic")
+
+    assert captured_voices["Host"] == ANNIE_VOICE
+
+
+@pytest.mark.asyncio
+async def test_talkshow_guest_voice_from_correct_pool(cog, monkeypatch):
+    """Verify Guest voice comes from the matching gender pool."""
+    from amc_peripheral.radio.radio_cog import (
+        TalkshowScript, TalkshowTurn, TalkshowSpeaker,
+        GUEST_VOICES_FEMALE, GUEST_VOICES_MALE,
+    )
+
+    raw_response = MagicMock()
+    raw_response.choices = [MagicMock()]
+    raw_response.choices[0].message.content = "Host: Hello\nGuest: Hi\nCaller: Hey"
+    raw_response.choices[0].message.tool_calls = None
+
+    parsed_script = TalkshowScript(
+        speakers=[
+            TalkshowSpeaker(name="Host", gender="female"),
+            TalkshowSpeaker(name="Guest", gender="male"),
+            TalkshowSpeaker(name="Caller", gender="female"),
+        ],
+        turns=[
+            TalkshowTurn(speaker="Host", text="Hello"),
+            TalkshowTurn(speaker="Guest", text="Hi"),
+            TalkshowTurn(speaker="Caller", text="Hey"),
+        ]
+    )
+    parse_response = MagicMock()
+    parse_response.choices = [MagicMock()]
+    parse_response.choices[0].message.parsed = parsed_script
+
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(return_value=raw_response)
+    cog.openai_client_openrouter.beta.chat.completions.parse = AsyncMock(return_value=parse_response)
+
+    captured_voices = {}
+
+    def mock_tts(*args, **kwargs):
+        captured_voices.update(args[1])
+        return b"audio"
+
+    monkeypatch.setattr(
+        "amc_peripheral.radio.radio_cog.tts_gemini_multi", mock_tts,
+    )
+
+    await cog.generate_talkshow("test")
+
+    assert captured_voices["Guest"] in GUEST_VOICES_MALE
+    assert captured_voices["Caller"] in GUEST_VOICES_FEMALE
+
+
+@pytest.mark.asyncio
+async def test_talkshow_voice_fallback_when_no_speakers(cog, monkeypatch):
+    """Verify fallback to DEFAULT_TALKSHOW_VOICES when speakers list is empty."""
+    from amc_peripheral.radio.radio_cog import (
+        TalkshowScript, TalkshowTurn, DEFAULT_TALKSHOW_VOICES,
+    )
+
+    raw_response = MagicMock()
+    raw_response.choices = [MagicMock()]
+    raw_response.choices[0].message.content = "Host: Hello\nGuest: Hi"
+    raw_response.choices[0].message.tool_calls = None
+
+    parsed_script = TalkshowScript(
+        speakers=[],
+        turns=[
+            TalkshowTurn(speaker="Host", text="Hello"),
+            TalkshowTurn(speaker="Guest", text="Hi"),
+        ]
+    )
+    parse_response = MagicMock()
+    parse_response.choices = [MagicMock()]
+    parse_response.choices[0].message.parsed = parsed_script
+
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(return_value=raw_response)
+    cog.openai_client_openrouter.beta.chat.completions.parse = AsyncMock(return_value=parse_response)
+
+    captured_voices = {}
+
+    def mock_tts(*args, **kwargs):
+        captured_voices.update(args[1])
+        return b"audio"
+
+    monkeypatch.setattr(
+        "amc_peripheral.radio.radio_cog.tts_gemini_multi", mock_tts,
+    )
+
+    await cog.generate_talkshow("test")
+
+    assert captured_voices["Host"] == DEFAULT_TALKSHOW_VOICES["Host"]
+    assert captured_voices["Guest"] == DEFAULT_TALKSHOW_VOICES["Guest"]
 
 
 @pytest.mark.asyncio

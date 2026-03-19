@@ -145,7 +145,13 @@ class TalkshowTurn(BaseModel):
     text: str
 
 
+class TalkshowSpeaker(BaseModel):
+    name: str  # e.g. "Host", "Guest", "Caller"
+    gender: str  # "male" or "female"
+
+
 class TalkshowScript(BaseModel):
+    speakers: list[TalkshowSpeaker]
     turns: list[TalkshowTurn]
 
 
@@ -204,6 +210,27 @@ Good: 'He even said he was sweating trying to stop! [short pause] Well, the serv
 Do NOT overuse tags. Most sentences need no tags at all — only add them where a real person would naturally pause, laugh, hesitate, or shift tone.
 """
 
+# Voice registry — all available Gemini TTS voices
+VOICES_FEMALE = [
+    "Achernar", "Aoede", "Autonoe", "Callirrhoe", "Despina",
+    "Erinome", "Gacrux", "Kore", "Laomedeia", "Leda",
+    "Pulcherrima", "Sulafat", "Vindemiatrix", "Zephyr",
+]
+VOICES_MALE = [
+    "Achird", "Algenib", "Algieba", "Alnilam", "Charon",
+    "Enceladus", "Fenrir", "Iapetus", "Orus", "Puck",
+    "Rasalgethi", "Sadachbia", "Sadaltager", "Schedar",
+    "Umbriel", "Zubenelgenubi",
+]
+
+# Annie is always Leda
+ANNIE_VOICE = "Leda"
+
+# Pool of voices for non-Annie speakers (excludes Leda to avoid confusion)
+GUEST_VOICES_FEMALE = [v for v in VOICES_FEMALE if v != "Leda"]
+GUEST_VOICES_MALE = VOICES_MALE
+
+# Fallback for when LLM doesn't return speaker metadata
 DEFAULT_TALKSHOW_VOICES = {
     "Host": "Leda",
     "Guest": "Charon",
@@ -501,7 +528,7 @@ class RadioCog(commands.Cog):
     async def fetch_news_context(self, hours=12):
         now = datetime.now(self.local_tz)
 
-        knowledge = self.knowledge_system_message or ""
+        knowledge = self.knowledge_index or ""
         system_message = """\
 You are a helpful bot in Motor Town, an open world driving game, specifically in a dedicated server named "ASEAN Motor Club".
 Use the following information about the game to answer queries. If a user asks a question outside the scope of your knowlege, refer them to the discord channel and other players in the game."""
@@ -804,6 +831,10 @@ CRITICAL:
 Each turn has a "speaker" (one of: Host, Guest, Caller) and "text" (the spoken words).
 Preserve the exact words but remove any speaker labels or colons from the text.
 
+Also identify each unique speaker and assign a gender ("male" or "female") that fits
+the scenario. The Host is always female. Choose a gender for Guest and Caller that
+makes sense for the topic being discussed.
+
 Script:
 {raw_script}""",
                 },
@@ -818,13 +849,22 @@ Script:
         # Build turns for TTS
         turns = [(turn.text, turn.speaker) for turn in script.turns]
 
-        # Only include voices for speakers that appear in the script
-        speakers_used = {turn.speaker for turn in script.turns}
-        speaker_voices = {
-            alias: voice
-            for alias, voice in DEFAULT_TALKSHOW_VOICES.items()
-            if alias in speakers_used
-        }
+        # Build speaker_voices dynamically based on LLM gender casting
+        speaker_voices = {"Host": ANNIE_VOICE}
+        if script.speakers:
+            for speaker_meta in script.speakers:
+                if speaker_meta.name == "Host":
+                    continue
+                pool = GUEST_VOICES_FEMALE if speaker_meta.gender == "female" else GUEST_VOICES_MALE
+                speaker_voices[speaker_meta.name] = random.choice(pool)
+        else:
+            # Fallback if LLM didn't return speaker metadata
+            speakers_used = {turn.speaker for turn in script.turns}
+            speaker_voices = {
+                alias: voice
+                for alias, voice in DEFAULT_TALKSHOW_VOICES.items()
+                if alias in speakers_used
+            }
 
         # Build readable transcript
         transcript = "\n".join(
