@@ -51,6 +51,7 @@ from amc_peripheral.settings import (
     DENO_PATH,
     LASTFM_API_KEY,
     KNOWLEDGE_FORUM_CHANNEL_ID,
+    MEMORY_DATA_DIR,
 )
 from amc_peripheral.db import RadioDB
 from amc_peripheral.utils.text_utils import split_markdown
@@ -337,8 +338,7 @@ class RadioCog(commands.Cog):
         self.lq = LiquidsoapController()
 
         # State
-        self.knowledge_topics: dict[str, str] = {}  # "Thread > Subtopic" → content
-        self.knowledge_index = ""  # Compact topic list for prompts
+        self.knowledge_store: "KnowledgeStore | None" = None
         self.embed_message_id = None
         self.user_requests = {}
         self.recent_song_queue = deque(maxlen=10)
@@ -365,16 +365,17 @@ class RadioCog(commands.Cog):
         self._now_playing_view = NowPlayingView(self)
         self.bot.add_view(self._now_playing_view)
 
-        # Load knowledge from forum channel (same source as KnowledgeCog)
+        # Initialize knowledge store
         try:
-            self.knowledge_topics, self.knowledge_index = await self._fetch_forum_knowledge()
-            total_chars = sum(len(v) for v in self.knowledge_topics.values())
+            from amc_peripheral.knowledge_store import KnowledgeStore
+            knowledge_path = os.path.join(MEMORY_DATA_DIR, "knowledge.json")
+            self.knowledge_store = KnowledgeStore(knowledge_path)
             log.info(
-                f"Radio knowledge loaded: {len(self.knowledge_topics)} topics, "
-                f"{total_chars} chars total, index: {len(self.knowledge_index)} chars"
+                f"Knowledge store loaded: {len(self.knowledge_store.list_keys())} entries, "
+                f"index: {len(self.knowledge_store.build_index())} chars"
             )
         except Exception as e:
-            log.error(f"Failed to load initial knowledge: {e}")
+            log.error(f"Failed to load knowledge store: {e}")
 
         # Load game schema for segment generation
         try:
@@ -533,7 +534,7 @@ class RadioCog(commands.Cog):
     async def fetch_news_context(self, hours=12):
         now = datetime.now(self.local_tz)
 
-        knowledge = self.knowledge_index or ""
+        knowledge = self.knowledge_store.build_index() if self.knowledge_store else ""
         system_message = """\
 You are a helpful bot in Motor Town, an open world driving game, specifically in a dedicated server named "ASEAN Motor Club".
 Use the following information about the game to answer queries. If a user asks a question outside the scope of your knowlege, refer them to the discord channel and other players in the game."""
@@ -701,7 +702,7 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
 
         system_message = f"""You are DJ Annie, a charismatic host for Radio ASEAN in Motor Town.
 
-{self.knowledge_index}
+{self.knowledge_store.build_index() if self.knowledge_store else ''}
 
 If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
 
@@ -745,7 +746,7 @@ Output only the spoken words, as if transcribed from a live recording.""",
 
         system_message = f"""You are DJ Annie, a charismatic host for Radio ASEAN in Motor Town.
 
-{self.knowledge_index}
+{self.knowledge_store.build_index() if self.knowledge_store else ''}
 
 If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
 
@@ -786,7 +787,7 @@ Make it engaging, fun, and in Annie's signature style — witty, warm, and enter
 
         system_message = f"""You are a scriptwriter for Radio ASEAN in Motor Town.
 
-{self.knowledge_index}
+{self.knowledge_store.build_index() if self.knowledge_store else ''}
 
 If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
 
@@ -980,8 +981,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             try:
                 return await ask_game_knowledge(
                     openai_client=self.openai_client_openrouter,
-                    knowledge_topics=self.knowledge_topics,
-                    knowledge_index=self.knowledge_index,
+                    knowledge_store=self.knowledge_store,
                     game_schema=self.game_schema_description,
                     question=question,
                     http_session=self.bot.http_session,
@@ -1588,8 +1588,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 try:
                     answer = await ask_game_knowledge(
                         openai_client=self.openai_client_openrouter,
-                        knowledge_topics=self.knowledge_topics,
-                        knowledge_index=self.knowledge_index,
+                        knowledge_store=self.knowledge_store,
                         game_schema=self.game_schema_description,
                         question=question,
                         http_session=self.bot.http_session,
@@ -1651,7 +1650,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             prev = f"{m.author.display_name}: {m.content}\n" + prev
 
         messages = [
-            {"role": "system", "content": ANNIE_SYSTEM_PROMPT.format(knowledge_index=self.knowledge_index)},
+            {"role": "system", "content": ANNIE_SYSTEM_PROMPT.format(knowledge_index=self.knowledge_store.build_index() if self.knowledge_store else "")},
             {"role": "user", "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)"},
         ]
         if prev:
@@ -1682,7 +1681,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 prev = f"{m.content}\n" + prev
 
         messages = [
-            {"role": "system", "content": ANNIE_SYSTEM_PROMPT.format(knowledge_index=self.knowledge_index) + "\nRespond briefly — game chat has a character limit. Keep it under 500 chars.\nDo NOT use any emojis — the game client cannot render them."},
+            {"role": "system", "content": ANNIE_SYSTEM_PROMPT.format(knowledge_index=self.knowledge_store.build_index() if self.knowledge_store else "") + "\nRespond briefly — game chat has a character limit. Keep it under 500 chars.\nDo NOT use any emojis — the game client cannot render them."},
             {"role": "user", "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)"},
         ]
         if prev:
