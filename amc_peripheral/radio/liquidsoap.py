@@ -1,5 +1,6 @@
 """Async HTTP client for Liquidsoap harbor API (localhost:6001)."""
 
+import contextlib
 import logging
 from typing import Optional
 from urllib.parse import quote
@@ -21,6 +22,20 @@ class LiquidsoapController:
     def __init__(self, base_url: str = LIQUIDSOAP_API_BASE, timeout: int = 5):
         self.base_url = base_url
         self.timeout = aiohttp.ClientTimeout(total=timeout)
+
+    @contextlib.asynccontextmanager
+    async def _fresh_post(self, url: str):
+        """POST with a disposable connection.
+
+        Liquidsoap's harbor HTTP server doesn't support keep-alive
+        reliably — reusing connections from the shared aiohttp session
+        causes 'Server disconnected' errors.  This creates a one-shot
+        connector so each POST gets a fresh TCP connection.
+        """
+        conn = aiohttp.TCPConnector(force_close=True)
+        async with aiohttp.ClientSession(connector=conn) as s:
+            async with s.post(url, timeout=self.timeout) as resp:
+                yield resp
 
     @staticmethod
     def _sanitize_annotation(value: str) -> str:
@@ -56,7 +71,7 @@ class LiquidsoapController:
         # parser splits on bare '=' and corrupts annotate key=value pairs.
         url = f"{self.base_url}/push?uri={quote(annotated_uri, safe='/:')}"
         try:
-            async with session.post(url, timeout=self.timeout) as resp:
+            async with self._fresh_post(url) as resp:
                 if resp.status == 200:
                     logger.info(f"Pushed {uri} to {queue_name}")
                     return True
@@ -88,7 +103,7 @@ class LiquidsoapController:
         """Skip the current track via HTTP."""
         url = f"{self.base_url}/skip"
         try:
-            async with session.post(url, timeout=self.timeout) as resp:
+            async with self._fresh_post(url) as resp:
                 if resp.status == 200:
                     logger.info(f"Skipped current track on {source_name}")
                     return True
@@ -108,7 +123,7 @@ class LiquidsoapController:
         """
         url = f"{self.base_url}/push_announcement?uri={quote(uri, safe='/:')}"
         try:
-            async with session.post(url, timeout=self.timeout) as resp:
+            async with self._fresh_post(url) as resp:
                 if resp.status == 200:
                     logger.info(f"Pushed announcement: {uri}")
                     return True
@@ -143,7 +158,7 @@ class LiquidsoapController:
         """Set a Liquidsoap interactive variable via HTTP."""
         url = f"{self.base_url}/set_var?name={name}&value={value}"
         try:
-            async with session.post(url, timeout=self.timeout) as resp:
+            async with self._fresh_post(url) as resp:
                 if resp.status == 200:
                     logger.info(f"Set {name} = {value}")
                     return True
