@@ -61,6 +61,11 @@ from amc_peripheral.utils.game_utils import announce_in_game
 
 log = logging.getLogger(__name__)
 
+# Temp directory for one-off audio files (talkshows, tracks, voice replies).
+# These are pushed to Liquidsoap's request/announcement queues and cleaned up
+# after playback. They must NOT go in JINGLES_PATH which loops indefinitely.
+RADIO_TMP_PATH = os.path.join(RADIO_PATH, "tmp")
+
 ANNIE_SYSTEM_PROMPT = """\
 You are DJ Annie, the charismatic and hilarious host of Radio ASEAN in Motor Town — an open-world driving game.
 You're known for your sharp wit, playful sarcasm, and genuinely warm personality.
@@ -1347,9 +1352,10 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             log.error(f"TTS generation failed: {e}")
             return False
 
-        # Write to a temp file in the radio path so Liquidsoap can access it
+        # Write to a temp file in the radio tmp dir so Liquidsoap can access it
         try:
-            fd, tmp_path = tempfile.mkstemp(suffix=".mp3", prefix="voice_", dir=JINGLES_PATH)
+            os.makedirs(RADIO_TMP_PATH, exist_ok=True)
+            fd, tmp_path = tempfile.mkstemp(suffix=".mp3", prefix="voice_", dir=RADIO_TMP_PATH)
             with os.fdopen(fd, "wb") as f:
                 f.write(audio_bytes)
             os.chmod(tmp_path, 0o644)  # Liquidsoap runs as a different user
@@ -1362,13 +1368,18 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         if success:
             # Wait for the audio to actually reach listeners (streaming buffer delay)
             await asyncio.sleep(10)
-        if not success:
-            # Clean up temp file on failure
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+        # Clean up temp file (deferred on success, immediate on failure)
+        self.bot.loop.create_task(self._deferred_cleanup(tmp_path, delay=60 if success else 0))
         return success
+
+    async def _deferred_cleanup(self, path: str, delay: int = 120):
+        """Delete a temp audio file after a delay, giving Liquidsoap time to consume it."""
+        try:
+            await asyncio.sleep(delay)
+            os.unlink(path)
+            log.debug(f"Cleaned up temp audio file: {path}")
+        except OSError:
+            pass
 
     async def _execute_annie_tool(self, name: str, args: dict, requester: str, notify_fn) -> str:
         """Execute a tool call from Annie's agentic loop."""
@@ -1522,10 +1533,11 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 duration = args.get("duration", "1-2 minutes")
                 try:
                     transcript, audio_bytes = await self.generate_track(topic, duration)
-                    # Write to temp file and push to request queue for immediate playback
+                    # Write to temp dir and push to request queue for immediate playback
                     safe_title = re.sub(r"[^a-zA-Z0-9]", "_", transcript[:40])
                     filename = f"track_{safe_title}.mp3"
-                    tmp_path = os.path.join(JINGLES_PATH, filename)
+                    os.makedirs(RADIO_TMP_PATH, exist_ok=True)
+                    tmp_path = os.path.join(RADIO_TMP_PATH, filename)
                     with open(tmp_path, "wb") as f:
                         f.write(audio_bytes)
                     os.chmod(tmp_path, 0o644)
@@ -1533,6 +1545,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                         self.bot.http_session, "song_requests", tmp_path,
                         title=f"Track: {topic[:60]}",
                     )
+                    self.bot.loop.create_task(self._deferred_cleanup(tmp_path))
                     return "Track generated and queued for playback. It will play after the current track."
                 except Exception as e:
                     return f"Failed to generate track: {e}"
@@ -1542,10 +1555,11 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 duration = args.get("duration", "1-2 minutes")
                 try:
                     transcript, audio_bytes = await self.generate_talkshow(topic, duration)
-                    # Write to temp file and push to request queue for immediate playback
+                    # Write to temp dir and push to request queue for immediate playback
                     safe_title = re.sub(r"[^a-zA-Z0-9]", "_", transcript[:40])
                     filename = f"talkshow_{safe_title}.mp3"
-                    tmp_path = os.path.join(JINGLES_PATH, filename)
+                    os.makedirs(RADIO_TMP_PATH, exist_ok=True)
+                    tmp_path = os.path.join(RADIO_TMP_PATH, filename)
                     with open(tmp_path, "wb") as f:
                         f.write(audio_bytes)
                     os.chmod(tmp_path, 0o644)
@@ -1553,6 +1567,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                         self.bot.http_session, "song_requests", tmp_path,
                         title=f"Talkshow: {topic[:60]}",
                     )
+                    self.bot.loop.create_task(self._deferred_cleanup(tmp_path))
                     return "Talkshow segment generated and queued for playback. It will play after the current track."
                 except Exception as e:
                     return f"Failed to generate talkshow segment: {e}"

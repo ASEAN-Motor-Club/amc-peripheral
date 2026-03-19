@@ -1049,7 +1049,7 @@ async def test_generate_radio_track_tool_defined(cog):
 async def test_execute_annie_tool_generate_radio_track(cog, monkeypatch, tmp_path):
     """Test generate_radio_track tool writes file and queues for playback."""
     from amc_peripheral.radio import radio_cog
-    monkeypatch.setattr(radio_cog, "JINGLES_PATH", str(tmp_path))
+    monkeypatch.setattr(radio_cog, "RADIO_TMP_PATH", str(tmp_path))
 
     monkeypatch.setattr(
         cog, "generate_track", AsyncMock(return_value=("Test transcript", b"audio_data"))
@@ -1327,7 +1327,7 @@ async def test_generate_talkshow_segment_tool_defined(cog):
 async def test_execute_annie_tool_generate_talkshow_segment(cog, monkeypatch, tmp_path):
     """Test generate_talkshow_segment queues audio for playback."""
     from amc_peripheral.radio import radio_cog
-    monkeypatch.setattr(radio_cog, "JINGLES_PATH", str(tmp_path))
+    monkeypatch.setattr(radio_cog, "RADIO_TMP_PATH", str(tmp_path))
 
     monkeypatch.setattr(
         cog, "generate_talkshow", AsyncMock(return_value=("**Host:** Hello\n**Guest:** Hi", b"talkshow_audio"))
@@ -1385,7 +1385,7 @@ async def test_voice_announce_command_exists(cog):
 @pytest.mark.asyncio
 async def test_insert_tts_waits_for_music(cog, monkeypatch, tmp_path):
     """Test _insert_tts_on_radio generates TTS and pushes announcement."""
-    monkeypatch.setattr("amc_peripheral.radio.radio_cog.JINGLES_PATH", str(tmp_path))
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.RADIO_TMP_PATH", str(tmp_path))
     monkeypatch.setattr(
         "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"audio"
     )
@@ -1401,7 +1401,7 @@ async def test_insert_tts_waits_for_music(cog, monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_insert_tts_timeout_inserts_anyway(cog, monkeypatch, tmp_path):
     """Test _insert_tts_on_radio inserts even after max retries."""
-    monkeypatch.setattr("amc_peripheral.radio.radio_cog.JINGLES_PATH", str(tmp_path))
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.RADIO_TMP_PATH", str(tmp_path))
     monkeypatch.setattr(
         "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"audio"
     )
@@ -1424,7 +1424,7 @@ async def test_insert_tts_timeout_inserts_anyway(cog, monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_insert_tts_push_failure(cog, monkeypatch, tmp_path):
     """Test _insert_tts_on_radio returns False when push fails."""
-    monkeypatch.setattr("amc_peripheral.radio.radio_cog.JINGLES_PATH", str(tmp_path))
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.RADIO_TMP_PATH", str(tmp_path))
     monkeypatch.setattr(
         "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"audio"
     )
@@ -1444,7 +1444,7 @@ async def test_insert_tts_push_failure(cog, monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_insert_tts_tts_failure(cog, monkeypatch, tmp_path):
     """Test _insert_tts_on_radio returns False when TTS generation fails."""
-    monkeypatch.setattr("amc_peripheral.radio.radio_cog.JINGLES_PATH", str(tmp_path))
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.RADIO_TMP_PATH", str(tmp_path))
     monkeypatch.setattr(
         "amc_peripheral.radio.radio_cog.tts_google",
         lambda *args, **kwargs: (_ for _ in ()).throw(Exception("TTS error")),
