@@ -2856,16 +2856,67 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         "feel good songs", "upbeat pop songs",
     ]
 
+    # Tags for tag.gettoptracks — driving/radio-friendly genres
+    LASTFM_TAGS = [
+        "rock", "pop", "indie", "electronic", "hip-hop", "r&b",
+        "alternative", "classic rock", "soul", "funk", "dance",
+        "80s", "90s", "chill", "driving", "summer",
+    ]
+
+    # Countries for geo.gettoptracks — ASEAN + popular music markets
+    LASTFM_COUNTRIES = [
+        "Thailand", "Indonesia", "Malaysia", "Philippines", "Vietnam",
+        "Singapore", "Japan", "South Korea", "United States",
+        "United Kingdom", "Australia",
+    ]
+
     async def _pick_trending_song(self) -> str:
-        """Pick a random song from Last.fm top tracks, with fallback to curated search."""
+        """Pick a random song from Last.fm using varied API methods for diversity.
+
+        Randomly selects between three Last.fm sources to avoid repeating
+        the same small pool of global chart tracks:
+          - 60% tag.gettoptracks (genre-based discovery)
+          - 25% chart.gettoptracks with random page 1-5
+          - 15% geo.gettoptracks (regional discovery)
+        """
         try:
             url = "https://ws.audioscrobbler.com/2.0/"
-            params = {
-                "method": "chart.gettoptracks",
-                "api_key": LASTFM_API_KEY,
-                "format": "json",
-                "limit": 50,
-            }
+            roll = random.random()
+
+            if roll < 0.60:
+                # Genre-based discovery
+                tag = random.choice(self.LASTFM_TAGS)
+                params = {
+                    "method": "tag.gettoptracks",
+                    "tag": tag,
+                    "api_key": LASTFM_API_KEY,
+                    "format": "json",
+                    "limit": 50,
+                }
+                log.debug(f"Last.fm source: tag.gettoptracks (tag={tag})")
+            elif roll < 0.85:
+                # Global chart with random page for deeper discovery
+                page = random.randint(1, 5)
+                params = {
+                    "method": "chart.gettoptracks",
+                    "page": page,
+                    "api_key": LASTFM_API_KEY,
+                    "format": "json",
+                    "limit": 50,
+                }
+                log.debug(f"Last.fm source: chart.gettoptracks (page={page})")
+            else:
+                # Regional discovery
+                country = random.choice(self.LASTFM_COUNTRIES)
+                params = {
+                    "method": "geo.gettoptracks",
+                    "country": country,
+                    "api_key": LASTFM_API_KEY,
+                    "format": "json",
+                    "limit": 50,
+                }
+                log.debug(f"Last.fm source: geo.gettoptracks (country={country})")
+
             async with self.bot.http_session.get(url, params=params) as resp:
                 data = await resp.json()
 

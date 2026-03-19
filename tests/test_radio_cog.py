@@ -256,6 +256,109 @@ async def test_pick_trending_song_dedup(cog):
     assert result == "New Artist - Fresh Song"
 
 
+@pytest.mark.asyncio
+async def test_pick_trending_song_tag_source(cog, monkeypatch):
+    """Test _pick_trending_song uses tag.gettoptracks when roll < 0.60."""
+    monkeypatch.setattr("random.random", lambda: 0.30)  # triggers tag source
+    monkeypatch.setattr("random.choice", lambda seq: seq[0])  # pick first item
+
+    mock_lastfm_response = {
+        "tracks": {
+            "track": [
+                {"name": "Rock Song", "artist": {"name": "Rock Artist"}},
+            ]
+        }
+    }
+
+    captured_params = {}
+
+    mock_resp = AsyncMock()
+    mock_resp.json = AsyncMock(return_value=mock_lastfm_response)
+    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+    def fake_get(url, params=None):
+        captured_params.update(params or {})
+        return mock_resp
+
+    cog.bot.http_session.get = MagicMock(side_effect=fake_get)
+
+    result = await cog._pick_trending_song()
+
+    assert result == "Rock Artist - Rock Song"
+    assert captured_params["method"] == "tag.gettoptracks"
+    assert captured_params["tag"] == "rock"
+
+
+@pytest.mark.asyncio
+async def test_pick_trending_song_chart_paged(cog, monkeypatch):
+    """Test _pick_trending_song uses chart.gettoptracks with page when roll is 0.60-0.85."""
+    monkeypatch.setattr("random.random", lambda: 0.70)  # triggers chart paged source
+    monkeypatch.setattr("random.randint", lambda a, b: 3)  # page 3
+    monkeypatch.setattr("random.choice", lambda seq: seq[0])  # pick first item
+
+    mock_lastfm_response = {
+        "tracks": {
+            "track": [
+                {"name": "Chart Song", "artist": {"name": "Chart Artist"}},
+            ]
+        }
+    }
+
+    captured_params = {}
+
+    mock_resp = AsyncMock()
+    mock_resp.json = AsyncMock(return_value=mock_lastfm_response)
+    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+    def fake_get(url, params=None):
+        captured_params.update(params or {})
+        return mock_resp
+
+    cog.bot.http_session.get = MagicMock(side_effect=fake_get)
+
+    result = await cog._pick_trending_song()
+
+    assert result == "Chart Artist - Chart Song"
+    assert captured_params["method"] == "chart.gettoptracks"
+    assert captured_params["page"] == 3
+
+
+@pytest.mark.asyncio
+async def test_pick_trending_song_geo_source(cog, monkeypatch):
+    """Test _pick_trending_song uses geo.gettoptracks when roll >= 0.85."""
+    monkeypatch.setattr("random.random", lambda: 0.90)  # triggers geo source
+    monkeypatch.setattr("random.choice", lambda seq: seq[0])  # pick first item
+
+    mock_lastfm_response = {
+        "tracks": {
+            "track": [
+                {"name": "Thai Hit", "artist": {"name": "Thai Artist"}},
+            ]
+        }
+    }
+
+    captured_params = {}
+
+    mock_resp = AsyncMock()
+    mock_resp.json = AsyncMock(return_value=mock_lastfm_response)
+    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+    def fake_get(url, params=None):
+        captured_params.update(params or {})
+        return mock_resp
+
+    cog.bot.http_session.get = MagicMock(side_effect=fake_get)
+
+    result = await cog._pick_trending_song()
+
+    assert result == "Thai Artist - Thai Hit"
+    assert captured_params["method"] == "geo.gettoptracks"
+    assert captured_params["country"] == "Thailand"
+
+
 # --- Download Queue & Serialization Tests ---
 
 
