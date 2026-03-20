@@ -1401,7 +1401,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         self.bot.loop.create_task(self._deferred_cleanup(tmp_path, delay=60 if success else 0))
         return success
 
-    async def _deferred_cleanup(self, path: str, delay: int = 120):
+    async def _deferred_cleanup(self, path: str, delay: int = 1800):
         """Delete a temp audio file after a delay, giving Liquidsoap time to consume it."""
         try:
             await asyncio.sleep(delay)
@@ -1573,7 +1573,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     await self.lq.push_segment(
                         self.bot.http_session, tmp_path,
                     )
-                    self.bot.loop.create_task(self._deferred_cleanup(tmp_path))
+                    self.bot.loop.create_task(self._deferred_cleanup(tmp_path, delay=1800))
                     return "Track generated and queued for playback. It will play after the current track."
                 except Exception as e:
                     return f"Failed to generate track: {e}"
@@ -1594,7 +1594,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     await self.lq.push_segment(
                         self.bot.http_session, tmp_path,
                     )
-                    self.bot.loop.create_task(self._deferred_cleanup(tmp_path))
+                    self.bot.loop.create_task(self._deferred_cleanup(tmp_path, delay=1800))
                     return "Talkshow segment generated and queued for playback. It will play after the current track."
                 except Exception as e:
                     return f"Failed to generate talkshow segment: {e}"
