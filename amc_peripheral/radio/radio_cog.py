@@ -332,6 +332,7 @@ class TrackConfirmView(discord.ui.View):
 # Download guard constants
 METADATA_TIMEOUT = 45   # Max seconds for YouTube metadata extraction (search + info)
 DOWNLOAD_TIMEOUT = 120  # Max seconds for the actual audio download + ffmpeg conversion
+MAX_SONG_DURATION = 10 * 60  # Max song length in seconds (10 minutes)
 
 
 class RadioCog(commands.Cog):
@@ -1813,11 +1814,11 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             )
 
         # pyrefly: ignore [unsupported-operation]
-        if duration > 600:
+        if duration > MAX_SONG_DURATION:
             # pyrefly: ignore [unsupported-operation]
             raise Exception(
                 # pyrefly: ignore [unsupported-operation]
-                f'"{title}" is too long ({duration // 60}m). Max duration is 10 minutes.'
+                f'"{title}" is too long ({duration // 60}m). Max duration is {MAX_SONG_DURATION // 60} minutes.'
             )
 
         # --- Download ---
@@ -2043,11 +2044,11 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             )
 
         # pyrefly: ignore [unsupported-operation]
-        if duration > 600:
+        if duration > MAX_SONG_DURATION:
             # pyrefly: ignore [unsupported-operation]
             raise Exception(
                 # pyrefly: ignore [unsupported-operation]
-                f'"{ title}" is too long ({duration // 60}m). Max duration is 10 minutes.'
+                f'"{ title}" is too long ({duration // 60}m). Max duration is {MAX_SONG_DURATION // 60} minutes.'
             )
 
         # --- Push to Queue ---
