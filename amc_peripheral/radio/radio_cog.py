@@ -2026,8 +2026,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     "You have queued too many songs. Please wait a moment. (Limit: 5 songs per 10 minutes)"
                 )
 
-        if "chips" in requester.lower().strip():
-            raise Exception("User not allowed to request songs.")
+
         if "give you up" in youtube_link.lower().strip():
             raise Exception("No, just no")
 
