@@ -857,13 +857,20 @@ Script:
         turns = [(turn.text, turn.speaker) for turn in script.turns]
 
         # Build speaker_voices dynamically based on LLM gender casting
+        # Track used voices so no two speakers share the same voice
         speaker_voices = {"Host": ANNIE_VOICE}
+        used_voices = {ANNIE_VOICE}
         if script.speakers:
             for speaker_meta in script.speakers:
                 if speaker_meta.name == "Host":
                     continue
                 pool = GUEST_VOICES_FEMALE if speaker_meta.gender == "female" else GUEST_VOICES_MALE
-                speaker_voices[speaker_meta.name] = random.choice(pool)
+                available = [v for v in pool if v not in used_voices]
+                if not available:
+                    available = pool  # fallback if we exhaust the pool
+                voice = random.choice(available)
+                speaker_voices[speaker_meta.name] = voice
+                used_voices.add(voice)
         else:
             # Fallback if LLM didn't return speaker metadata
             speakers_used = {turn.speaker for turn in script.turns}
