@@ -46,7 +46,9 @@ export async function authenticateWithDiscord(): Promise<DiscordAuth> {
 	// Lazy instantiation — only create SDK when actually inside Discord
 	discordSdk = new DiscordSDK(CLIENT_ID);
 
+	console.log('[Radio] SDK created, waiting for ready...');
 	await discordSdk.ready();
+	console.log('[Radio] SDK ready, authorizing...');
 
 	// Step 1: Get authorization code from Discord client
 	const { code } = await discordSdk.commands.authorize({
@@ -54,8 +56,9 @@ export async function authenticateWithDiscord(): Promise<DiscordAuth> {
 		response_type: 'code',
 		state: '',
 		prompt: 'none',
-		scope: ['identify', 'guilds', 'guilds.members.read'],
+		scope: ['identify', 'guilds'],
 	});
+	console.log('[Radio] Got auth code, exchanging for token...');
 
 	// Step 2: Exchange code for access_token via our backend
 	const response = await fetch('/.proxy/radio-api/api/token', {
@@ -65,10 +68,13 @@ export async function authenticateWithDiscord(): Promise<DiscordAuth> {
 	});
 
 	if (!response.ok) {
-		throw new Error('Token exchange failed');
+		const errData = await response.json().catch(() => ({}));
+		console.error('[Radio] Token exchange failed:', response.status, errData);
+		throw new Error(`Token exchange failed: ${response.status}`);
 	}
 
 	const { access_token } = await response.json();
+	console.log('[Radio] Got access_token, authenticating with Discord...');
 
 	// Step 3: Authenticate with Discord client
 	const auth = await discordSdk.commands.authenticate({ access_token });
@@ -76,6 +82,7 @@ export async function authenticateWithDiscord(): Promise<DiscordAuth> {
 		throw new Error('Discord authentication failed');
 	}
 
+	console.log('[Radio] Authenticated as', auth.user.username);
 	return {
 		access_token,
 		user: auth.user as DiscordAuth['user'],
