@@ -53,7 +53,7 @@ def parse_song_info(metadata: dict) -> Optional[dict]:
             return None
 
         requester, song_path = filepath.split("-", 1)
-        song_title = song_path.removesuffix(".mp3")
+        song_title = song_path.removesuffix(".mp3").removesuffix(".opus")
         return {
             "folder": folder,
             "requester": requester,

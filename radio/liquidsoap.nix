@@ -10,6 +10,9 @@ in {
     services.liquidsoap.streams = {
       radio = pkgs.writeText "radio.liq" ''
       log.level := 3
+      settings.log.level.set("decoder", 2)
+      settings.log.level.set("metadata.cover", 2)
+      settings.decoder.file_extensions.ffmpeg := ["opus", "webm", "ogg", "mp3", "mp4", "m4a", "wav", "flac", "aac"]
       default_playlist = blank()
       settings.encoder.metadata.export := ["filename", "artist", "title", "album", "genre", "date", "tracknumber", "comment", "track", "year", "dj", "next", "apic", "metadata_url", "metadata_block_picture", "coverart"]
       queue = request.queue(id="song_requests")

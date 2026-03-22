@@ -1835,22 +1835,14 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         base_filename = f"{safe_requester}-{safe_title}"
 
         ydl_opts = {
-            "format": "bestaudio/best",
+            "format": "bestaudio[ext=webm]/bestaudio/best",
             "outtmpl": f"{REQUESTS_PATH}/{base_filename}.%(ext)s",
             "cookiefile": YT_COOKIES_PATH,
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "128",
-                },
-                {
-                    "key": "FFmpegMetadata",
-                    "add_metadata": True,
-                },
-            ],
-            "ffmpeg_location": os.environ.get("FFMPEG_PATH"),
-            "prefer_ffmpeg": True,
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "opus",
+                "preferredquality": "128",
+            }],
             "retries": 5,
             "js_runtimes": {"deno": {"path": DENO_PATH}},
         }
@@ -1905,22 +1897,14 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         base_filename = safe_title
 
         ydl_opts = {
-            "format": "bestaudio/best",
+            "format": "bestaudio[ext=webm]/bestaudio/best",
             "outtmpl": f"{output_dir}/{base_filename}.%(ext)s",
             "cookiefile": YT_COOKIES_PATH,
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "128",
-                },
-                {
-                    "key": "FFmpegMetadata",
-                    "add_metadata": True,
-                },
-            ],
-            "ffmpeg_location": os.environ.get("FFMPEG_PATH"),
-            "prefer_ffmpeg": True,
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "opus",
+                "preferredquality": "128",
+            }],
             "retries": 5,
             "js_runtimes": {"deno": {"path": DENO_PATH}},
         }
@@ -1933,7 +1917,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         except Exception as e:
             raise Exception(f"Failed to download audio: {e}")
 
-        filepath = f"{output_dir}/{base_filename}.mp3"
+        filepath = f"{output_dir}/{base_filename}.opus"
         return title, filepath
 
     async def _tool_search_playlist(self, query: str) -> str:
@@ -2129,7 +2113,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 
         # Check cache
         cached = self.db.get_cached_song(video_id)
-        cache_path = f"{SONG_CACHE_PATH}/{video_id}.mp3"
+        cache_path = f"{SONG_CACHE_PATH}/{video_id}.opus"
 
         if cached and os.path.exists(cached["local_path"]):
             log.info(f"Cache hit for '{title}' (video_id={video_id})")
@@ -2140,22 +2124,14 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         self._evict_cache()
 
         ydl_opts = {
-            "format": "bestaudio/best",
+            "format": "bestaudio[ext=webm]/bestaudio/best",
             "outtmpl": f"{SONG_CACHE_PATH}/{video_id}.%(ext)s",
             "cookiefile": YT_COOKIES_PATH,
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "128",
-                },
-                {
-                    "key": "FFmpegMetadata",
-                    "add_metadata": True,
-                },
-            ],
-            "ffmpeg_location": os.environ.get("FFMPEG_PATH"),
-            "prefer_ffmpeg": True,
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "opus",
+                "preferredquality": "128",
+            }],
             "retries": 5,
             "js_runtimes": {"deno": {"path": DENO_PATH}},
         }
