@@ -14,8 +14,8 @@
 
     NODE_ENV = "production";
 
-    # Discord Activity client ID — injected at build time via Vite
-    VITE_DISCORD_CLIENT_ID = "1359465917624352920";
+    # Discord Activity client ID — injected at build time via SvelteKit $env/static/public
+    PUBLIC_DISCORD_CLIENT_ID = "1359465917624352920";
 
     buildPhase = ''
       runHook preBuild

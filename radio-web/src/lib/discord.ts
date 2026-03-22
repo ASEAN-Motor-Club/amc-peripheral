@@ -7,8 +7,7 @@
  * which are only present when running inside a Discord Activity.
  */
 import { DiscordSDK } from '@discord/embedded-app-sdk';
-
-const CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID;
+import { PUBLIC_DISCORD_CLIENT_ID } from '$env/static/public';
 
 let discordSdk: DiscordSDK | null = null;
 
@@ -44,7 +43,7 @@ export function isInDiscordActivity(): boolean {
  */
 export async function authenticateWithDiscord(): Promise<DiscordAuth> {
 	// Lazy instantiation — only create SDK when actually inside Discord
-	discordSdk = new DiscordSDK(CLIENT_ID);
+	discordSdk = new DiscordSDK(PUBLIC_DISCORD_CLIENT_ID);
 
 	console.log('[Radio] SDK created, waiting for ready...');
 	await discordSdk.ready();
@@ -52,7 +51,7 @@ export async function authenticateWithDiscord(): Promise<DiscordAuth> {
 
 	// Step 1: Get authorization code from Discord client
 	const { code } = await discordSdk.commands.authorize({
-		client_id: CLIENT_ID,
+		client_id: PUBLIC_DISCORD_CLIENT_ID,
 		response_type: 'code',
 		state: '',
 		prompt: 'none',
