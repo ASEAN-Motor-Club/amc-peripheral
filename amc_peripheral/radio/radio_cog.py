@@ -60,7 +60,7 @@ from amc_peripheral.db import RadioDB
 from amc_peripheral.utils.text_utils import split_markdown
 from amc_peripheral.radio.tts import tts as tts_google, tts_gemini_multi
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
-from amc_peripheral.radio.radio_server import get_current_song_metadata, get_current_song, parse_song_info
+from amc_peripheral.radio.radio_server import get_current_song_metadata, get_current_song, get_listener_count, parse_song_info
 from amc_peripheral.utils.game_utils import announce_in_game
 
 log = logging.getLogger(__name__)
@@ -3079,11 +3079,34 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             inline=False,
         )
 
-        # Show like count if any
+        # Show listener count and likes inline
+        listener_count = await get_listener_count(self.bot.http_session)
+        if listener_count > 0:
+            embed.add_field(
+                name="🎧 Listeners", value=str(listener_count), inline=True,
+            )
+
         like_count = self.db.get_song_like_count(song_title)
         if like_count > 0:
             embed.add_field(
                 name="❤️ Likes", value=str(like_count), inline=True,
+            )
+
+        # Show queued songs
+        queue_len = await self.lq.get_queue_length(
+            self.bot.http_session, "song_requests"
+        )
+        if queue_len and queue_len > 0:
+            # Show the last N titles from recent_song_queue matching the queue length
+            upcoming = list(self.recent_song_queue)[-queue_len:]
+            if upcoming:
+                queue_text = "\n".join(
+                    f"{i+1}. *{title}*" for i, title in enumerate(upcoming)
+                )
+            else:
+                queue_text = f"{queue_len} song(s) queued"
+            embed.add_field(
+                name="📋 Up Next", value=queue_text, inline=False,
             )
 
         view = self._now_playing_view

@@ -76,6 +76,25 @@ def parse_song_info(metadata: dict) -> Optional[dict]:
         return None
 
 
+ICECAST_STATUS_URL = "http://localhost:8000/status-json.xsl"
+
+
+async def get_listener_count(http_session: aiohttp.ClientSession) -> int:
+    """Fetch the current listener count from Icecast."""
+    try:
+        async with http_session.get(ICECAST_STATUS_URL) as resp:
+            data = await resp.json(content_type=None)
+            source = data.get("icestats", {}).get("source")
+            if source is None:
+                return 0
+            if isinstance(source, list):
+                return sum(s.get("listeners", 0) for s in source)
+            return source.get("listeners", 0)
+    except Exception as e:
+        log.error(f"Could not fetch Icecast listener count: {e}")
+        return 0
+
+
 async def get_current_song(http_session: aiohttp.ClientSession) -> Optional[str]:
     """
     Get a human-readable string of the currently playing song.
