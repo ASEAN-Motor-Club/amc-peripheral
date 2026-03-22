@@ -99,6 +99,9 @@ async def handle_token_exchange(request: web.Request) -> web.Response:
     if not code:
         return web.json_response({"error": "missing code"}, status=400)
 
+    # For Discord Activities, redirect_uri must be the discordsays proxy URL
+    redirect_uri = f"https://{DISCORD_CLIENT_ID}.discordsays.com"
+
     http_session: aiohttp.ClientSession = request.app["http_session"]
     async with http_session.post(
         f"{DISCORD_API}/oauth2/token",
@@ -107,13 +110,14 @@ async def handle_token_exchange(request: web.Request) -> web.Response:
             "client_secret": DISCORD_CLIENT_SECRET,
             "grant_type": "authorization_code",
             "code": code,
+            "redirect_uri": redirect_uri,
         },
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     ) as resp:
         data = await resp.json()
         if resp.status != 200:
             log.warning(f"Token exchange failed: {data}")
-            return web.json_response({"error": "token_exchange_failed"}, status=400)
+            return web.json_response({"error": "token_exchange_failed", "detail": data}, status=400)
         return web.json_response({"access_token": data["access_token"]})
 
 
