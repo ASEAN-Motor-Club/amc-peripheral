@@ -3,8 +3,9 @@ import aiohttp
 import logging
 import discord
 from discord.ext import commands
-from amc_peripheral.settings import DISCORD_TOKEN_RADIO, GUILD_ID
+from amc_peripheral.settings import DISCORD_TOKEN_RADIO, GUILD_ID, RADIO_API_PORT
 from amc_peripheral.radio.radio_cog import RadioCog
+from amc_peripheral.radio.api import start_api_server
 
 log = logging.getLogger(__name__)
 
@@ -18,12 +19,19 @@ class AMCBot(commands.Bot):
         intents.voice_states = True
         super().__init__(command_prefix="/", intents=intents)
         self.http_session = None
+        self._api_runner = None
 
     async def setup_hook(self):
         self.http_session = aiohttp.ClientSession()
 
         # Load Cog
-        await self.add_cog(RadioCog(self))
+        radio_cog = RadioCog(self)
+        await self.add_cog(radio_cog)
+
+        # Start Radio Web API server
+        self._api_runner = await start_api_server(
+            radio_cog, self.http_session, port=RADIO_API_PORT
+        )
 
         # Sync tree
         guild = discord.Object(id=GUILD_ID)

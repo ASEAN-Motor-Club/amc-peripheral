@@ -187,3 +187,8 @@ SHARRY_PASSWORD = os.environ.get("SHARRY_PASSWORD", "")
 
 # Backend Database (read-only PostgreSQL access via Tailscale)
 BACKEND_DB_URL = os.environ.get("BACKEND_DB_URL")
+
+# Radio Web Interface (Discord Activity)
+DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID", "")
+DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
+RADIO_API_PORT = int(os.environ.get("RADIO_API_PORT", "7001"))

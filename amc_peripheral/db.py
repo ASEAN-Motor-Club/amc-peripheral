@@ -159,6 +159,12 @@ class RadioDB:
         """
         return list(self.db.query(query, [limit]))
 
+    def get_recent_requests(self, limit: int = 20) -> list[dict]:
+        """Get the most recent song requests across all users."""
+        return list(self.db["song_requests"].rows_where(
+            order_by="requested_at desc", limit=limit
+        ))
+
     def add_like(self, discord_id: str, song_title: str, song_url: str | None = None) -> int | None:
         """Add or restore a like for a song."""
         row = {
