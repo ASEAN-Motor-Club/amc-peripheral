@@ -1,6 +1,7 @@
 /**
  * Discord Embedded App SDK integration.
- * Handles SDK initialization, authorization, and authentication.
+ * Handles SDK initialization, authorization, authentication,
+ * and Activity layout mode tracking (full vs PiP).
  *
  * IMPORTANT: The DiscordSDK must be instantiated lazily (not at module level)
  * because it requires Discord iframe query params (frame_id, instance_id, platform)
@@ -8,8 +9,12 @@
  */
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import { PUBLIC_DISCORD_CLIENT_ID } from '$env/static/public';
+import { writable } from 'svelte/store';
 
 let discordSdk: DiscordSDK | null = null;
+
+/** Layout mode: 0 = full, 1 = PiP (minimized), 2 = focused */
+export const layoutMode = writable<number>(0);
 
 export interface DiscordAuth {
 	access_token: string;
@@ -30,6 +35,22 @@ export function isInDiscordActivity(): boolean {
 		return window.self !== window.top;
 	} catch {
 		return true;
+	}
+}
+
+/**
+ * Subscribe to layout mode updates from the Discord Activity.
+ * Must be called after authentication.
+ */
+export function subscribeToLayoutMode(): void {
+	if (!discordSdk) return;
+	try {
+		discordSdk.subscribe('ACTIVITY_LAYOUT_MODE_UPDATE', (data: { layout_mode: number }) => {
+			layoutMode.set(data.layout_mode);
+			console.log('[Radio] Layout mode:', data.layout_mode === 1 ? 'PiP' : 'Full');
+		});
+	} catch (err) {
+		console.warn('[Radio] Could not subscribe to layout mode:', err);
 	}
 }
 
