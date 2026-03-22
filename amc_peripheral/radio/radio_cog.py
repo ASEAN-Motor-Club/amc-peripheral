@@ -1415,7 +1415,11 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         try:
             if name == "search_and_queue_song":
                 query = args.get("query", "")
-                # Fire-and-forget: launch download in background
+                # Validate before dispatching — catches blacklist, throttling
+                try:
+                    self._validate_song_request(query, requester, bypass_throttling=False)
+                except Exception as e:
+                    return f"Song rejected: {e}"
                 self.bot.loop.create_task(
                     self._fire_and_forget_queue(query, requester, notify_fn)
                 )
@@ -1968,29 +1972,29 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         except Exception as e:
             await notify_fn(f"Couldn't add that song to the playlist: {e}")
 
-    async def request_song(
-        self,
-        youtube_link: str,
-        requester: str,
-        discord_id: str | None = None,
-        bypass_throttling=False,
-    ):
-        now = datetime.now(self.local_tz)
+    def _validate_song_request(self, query: str, requester: str, bypass_throttling: bool = False):
+        """Run pre-download validation checks (blacklist, throttling).
 
-        # --- Throttling Logic ---
-        ten_minutes_ago = now - timedelta(minutes=10)
-        self.user_requests.setdefault(requester, [])
-        self.user_requests[requester] = [
-            t for t in self.user_requests[requester] if t > ten_minutes_ago
-        ]
-
-        five_minutes_ago = now - timedelta(minutes=5)
-        requests_last_5_min = sum(
-            1 for t in self.user_requests[requester] if t > five_minutes_ago
-        )
-        requests_last_10_min = len(self.user_requests[requester])
+        Raises Exception on rejection. These checks don't require resolved
+        metadata so they can run synchronously before dispatching a download.
+        """
+        if "give you up" in query.lower().strip():
+            raise Exception("No, just no")
 
         if not bypass_throttling:
+            now = datetime.now(self.local_tz)
+            ten_minutes_ago = now - timedelta(minutes=10)
+            self.user_requests.setdefault(requester, [])
+            self.user_requests[requester] = [
+                t for t in self.user_requests[requester] if t > ten_minutes_ago
+            ]
+
+            five_minutes_ago = now - timedelta(minutes=5)
+            requests_last_5_min = sum(
+                1 for t in self.user_requests[requester] if t > five_minutes_ago
+            )
+            requests_last_10_min = len(self.user_requests[requester])
+
             if requests_last_5_min >= 3:
                 raise Exception(
                     "You have queued too many songs. Please wait a moment. (Limit: 3 songs per 5 minutes)"
@@ -2000,9 +2004,15 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     "You have queued too many songs. Please wait a moment. (Limit: 5 songs per 10 minutes)"
                 )
 
-
-        if "give you up" in youtube_link.lower().strip():
-            raise Exception("No, just no")
+    async def request_song(
+        self,
+        youtube_link: str,
+        requester: str,
+        discord_id: str | None = None,
+        bypass_throttling=False,
+    ):
+        # --- Pre-download validation ---
+        self._validate_song_request(youtube_link, requester, bypass_throttling)
 
         # --- Queued download (processed by background worker) ---
         future: asyncio.Future = asyncio.get_event_loop().create_future()
@@ -2041,7 +2051,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             log.error(f"Failed to push song to queue: {e}")
 
         # Update throttling
-        self.user_requests[requester].append(now)
+        self.user_requests.setdefault(requester, [])
+        self.user_requests[requester].append(datetime.now(self.local_tz))
         self.recent_song_queue.append(title)
 
         # Persist request

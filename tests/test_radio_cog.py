@@ -603,6 +603,70 @@ async def test_annie_tools_defined(cog):
     assert "add_to_playlist" in tool_names
     assert "remove_from_playlist" in tool_names
 
+# --- Agent Tool Pre-Download Validation Tests ---
+
+
+@pytest.mark.asyncio
+async def test_execute_annie_tool_rejects_blacklisted_song(cog, mock_bot):
+    """Verify search_and_queue_song returns rejection for blacklisted song."""
+    notify_fn = AsyncMock()
+
+    result = await cog._execute_annie_tool(
+        "search_and_queue_song",
+        {"query": "never gonna give you up"},
+        "TestUser",
+        notify_fn,
+    )
+
+    assert "Song rejected" in result
+    assert "No, just no" in result
+    # create_task should NOT have been called (no download dispatched)
+    mock_bot.loop.create_task.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_execute_annie_tool_rejects_throttled_song(cog, mock_bot):
+    """Verify search_and_queue_song returns rejection when throttled."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    # Pre-populate 3 requests within the last 5 minutes
+    now = datetime.now(ZoneInfo("Asia/Bangkok"))
+    cog.user_requests["TestUser"] = [
+        now - timedelta(minutes=1),
+        now - timedelta(minutes=2),
+        now - timedelta(minutes=3),
+    ]
+
+    notify_fn = AsyncMock()
+
+    result = await cog._execute_annie_tool(
+        "search_and_queue_song",
+        {"query": "some valid song"},
+        "TestUser",
+        notify_fn,
+    )
+
+    assert "Song rejected" in result
+    assert "too many songs" in result
+    mock_bot.loop.create_task.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_execute_annie_tool_passes_valid_song(cog, mock_bot):
+    """Verify search_and_queue_song dispatches download for valid query."""
+    notify_fn = AsyncMock()
+
+    result = await cog._execute_annie_tool(
+        "search_and_queue_song",
+        {"query": "bohemian rhapsody"},
+        "TestUser",
+        notify_fn,
+    )
+
+    assert "Download started" in result
+    mock_bot.loop.create_task.assert_called_once()
+
 
 # --- Playlist Management Tool Tests ---
 
