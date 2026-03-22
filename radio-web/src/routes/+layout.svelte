@@ -4,13 +4,15 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import { authenticateWithDiscord, isInDiscordActivity } from '$lib/discord';
-	import { setAccessToken } from '$lib/api';
+	import { setAccessToken, setApiBase } from '$lib/api';
 	import { authStore } from '$lib/stores/auth';
 
 	let { children } = $props();
 
 	onMount(async () => {
 		if (isInDiscordActivity()) {
+			// Inside Discord Activity — use proxy path for API
+			setApiBase('/.proxy/radio-api/api');
 			try {
 				const auth = await authenticateWithDiscord();
 				setAccessToken(auth.access_token);

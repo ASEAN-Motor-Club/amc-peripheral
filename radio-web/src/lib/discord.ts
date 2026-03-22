@@ -1,12 +1,16 @@
 /**
  * Discord Embedded App SDK integration.
  * Handles SDK initialization, authorization, and authentication.
+ *
+ * IMPORTANT: The DiscordSDK must be instantiated lazily (not at module level)
+ * because it requires Discord iframe query params (frame_id, instance_id, platform)
+ * which are only present when running inside a Discord Activity.
  */
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 
-const CLIENT_ID = import.meta.env.PUBLIC_DISCORD_CLIENT_ID;
+const CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID;
 
-export const discordSdk = new DiscordSDK(CLIENT_ID);
+let discordSdk: DiscordSDK | null = null;
 
 export interface DiscordAuth {
 	access_token: string;
@@ -19,13 +23,29 @@ export interface DiscordAuth {
 }
 
 /**
+ * Check if we're running inside a Discord Activity iframe.
+ * Falls back gracefully for standalone browser testing.
+ */
+export function isInDiscordActivity(): boolean {
+	try {
+		return window.self !== window.top;
+	} catch {
+		return true;
+	}
+}
+
+/**
  * Run the full Discord Activity auth flow:
- * 1. Wait for SDK ready
- * 2. Authorize (get code)
- * 3. Exchange code for access_token via our backend
- * 4. Authenticate with Discord client
+ * 1. Create SDK instance (lazy)
+ * 2. Wait for SDK ready
+ * 3. Authorize (get code)
+ * 4. Exchange code for access_token via our backend
+ * 5. Authenticate with Discord client
  */
 export async function authenticateWithDiscord(): Promise<DiscordAuth> {
+	// Lazy instantiation — only create SDK when actually inside Discord
+	discordSdk = new DiscordSDK(CLIENT_ID);
+
 	await discordSdk.ready();
 
 	// Step 1: Get authorization code from Discord client
@@ -38,7 +58,7 @@ export async function authenticateWithDiscord(): Promise<DiscordAuth> {
 	});
 
 	// Step 2: Exchange code for access_token via our backend
-	const response = await fetch('/api/token', {
+	const response = await fetch('/.proxy/radio-api/api/token', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ code }),
@@ -60,16 +80,4 @@ export async function authenticateWithDiscord(): Promise<DiscordAuth> {
 		access_token,
 		user: auth.user as DiscordAuth['user'],
 	};
-}
-
-/**
- * Check if we're running inside a Discord Activity iframe.
- * Falls back gracefully for standalone browser testing.
- */
-export function isInDiscordActivity(): boolean {
-	try {
-		return window.self !== window.top;
-	} catch {
-		return true;
-	}
 }

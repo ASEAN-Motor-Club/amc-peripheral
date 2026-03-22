@@ -1,12 +1,20 @@
 /**
  * API client for the Radio ASEAN backend.
  * All calls include the Discord access_token as Bearer auth.
+ *
+ * When inside a Discord Activity, API requests go through the Discord proxy
+ * at /.proxy/radio-api/api/*. In dev mode (direct browser), they go to /api/*.
  */
 
 let _accessToken: string = '';
+let _apiBase: string = '/api';
 
 export function setAccessToken(token: string) {
 	_accessToken = token;
+}
+
+export function setApiBase(base: string) {
+	_apiBase = base;
 }
 
 async function apiFetch<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
@@ -19,7 +27,8 @@ async function apiFetch<T = unknown>(path: string, options: RequestInit = {}): P
 		headers['Authorization'] = `Bearer ${_accessToken}`;
 	}
 
-	const response = await fetch(path, {
+	const url = `${_apiBase}${path}`;
+	const response = await fetch(url, {
 		...options,
 		headers,
 	});
@@ -44,26 +53,26 @@ export interface NowPlaying {
 }
 
 export function getNowPlaying(): Promise<NowPlaying> {
-	return apiFetch('/api/now-playing');
+	return apiFetch('/now-playing');
 }
 
 export function queueSong(query: string): Promise<{ ok: boolean; title: string }> {
-	return apiFetch('/api/queue', {
+	return apiFetch('/queue', {
 		method: 'POST',
 		body: JSON.stringify({ query }),
 	});
 }
 
 export function skipTrack(): Promise<{ ok: boolean }> {
-	return apiFetch('/api/skip', { method: 'POST' });
+	return apiFetch('/skip', { method: 'POST' });
 }
 
 export function likeSong(): Promise<{ ok: boolean; song_title: string }> {
-	return apiFetch('/api/like', { method: 'POST' });
+	return apiFetch('/like', { method: 'POST' });
 }
 
 export function dislikeSong(): Promise<{ ok: boolean; song_title: string }> {
-	return apiFetch('/api/dislike', { method: 'POST' });
+	return apiFetch('/dislike', { method: 'POST' });
 }
 
 export interface SongRequest {
@@ -76,7 +85,7 @@ export interface SongRequest {
 }
 
 export function getRecentRequests(limit = 20): Promise<{ requests: SongRequest[] }> {
-	return apiFetch(`/api/recent-requests?limit=${limit}`);
+	return apiFetch(`/recent-requests?limit=${limit}`);
 }
 
 export interface TopSong {
@@ -85,9 +94,9 @@ export interface TopSong {
 }
 
 export function getTopLiked(limit = 10): Promise<{ songs: TopSong[] }> {
-	return apiFetch(`/api/top-liked?limit=${limit}`);
+	return apiFetch(`/top-liked?limit=${limit}`);
 }
 
 export function queueTrending(): Promise<{ ok: boolean; title: string }> {
-	return apiFetch('/api/queue-trending', { method: 'POST' });
+	return apiFetch('/queue-trending', { method: 'POST' });
 }

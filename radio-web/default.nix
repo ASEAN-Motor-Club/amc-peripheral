@@ -15,7 +15,7 @@
     NODE_ENV = "production";
 
     # Discord Activity client ID — injected at build time via Vite
-    PUBLIC_DISCORD_CLIENT_ID = "1359465917624352920";
+    VITE_DISCORD_CLIENT_ID = "1359465917624352920";
 
     buildPhase = ''
       runHook preBuild
