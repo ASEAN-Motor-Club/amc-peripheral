@@ -9,7 +9,7 @@ in {
   config = lib.mkIf cfg.enable {
     services.liquidsoap.streams = {
       radio = pkgs.writeText "radio.liq" ''
-      log.level := 5
+      log.level := 3
       default_playlist = blank()
       settings.encoder.metadata.export := ["filename", "artist", "title", "album", "genre", "date", "tracknumber", "comment", "track", "year", "dj", "next", "apic", "metadata_url", "metadata_block_picture", "coverart"]
       queue = request.queue(id="song_requests")
@@ -180,14 +180,7 @@ in {
         password = "hackme",
         mount = "/stream"
       )
-      output.icecast(
-        %opus,
-        radio,
-        host = "localhost",
-        port = 8000,
-        password = "hackme",
-        mount = "/stream_high"
-      )
+
     '';
       fallback = pkgs.writeText "fallback.liq" ''
         output.icecast(
