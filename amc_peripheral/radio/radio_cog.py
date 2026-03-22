@@ -1838,11 +1838,6 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             "format": "bestaudio[ext=webm]/bestaudio/best",
             "outtmpl": f"{REQUESTS_PATH}/{base_filename}.%(ext)s",
             "cookiefile": YT_COOKIES_PATH,
-            "postprocessors": [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "opus",
-                "preferredquality": "128",
-            }],
             "retries": 5,
             "js_runtimes": {"deno": {"path": DENO_PATH}},
         }
@@ -1900,11 +1895,6 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             "format": "bestaudio[ext=webm]/bestaudio/best",
             "outtmpl": f"{output_dir}/{base_filename}.%(ext)s",
             "cookiefile": YT_COOKIES_PATH,
-            "postprocessors": [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "opus",
-                "preferredquality": "128",
-            }],
             "retries": 5,
             "js_runtimes": {"deno": {"path": DENO_PATH}},
         }
@@ -1917,7 +1907,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         except Exception as e:
             raise Exception(f"Failed to download audio: {e}")
 
-        filepath = f"{output_dir}/{base_filename}.opus"
+        filepath = f"{output_dir}/{base_filename}.webm"
         return title, filepath
 
     async def _tool_search_playlist(self, query: str) -> str:
@@ -2113,7 +2103,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 
         # Check cache
         cached = self.db.get_cached_song(video_id)
-        cache_path = f"{SONG_CACHE_PATH}/{video_id}.opus"
+        cache_path = f"{SONG_CACHE_PATH}/{video_id}.webm"
 
         if cached and os.path.exists(cached["local_path"]):
             log.info(f"Cache hit for '{title}' (video_id={video_id})")
@@ -2127,11 +2117,6 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             "format": "bestaudio[ext=webm]/bestaudio/best",
             "outtmpl": f"{SONG_CACHE_PATH}/{video_id}.%(ext)s",
             "cookiefile": YT_COOKIES_PATH,
-            "postprocessors": [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "opus",
-                "preferredquality": "128",
-            }],
             "retries": 5,
             "js_runtimes": {"deno": {"path": DENO_PATH}},
         }

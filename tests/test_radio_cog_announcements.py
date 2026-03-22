@@ -62,7 +62,7 @@ async def test_request_song_pushes_to_queue(cog):
         
         # Verify push_to_queue was called
         # safe_requester = "TestUser", safe_title = "Test_Song_Title"
-        expected_path = f"{REQUESTS_PATH}/TestUser-Test_Song_Title.opus"
+        expected_path = f"{REQUESTS_PATH}/TestUser-Test_Song_Title.webm"
         cog.lq.push_to_queue.assert_called_once_with(cog.bot.http_session, "song_requests", expected_path)
 
 @pytest.mark.asyncio

@@ -219,13 +219,11 @@
               description = "AMC Radio Service";
               environment = {
                 PLAYLIST_PATH = "/var/lib/radio/playlist";
-                FFPROBE_PATH = "${pkgs.ffmpeg}/bin/ffprobe";
                 DENO_PATH = "${pkgs.deno}/bin/deno";
                 RADIO_PATH = "/var/lib/radio/";
                 REQUESTS_PATH = "/var/lib/radio/requests";
                 SONGS_PATH = "/var/lib/radio/songs";
                 JINGLES_PATH = "/var/lib/radio/jingles";
-                FFMPEG_PATH = "${pkgs.ffmpeg}/bin/ffmpeg";
                 GOOGLE_APPLICATION_CREDENTIALS = "/var/lib/radio/adc.json";
                 OPUS_PATH = "${pkgs.libopus}/lib/libopus.so";
                 YT_COOKIES_PATH = "${cfg.cookiesPath}";
@@ -249,8 +247,6 @@
               after = ["network.target" "motortown-server.service" "amc-radio.service"];
               description = "AMC Bot";
               environment = {
-                FFMPEG_PATH = "${pkgs.ffmpeg}/bin/ffmpeg";
-                FFPROBE_PATH = "${pkgs.ffmpeg}/bin/ffprobe";
                 RADIO_DB_PATH = "${cfg.dbPath}";
                 GAME_DB_PATH = "/var/lib/motortown/gamedata.db";
                 YT_COOKIES_PATH = "${cfg.cookiesPath}";
