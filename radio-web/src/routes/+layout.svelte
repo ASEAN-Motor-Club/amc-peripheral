@@ -22,12 +22,14 @@
 					user: auth.user,
 					error: null,
 				});
-			} catch (err) {
+			} catch (err: any) {
+				console.error('[Radio] Auth error:', err);
+				const errorMsg = err?.message || err?.code || (typeof err === 'string' ? err : JSON.stringify(err));
 				authStore.set({
 					loading: false,
 					authenticated: false,
 					user: null,
-					error: err instanceof Error ? err.message : 'Authentication failed',
+					error: errorMsg || 'Unknown authentication error',
 				});
 			}
 		} else {
