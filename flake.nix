@@ -192,6 +192,50 @@
               description = "Default AI model for JARVIS.";
             };
 
+            # Icecast streaming server
+            icecast = {
+              admin.password = lib.mkOption {
+                type = lib.types.str;
+                description = "Icecast admin password.";
+              };
+              source.password = lib.mkOption {
+                type = lib.types.str;
+                default = "hackme";
+                description = "Icecast source password.";
+              };
+              listen.port = lib.mkOption {
+                type = lib.types.port;
+                default = 8000;
+                description = "Port Icecast listens on.";
+              };
+              listen.address = lib.mkOption {
+                type = lib.types.str;
+                default = "0.0.0.0";
+                description = "Address Icecast binds to.";
+              };
+            };
+
+            # Nginx vhost domains
+            nginx.domains = {
+              radio = lib.mkOption {
+                type = lib.types.str;
+                default = "radio.aseanmotorclub.com";
+                description = "Domain for the radio web UI.";
+              };
+              share = lib.mkOption {
+                type = lib.types.str;
+                default = "share.aseanmotorclub.com";
+                description = "Domain for Sharry file sharing.";
+              };
+            };
+
+            # Radio web UI package
+            radioWeb.package = lib.mkOption {
+              type = lib.types.package;
+              default = (import ./radio-web {inherit pkgs;}).package;
+              description = "Radio web UI static build package.";
+            };
+
             # Sharry file sharing service
             sharry = {
               enable = lib.mkEnableOption "Sharry file sharing service";
@@ -212,6 +256,137 @@
           config = lib.mkIf cfg.enable {
             # Apply Sharry's overlay to make pkgs.sharry available
             nixpkgs.overlays = [ inputs.sharry.overlays.default ];
+
+            # Icecast streaming server
+            services.icecast = {
+              enable = true;
+              hostname = "aseanmotorclub.com";
+              admin.password = cfg.icecast.admin.password;
+
+              listen.address = cfg.icecast.listen.address;
+              listen.port = cfg.icecast.listen.port;
+
+              extraConf = ''
+                <location>ASEAN Motor Club</location>
+                <admin>admin@aseanmotorclub.com</admin>
+
+                <limits>
+                  <clients>500</clients>
+                  <sources>2</sources>
+                  <queue-size>2097152</queue-size>
+                  <client-timeout>300</client-timeout>
+                  <header-timeout>15</header-timeout>
+                  <source-timeout>30</source-timeout>
+                  <burst-on-connect>1</burst-on-connect>
+                  <burst-size>524288</burst-size>
+                </limits>
+
+                <mount>
+                  <mount-name>/stream</mount-name>
+                  <username>source</username>
+                  <password>${cfg.icecast.source.password}</password>
+                  <max-listeners>500</max-listeners>
+                  <public>1</public>
+                  <stream-name>ASEAN Motor Club Radio</stream-name>
+                  <stream-description>Your home for automotive enthusiasm in Southeast Asia</stream-description>
+                  <stream-url>https://aseanmotorclub.com/radio</stream-url>
+                  <genre>Automotive</genre>
+                  <fallback-mount>/fallback</fallback-mount>
+                  <fallback-override>1</fallback-override>
+                </mount>
+
+
+                <mount>
+                  <mount-name>/fallback</mount-name>
+                  <username>source</username>
+                  <password>${cfg.icecast.source.password}</password>
+                  <hidden>1</hidden>
+                </mount>
+              '';
+            };
+
+            # Sharry file sharing — Nginx vhost
+            services.nginx.virtualHosts.${cfg.nginx.domains.share} = {
+              enableACME = true;
+              forceSSL = true;
+              locations."/" = {
+                proxyPass = "http://127.0.0.1:${toString cfg.sharry.bindPort}";
+                extraConfig = ''
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection "upgrade";
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_buffering off;
+                  client_max_body_size 105M;
+                  proxy_send_timeout 300s;
+                  proxy_read_timeout 300s;
+                  send_timeout 300s;
+                '';
+              };
+            };
+
+            # Radio ASEAN Web Interface (Discord Activity)
+            services.nginx.virtualHosts.${cfg.nginx.domains.radio} = {
+              enableACME = true;
+              forceSSL = true;
+              locations."/" = {
+                root = "${cfg.radioWeb.package}";
+                tryFiles = "$uri $uri/index.html /index.html";
+                extraConfig = ''
+                  add_header Cache-Control "public, max-age=3600";
+                '';
+              };
+              locations."/api" = {
+                proxyPass = "http://127.0.0.1:7001/api";
+                extraConfig = ''
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                '';
+              };
+              locations."/stream" = {
+                proxyPass = "http://127.0.0.1:${toString cfg.icecast.listen.port}/stream";
+                extraConfig = ''
+                  proxy_http_version 1.1;
+                  proxy_connect_timeout 5s;
+                  proxy_read_timeout 86400s;
+                  proxy_send_timeout 86400s;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection "keep-alive";
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_buffering off;
+                  proxy_cache off;
+                  gzip off;
+                  access_log off;
+                  add_header X-Accel-Buffering no;
+                  add_header Access-Control-Allow-Origin "*";
+                '';
+              };
+              # Icecast admin UI — accessible only over Tailscale
+              locations."/icecast/" = {
+                proxyPass = "http://127.0.0.1:${toString cfg.icecast.listen.port}/";
+                extraConfig = ''
+                  allow 100.64.0.0/10;
+                  deny all;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  # Rewrite absolute paths in Icecast XSL/HTML responses
+                  sub_filter_types text/xml text/xsl text/html application/xhtml+xml;
+                  sub_filter_once off;
+                  sub_filter 'href="/' 'href="/icecast/';
+                  sub_filter 'src="/' 'src="/icecast/';
+                  sub_filter 'url(/' 'url(/icecast/';
+                  sub_filter '="/status' '="/icecast/status';
+                  sub_filter '="/admin' '="/icecast/admin';
+                '';
+              };
+            };
 
             systemd.services.amc-radio = {
               wantedBy = ["multi-user.target"];
