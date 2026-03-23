@@ -54,10 +54,6 @@
 					{/if}
 				</div>
 			</div>
-
-			<audio class="np-audio" controls src="/stream" preload="none">
-				<track kind="captions" />
-			</audio>
 		{:else}
 			<div class="np-off">
 				<div class="np-off-icon">📻</div>

@@ -10,10 +10,13 @@
 
 	let { children } = $props();
 
+	let streamUrl = $state('/stream');
+
 	onMount(async () => {
 		if (isInDiscordActivity()) {
-			// Inside Discord Activity — use proxy path for API
+			// Inside Discord Activity — use proxy path for API and stream
 			setApiBase('/.proxy/radio-api/api');
+			streamUrl = '/.proxy/radio-api/stream';
 			try {
 				const auth = await authenticateWithDiscord();
 				setAccessToken(auth.access_token);
@@ -51,43 +54,60 @@
 
 	let currentLayout = $state(0);
 	layoutMode.subscribe(v => { currentLayout = v; });
+
+	let isPiP = $derived(currentLayout === 1);
 </script>
 
-{#if auth.authenticated && currentLayout === 1}
-	<!-- PiP mode — compact radio player only -->
-	<div class="pip-shell">
-		<PiPPlayer isDj={false} />
+<!--
+  IMPORTANT: Both views are always mounted, toggled via CSS display.
+  This keeps the <audio> element alive across layout mode switches
+  so the stream doesn't restart when minimizing/expanding.
+-->
+
+<!-- PiP mode — compact radio player -->
+<div class="pip-shell" class:hidden={!auth.authenticated || !isPiP}>
+	<PiPPlayer isDj={false} />
+</div>
+
+<!-- Full mode — normal app shell -->
+<div class="app-shell" class:hidden={auth.authenticated && isPiP}>
+	<Sidebar />
+	<div class="app-main">
+		<Header />
+		<main class="app-content">
+			{#if auth.loading}
+				<div class="loading-screen">
+					<div class="spinner" style="width: 32px; height: 32px;"></div>
+					<p style="color: var(--text-muted); font-size: 0.875rem; margin-top: var(--space-lg);">
+						Connecting to Discord...
+					</p>
+				</div>
+			{:else if auth.error}
+				<div class="loading-screen">
+					<p style="color: var(--led-red); font-size: 0.875rem;">⚠️ {auth.error}</p>
+					<p style="color: var(--text-muted); font-size: 0.8125rem; margin-top: var(--space-sm);">
+						Open this as a Discord Activity to authenticate
+					</p>
+				</div>
+			{:else}
+				{@render children()}
+			{/if}
+		</main>
 	</div>
-{:else}
-	<!-- Full mode — normal app shell -->
-	<div class="app-shell">
-		<Sidebar />
-		<div class="app-main">
-			<Header />
-			<main class="app-content">
-				{#if auth.loading}
-					<div class="loading-screen">
-						<div class="spinner" style="width: 32px; height: 32px;"></div>
-						<p style="color: var(--text-muted); font-size: 0.875rem; margin-top: var(--space-lg);">
-							Connecting to Discord...
-						</p>
-					</div>
-				{:else if auth.error}
-					<div class="loading-screen">
-						<p style="color: var(--led-red); font-size: 0.875rem;">⚠️ {auth.error}</p>
-						<p style="color: var(--text-muted); font-size: 0.8125rem; margin-top: var(--space-sm);">
-							Open this as a Discord Activity to authenticate
-						</p>
-					</div>
-				{:else}
-					{@render children()}
-				{/if}
-			</main>
-		</div>
-	</div>
+</div>
+
+<!-- Persistent audio player — lives at layout level, never destroyed -->
+{#if auth.authenticated}
+	<audio class="persistent-audio" src={streamUrl} preload="none" controls>
+		<track kind="captions" />
+	</audio>
 {/if}
 
 <style>
+	.hidden {
+		display: none !important;
+	}
+
 	.pip-shell {
 		height: 100dvh;
 		width: 100vw;
@@ -125,5 +145,22 @@
 		align-items: center;
 		justify-content: center;
 		height: 100%;
+	}
+
+	.persistent-audio {
+		position: fixed;
+		bottom: 8px;
+		left: 50%;
+		transform: translateX(-50%);
+		width: min(90%, 400px);
+		height: 36px;
+		border-radius: var(--radius-md);
+		outline: none;
+		z-index: 1000;
+		opacity: 0.85;
+	}
+
+	.persistent-audio::-webkit-media-controls-panel {
+		background: var(--bg-elevated);
 	}
 </style>

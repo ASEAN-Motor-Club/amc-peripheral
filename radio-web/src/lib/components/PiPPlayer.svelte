@@ -103,11 +103,6 @@
 			</button>
 		{/if}
 	</div>
-
-	<!-- Hidden audio element for the stream -->
-	<audio class="pip-audio" src="/.proxy/radio-api/stream" preload="none" controls>
-		<track kind="captions" />
-	</audio>
 </div>
 
 <style>
