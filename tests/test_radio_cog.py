@@ -1660,6 +1660,151 @@ async def test_voice_reply_background_failure(cog, monkeypatch):
     assert "Failed" in notify_fn.call_args[0][0]
 
 
+# --- Content Screening Tests ---
+
+
+@pytest.mark.asyncio
+async def test_screen_song_content_rejects_slur(cog):
+    """Verify _screen_song_content returns rejection for racially offensive songs."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "REJECT: Title contains racial slur"
+
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
+
+    result = await cog._screen_song_content("Gangsta Rap - offensive title")
+    assert result is not None
+    assert "REJECT" in result
+    assert "racial slur" in result
+
+
+@pytest.mark.asyncio
+async def test_screen_song_content_allows_explicit(cog):
+    """Verify _screen_song_content allows explicit but non-offensive songs."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "ALLOW"
+
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
+
+    result = await cog._screen_song_content("Eminem - Lose Yourself")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_screen_song_content_allows_normal(cog):
+    """Verify _screen_song_content allows normal songs."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "ALLOW"
+
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
+
+    result = await cog._screen_song_content("Taylor Swift - Shake It Off")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_screen_song_content_fails_open(cog):
+    """Verify _screen_song_content allows songs when LLM call fails."""
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        side_effect=Exception("API error")
+    )
+
+    result = await cog._screen_song_content("Some Song")
+    # Should fail open — return None (allow)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_execute_annie_tool_screens_content(cog, mock_bot):
+    """Verify search_and_queue_song tool calls _screen_song_content before dispatching."""
+    cog._screen_song_content = AsyncMock(
+        return_value="REJECT: Contains racial slur in title"
+    )
+    notify_fn = AsyncMock()
+
+    result = await cog._execute_annie_tool(
+        "search_and_queue_song",
+        {"query": "offensive song title"},
+        "TestUser",
+        notify_fn,
+    )
+
+    assert "Song rejected" in result
+    assert "REJECT" in result
+    cog._screen_song_content.assert_called_once_with("offensive song title")
+    # No download should be dispatched
+    mock_bot.loop.create_task.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_execute_annie_tool_allows_after_screening(cog, mock_bot):
+    """Verify search_and_queue_song dispatches download when screening passes."""
+    cog._screen_song_content = AsyncMock(return_value=None)
+    notify_fn = AsyncMock()
+
+    result = await cog._execute_annie_tool(
+        "search_and_queue_song",
+        {"query": "bohemian rhapsody"},
+        "TestUser",
+        notify_fn,
+    )
+
+    assert "Download started" in result
+    cog._screen_song_content.assert_called_once_with("bohemian rhapsody")
+    mock_bot.loop.create_task.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_agent_song_request_routes_through_llm(cog):
+    """Verify _agent_song_request calls the Annie LLM with search_and_queue_song tool."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "On it! Queuing that song for you."
+    mock_response.choices[0].message.tool_calls = None
+
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        return_value=mock_response
+    )
+
+    result = await cog._agent_song_request(
+        query="bohemian rhapsody",
+        requester_name="TestPlayer",
+        requester_id="12345",
+    )
+
+    assert "Queuing" in result or "On it" in result
+    # Verify the LLM was actually called
+    cog.openai_client_openrouter.chat.completions.create.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_agent_game_request_song_announces(cog, mock_bot, monkeypatch):
+    """Verify _agent_game_request_song sends response to game and Discord."""
+    from amc_peripheral.radio import radio_cog
+    monkeypatch.setattr(radio_cog, "GAME_ANNOUNCEMENTS_CHANNEL_ID", 99999)
+
+    mock_channel = MagicMock()
+    mock_channel.send = AsyncMock()
+    mock_bot.get_channel = MagicMock(return_value=mock_channel)
+
+    cog._agent_song_request = AsyncMock(return_value="Queuing your song!")
+    monkeypatch.setattr(radio_cog, "announce_in_game", AsyncMock())
+
+    await cog._agent_game_request_song("cool song", "PlayerOne")
+
+    cog._agent_song_request.assert_called_once()
+    mock_channel.send.assert_called_once_with("Queuing your song!")
+    radio_cog.announce_in_game.assert_called_once()
+
+
 class AsyncIteratorMock:
     def __init__(self, items):
         self.items = iter(items)

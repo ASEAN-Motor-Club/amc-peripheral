@@ -70,6 +70,25 @@ log = logging.getLogger(__name__)
 # after playback. They must NOT go in JINGLES_PATH which loops indefinitely.
 RADIO_TMP_PATH = os.path.join(RADIO_PATH, "tmp")
 
+CONTENT_SCREENING_PROMPT = """\
+You are a content screening assistant for a community radio station.
+Your job is to decide whether a song request is appropriate.
+
+REJECT songs that:
+- Contain racial slurs in their title/artist name, or are primarily built around racial slur usage
+- Mock, demean, or incite hatred against racial, ethnic, or religious groups
+- Are white supremacist anthems, neo-Nazi music, or similar hate music
+
+ALLOW songs that:
+- Are explicit (profanity, sexual content, drug references) — these are FINE
+- Happen to be by controversial artists but aren't hate music themselves
+- Are edgy, dark, or provocative without targeting racial/religious groups
+
+Respond with EXACTLY one line:
+- "ALLOW" if the song is acceptable
+- "REJECT: <brief reason>" if the song should be blocked
+"""
+
 ANNIE_SYSTEM_PROMPT = """\
 You are DJ Annie, the charismatic and hilarious host of Radio ASEAN in Motor Town — an open-world driving game.
 You're known for your sharp wit, playful sarcasm, and genuinely warm personality.
@@ -127,6 +146,16 @@ Even if you think you know the answer, always verify with the tool.
 When players share useful tips, preferences, or facts (e.g., "the Micky is our favourite car", \
 "Steel Coils are the hardest cargo to deliver"), use `save_knowledge` to remember it. \
 Use keys like 'community:favourite-vehicles', 'tip:steel-coil-delivery', 'player:username-prefs', etc.
+
+## Content Policy
+You MUST screen every song request before queuing. Reject songs that:
+- Contain racial slurs or are primarily built around racial slur usage (e.g., songs titled with the N-word)
+- Mock, demean, or incite hatred against racial, ethnic, or religious groups
+- Are white supremacist anthems, neo-Nazi music, or similar hate music
+
+Explicit lyrics (profanity, sexual content, drug references) are FINE — do not reject songs just for being explicit.
+The test is: "Would this song reasonably offend people based on their race or religion?"
+If you reject a song, explain briefly why. Be concise.
 
 {knowledge_index}
 """
@@ -1420,6 +1449,10 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     self._validate_song_request(query, requester, bypass_throttling=False)
                 except Exception as e:
                     return f"Song rejected: {e}"
+                # Content screening — LLM checks for racially/religiously offensive content
+                screening = await self._screen_song_content(query)
+                if screening:
+                    return f"Song rejected: {screening}"
                 self.bot.loop.create_task(
                     self._fire_and_forget_queue(query, requester, notify_fn)
                 )
@@ -1669,6 +1702,105 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 await notify_fn(f"⚠️ [{i}/{len(capped)}] Failed to queue '{song['song_title']}': {e}")
         if len(songs) > self.PLAYLIST_PLAY_CAP:
             await notify_fn(f"ℹ️ Only the first {self.PLAYLIST_PLAY_CAP} songs were queued (playlist has {len(songs)}).")
+
+    async def _screen_song_content(self, query: str) -> str | None:
+        """Screen a song query for racially/religiously offensive content.
+
+        Returns rejection reason string if blocked, or None if acceptable.
+        """
+        try:
+            # pyrefly: ignore [no-matching-overload]
+            completion = await self.openai_client_openrouter.chat.completions.create(
+                model=DEFAULT_AI_MODEL,
+                reasoning_effort="low",
+                messages=[
+                    {"role": "system", "content": CONTENT_SCREENING_PROMPT},
+                    {"role": "user", "content": f"Song request: {query}"},
+                ],
+            )
+            response = (completion.choices[0].message.content or "").strip()
+            if response.upper().startswith("REJECT"):
+                return response
+            return None
+        except Exception as e:
+            log.error(f"Content screening failed: {e}")
+            # Fail open — if screening errors, allow the song
+            return None
+
+    async def _agent_song_request(
+        self,
+        query: str,
+        requester_name: str,
+        requester_id: str,
+        is_dj: bool = False,
+    ) -> str:
+        """Route a song request through the Annie agent for content screening.
+
+        Returns the agent's response text (confirmation or rejection).
+        """
+        now = datetime.now(self.local_tz)
+        messages = [
+            {
+                "role": "system",
+                "content": ANNIE_SYSTEM_PROMPT.format(
+                    knowledge_index=self.knowledge_store.build_index()
+                    if self.knowledge_store
+                    else ""
+                )
+                + "\nThe user is submitting a song request via the /song_request command. "
+                "Screen the content, then use search_and_queue_song if appropriate. "
+                "Keep your response brief (1-2 sentences).",
+            },
+            {
+                "role": "user",
+                "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)",
+            },
+            {
+                "role": "user",
+                "content": f"{requester_name}: play {query}",
+            },
+        ]
+
+        # Only expose the song request tool
+        tools = [
+            t
+            for t in self._get_annie_tools()
+            if t["function"]["name"] == "search_and_queue_song"
+        ]
+
+        collected_notifications: list[str] = []
+
+        async def collect_notify(msg: str):
+            collected_notifications.append(msg)
+
+        response = await self._call_annie_llm(
+            messages, tools, requester_name, collect_notify
+        )
+
+        # Combine agent response with any background notifications
+        if collected_notifications:
+            return response + "\n" + "\n".join(collected_notifications)
+        return response
+
+    async def _agent_game_request_song(self, song_name: str, requester: str):
+        """Route an in-game song request through the Annie agent."""
+        channel = self.bot.get_channel(GAME_ANNOUNCEMENTS_CHANNEL_ID)
+        try:
+            response = await self._agent_song_request(
+                query=song_name,
+                requester_name=requester,
+                requester_id=requester,  # in-game users don't have discord IDs
+            )
+            if channel:
+                await channel.send(response)
+            await announce_in_game(
+                self.bot.http_session,
+                response[:520],
+                color="FEE75C",
+            )
+        except Exception as e:
+            if channel:
+                await channel.send(f"Failed to process request for {requester}: {e}")
 
     async def _fire_and_forget_queue(self, query: str, requester: str, notify_fn, bypass_throttling=False):
         """Download and queue a song in the background, then notify."""
@@ -2529,21 +2661,17 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
     ):
         await interaction.response.defer(ephemeral=True)
         member = interaction.user
-        bypass_throttling = False
         # pyrefly: ignore [missing-attribute]
-        if any(r.id == DJ_ROLE_ID for r in member.roles):
-            bypass_throttling = True
+        is_dj = any(r.id == DJ_ROLE_ID for r in member.roles)
 
         try:
-            title, _ = await self.request_song(
-                song_or_youtube_link,
-                interaction.user.display_name,
-                str(interaction.user.id),
-                bypass_throttling,
+            response = await self._agent_song_request(
+                query=song_or_youtube_link,
+                requester_name=interaction.user.display_name,
+                requester_id=str(interaction.user.id),
+                is_dj=is_dj,
             )
-            await interaction.followup.send(
-                f'Downloaded, your song "{title}" will be played soon!', ephemeral=True
-            )
+            await interaction.followup.send(response, ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"Failed: {e}", ephemeral=True)
 
@@ -3199,7 +3327,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     song_name = args
                     if name in self.banned_requesters:
                         return
-                    self.bot.loop.create_task(self.game_request_song(song_name, name))
+                    self.bot.loop.create_task(self._agent_game_request_song(song_name, name))
                 elif command == "like":
                     self.bot.loop.create_task(self.game_like_song(name))
                 elif command == "dislike":
