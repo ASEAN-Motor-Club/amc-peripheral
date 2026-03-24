@@ -227,6 +227,13 @@
               description = "Radio web UI static build package.";
             };
 
+            # Code web UI package (OpenCode Discord Activity wrapper)
+            codeWeb.package = lib.mkOption {
+              type = lib.types.package;
+              default = (import ./code-web {inherit pkgs;}).package;
+              description = "Code web UI static build package (Discord Activity).";
+            };
+
             # Sharry file sharing service
             sharry = {
               enable = lib.mkEnableOption "Sharry file sharing service";
