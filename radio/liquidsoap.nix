@@ -173,10 +173,9 @@ in {
       radio = source.drop.metadata(radio)
 
 
-      radio = buffer(buffer=5.0, max=10.0, radio)
-
       output.icecast(
         %mp3(bitrate=128),
+        fallible=true,
         radio,
         host = "localhost",
         port = 8000,
