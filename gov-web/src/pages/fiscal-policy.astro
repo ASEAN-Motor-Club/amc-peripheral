@@ -312,6 +312,29 @@ import WarningText from '../components/WarningText.astro';
         </tbody>
       </table>
 
+      <h3>6.3 Tax vs Interest Crossover</h3>
+      <p>The following table shows how many days of continuous idleness it takes for <strong>cumulative wealth tax to exceed cumulative interest earned</strong>. Beyond this point, the account is in net decline.</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 9: Days offline until cumulative wealth tax exceeds cumulative interest</caption>
+        <thead><tr><th>Balance</th><th>Crossover</th><th>Observation</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">$500,000</td><td>Never</td><td style="text-align:left">Exempt from wealth tax</td></tr>
+          <tr><td style="text-align:left">$1,000,000</td><td>Never</td><td style="text-align:left">Interest always exceeds tax — Low bracket (k=0.75)</td></tr>
+          <tr><td style="text-align:left">$2,000,000</td><td>Never</td><td style="text-align:left">Interest always exceeds tax — Low bracket</td></tr>
+          <tr><td style="text-align:left">$5,000,000</td><td style="color:#d4a910;font-weight:700">~171 days</td><td style="text-align:left">Mid bracket (k=1.25) eventually dominates</td></tr>
+          <tr><td style="text-align:left">$10,000,000</td><td style="color:#d4a910;font-weight:700">~117 days</td><td style="text-align:left">Full bracket range; interest scaling starts</td></tr>
+          <tr><td style="text-align:left">$30,000,000</td><td style="color:#d4351c;font-weight:700">~35 days</td><td style="text-align:left">Interest scaling (60% rate) + High bracket (k=1.75)</td></tr>
+          <tr><td style="text-align:left">$50,000,000</td><td style="color:#d4351c;font-weight:700">~19 days</td><td style="text-align:left">Interest scaling (37% rate)</td></tr>
+          <tr><td style="text-align:left">$100,000,000</td><td style="color:#d4351c;font-weight:700">~6 days</td><td style="text-align:left">Interest scaling (11% rate)</td></tr>
+          <tr><td style="text-align:left">$200,000,000</td><td style="color:#d4351c;font-weight:700">&lt;1 day</td><td style="text-align:left">Interest effectively zero (2% scale)</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        Below $2M, interest always outpaces the wealth tax — the system is net-positive for smaller accounts regardless of activity. Above $5M, inactivity becomes increasingly punitive as both the tax brackets and the interest scaling work against idle wealth.
+      </InsetText>
+
       <!-- 7. Technical Reference -->
       <h2 id="appendix">7. Technical Reference</h2>
 
