@@ -11,7 +11,8 @@ in {
       radio = pkgs.writeText "radio.liq" ''
       log.level := 3
       settings.decoder.file_extensions.ffmpeg := ["opus", "webm", "ogg", "mp3", "mp4", "m4a", "wav", "flac", "aac"]
-      default_playlist = blank()
+      enable_replaygain_metadata()
+      default_playlist = amplify(0.005, noise())
       settings.encoder.metadata.export := ["filename", "artist", "title", "album", "genre", "date", "tracknumber", "comment", "track", "year", "dj", "next", "apic", "metadata_url", "metadata_block_picture", "coverart"]
       queue = request.queue(id="song_requests")
       segments = request.queue(id="segments")
@@ -74,7 +75,7 @@ in {
 
       live = blank.strip(max_blank=2., min_noise=.1, threshold=-20., live)
 
-      radio = nrj(normalize(radio_unnormaliszed))
+      radio = amplify(1., override="replaygain_track_gain", radio_unnormaliszed)
 
       radio = switch(
         track_sensitive=false,
@@ -175,7 +176,6 @@ in {
 
       output.icecast(
         %mp3(bitrate=128),
-        fallible=true,
         radio,
         host = "localhost",
         port = 8000,
