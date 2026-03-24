@@ -121,6 +121,12 @@ def get_env_dict(var_name, default):
     return default
 
 
+# Embed Limiter
+EMBED_LIMITER_ENABLED = os.environ.get("EMBED_LIMITER_ENABLED", "false").lower() == "true"
+EMBED_LIMITER_CHANNELS = get_env_dict("EMBED_LIMITER_CHANNELS", {})
+# Format: {"channel_id_str": {"per_user": 5, "global": 30, "window_hours": 24}}
+# Only GIFs are limited by default
+
 LANGUAGE_CHANNELS = get_env_dict(
     "LANGUAGE_CHANNELS",
     {
