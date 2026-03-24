@@ -1,0 +1,97 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import InsetText from '../../components/InsetText.astro';
+import WarningText from '../../components/WarningText.astro';
+import Sidebar from '../../components/Sidebar.astro';
+---
+<GovLayout title="Loans" department="Bank of ASEAN" description="Loan eligibility, fee structure, and repayment rules at the Bank of ASEAN.">
+
+<PhaseBanner tag="Policy" text="Published 24 March 2026" />
+<Breadcrumbs items={[
+  { label: "Banking & Credit", href: "/banking" },
+  { label: "Loans", href: "/banking/loans" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Loans</h1>
+
+      <SummaryBox title="Summary">
+        <p>The Bank of ASEAN offers loans to verified citizens. Loan amounts are determined by driver experience, earnings history, and social standing. Interest is charged as a one-time fee at origination.</p>
+      </SummaryBox>
+
+      <h2 id="eligibility">1. Eligibility</h2>
+      <p>To take out a loan, you must:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>Be <strong>Discord-verified</strong> (linked account)</li>
+        <li>Have a <strong>positive social score</strong> (negative scores make you ineligible)</li>
+      </ul>
+
+      <h2 id="max-loan">2. Maximum Loan Calculation</h2>
+      <p>Your maximum loan is determined by a series of factors applied in order:</p>
+
+      <table class="govuk-table">
+        <caption>Loan Limit Factors (applied sequentially)</caption>
+        <thead><tr><th>Step</th><th>Factor</th><th>Details</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td><strong>Base loan</strong></td><td>$10,000 + (driver_level × $3,000) + (truck_level × $3,000)</td></tr>
+          <tr><td>2</td><td><strong>Social score modifier</strong></td><td>Multiplied by (1 + social_score × 0.05). Negative scores reduce, positive increase.</td></tr>
+          <tr><td>3</td><td><strong>Bank policy cap</strong></td><td>Hard cap at $6,000,000</td></tr>
+          <tr><td>4</td><td><strong>Earnings history cap</strong></td><td>Capped at 5× your total lifetime delivery earnings</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        New players will typically be limited by the earnings history cap. As you complete more deliveries, your borrowing capacity naturally grows.
+      </InsetText>
+
+      <h2 id="fees">3. Fee Structure</h2>
+      <p>Loans carry a <strong>one-time origination fee</strong> calculated using a tiered system:</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Loan Fee Tiers</caption>
+        <thead><tr><th>Tier</th><th>Portion of Loan</th><th>Interest Rate</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Tier 1</td><td>First 50% of max loan</td><td>10%</td></tr>
+          <tr><td style="text-align:left">Tier 2</td><td>Next 25% of max loan</td><td>20%</td></tr>
+          <tr><td style="text-align:left">Tier 3</td><td>Next 12.5% of max loan</td><td>30%</td></tr>
+          <tr><td style="text-align:left">Beyond</td><td>Remaining</td><td>30%</td></tr>
+        </tbody>
+      </table>
+
+      <p>The fee is further adjusted by your <strong>credit score</strong>:</p>
+      <div class="formula">
+        Credit score 0 → fee × 2.0 (doubled)<br />
+        Credit score 100 → fee × 1.0 (no change)<br />
+        Credit score 200 → fee × 0.5 (halved)
+      </div>
+
+      <h2 id="repayment">4. Repayment</h2>
+      <p>Loans can be repaid through:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Manual repayment</strong> — using the bank command in-game</li>
+        <li><strong>Auto-repayment</strong> — a portion of UBI and delivery profits is automatically applied</li>
+        <li><strong>Vehicle sale proceeds</strong> — 50% of vehicle sale value is applied to loans</li>
+      </ul>
+
+      <WarningText>
+        <strong>Non-performing loans:</strong> If you fail to repay at least 10% of your loan balance within 7 days, your loan is classified as <strong>non-performing (NPL)</strong>. This severely impacts your credit score and may restrict future borrowing. See <a href="/banking/credit-score">Credit Score</a> for details.
+      </WarningText>
+
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Eligibility", href: "#eligibility" },
+        { label: "Maximum Loan", href: "#max-loan" },
+        { label: "Fee Structure", href: "#fees" },
+        { label: "Repayment", href: "#repayment" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>

@@ -1,0 +1,33 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+---
+<GovLayout title="Banking & Credit" department="Bank of ASEAN" description="Interest rates, loans, and credit scoring at the Bank of ASEAN.">
+
+<PhaseBanner tag="GOV" />
+<Breadcrumbs items={[{ label: "Banking & Credit", href: "/banking" }]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-column-full">
+    <h1>Banking & Credit</h1>
+    <p>The Bank of ASEAN provides deposit accounts, interest, loans, and credit scoring for all citizens.</p>
+
+    <ul class="govuk-topic-list">
+      <li>
+        <a href="/banking/interest">Bank Interest</a>
+        <p>Interest rates, online multiplier, balance scaling, and offline decay.</p>
+      </li>
+      <li>
+        <a href="/banking/loans">Loans</a>
+        <p>Eligibility, fee structure, earnings cap, and social score modifier.</p>
+      </li>
+      <li>
+        <a href="/banking/credit-score">Credit Score</a>
+        <p>0–200 credit scale, evaluation criteria, NPL thresholds, and utilisation penalties.</p>
+      </li>
+    </ul>
+  </div>
+</main>
+
+</GovLayout>

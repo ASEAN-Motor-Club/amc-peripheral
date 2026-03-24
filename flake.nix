@@ -218,6 +218,11 @@
                 default = "share.aseanmotorclub.com";
                 description = "Domain for Sharry file sharing.";
               };
+              gov = lib.mkOption {
+                type = lib.types.str;
+                default = "gov.aseanmotorclub.com";
+                description = "Domain for the government portal.";
+              };
             };
 
             # Radio web UI package
@@ -232,6 +237,13 @@
               type = lib.types.package;
               default = (import ./code-web {inherit pkgs;}).package;
               description = "Code web UI static build package (Discord Activity).";
+            };
+
+            # Government portal static site
+            govWeb.package = lib.mkOption {
+              type = lib.types.package;
+              default = (import ./gov-web {inherit pkgs;}).package;
+              description = "Government portal static build package.";
             };
 
             # Sharry file sharing service
@@ -382,6 +394,19 @@
                   sub_filter 'url(/' 'url(/icecast/';
                   sub_filter '="/status' '="/icecast/status';
                   sub_filter '="/admin' '="/icecast/admin';
+                '';
+              };
+            };
+
+            # Government Portal (static site)
+            services.nginx.virtualHosts.${cfg.nginx.domains.gov} = {
+              enableACME = true;
+              forceSSL = true;
+              locations."/" = {
+                root = "${cfg.govWeb.package}";
+                tryFiles = "$uri $uri/index.html /index.html";
+                extraConfig = ''
+                  add_header Cache-Control "public, max-age=3600";
                 '';
               };
             };

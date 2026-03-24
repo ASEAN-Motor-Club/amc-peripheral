@@ -1,0 +1,70 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import Sidebar from '../../components/Sidebar.astro';
+---
+<GovLayout title="Supply Chain Events" department="Ministry of Employment" description="Community-wide logistics challenges with objective-based rewards.">
+
+<PhaseBanner tag="Policy" text="Published 24 March 2026" />
+<Breadcrumbs items={[
+  { label: "Employment & Industry", href: "/employment" },
+  { label: "Supply Chain Events", href: "/employment/supply-chain" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Supply Chain Events</h1>
+
+      <SummaryBox title="Summary">
+        <p>Supply chain events are time-limited community challenges that incentivise large-scale cargo movement. Players earn rewards proportional to their contribution.</p>
+      </SummaryBox>
+
+      <h2 id="lifecycle">1. Event Lifecycle</h2>
+      <p>Each supply chain event follows this lifecycle:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Created from template</strong> — defines objectives, duration, and reward per item</li>
+        <li><strong>Active period</strong> — players contribute deliveries that match event objectives</li>
+        <li><strong>Ends</strong> — when the time expires or all objectives reach their ceiling</li>
+        <li><strong>Rewards distributed</strong> — proportional payouts based on individual contributions</li>
+      </ul>
+
+      <h2 id="objectives">2. Objectives</h2>
+      <p>Each event contains one or more <strong>objectives</strong> with:</p>
+
+      <table class="govuk-table">
+        <thead><tr><th>Property</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Cargo filter</strong></td><td>Which cargo types count towards this objective</td></tr>
+          <tr><td><strong>Destination/source points</strong></td><td>Specific delivery points that qualify</td></tr>
+          <tr><td><strong>Ceiling</strong></td><td>Maximum quantity — contributions beyond this aren't rewarded</td></tr>
+          <tr><td><strong>Reward weight</strong></td><td>Share of the total reward pool allocated to this objective</td></tr>
+          <tr><td><strong>Primary flag</strong></td><td>The primary objective determines the total reward pool size</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="rewards">3. Reward Distribution</h2>
+      <p>The total reward pool is calculated as:</p>
+      <div class="formula">
+        pool = reward_per_item × primary_objective.quantity_fulfilled
+      </div>
+      <p>This pool is split across objectives by their reward weight, then distributed proportionally to each contributor based on their share of deliveries within that objective.</p>
+
+      <h2 id="conflicts">4. Job Suppression</h2>
+      <p>During active supply chain events, the job posting system automatically suppresses any delivery job templates that would conflict with the event's cargo/destination objectives. This prevents competition between regular jobs and event objectives.</p>
+
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Event Lifecycle", href: "#lifecycle" },
+        { label: "Objectives", href: "#objectives" },
+        { label: "Reward Distribution", href: "#rewards" },
+        { label: "Job Suppression", href: "#conflicts" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>

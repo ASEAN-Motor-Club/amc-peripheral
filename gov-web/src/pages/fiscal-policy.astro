@@ -1,0 +1,394 @@
+---
+import GovLayout from '../layouts/GovLayout.astro';
+import PhaseBanner from '../components/PhaseBanner.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import SummaryBox from '../components/SummaryBox.astro';
+import Sidebar from '../components/Sidebar.astro';
+import InsetText from '../components/InsetText.astro';
+import WarningText from '../components/WarningText.astro';
+---
+<GovLayout title="Fiscal Policy: Wealth Tax, Bank Interest & Sovereign Reserves" department="Ministry of Finance & Treasury" description="Progressive wealth tax, bank interest, and sovereign reserves policy for the ASEAN Motor Club.">
+
+<PhaseBanner tag="Policy" text="Published 24 March 2026" />
+<Breadcrumbs items={[{ label: "Fiscal Policy", href: "/fiscal-policy" }]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Fiscal Policy: Wealth Tax, Bank Interest & Sovereign Reserves</h1>
+
+      <div class="govuk-metadata">
+        <dl>
+          <dt>From:</dt><dd>Ministry of Finance & Treasury</dd>
+          <dt>Applies to:</dt><dd>All accounts at Bank of ASEAN</dd>
+          <dt>Effective:</dt><dd>24 March 2026</dd>
+        </dl>
+      </div>
+
+      <SummaryBox title="Summary">
+        <p>This document sets out the ASEAN Motor Club's fiscal policy for managing the money supply, including:</p>
+        <ul class="govuk-list">
+          <li>A <strong>progressive wealth tax</strong> on idle bank balances, scaled by offline duration</li>
+          <li><strong>Bank interest</strong> with balance-dependent scaling and offline decay</li>
+          <li>Establishment of the <strong>Sovereign Reserves Fund</strong>, with a monthly Net Investment Returns Contribution (NIRC) to the operating treasury</li>
+        </ul>
+        <p>These measures aim to curb hyperinflation, incentivise active participation, and build long-term national reserves.</p>
+      </SummaryBox>
+
+      <!-- 1. Overview -->
+      <h2 id="overview">1. Overview</h2>
+      <p>The ASEAN Motor Club economy has experienced sustained inflationary pressure over the past year, driven by high interest rates on bank deposits and a concentration of wealth in idle accounts. Without intervention, the money supply will continue to grow unchecked, eroding the purchasing power of active participants.</p>
+      <p>This policy introduces three interlocking mechanisms:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Wealth Tax</strong> — a progressive hourly tax on offline accounts above $500,000, using marginal brackets</li>
+        <li><strong>Interest Decay</strong> — bank interest that decays with time offline, rewarding active players</li>
+        <li><strong>Sovereign Reserves</strong> — a locked national fund that receives wealth tax revenue, with only a controlled monthly drip to the operating treasury</li>
+      </ul>
+
+      <WarningText>
+        <strong>Important:</strong> All monetary figures in this document are denominated in the in-game currency ($). The exempt threshold of $500,000 means accounts at or below this balance are never taxed.
+      </WarningText>
+
+      <!-- 2. Wealth Tax -->
+      <h2 id="wealth-tax">2. Wealth Tax</h2>
+      <h3>2.1 Scope & Exemption</h3>
+      <p>The wealth tax applies to all character bank accounts held at the Bank of ASEAN with a balance exceeding <strong>$500,000</strong> (the exempt threshold). Characters with a null game GUID (zombie accounts) are excluded.</p>
+      <p>Tax is computed and deducted <strong>hourly</strong>, based on the number of hours the character has been offline.</p>
+
+      <InsetText>
+        A character who logs in briefly resets their offline clock to zero. This is by design — rewarding engagement, even briefly.
+      </InsetText>
+
+      <h3>2.2 Progressive Brackets</h3>
+      <p>Tax is applied marginally across three tiers. Only the portion of balance within each bracket is taxed at that bracket's rate.</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 1: Wealth Tax Brackets</caption>
+        <thead>
+          <tr><th>Bracket</th><th>Balance Range</th><th>k-factor</th></tr>
+        </thead>
+        <tbody>
+          <tr><td style="text-align:left">Exempt</td><td>$0 – $500,000</td><td>0 (not taxed)</td></tr>
+          <tr><td style="text-align:left">Low</td><td>$500,000 – $2,500,000</td><td>0.75</td></tr>
+          <tr><td style="text-align:left">Mid</td><td>$2,500,000 – $10,000,000</td><td>1.25</td></tr>
+          <tr><td style="text-align:left">High</td><td>$10,000,000+</td><td>1.75</td></tr>
+        </tbody>
+      </table>
+
+      <h3>2.3 Rate Formula</h3>
+      <p>The hourly tax rate for each bracket uses a <strong>log-plateau decay</strong> function, which ensures monotonically increasing cumulative tax over time:</p>
+
+      <div class="formula">
+        r(t) = k · ln(1 + t/S) / (S + t)<br /><br />
+        where:<br />
+        &nbsp;&nbsp;t = hours offline<br />
+        &nbsp;&nbsp;S = 2,163 hours (~90 days)<br />
+        &nbsp;&nbsp;k = bracket-specific multiplier (see Table 1)
+      </div>
+
+      <p>The cumulative fraction lost follows <code>k/2 · ln(1 + t/S)²</code>, which grows monotonically — there is no recovery window for long-term idleness.</p>
+
+      <h3>2.4 Effective Tax Rates</h3>
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 2: Effective hourly rate by offline duration (High bracket, k=1.75)</caption>
+        <thead>
+          <tr><th>Offline Duration</th><th>Hourly Rate</th><th>~Daily Equivalent</th></tr>
+        </thead>
+        <tbody>
+          <tr><td style="text-align:left">1 hour</td><td>0.00037%</td><td>0.009%</td></tr>
+          <tr><td style="text-align:left">24 hours (1 day)</td><td>0.0087%</td><td>0.21%</td></tr>
+          <tr><td style="text-align:left">168 hours (1 week)</td><td>0.054%</td><td>1.30%</td></tr>
+          <tr><td style="text-align:left">720 hours (1 month)</td><td>0.17%</td><td>4.14%</td></tr>
+          <tr><td style="text-align:left">2,163 hours (~90 days)</td><td>0.28%</td><td>6.81%</td></tr>
+          <tr><td style="text-align:left">8,760 hours (1 year)</td><td>0.19%</td><td>4.60%</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        The hourly rate peaks around 90 days, then slowly decreases — but cumulative loss always grows. A player offline for a full year will lose substantially more total balance than one offline for 90 days.
+      </InsetText>
+
+      <!-- 3. Bank Interest -->
+      <h2 id="bank-interest">3. Bank Interest</h2>
+      <h3>3.1 Base Rate</h3>
+      <p>Bank of ASEAN pays hourly interest on all liability (checking) accounts. The base rate is <strong>2.2% per hour</strong>, with a <strong>2× multiplier for online players</strong>.</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 3: Interest Rate Parameters</caption>
+        <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Base hourly rate</td><td>2.2%</td></tr>
+          <tr><td style="text-align:left">Online multiplier</td><td>2.0×</td></tr>
+          <tr><td style="text-align:left">Balance scaling threshold</td><td>$10,000,000</td></tr>
+          <tr><td style="text-align:left">Balance scaling constant</td><td>$40,000,000</td></tr>
+          <tr><td style="text-align:left">Offline decay k</td><td>2.0</td></tr>
+        </tbody>
+      </table>
+
+      <h3>3.2 Balance Scaling</h3>
+      <p>For balances above the $10M threshold, interest is scaled down using an exponential decay:</p>
+
+      <div class="formula">
+        scale = exp(-(balance - threshold) / scale_constant)<br /><br />
+        effective_rate = base_rate × scale
+      </div>
+
+      <p>This creates a natural ceiling (~$170M) where interest earned approaches zero, preventing unlimited compounding.</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 4: Effective interest rate by balance (online player)</caption>
+        <thead><tr><th>Balance</th><th>Scale Factor</th><th>Effective Hourly Rate</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">$1,000,000</td><td>100%</td><td>4.40%</td></tr>
+          <tr><td style="text-align:left">$10,000,000</td><td>100%</td><td>4.40%</td></tr>
+          <tr><td style="text-align:left">$30,000,000</td><td>60.65%</td><td>2.67%</td></tr>
+          <tr><td style="text-align:left">$50,000,000</td><td>36.79%</td><td>1.62%</td></tr>
+          <tr><td style="text-align:left">$100,000,000</td><td>10.54%</td><td>0.46%</td></tr>
+          <tr><td style="text-align:left">$170,000,000</td><td>1.83%</td><td>0.08%</td></tr>
+        </tbody>
+      </table>
+
+      <h3>3.3 Offline Decay</h3>
+      <p>When a player is offline, their interest rate decays using a log-plateau formula with <strong>k=2.0</strong>. The longer they are offline, the less interest they earn — eventually approaching zero.</p>
+
+      <InsetText>
+        The interest decay uses the same formula family as the wealth tax. Combined, a long-term idle player earns negligible interest while losing balance to the wealth tax — ensuring net-negative growth.
+      </InsetText>
+
+      <!-- 4. Sovereign Reserves -->
+      <h2 id="sovereign-reserves">4. Sovereign Reserves Fund</h2>
+      <h3>4.1 Purpose</h3>
+      <p>Inspired by Singapore's GIC and Temasek sovereign wealth funds, the ASEAN Motor Club maintains a <strong>Sovereign Reserves Fund</strong> — a locked government asset account that accumulates wealth tax revenue.</p>
+      <p>The reserves serve three purposes:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Liquidity destruction</strong> — money taxed from idle accounts is removed from the active money supply</li>
+        <li><strong>Long-term stability</strong> — reserves provide a shock absorber for the economy</li>
+        <li><strong>Community metric</strong> — reserves represent national prosperity, visible to all citizens</li>
+      </ul>
+
+      <h3>4.2 Fund Structure</h3>
+      <table class="govuk-table">
+        <caption>Table 5: Government Accounts</caption>
+        <thead><tr><th>Account</th><th>Type</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>Treasury Fund</td><td>Operating (ASSET)</td><td>Day-to-day spending: job bonuses, subsidies, Ministry budget</td></tr>
+          <tr><td>Sovereign Reserves</td><td>Locked (ASSET)</td><td>Receives wealth tax. Not directly spendable.</td></tr>
+        </tbody>
+      </table>
+
+      <WarningText>
+        <strong>Key rule:</strong> Wealth tax revenue flows <em>only</em> to Sovereign Reserves — never directly to the operating treasury. This prevents the treasury from becoming permanently flush and devaluing active contributions.
+      </WarningText>
+
+      <h3>4.3 NIRC — Net Investment Returns Contribution</h3>
+      <p>Following Singapore's constitutional framework, a controlled portion of reserves is transferred to the operating treasury as the <strong>NIRC</strong>:</p>
+
+      <div class="formula">
+        Daily transfer = Sovereign Reserves × 5% / 30<br /><br />
+        ≈ 0.167% of reserves per day
+      </div>
+
+      <p>This transfer runs as a daily automated process at 00:05 server time.</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 6: NIRC Projections (based on ~$16M/day wealth tax inflow)</caption>
+        <thead><tr><th>Timeline</th><th>Estimated Reserves</th><th>Monthly NIRC</th><th>Daily NIRC</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Month 1</td><td>$480,000,000</td><td>$24,000,000</td><td>$800,000</td></tr>
+          <tr><td style="text-align:left">Month 3</td><td>$1,200,000,000</td><td>$60,000,000</td><td>$2,000,000</td></tr>
+          <tr><td style="text-align:left">Month 6</td><td>$2,100,000,000</td><td>$105,000,000</td><td>$3,500,000</td></tr>
+          <tr><td style="text-align:left">Year 1</td><td>$3,500,000,000</td><td>$175,000,000</td><td>$5,833,000</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        Note: Reserves growth decelerates over time as wealth tax revenue shrinks (taxable balances decrease). The projections above assume a gradually declining inflow.
+      </InsetText>
+
+      <!-- 5. Flow of Funds -->
+      <h2 id="flow-of-funds">5. Flow of Funds</h2>
+      <p>The following diagram illustrates the complete monetary flow in the ASEAN Motor Club economy:</p>
+
+      <div class="chart-container">
+        <div class="chart-title">Figure 1: Flow of Funds</div>
+        <svg viewBox="0 0 750 370" xmlns="http://www.w3.org/2000/svg">
+          <rect x="20" y="20" width="200" height="60" rx="4" fill="#1d70b8" stroke="#003078" stroke-width="2"/>
+          <text x="120" y="45" text-anchor="middle" fill="white" font-size="14" font-weight="700">Player Accounts</text>
+          <text x="120" y="63" text-anchor="middle" fill="#c5d4e4" font-size="11">(Bank of ASEAN)</text>
+
+          <line x1="220" y1="50" x2="310" y2="50" stroke="#d4351c" stroke-width="2" marker-end="url(#arrowRed)"/>
+          <text x="265" y="40" text-anchor="middle" fill="#d4351c" font-size="10" font-weight="700">Wealth Tax</text>
+          <text x="265" y="68" text-anchor="middle" fill="#505a5f" font-size="9">(hourly)</text>
+
+          <rect x="310" y="20" width="200" height="60" rx="4" fill="#00703c" stroke="#005a30" stroke-width="2"/>
+          <text x="410" y="45" text-anchor="middle" fill="white" font-size="14" font-weight="700">Sovereign Reserves</text>
+          <text x="410" y="63" text-anchor="middle" fill="#a0d4b0" font-size="11">(Locked)</text>
+
+          <line x1="410" y1="80" x2="410" y2="140" stroke="#00703c" stroke-width="2" marker-end="url(#arrowGreen)"/>
+          <text x="460" y="115" text-anchor="start" fill="#00703c" font-size="10" font-weight="700">NIRC Drip</text>
+          <text x="460" y="128" text-anchor="start" fill="#505a5f" font-size="9">(5%/month ÷ 30)</text>
+
+          <rect x="310" y="145" width="200" height="60" rx="4" fill="#0b0c0c" stroke="#505a5f" stroke-width="2"/>
+          <text x="410" y="170" text-anchor="middle" fill="white" font-size="14" font-weight="700">Treasury Fund</text>
+          <text x="410" y="188" text-anchor="middle" fill="#b1b4b6" font-size="11">(Operating)</text>
+
+          <line x1="120" y1="145" x2="120" y2="80" stroke="#1d70b8" stroke-width="2" marker-end="url(#arrowBlue)"/>
+          <text x="60" y="115" text-anchor="start" fill="#1d70b8" font-size="10" font-weight="700">Interest</text>
+          <text x="60" y="128" text-anchor="start" fill="#505a5f" font-size="9">(hourly)</text>
+
+          <rect x="20" y="145" width="200" height="60" rx="4" fill="#1d70b8" stroke="#003078" stroke-width="2"/>
+          <text x="120" y="170" text-anchor="middle" fill="white" font-size="14" font-weight="700">Bank of ASEAN</text>
+          <text x="120" y="188" text-anchor="middle" fill="#c5d4e4" font-size="11">(Interest Engine)</text>
+
+          <line x1="310" y1="175" x2="220" y2="175" stroke="#0b0c0c" stroke-width="2" marker-end="url(#arrowBlack)"/>
+          <text x="265" y="165" text-anchor="middle" fill="#0b0c0c" font-size="10" font-weight="700">Job Payouts</text>
+
+          <rect x="555" y="20" width="170" height="60" rx="4" fill="#f3f2f1" stroke="#b1b4b6" stroke-width="2"/>
+          <text x="640" y="45" text-anchor="middle" fill="#0b0c0c" font-size="13" font-weight="700">Active Players</text>
+          <text x="640" y="63" text-anchor="middle" fill="#505a5f" font-size="11">(Donations, Ministry)</text>
+
+          <line x1="555" y1="80" x2="510" y2="165" stroke="#505a5f" stroke-width="1.5" stroke-dasharray="6,3" marker-end="url(#arrowGrey)"/>
+          <text x="550" y="125" text-anchor="start" fill="#505a5f" font-size="10">Donations</text>
+
+          <!-- Government Workers -->
+          <rect x="555" y="145" width="170" height="60" rx="4" fill="#F5C518" stroke="#d4a910" stroke-width="2"/>
+          <text x="640" y="170" text-anchor="middle" fill="#0b0c0c" font-size="13" font-weight="700">Gov Workers</text>
+          <text x="640" y="188" text-anchor="middle" fill="#505a5f" font-size="11">(Earnings confiscated)</text>
+
+          <line x1="555" y1="175" x2="510" y2="175" stroke="#d4a910" stroke-width="2" stroke-dasharray="6,3" marker-end="url(#arrowGold)"/>
+          <text x="525" y="195" text-anchor="middle" fill="#d4a910" font-size="10" font-weight="700">Redirect</text>
+
+          <rect x="20" y="280" width="700" height="70" rx="4" fill="#f3f2f1" stroke="#b1b4b6" stroke-width="1"/>
+          <text x="35" y="303" fill="#0b0c0c" font-size="12" font-weight="700">Key:</text>
+          <rect x="70" y="293" width="12" height="12" fill="#d4351c"/><text x="88" y="304" fill="#0b0c0c" font-size="11">Tax (money destroyed from circulation)</text>
+          <rect x="340" y="293" width="12" height="12" fill="#00703c"/><text x="358" y="304" fill="#0b0c0c" font-size="11">NIRC (controlled release)</text>
+          <rect x="540" y="293" width="12" height="12" fill="#1d70b8"/><text x="558" y="304" fill="#0b0c0c" font-size="11">Interest (money created)</text>
+          <rect x="70" y="317" width="12" height="12" fill="#0b0c0c"/><text x="88" y="328" fill="#0b0c0c" font-size="11">Spending (treasury outflow)</text>
+          <line x1="340" y1="323" x2="360" y2="323" stroke="#505a5f" stroke-width="1.5" stroke-dasharray="5,3"/><text x="368" y="328" fill="#0b0c0c" font-size="11">Player/worker contributions (treasury inflow)</text>
+
+          <defs>
+            <marker id="arrowRed" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#d4351c"/></marker>
+            <marker id="arrowGreen" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#00703c"/></marker>
+            <marker id="arrowBlue" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#1d70b8"/></marker>
+            <marker id="arrowBlack" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#0b0c0c"/></marker>
+            <marker id="arrowGrey" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#505a5f"/></marker>
+            <marker id="arrowGold" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#d4a910"/></marker>
+          </defs>
+        </svg>
+      </div>
+
+      <h3>5.1 Government Employee Revenue</h3>
+      <p><strong>Government employees</strong> are a significant source of treasury revenue. When a gov employee completes deliveries, their base earnings are confiscated from their wallet and redirected directly to the Treasury Fund. Contract completion bonuses are <strong>burned</strong> (destroyed from circulation without entering the treasury), serving as an automatic money sink.</p>
+      <p>For full details on the three-track income system, see <a href="/welfare/gov-employees#finances">Government Employee Programme: Financial Mechanics</a>.</p>
+
+      <!-- 6. Impact -->
+      <h2 id="impact">6. Economic Impact Assessment</h2>
+
+      <h3>6.1 Comparison: Active vs Idle Players</h3>
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 7: 30-day net balance change by player behaviour ($10M starting balance)</caption>
+        <thead><tr><th>Player Type</th><th>Interest Earned</th><th>Wealth Tax Paid</th><th>Net Change</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Daily active (1h+/day)</td><td>+$3,168,000</td><td>-$21,600</td><td style="color:#00703c;font-weight:700">+$3,146,400</td></tr>
+          <tr><td style="text-align:left">Weekly active (1h/week)</td><td>+$1,584,000</td><td>-$151,200</td><td style="color:#00703c;font-weight:700">+$1,432,800</td></tr>
+          <tr><td style="text-align:left">Idle 30 days</td><td>+$86,400</td><td>-$1,231,200</td><td style="color:#d4351c;font-weight:700">-$1,144,800</td></tr>
+          <tr><td style="text-align:left">Idle 90 days</td><td>+$7,200</td><td>-$2,030,400</td><td style="color:#d4351c;font-weight:700">-$2,023,200</td></tr>
+          <tr><td style="text-align:left">Idle 365 days</td><td>~$0</td><td>-$3,369,600</td><td style="color:#d4351c;font-weight:700">-$3,369,600</td></tr>
+        </tbody>
+      </table>
+
+      <h3>6.2 Balance Tier Impact</h3>
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 8: Monthly wealth tax by balance tier (30 days idle)</caption>
+        <thead><tr><th>Starting Balance</th><th>Monthly Tax</th><th>Effective Rate</th><th>Remaining</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">$500,000</td><td>$0</td><td>0%</td><td>$500,000</td></tr>
+          <tr><td style="text-align:left">$1,000,000</td><td>$44,550</td><td>4.5%</td><td>$955,450</td></tr>
+          <tr><td style="text-align:left">$5,000,000</td><td>$437,400</td><td>8.7%</td><td>$4,562,600</td></tr>
+          <tr><td style="text-align:left">$10,000,000</td><td>$1,231,200</td><td>12.3%</td><td>$8,768,800</td></tr>
+          <tr><td style="text-align:left">$50,000,000</td><td>$8,316,000</td><td>16.6%</td><td>$41,684,000</td></tr>
+          <tr><td style="text-align:left">$200,000,000</td><td>$34,938,000</td><td>17.5%</td><td>$165,062,000</td></tr>
+        </tbody>
+      </table>
+
+      <!-- 7. Technical Reference -->
+      <h2 id="appendix">7. Technical Reference</h2>
+
+      <details>
+        <summary>Full list of system constants</summary>
+        <div>
+          <table class="govuk-table govuk-table--numeric">
+            <caption>Table 9: All fiscal policy constants</caption>
+            <thead><tr><th>Constant</th><th>Value</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td style="text-align:left"><code>INTEREST_RATE</code></td><td>0.022</td><td style="text-align:left">Base hourly interest rate (2.2%)</td></tr>
+              <tr><td style="text-align:left"><code>ONLINE_INTEREST_MULTIPLIER</code></td><td>2.0</td><td style="text-align:left">Bonus multiplier for online players</td></tr>
+              <tr><td style="text-align:left"><code>INTEREST_THRESHOLD</code></td><td>10,000,000</td><td style="text-align:left">Balance above which interest is scaled down</td></tr>
+              <tr><td style="text-align:left"><code>INTEREST_SCALE</code></td><td>40,000,000</td><td style="text-align:left">Exponential decay scale constant</td></tr>
+              <tr><td style="text-align:left"><code>INTEREST_DECAY_K</code></td><td>2.0</td><td style="text-align:left">Offline interest decay factor</td></tr>
+              <tr><td style="text-align:left"><code>WEALTH_TAX_EXEMPT</code></td><td>500,000</td><td style="text-align:left">Balance exempt from wealth tax</td></tr>
+              <tr><td style="text-align:left"><code>WEALTH_TAX_S</code></td><td>2,163</td><td style="text-align:left">Log-plateau time scale (hours, ~90 days)</td></tr>
+              <tr><td style="text-align:left"><code>NIRC_MONTHLY_RATE</code></td><td>0.05</td><td style="text-align:left">5% of reserves drips to treasury per month</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <details>
+        <summary>Cron schedule</summary>
+        <div>
+          <table class="govuk-table">
+            <thead><tr><th>Job</th><th>Schedule</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>Bank Interest</td><td>Every hour, minute 0</td><td>Applies interest to all eligible accounts</td></tr>
+              <tr><td>Wealth Tax</td><td>Every hour, minute 0, second 30</td><td>Applies progressive tax to offline accounts &gt;$500K</td></tr>
+              <tr><td>NIRC Transfer</td><td>Daily at 00:05</td><td>Transfers 5%/30 of Sovereign Reserves to Treasury Fund</td></tr>
+              <tr><td>Credit Score</td><td>Daily at 00:15</td><td>Evaluates all character credit scores</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <details>
+        <summary>Accounting treatment</summary>
+        <div>
+          <h3>Wealth Tax Entry</h3>
+          <table class="govuk-table">
+            <thead><tr><th>Account</th><th>Debit</th><th>Credit</th></tr></thead>
+            <tbody>
+              <tr><td>Player Checking (Liability, Bank)</td><td>tax_amount</td><td>—</td></tr>
+              <tr><td>Sovereign Reserves (Asset, Government)</td><td>—</td><td>tax_amount</td></tr>
+            </tbody>
+          </table>
+          <p>Debit on a liability account reduces the player's balance. Credit on an asset account increases reserves.</p>
+
+          <h3>NIRC Transfer Entry</h3>
+          <table class="govuk-table">
+            <thead><tr><th>Account</th><th>Debit</th><th>Credit</th></tr></thead>
+            <tbody>
+              <tr><td>Treasury Fund (Asset, Government)</td><td>nirc_amount</td><td>—</td></tr>
+              <tr><td>Sovereign Reserves (Asset, Government)</td><td>—</td><td>nirc_amount</td></tr>
+            </tbody>
+          </table>
+          <p>Credit reduces reserves, debit increases operating treasury.</p>
+        </div>
+      </details>
+
+    </div>
+
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Overview", href: "#overview" },
+        { label: "Wealth Tax", href: "#wealth-tax" },
+        { label: "Bank Interest", href: "#bank-interest" },
+        { label: "Sovereign Reserves Fund", href: "#sovereign-reserves" },
+        { label: "Flow of Funds", href: "#flow-of-funds" },
+        { label: "Economic Impact", href: "#impact" },
+        { label: "Technical Reference", href: "#appendix" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>

@@ -1,0 +1,33 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+---
+<GovLayout title="Employment & Industry" department="Ministry of Employment" description="Delivery jobs, subsidies, and supply chain events in the ASEAN Motor Club.">
+
+<PhaseBanner tag="GOV" />
+<Breadcrumbs items={[{ label: "Employment & Industry", href: "/employment" }]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-column-full">
+    <h1>Employment & Industry</h1>
+    <p>The ASEAN Motor Club economy is driven by delivery services, subsidised freight, and community supply chain events.</p>
+
+    <ul class="govuk-topic-list">
+      <li>
+        <a href="/employment/jobs">Delivery Jobs</a>
+        <p>Government-posted delivery contracts with adaptive scaling and completion bonuses.</p>
+      </li>
+      <li>
+        <a href="/employment/subsidies">Subsidies</a>
+        <p>Cargo, wrecker, and passenger subsidies funded by the Treasury.</p>
+      </li>
+      <li>
+        <a href="/employment/supply-chain">Supply Chain Events</a>
+        <p>Time-limited community logistics challenges with proportional reward distribution.</p>
+      </li>
+    </ul>
+  </div>
+</main>
+
+</GovLayout>

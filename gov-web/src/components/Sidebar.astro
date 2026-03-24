@@ -1,0 +1,14 @@
+---
+interface Props {
+  items: Array<{ label: string; href: string }>;
+}
+const { items } = Astro.props;
+---
+<nav class="govuk-sidebar" aria-label="Table of contents">
+  <h3>Contents</h3>
+  <ol>
+    {items.map(item => (
+      <li><a href={item.href}>{item.label}</a></li>
+    ))}
+  </ol>
+</nav>

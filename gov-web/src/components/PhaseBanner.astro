@@ -1,0 +1,12 @@
+---
+interface Props {
+  tag?: string;
+  text?: string;
+}
+const { tag = "Policy", text = "" } = Astro.props;
+---
+<div class="govuk-phase-banner">
+  <span class="govuk-tag">{tag}</span>
+  {text && <span>{text}</span>}
+  <slot />
+</div>

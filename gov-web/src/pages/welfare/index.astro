@@ -1,0 +1,29 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+---
+<GovLayout title="Social Welfare" department="Ministry of Social Welfare" description="Universal Basic Income and government employee programmes.">
+
+<PhaseBanner tag="GOV" />
+<Breadcrumbs items={[{ label: "Social Welfare", href: "/welfare" }]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-column-full">
+    <h1>Social Welfare</h1>
+    <p>The government provides a safety net for all citizens through Universal Basic Income and a voluntary government employment programme.</p>
+
+    <ul class="govuk-topic-list">
+      <li>
+        <a href="/welfare/ubi">Universal Basic Income</a>
+        <p>Regular income payments to all active citizens, scaled by driver level and activity.</p>
+      </li>
+      <li>
+        <a href="/welfare/gov-employees">Government Employee Programme</a>
+        <p>Voluntary public service programme with contribution-based levels and the GOV tag.</p>
+      </li>
+    </ul>
+  </div>
+</main>
+
+</GovLayout>

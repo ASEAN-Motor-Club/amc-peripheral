@@ -1,0 +1,106 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import InsetText from '../../components/InsetText.astro';
+import WarningText from '../../components/WarningText.astro';
+import Sidebar from '../../components/Sidebar.astro';
+---
+<GovLayout title="Government Employee Programme" department="Ministry of Social Welfare" description="The GOV employee programme — voluntary public service, contribution-based levels, and income redirection.">
+
+<PhaseBanner tag="Policy" text="Published 24 March 2026" />
+<Breadcrumbs items={[
+  { label: "Social Welfare", href: "/welfare" },
+  { label: "Government Employees", href: "/welfare/gov-employees" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Government Employee Programme</h1>
+
+      <SummaryBox title="Summary">
+        <p>Government employees are citizens who voluntarily redirect their earnings to the Treasury. In return, they receive double UBI, a visible rank in their name tag, and progressive level advancement.</p>
+      </SummaryBox>
+
+      <h2 id="how">1. How It Works</h2>
+      <p>When activated, a government employee's income from deliveries, job completions, and other activities is <strong>redirected to the Treasury Fund</strong>. The employee receives no direct payment — instead, the contribution is logged for level progression.</p>
+
+      <WarningText>
+        <strong>Important:</strong> Government employees do not receive direct income from deliveries or job completions. All earnings go to the Treasury. They are compensated through a 2× UBI multiplier.
+      </WarningText>
+
+      <h2 id="activation">2. Activation & Duration</h2>
+      <p>Government employee status lasts for <strong>24 hours</strong> per activation. When the role is active:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>The player's name is prefixed with <code>[GOV#]</code> where <code>#</code> is their level</li>
+        <li>All earnings are redirected to the Treasury</li>
+        <li>UBI is doubled (active: $36K/h, AFK: $12K/h)</li>
+      </ul>
+      <p>After 24 hours, the role expires automatically and the player reverts to normal citizen status.</p>
+
+      <h2 id="finances">3. Financial Mechanics</h2>
+      <p>Government employee earnings follow a three-track system based on income source:</p>
+
+      <table class="govuk-table">
+        <caption>Income handling by source</caption>
+        <thead><tr><th>Income Source</th><th>Wallet</th><th>Treasury</th><th>Level Progression</th></tr></thead>
+        <tbody>
+          <tr><td>Base delivery earnings</td><td style="color:#d4351c;font-weight:700">Confiscated</td><td style="color:#00703c;font-weight:700">Redirected</td><td style="color:#00703c;font-weight:700">✓ Counts</td></tr>
+          <tr><td>Contract completion bonus</td><td style="color:#d4351c;font-weight:700">Confiscated</td><td style="color:#d4351c;font-weight:700">Burned</td><td>✗ Excluded</td></tr>
+          <tr><td>Subsidy (depot restock, etc.)</td><td style="color:#d4351c;font-weight:700">Confiscated</td><td>No effect</td><td style="color:#00703c;font-weight:700">✓ Counts</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        <strong>Contract burning:</strong> Contract completion payments are destroyed from the economy — they are confiscated from the employee's wallet but not sent to the Treasury. This acts as a money sink that reduces inflation.
+      </InsetText>
+
+      <p><strong>Subsidy treatment:</strong> When a gov employee earns a subsidy (e.g. from a depot restock), the subsidy is briefly deposited then immediately confiscated. However, since the subsidy came <em>from</em> the Treasury, no money is sent back — it would be circular. Instead, the subsidy value counts toward the employee's level progression as a "contribution credit".</p>
+
+      <h2 id="levels">4. Levels & Progression</h2>
+      <p>Government employee levels are based on <strong>cumulative contributions</strong> to the treasury:</p>
+
+      <div class="formula">
+        Level = floor(contributions / $500,000) + 1
+      </div>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Level Progression</caption>
+        <thead><tr><th>Level</th><th>Cumulative Contributions</th><th>Tag</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">1</td><td>$0 – $499,999</td><td style="text-align:left">[GOV1]</td></tr>
+          <tr><td style="text-align:left">2</td><td>$500,000 – $999,999</td><td style="text-align:left">[GOV2]</td></tr>
+          <tr><td style="text-align:left">5</td><td>$2,000,000 – $2,499,999</td><td style="text-align:left">[GOV5]</td></tr>
+          <tr><td style="text-align:left">10</td><td>$4,500,000 – $4,999,999</td><td style="text-align:left">[GOV10]</td></tr>
+          <tr><td style="text-align:left">∞</td><td>No cap — levels scale infinitely</td><td style="text-align:left">[GOVn]</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        When a government employee levels up, a promotion announcement is broadcast to all players on the server. Contributions from job bonuses and supply chain event rewards also count towards progression, even though the employee receives no direct payment.
+      </InsetText>
+
+      <h2 id="tag">5. The GOV Tag</h2>
+      <p>The <code>[GOV#]</code> tag is a protected name prefix. Only active government employees may display it. The server automatically:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>Adds the tag when the role is activated</li>
+        <li>Removes the tag when the role expires</li>
+        <li>Warns players who attempt to use the tag without authorisation</li>
+      </ul>
+
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "How It Works", href: "#how" },
+        { label: "Activation & Duration", href: "#activation" },
+        { label: "Financial Mechanics", href: "#finances" },
+        { label: "Levels & Progression", href: "#levels" },
+        { label: "The GOV Tag", href: "#tag" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>

@@ -1,0 +1,80 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import InsetText from '../../components/InsetText.astro';
+import Sidebar from '../../components/Sidebar.astro';
+---
+<GovLayout title="Bank Interest" department="Bank of ASEAN" description="Interest rate policy, online multiplier, balance scaling, and offline decay.">
+
+<PhaseBanner tag="Policy" text="Published 24 March 2026" />
+<Breadcrumbs items={[
+  { label: "Banking & Credit", href: "/banking" },
+  { label: "Bank Interest", href: "/banking/interest" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Bank Interest</h1>
+
+      <SummaryBox title="Summary">
+        <p>The Bank of ASEAN pays hourly interest on all checking accounts. The rate depends on whether the account holder is online, their balance size, and how long they've been offline.</p>
+      </SummaryBox>
+
+      <h2 id="base-rate">1. Base Rate</h2>
+      <p>The base interest rate is <strong>2.2% per hour</strong>. Online players receive a <strong>2× multiplier</strong>, doubling their effective rate to 4.4%.</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Interest Rate Parameters</caption>
+        <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Base hourly rate</td><td>2.2%</td></tr>
+          <tr><td style="text-align:left">Online multiplier</td><td>2.0×</td></tr>
+          <tr><td style="text-align:left">Effective online rate</td><td>4.4%</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="balance-scaling">2. Balance Scaling</h2>
+      <p>For accounts above <strong>$10,000,000</strong>, interest is scaled down exponentially:</p>
+
+      <div class="formula">
+        scale = exp(-(balance - $10M) / $40M)<br /><br />
+        effective_rate = base_rate × scale
+      </div>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Effective interest by balance (online)</caption>
+        <thead><tr><th>Balance</th><th>Scale Factor</th><th>Effective Hourly Rate</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">$1,000,000</td><td>100%</td><td>4.40%</td></tr>
+          <tr><td style="text-align:left">$10,000,000</td><td>100%</td><td>4.40%</td></tr>
+          <tr><td style="text-align:left">$30,000,000</td><td>60.65%</td><td>2.67%</td></tr>
+          <tr><td style="text-align:left">$50,000,000</td><td>36.79%</td><td>1.62%</td></tr>
+          <tr><td style="text-align:left">$100,000,000</td><td>10.54%</td><td>0.46%</td></tr>
+          <tr><td style="text-align:left">$170,000,000</td><td>1.83%</td><td>0.08%</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        This creates a natural wealth ceiling around $170M where interest approaches zero. Combined with the wealth tax, balances above this level will naturally deflate over time.
+      </InsetText>
+
+      <h2 id="offline-decay">3. Offline Decay</h2>
+      <p>When a player goes offline, their interest rate decays over time using the same log-plateau formula as the wealth tax (with k=2.0). The longer they're offline, the less interest they earn — eventually approaching zero.</p>
+
+      <p>See <a href="/fiscal-policy#bank-interest">Fiscal Policy: Bank Interest</a> for the complete formula and projection tables.</p>
+
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Base Rate", href: "#base-rate" },
+        { label: "Balance Scaling", href: "#balance-scaling" },
+        { label: "Offline Decay", href: "#offline-decay" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>

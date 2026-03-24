@@ -1,0 +1,15 @@
+---
+interface Props {
+  department?: string;
+}
+const { department } = Astro.props;
+---
+<header class="govuk-header">
+  <div class="govuk-header__container">
+    <div class="govuk-header__crown">🏛️</div>
+    <div class="govuk-header__logotype">
+      <a href="/" class="govuk-header__link">ASEAN Motor Club</a>
+      {department && <span class="govuk-header__dept">{department}</span>}
+    </div>
+  </div>
+</header>

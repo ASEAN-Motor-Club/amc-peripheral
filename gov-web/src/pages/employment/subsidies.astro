@@ -1,0 +1,85 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import InsetText from '../../components/InsetText.astro';
+import Sidebar from '../../components/Sidebar.astro';
+---
+<GovLayout title="Subsidies" department="Ministry of Employment" description="Cargo, wrecker, and passenger subsidies funded by the ASEAN Motor Club Treasury.">
+
+<PhaseBanner tag="Policy" text="Published 24 March 2026" />
+<Breadcrumbs items={[
+  { label: "Employment & Industry", href: "/employment" },
+  { label: "Subsidies", href: "/employment/subsidies" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Subsidies</h1>
+
+      <SummaryBox title="Summary">
+        <p>The government provides subsidies to incentivise specific economic activities. Subsidies are funded from the Treasury Fund and scale with treasury health.</p>
+      </SummaryBox>
+
+      <h2 id="cargo">1. Cargo Subsidies</h2>
+      <p>Cargo subsidies are configured through <strong>Subsidy Rules</strong> — each rule defines:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Cargo filter</strong> — which cargo types qualify (or "any cargo" for universal rules)</li>
+        <li><strong>Source/destination filters</strong> — specific areas or delivery points</li>
+        <li><strong>Reward type</strong> — percentage of payment or flat amount</li>
+        <li><strong>On-time requirement</strong> — some subsidies require timely delivery</li>
+        <li><strong>Priority</strong> — when multiple rules match, the highest priority wins</li>
+      </ul>
+
+      <InsetText>
+        Subsidies are subject to a <strong>treasury cap</strong>. When the treasury balance falls below $50M, subsidy amounts scale down proportionally. A subsidy can never exceed the current treasury balance.
+      </InsetText>
+
+      <h2 id="wrecker">2. Wrecker Subsidies</h2>
+      <p>Tow truck operators receive subsidies for providing roadside assistance:</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Wrecker Subsidy Rates</caption>
+        <thead><tr><th>Scenario</th><th>Base Bonus</th><th>Payment Bonus</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Flipped Vehicle</td><td>$2,000</td><td>100% of payment</td></tr>
+          <tr><td style="text-align:left">Other Tow Requests</td><td>$2,000</td><td>50% of payment</td></tr>
+        </tbody>
+      </table>
+
+      <p>Additionally, tow requests include a <strong>body damage bonus</strong> of up to 55% of base payment. Keeping the towed vehicle's body intact earns the maximum bonus.</p>
+
+      <h2 id="passenger">3. Passenger Subsidies</h2>
+      <p>Passenger transport services receive the following subsidies:</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Passenger Subsidy Rates</caption>
+        <thead><tr><th>Service</th><th>Base Bonus</th><th>Payment Bonus</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Taxi</td><td>$2,000</td><td>50% of payment</td></tr>
+          <tr><td style="text-align:left">Ambulance</td><td>$2,000</td><td>50% of payment</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="treasury-cap">4. Treasury Cap</h2>
+      <p>All subsidies are subject to a treasury health check:</p>
+      <div class="formula">
+        effective_subsidy = min(subsidy, subsidy × treasury_balance / $50,000,000)
+      </div>
+      <p>When the treasury contains $50M or more, subsidies are paid in full. Below that, they scale linearly down to zero.</p>
+
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Cargo Subsidies", href: "#cargo" },
+        { label: "Wrecker Subsidies", href: "#wrecker" },
+        { label: "Passenger Subsidies", href: "#passenger" },
+        { label: "Treasury Cap", href: "#treasury-cap" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>

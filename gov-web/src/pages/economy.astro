@@ -1,0 +1,121 @@
+---
+import GovLayout from '../layouts/GovLayout.astro';
+import PhaseBanner from '../components/PhaseBanner.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import SummaryBox from '../components/SummaryBox.astro';
+import Sidebar from '../components/Sidebar.astro';
+import InsetText from '../components/InsetText.astro';
+import WarningText from '../components/WarningText.astro';
+---
+<GovLayout title="Economy & Treasury" department="Ministry of Finance & Treasury" description="Treasury Fund, Sovereign Reserves, NIRC, and economic equilibrium mechanisms.">
+
+<PhaseBanner tag="Policy" text="Published 24 March 2026" />
+<Breadcrumbs items={[{ label: "Economy & Treasury", href: "/economy" }]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Economy & Treasury</h1>
+
+      <div class="govuk-metadata">
+        <dl>
+          <dt>From:</dt><dd>Ministry of Finance & Treasury</dd>
+        </dl>
+      </div>
+
+      <SummaryBox title="Summary">
+        <p>The ASEAN Motor Club operates a two-tier government fund structure inspired by Singapore's fiscal framework. This page explains how the treasury works, how spending is self-regulating, and how revenue flows through the economy.</p>
+      </SummaryBox>
+
+      <h2 id="two-tier">1. Two-Tier Fund Structure</h2>
+      <p>The government maintains two separate accounts, each with a distinct purpose:</p>
+
+      <table class="govuk-table">
+        <caption>Government Accounts</caption>
+        <thead>
+          <tr><th>Account</th><th>Type</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Treasury Fund</strong></td>
+            <td>Operating (Asset)</td>
+            <td>Day-to-day spending: job bonuses, subsidies, UBI, Ministry budget</td>
+          </tr>
+          <tr>
+            <td><strong>Sovereign Reserves</strong></td>
+            <td>Locked (Asset)</td>
+            <td>Receives all wealth tax revenue. Not directly spendable.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <WarningText>
+        <strong>Key rule:</strong> Wealth tax revenue flows <em>only</em> to Sovereign Reserves — never directly to the operating treasury. This prevents the treasury from becoming permanently flush and devaluing active contributions.
+      </WarningText>
+
+      <h2 id="nirc">2. NIRC — Net Investment Returns Contribution</h2>
+      <p>Following Singapore's constitutional framework, a controlled portion of reserves is transferred to the operating treasury daily as the <strong>NIRC</strong>:</p>
+
+      <div class="formula">
+        Daily transfer = Sovereign Reserves × 5% / 30<br /><br />
+        ≈ 0.167% of reserves per day
+      </div>
+
+      <p>This transfer runs as a daily automated process at 00:05 server time. It provides a steady, predictable income stream to the treasury without depleting reserves.</p>
+
+      <h2 id="equilibrium">3. Treasury Equilibrium</h2>
+      <p>Government spending (job bonuses, subsidies) is automatically regulated by the treasury balance using a <strong>sigmoid-based multiplier</strong>:</p>
+
+      <div class="formula">
+        multiplier = 2.0 / (1 + e<sup>-sensitivity × (balance/equilibrium - 1)</sup>)
+      </div>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Treasury Multiplier by Balance</caption>
+        <thead>
+          <tr><th>Treasury Balance</th><th>Multiplier</th><th>Effect</th></tr>
+        </thead>
+        <tbody>
+          <tr><td style="text-align:left">Well below equilibrium</td><td>~0.5×</td><td>Spending tightens — fewer jobs, lower bonuses</td></tr>
+          <tr><td style="text-align:left">At equilibrium ($100M default)</td><td>~1.0×</td><td>Normal spending</td></tr>
+          <tr><td style="text-align:left">Well above equilibrium</td><td>~2.0×</td><td>Spending increases — more jobs, higher bonuses</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        This creates a self-correcting economy: when the treasury is low, the government automatically tightens spending. When it's high, it spends more — keeping the economy in balance without manual intervention.
+      </InsetText>
+
+      <h2 id="revenue">4. Revenue Sources</h2>
+      <p>The treasury receives income from:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>NIRC drip</strong> — daily transfer from Sovereign Reserves (primary source)</li>
+        <li><strong>Player donations</strong> — voluntary contributions from citizens</li>
+        <li><strong>Government employee contributions</strong> — income redirected from GOV-tagged players</li>
+        <li><strong>Vehicle purchases</strong> — certain luxury vehicle purchases contribute to the treasury</li>
+      </ul>
+
+      <h2 id="expenditure">5. Expenditure</h2>
+      <p>The treasury funds:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Delivery job bonuses</strong> — completion rewards for community jobs</li>
+        <li><strong>Cargo subsidies</strong> — bonus payments on qualifying deliveries</li>
+        <li><strong>Universal Basic Income</strong> — regular payments to all active citizens</li>
+        <li><strong>Government salary</strong> — 2× UBI for government employees</li>
+        <li><strong>Ministry budget</strong> — allocated to the elected Minister for discretionary spending</li>
+      </ul>
+
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Two-Tier Fund Structure", href: "#two-tier" },
+        { label: "NIRC", href: "#nirc" },
+        { label: "Treasury Equilibrium", href: "#equilibrium" },
+        { label: "Revenue Sources", href: "#revenue" },
+        { label: "Expenditure", href: "#expenditure" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>

@@ -1,0 +1,102 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import InsetText from '../../components/InsetText.astro';
+import Sidebar from '../../components/Sidebar.astro';
+---
+<GovLayout title="Credit Score" department="Bank of ASEAN" description="Credit score system — 0 to 200 scale, evaluation criteria, and impact on borrowing.">
+
+<PhaseBanner tag="Policy" text="Published 24 March 2026" />
+<Breadcrumbs items={[
+  { label: "Banking & Credit", href: "/banking" },
+  { label: "Credit Score", href: "/banking/credit-score" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Credit Score</h1>
+
+      <SummaryBox title="Summary">
+        <p>Every citizen with a qualifying loan balance has a credit score from 0 to 200. Your score affects loan fees and borrowing eligibility. It is evaluated once per repayment period (default: 7 days).</p>
+      </SummaryBox>
+
+      <h2 id="scale">1. Score Scale</h2>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Credit Score Tiers</caption>
+        <thead><tr><th>Score Range</th><th>Label</th><th>Loan Fee Impact</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">171 – 200</td><td style="text-align:left"><strong>Excellent</strong></td><td>0.5× – 0.65× (up to 50% discount)</td></tr>
+          <tr><td style="text-align:left">131 – 170</td><td style="text-align:left"><strong>Very Good</strong></td><td>0.65× – 0.85×</td></tr>
+          <tr><td style="text-align:left">101 – 130</td><td style="text-align:left"><strong>Good</strong></td><td>0.85× – 1.0×</td></tr>
+          <tr><td style="text-align:left">100</td><td style="text-align:left"><strong>Neutral</strong></td><td>1.0× (baseline)</td></tr>
+          <tr><td style="text-align:left">71 – 99</td><td style="text-align:left"><strong>Fair</strong></td><td>1.0× – 1.3×</td></tr>
+          <tr><td style="text-align:left">41 – 70</td><td style="text-align:left"><strong>Poor</strong></td><td>1.3× – 1.6×</td></tr>
+          <tr><td style="text-align:left">0 – 40</td><td style="text-align:left"><strong>Very Poor</strong></td><td>1.6× – 2.0× (doubled fees)</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="evaluation">2. How Scores Change</h2>
+      <p>Credit scores are evaluated once per <strong>repayment period</strong> (default: 7 days). Each evaluation checks whether you met your minimum repayment obligation:</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Score Delta per Evaluation</caption>
+        <thead><tr><th>Condition</th><th>Score Change</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Obligations met (repaid ≥ 10% of balance)</td><td style="color:#00703c;font-weight:700">+10</td></tr>
+          <tr><td style="text-align:left">Obligations exceeded (repaid ≥ 200% of required)</td><td style="color:#00703c;font-weight:700">+15</td></tr>
+          <tr><td style="text-align:left">Obligations missed (NPL)</td><td style="color:#d4351c;font-weight:700">−30</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        Missing one payment costs −30 points. Recovering takes 3 successful evaluations (+10 each). Good credit takes sustained effort to build, but can be destroyed quickly by negligence.
+      </InsetText>
+
+      <h2 id="utilisation">3. Credit Utilisation</h2>
+      <p>In addition to repayment behaviour, your loan utilisation ratio can trigger penalties:</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Utilisation Penalties (applied per evaluation)</caption>
+        <thead><tr><th>Utilisation</th><th>Penalty</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">&gt; 70% of max loan</td><td style="color:#d4351c">−5 per period</td></tr>
+          <tr><td style="text-align:left">&gt; 90% of max loan</td><td style="color:#d4351c">−10 per period</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="npl">4. Non-Performing Loans (NPL)</h2>
+      <p>A loan is classified as <strong>non-performing</strong> when:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>The loan balance is <strong>≥ $500,000</strong> (the NPL threshold)</li>
+        <li>Repayments in the last <strong>7 days</strong> are below <strong>10%</strong> of the outstanding balance</li>
+      </ul>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>NPL Parameters</caption>
+        <thead><tr><th>Parameter</th><th>Default Value</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Minimum balance for NPL</td><td>$500,000</td></tr>
+          <tr><td style="text-align:left">Repayment period</td><td>7 days</td></tr>
+          <tr><td style="text-align:left">Minimum repayment rate</td><td>10% of balance</td></tr>
+        </tbody>
+      </table>
+
+      <p>NPL status triggers a −30 credit score penalty per evaluation and may limit access to future loans.</p>
+
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Score Scale", href: "#scale" },
+        { label: "How Scores Change", href: "#evaluation" },
+        { label: "Credit Utilisation", href: "#utilisation" },
+        { label: "Non-Performing Loans", href: "#npl" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>

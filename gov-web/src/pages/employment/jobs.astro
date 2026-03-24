@@ -1,0 +1,98 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import InsetText from '../../components/InsetText.astro';
+import Sidebar from '../../components/Sidebar.astro';
+---
+<GovLayout title="Delivery Jobs" department="Ministry of Employment" description="How delivery jobs work — adaptive posting, completion bonuses, and government funding.">
+
+<PhaseBanner tag="Policy" text="Published 24 March 2026" />
+<Breadcrumbs items={[
+  { label: "Employment & Industry", href: "/employment" },
+  { label: "Delivery Jobs", href: "/employment/jobs" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Delivery Jobs</h1>
+
+      <SummaryBox title="Summary">
+        <p>The government posts delivery contracts that reward players for moving cargo between delivery points. Jobs are posted automatically using an adaptive system that responds to player activity and treasury health.</p>
+      </SummaryBox>
+
+      <h2 id="how-it-works">1. How Jobs Work</h2>
+      <p>Delivery jobs are created from <strong>templates</strong> — predefined contracts specifying cargo type, source/destination points, quantity, and base bonus. The system automatically selects templates and posts them as active jobs, considering:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>Current number of active jobs vs available slots</li>
+        <li>Supply chain event conflicts (jobs won't compete with active events)</li>
+        <li>Source storage availability (enough cargo at the pickup point)</li>
+        <li>Destination capacity (room at the delivery point)</li>
+      </ul>
+
+      <h2 id="adaptive">2. Adaptive Posting</h2>
+      <p>The number of job slots scales dynamically based on:</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Job Slot Calculation</caption>
+        <thead><tr><th>Factor</th><th>Method</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Player count</td><td>log₂(1 + players) base curve</td></tr>
+          <tr><td style="text-align:left">Success rate (24h)</td><td>Adaptive multiplier (0.5× – 2.0×)</td></tr>
+          <tr><td style="text-align:left">Treasury health</td><td>Sigmoid multiplier (0× – 2.0×)</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        If too many jobs expire unfulfilled, the system reduces the posting rate. If jobs are completed quickly, it ramps up — creating a self-balancing labour market.
+      </InsetText>
+
+      <h2 id="bonuses">3. Completion Bonuses</h2>
+      <p>Each job has a <strong>completion bonus</strong> distributed proportionally to all contributors based on their delivery quantity. Bonuses are influenced by:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Treasury multiplier</strong> — higher treasury means higher bonuses (0.5× – 2.0× range)</li>
+        <li><strong>Random variance</strong> — ±30% randomisation on each posting</li>
+        <li><strong>Template base</strong> — each template defines a base bonus amount</li>
+      </ul>
+
+      <h2 id="funding">4. Government Funding</h2>
+      <p>Job bonuses are funded through two mechanisms:</p>
+
+      <table class="govuk-table">
+        <thead><tr><th>Mechanism</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Ministry Budget</strong></td>
+            <td>When a Minister is in office, bonuses are escrowed from the Ministry's allocated budget. If the budget runs out, no new Ministry-funded jobs are posted.</td>
+          </tr>
+          <tr>
+            <td><strong>Treasury Direct</strong></td>
+            <td>During a "government shutdown" (no active Minister), jobs are funded directly from the Treasury Fund with a 50% penalty on expiration.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="expiration">5. Job Expiration</h2>
+      <p>When a job expires without being completed:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Ministry-funded jobs:</strong> escrowed funds are returned to the Ministry budget</li>
+        <li><strong>Treasury-funded jobs:</strong> a 50% penalty of the completion bonus is deducted from the Treasury</li>
+        <li>The template's success score decays by 30%, making it less likely to be posted again soon</li>
+      </ul>
+
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "How Jobs Work", href: "#how-it-works" },
+        { label: "Adaptive Posting", href: "#adaptive" },
+        { label: "Completion Bonuses", href: "#bonuses" },
+        { label: "Government Funding", href: "#funding" },
+        { label: "Job Expiration", href: "#expiration" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>
