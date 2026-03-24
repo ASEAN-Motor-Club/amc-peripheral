@@ -25,7 +25,7 @@ YT_COOKIES_PATH = os.environ.get("YT_COOKIES_PATH")
 DENO_PATH = os.environ.get("DENO_PATH")
 
 # AI Config
-DEFAULT_AI_MODEL = os.environ.get("DEFAULT_AI_MODEL", "google/gemini-3-flash-preview")
+DEFAULT_AI_MODEL = os.environ.get("DEFAULT_AI_MODEL", "xiaomi/mimo-v2-pro")
 TRANSLATION_AI_MODEL = os.environ.get("TRANSLATION_AI_MODEL", "openai/gpt-oss-20b")
 LOCAL_TIMEZONE = os.environ.get("LOCAL_TIMEZONE", "Asia/Bangkok")
 
