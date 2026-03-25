@@ -1,0 +1,186 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import Sidebar from '../../components/Sidebar.astro';
+import InsetText from '../../components/InsetText.astro';
+import WarningText from '../../components/WarningText.astro';
+---
+<GovLayout title="Economic Inequality Report" department="Office of the Treasury" description="Official report on wealth distribution among ASEAN Motor Club citizens — Gini coefficient, Lorenz curve, and wealth bracket analysis.">
+
+<PhaseBanner tag="Report" text="Published 25 March 2026" />
+<Breadcrumbs items={[
+  { label: "Reports & Statistics", href: "/reports" },
+  { label: "Economic Inequality Report", href: "/reports/economic-inequality" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Economic Inequality Report</h1>
+
+      <dl class="govuk-metadata">
+        <dt>Published:</dt><dd>25 March 2026</dd>
+        <dt>Department:</dt><dd>Office of the Treasury, Bank of ASEAN</dd>
+        <dt>Classification:</dt><dd>Public</dd>
+      </dl>
+
+      <SummaryBox title="Key findings">
+        <ul>
+          <li>The Gini coefficient of citizen bank deposits is <strong>0.8929</strong></li>
+          <li>The top 20% of citizens hold <strong>93.7%</strong> of all wealth</li>
+          <li>The top 10 depositors hold <strong>40.9%</strong> of total deposits</li>
+          <li>The median citizen balance is <strong>$373,304</strong> — 19× below the mean</li>
+        </ul>
+      </SummaryBox>
+
+      <!-- 1. Methodology -->
+      <h2 id="methodology">1. Methodology</h2>
+      <p>This report analyses the distribution of bank deposits among <strong>citizens</strong> — defined as characters with more than <strong>5 hours of cumulative session time</strong>. This threshold excludes transient visitors and inactive accounts, yielding a population of <strong>688 citizen accounts</strong> out of 1,165 total registered accounts.</p>
+      <p>Wealth is measured by the balance held in each citizen's Bank of ASEAN deposit account. The Gini coefficient is calculated using the relative mean absolute difference method.</p>
+
+      <!-- 2. Summary Statistics -->
+      <h2 id="summary-statistics">2. Summary Statistics</h2>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 1: Key economic indicators</caption>
+        <thead><tr><th>Indicator</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Citizen Accounts</td><td>688</td></tr>
+          <tr><td style="text-align:left">Total Citizen Deposits</td><td>$4,895,312,085</td></tr>
+          <tr><td style="text-align:left">Share of Total Money Supply</td><td>99.3%</td></tr>
+          <tr><td style="text-align:left">Mean Balance</td><td>$7,115,279</td></tr>
+          <tr><td style="text-align:left">Median Balance</td><td>$373,304</td></tr>
+          <tr><td style="text-align:left">Standard Deviation</td><td>$29,130,778</td></tr>
+          <tr><td style="text-align:left">Zero-Balance Accounts</td><td>57 (8.3%)</td></tr>
+        </tbody>
+      </table>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 2: Balance percentiles</caption>
+        <thead><tr><th>Percentile</th><th>Balance</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">P50 (Median)</td><td>$373,304</td></tr>
+          <tr><td style="text-align:left">P90</td><td>$10,960,564</td></tr>
+          <tr><td style="text-align:left">P95</td><td>$30,888,024</td></tr>
+          <tr><td style="text-align:left">P99</td><td>$129,001,939</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        The mean-to-median ratio of <strong>19.1×</strong> indicates extreme right-skew — a small number of very large accounts pull the average far above the typical citizen's balance.
+      </InsetText>
+
+      <!-- 3. Gini Coefficient -->
+      <h2 id="gini-coefficient">3. Gini Coefficient</h2>
+      <div class="formula">Gini = 0.8929</div>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 3: International wealth Gini comparison</caption>
+        <thead><tr><th>Economy</th><th>Wealth Gini</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">🇯🇵 Japan</td><td>0.63</td></tr>
+          <tr><td style="text-align:left">🇸🇬 Singapore</td><td>0.76</td></tr>
+          <tr><td style="text-align:left">🇺🇸 United States</td><td>0.85</td></tr>
+          <tr><td style="text-align:left">🇿🇦 South Africa</td><td>0.88</td></tr>
+          <tr><td style="text-align:left"><strong>🏁 ASEAN Motor Club</strong></td><td><strong>0.89</strong></td></tr>
+        </tbody>
+      </table>
+
+      <p>The AMC economy exhibits wealth concentration comparable to the most unequal real-world economies. This is structurally expected in a game economy where compounding returns (interest) and variable engagement create divergent wealth trajectories.</p>
+
+      <!-- 4. Lorenz Curve -->
+      <h2 id="lorenz-curve">4. Lorenz Curve</h2>
+      <p>The Lorenz curve shows cumulative wealth share by population percentile. A perfectly equal economy would follow the 45° diagonal.</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 4: Lorenz curve — cumulative wealth distribution</caption>
+        <thead><tr><th>Population %</th><th>Cumulative Wealth Share</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">10%</td><td>0.0%</td></tr>
+          <tr><td style="text-align:left">20%</td><td>0.0%</td></tr>
+          <tr><td style="text-align:left">30%</td><td>0.1%</td></tr>
+          <tr><td style="text-align:left">40%</td><td>0.2%</td></tr>
+          <tr><td style="text-align:left">50%</td><td>0.6%</td></tr>
+          <tr><td style="text-align:left">60%</td><td>1.4%</td></tr>
+          <tr><td style="text-align:left">70%</td><td>2.8%</td></tr>
+          <tr><td style="text-align:left">80%</td><td>6.2%</td></tr>
+          <tr><td style="text-align:left">90%</td><td>15.0%</td></tr>
+          <tr><td style="text-align:left">100%</td><td>100.0%</td></tr>
+        </tbody>
+      </table>
+
+      <WarningText>
+        <strong>The bottom 80% of citizens hold just 6.2% of total wealth</strong>, while the top 10% hold 85.0%.
+      </WarningText>
+
+      <!-- 5. Wealth Brackets -->
+      <h2 id="wealth-brackets">5. Wealth Bracket Distribution</h2>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 5: Wealth bracket breakdown</caption>
+        <thead><tr><th>Bracket</th><th>Accounts</th><th>% of Citizens</th><th>Total Wealth</th><th>Wealth Share</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Under $10K</td><td>128</td><td>18.6%</td><td>$163,334</td><td>0.0%</td></tr>
+          <tr><td style="text-align:left">$10K – $100K</td><td>89</td><td>12.9%</td><td>$3,762,524</td><td>0.1%</td></tr>
+          <tr><td style="text-align:left">$100K – $500K</td><td>154</td><td>22.4%</td><td>$37,455,322</td><td>0.8%</td></tr>
+          <tr><td style="text-align:left">$500K – $1M</td><td>75</td><td>10.9%</td><td>$53,788,271</td><td>1.1%</td></tr>
+          <tr><td style="text-align:left">$1M – $5M</td><td>126</td><td>18.3%</td><td>$302,693,342</td><td>6.2%</td></tr>
+          <tr><td style="text-align:left">$5M – $10M</td><td>42</td><td>6.1%</td><td>$283,722,977</td><td>5.8%</td></tr>
+          <tr><td style="text-align:left">$10M – $50M</td><td>51</td><td>7.4%</td><td>$1,217,925,576</td><td>24.9%</td></tr>
+          <tr><td style="text-align:left">$50M – $100M</td><td>11</td><td>1.6%</td><td>$773,372,235</td><td>15.8%</td></tr>
+          <tr><td style="text-align:left">$100M+</td><td>12</td><td>1.7%</td><td>$2,222,428,579</td><td>45.4%</td></tr>
+        </tbody>
+      </table>
+
+      <p>The economy exhibits a clear <strong>two-tier structure</strong>:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Lower tier</strong> (under $1M): 446 citizens (64.8%) holding 2.0% of wealth</li>
+        <li><strong>Upper tier</strong> ($1M and above): 242 citizens (35.2%) holding 98.0% of wealth</li>
+      </ul>
+
+      <!-- 6. Quintile Analysis -->
+      <h2 id="quintile-analysis">6. Quintile Analysis</h2>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Table 6: Wealth distribution by quintile</caption>
+        <thead><tr><th>Quintile</th><th>Accounts</th><th>Wealth Share</th><th>Balance Range</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Q1 (Poorest 20%)</td><td>138</td><td>0.0%</td><td>$0 – $12,748</td></tr>
+          <tr><td style="text-align:left">Q2</td><td>138</td><td>0.2%</td><td>$12,855 – $180,570</td></tr>
+          <tr><td style="text-align:left">Q3</td><td>138</td><td>1.1%</td><td>$181,920 – $725,144</td></tr>
+          <tr><td style="text-align:left">Q4</td><td>137</td><td>4.9%</td><td>$734,571 – $3,356,646</td></tr>
+          <tr><td style="text-align:left">Q5 (Richest 20%)</td><td>137</td><td>93.7%</td><td>$3,363,424 – $419,826,096</td></tr>
+        </tbody>
+      </table>
+
+      <p>The Q5/Q1 wealth share ratio exceeds <strong>2,000:1</strong>, indicating that progressive fiscal instruments such as the <a href="/fiscal-policy">Wealth Tax</a> are essential tools for redistribution.</p>
+
+      <!-- 7. Policy Implications -->
+      <h2 id="policy-implications">7. Policy Implications</h2>
+
+      <ol class="govuk-list">
+        <li><strong>The Wealth Tax is well-justified.</strong> With a Gini of 0.89 and 93.7% of wealth concentrated in the top quintile, progressive taxation is the primary mechanism available to the Treasury for redistribution.</li>
+        <li><strong>The median citizen is modestly wealthy.</strong> At $373K, the median citizen has meaningful savings but is orders of magnitude below the mean — policy should be calibrated to avoid burdening this middle class.</li>
+        <li><strong>The zero-balance population (8.3%) warrants attention.</strong> 57 citizens with over 5 hours of engagement hold no bank savings, suggesting either active cash-only play or systemic barriers to wealth accumulation.</li>
+      </ol>
+
+    </div>
+
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Methodology", href: "#methodology" },
+        { label: "Summary Statistics", href: "#summary-statistics" },
+        { label: "Gini Coefficient", href: "#gini-coefficient" },
+        { label: "Lorenz Curve", href: "#lorenz-curve" },
+        { label: "Wealth Brackets", href: "#wealth-brackets" },
+        { label: "Quintile Analysis", href: "#quintile-analysis" },
+        { label: "Policy Implications", href: "#policy-implications" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>

@@ -1,0 +1,310 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import InsetText from '../../components/InsetText.astro';
+import WarningText from '../../components/WarningText.astro';
+---
+<GovLayout title="Balance Calculator" department="Bank of ASEAN" description="Calculate how interest and wealth tax affect your bank balance over time.">
+
+<PhaseBanner tag="Tool" text="Bank of ASEAN" />
+<Breadcrumbs items={[
+  { label: "Banking & Credit", href: "/banking" },
+  { label: "Balance Calculator", href: "/banking/calculator" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-column-full">
+    <h1>Balance Calculator</h1>
+    <p>Estimate how your bank balance will change over a period of inactivity. This calculator simulates the hourly compounding of interest and wealth tax using the exact formulas applied by the Bank of ASEAN.</p>
+
+    <InsetText>
+      Both interest and wealth tax are applied <strong>every hour</strong> by the banking system. This calculator runs the same hour-by-hour simulation, so results closely match what you would actually experience in-game.
+    </InsetText>
+
+    <!-- Calculator Form -->
+    <div class="calculator-form">
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--m" for="initial-balance">
+          Initial bank balance ($)
+        </label>
+        <div class="govuk-hint">Enter your current bank account balance.</div>
+        <div class="currency-input">
+          <span class="currency-prefix">$</span>
+          <input class="govuk-input govuk-input--width-10" id="initial-balance" type="text" inputmode="numeric" placeholder="10,000,000" />
+        </div>
+      </div>
+
+      <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--m" for="days-offline">
+          Days without logging in
+        </label>
+        <div class="govuk-hint">How many days you will be offline (1–365).</div>
+        <input class="govuk-input govuk-input--width-4" id="days-offline" type="number" min="1" max="365" value="30" />
+      </div>
+
+      <button class="govuk-button" id="calculate-btn">Calculate</button>
+    </div>
+
+    <!-- Results -->
+    <div id="results" class="results-container" style="display:none;">
+      <h2>Results</h2>
+
+      <table class="govuk-table govuk-table--numeric" id="summary-table">
+        <caption>Balance projection summary</caption>
+        <tbody>
+          <tr><td style="text-align:left">Starting Balance</td><td id="r-start"></td></tr>
+          <tr><td style="text-align:left">Total Interest Earned</td><td id="r-interest" class="result-positive"></td></tr>
+          <tr><td style="text-align:left">Total Wealth Tax Paid</td><td id="r-tax" class="result-negative"></td></tr>
+          <tr class="govuk-table__row--highlight"><td style="text-align:left;font-weight:700">Net Change</td><td id="r-net" style="font-weight:700"></td></tr>
+          <tr><td style="text-align:left;font-weight:700">Final Balance</td><td id="r-final" style="font-weight:700"></td></tr>
+        </tbody>
+      </table>
+
+      <div id="crossover-warning" style="display:none;">
+        <WarningText>
+          <strong>Crossover detected:</strong> <span id="crossover-text"></span>
+        </WarningText>
+      </div>
+
+      <details class="govuk-details" id="daily-details">
+        <summary>Daily breakdown</summary>
+        <div>
+          <table class="govuk-table govuk-table--numeric" id="daily-table">
+            <thead>
+              <tr>
+                <th>Day</th>
+                <th>Balance</th>
+                <th>Interest (day)</th>
+                <th>Tax (day)</th>
+                <th>Net (day)</th>
+              </tr>
+            </thead>
+            <tbody id="daily-tbody"></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </div>
+</main>
+
+</GovLayout>
+
+<style>
+  /* Form group spacing */
+  .govuk-form-group {
+    margin-bottom: 1.5rem;
+  }
+  .govuk-label {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+  .govuk-label--m {
+    font-size: 1.2rem;
+  }
+  .govuk-hint {
+    color: #505a5f;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Inputs — GDS-style */
+  .govuk-input {
+    font-family: inherit;
+    font-size: 19px;
+    line-height: 1.3;
+    padding: 7px 10px;
+    border: 2px solid #0b0c0c;
+    border-radius: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    height: 44px;
+  }
+  .govuk-input:focus {
+    outline: 3px solid #fd0;
+    outline-offset: 0;
+    box-shadow: inset 0 0 0 2px #0b0c0c;
+  }
+  .govuk-input--width-10 { width: 260px; }
+  .govuk-input--width-4 { width: 100px; }
+
+  /* Button — GDS green */
+  .govuk-button {
+    font-family: inherit;
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 10px 20px 8px;
+    height: 44px;
+    min-width: 120px;
+    color: #fff;
+    background: #00703c;
+    border: 2px solid transparent;
+    border-bottom: 3px solid #002d18;
+    border-radius: 0;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    box-shadow: 0 2px 0 #002d18;
+    display: inline-block;
+    text-align: center;
+  }
+  .govuk-button:hover {
+    background: #005a30;
+  }
+  .govuk-button:focus {
+    outline: 3px solid #fd0;
+    outline-offset: 0;
+    box-shadow: 0 2px 0 #0b0c0c;
+  }
+  .govuk-button:active {
+    background: #00401e;
+    box-shadow: none;
+    border-bottom-width: 0;
+    padding-bottom: 11px;
+  }
+
+  /* Calculator form container */
+  .calculator-form {
+    background: #f3f2f1;
+    padding: 1.5rem 2rem;
+    border-left: 4px solid #1d70b8;
+    margin-bottom: 2rem;
+  }
+
+  /* Currency prefix input */
+  .currency-input {
+    display: flex;
+    align-items: stretch;
+  }
+  .currency-prefix {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #505a5f;
+    color: #fff;
+    font-weight: 700;
+    font-size: 19px;
+    padding: 0 12px;
+    border: 2px solid #0b0c0c;
+    border-right: none;
+    height: 44px;
+  }
+  .currency-input .govuk-input {
+    border-left: none;
+  }
+
+  /* Results */
+  .results-container {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 4px solid #1d70b8;
+  }
+  .result-positive { color: #00703c; }
+  .result-negative { color: #d4351c; }
+  .govuk-table__row--highlight td {
+    border-top: 2px solid #0b0c0c;
+    padding-top: 0.75rem;
+  }
+  #daily-table tbody tr:nth-child(even) {
+    background: #f8f8f8;
+  }
+</style>
+
+<script>
+  import {
+    calculateHourlyInterest,
+    calculateWealthTax,
+    simulate,
+  } from '../../lib/simulation.mjs';
+
+  // ── Formatting ──
+  function fmt(n) {
+    return '$' + Math.round(n).toLocaleString('en-US');
+  }
+  function fmtSigned(n) {
+    const sign = n >= 0 ? '+' : '';
+    return sign + fmt(n);
+  }
+
+  // ── Parse currency input ──
+  function parseCurrency(str) {
+    return parseInt(str.replace(/[^0-9]/g, ''), 10) || 0;
+  }
+
+  // ── DOM wiring ──
+  const balanceInput = document.getElementById('initial-balance');
+  const daysInput = document.getElementById('days-offline');
+  const calculateBtn = document.getElementById('calculate-btn');
+  const resultsDiv = document.getElementById('results');
+
+  // Format input as currency on blur
+  balanceInput.addEventListener('blur', () => {
+    const val = parseCurrency(balanceInput.value);
+    if (val > 0) balanceInput.value = val.toLocaleString('en-US');
+  });
+
+  calculateBtn.addEventListener('click', () => {
+    const initialBalance = parseCurrency(balanceInput.value);
+    const days = parseInt(daysInput.value, 10);
+
+    if (initialBalance <= 0) {
+      balanceInput.focus();
+      return;
+    }
+    if (!days || days < 1 || days > 365) {
+      daysInput.focus();
+      return;
+    }
+
+    const result = simulate(initialBalance, days);
+
+    // Summary
+    document.getElementById('r-start').textContent = fmt(initialBalance);
+
+    const interestEl = document.getElementById('r-interest');
+    interestEl.textContent = '+' + fmt(result.totalInterest);
+    interestEl.className = 'result-positive';
+
+    const taxEl = document.getElementById('r-tax');
+    taxEl.textContent = '-' + fmt(result.totalTax);
+    taxEl.className = 'result-negative';
+
+    const netEl = document.getElementById('r-net');
+    netEl.textContent = fmtSigned(result.netChange);
+    netEl.className = result.netChange >= 0 ? 'result-positive' : 'result-negative';
+
+    const finalEl = document.getElementById('r-final');
+    finalEl.textContent = fmt(result.finalBalance);
+
+    // Crossover warning
+    const crossoverDiv = document.getElementById('crossover-warning');
+    if (result.crossoverDay !== null) {
+      document.getElementById('crossover-text').textContent =
+        `From day ${result.crossoverDay} onwards, your hourly wealth tax exceeds interest earned. Your balance is declining.`;
+      crossoverDiv.style.display = '';
+    } else {
+      crossoverDiv.style.display = 'none';
+    }
+
+    // Daily breakdown
+    const tbody = document.getElementById('daily-tbody');
+    tbody.innerHTML = '';
+    for (const snap of result.dailySnapshots) {
+      const tr = document.createElement('tr');
+      const netClass = snap.net >= 0 ? 'result-positive' : 'result-negative';
+      tr.innerHTML = `
+        <td style="text-align:left">Day ${snap.day}</td>
+        <td>${fmt(snap.balance)}</td>
+        <td class="result-positive">+${fmt(snap.interest)}</td>
+        <td class="result-negative">-${fmt(snap.tax)}</td>
+        <td class="${netClass}">${fmtSigned(snap.net)}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    resultsDiv.style.display = '';
+    resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+</script>

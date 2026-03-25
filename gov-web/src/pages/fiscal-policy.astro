@@ -41,19 +41,19 @@ import WarningText from '../components/WarningText.astro';
       <p>The ASEAN Motor Club economy has experienced sustained inflationary pressure over the past year, driven by high interest rates on bank deposits and a concentration of wealth in idle accounts. Without intervention, the money supply will continue to grow unchecked, eroding the purchasing power of active participants.</p>
       <p>This policy introduces three interlocking mechanisms:</p>
       <ul class="govuk-list govuk-list--bullet">
-        <li><strong>Wealth Tax</strong> — a progressive hourly tax on offline accounts above $500,000, using marginal brackets</li>
+        <li><strong>Wealth Tax</strong> — a progressive hourly tax on offline accounts above $1,000,000, using marginal brackets</li>
         <li><strong>Interest Decay</strong> — bank interest that decays with time offline, rewarding active players</li>
         <li><strong>Sovereign Reserves</strong> — a locked national fund that receives wealth tax revenue, with only a controlled monthly drip to the operating treasury</li>
       </ul>
 
       <WarningText>
-        <strong>Important:</strong> All monetary figures in this document are denominated in the in-game currency ($). The exempt threshold of $500,000 means accounts at or below this balance are never taxed.
+        <strong>Important:</strong> All monetary figures in this document are denominated in the in-game currency ($). The exempt threshold of $1,000,000 means accounts at or below this balance are never taxed.
       </WarningText>
 
       <!-- 2. Wealth Tax -->
       <h2 id="wealth-tax">2. Wealth Tax</h2>
       <h3>2.1 Scope & Exemption</h3>
-      <p>The wealth tax applies to all character bank accounts held at the Bank of ASEAN with a balance exceeding <strong>$500,000</strong> (the exempt threshold). Characters with a null game GUID (zombie accounts) are excluded.</p>
+      <p>The wealth tax applies to all character bank accounts held at the Bank of ASEAN with a balance exceeding <strong>$1,000,000</strong> (the exempt threshold). Characters with a null game GUID (zombie accounts) are excluded.</p>
       <p>Tax is computed and deducted <strong>hourly</strong>, based on the number of hours the character has been offline.</p>
 
       <InsetText>
@@ -69,10 +69,10 @@ import WarningText from '../components/WarningText.astro';
           <tr><th>Bracket</th><th>Balance Range</th><th>k-factor</th></tr>
         </thead>
         <tbody>
-          <tr><td style="text-align:left">Exempt</td><td>$0 – $500,000</td><td>0 (not taxed)</td></tr>
-          <tr><td style="text-align:left">Low</td><td>$500,000 – $2,500,000</td><td>0.75</td></tr>
-          <tr><td style="text-align:left">Mid</td><td>$2,500,000 – $10,000,000</td><td>1.25</td></tr>
-          <tr><td style="text-align:left">High</td><td>$10,000,000+</td><td>1.75</td></tr>
+          <tr><td style="text-align:left">Exempt</td><td>$0 – $1,000,000</td><td>0 (not taxed)</td></tr>
+          <tr><td style="text-align:left">Low</td><td>$1,000,000 – $20,000,000</td><td>0.65</td></tr>
+          <tr><td style="text-align:left">Mid</td><td>$20,000,000 – $100,000,000</td><td>1.05</td></tr>
+          <tr><td style="text-align:left">High</td><td>$100,000,000+</td><td>1.55</td></tr>
         </tbody>
       </table>
 
@@ -91,17 +91,17 @@ import WarningText from '../components/WarningText.astro';
 
       <h3>2.4 Effective Tax Rates</h3>
       <table class="govuk-table govuk-table--numeric">
-        <caption>Table 2: Effective hourly rate by offline duration (High bracket, k=1.75)</caption>
+        <caption>Table 2: Effective hourly rate by offline duration (High bracket, k=1.55)</caption>
         <thead>
           <tr><th>Offline Duration</th><th>Hourly Rate</th><th>~Daily Equivalent</th></tr>
         </thead>
         <tbody>
-          <tr><td style="text-align:left">1 hour</td><td>0.00037%</td><td>0.009%</td></tr>
-          <tr><td style="text-align:left">24 hours (1 day)</td><td>0.0087%</td><td>0.21%</td></tr>
-          <tr><td style="text-align:left">168 hours (1 week)</td><td>0.054%</td><td>1.30%</td></tr>
-          <tr><td style="text-align:left">720 hours (1 month)</td><td>0.17%</td><td>4.14%</td></tr>
-          <tr><td style="text-align:left">2,163 hours (~90 days)</td><td>0.28%</td><td>6.81%</td></tr>
-          <tr><td style="text-align:left">8,760 hours (1 year)</td><td>0.19%</td><td>4.60%</td></tr>
+          <tr><td style="text-align:left">1 hour</td><td>0.00003%</td><td>0.00%</td></tr>
+          <tr><td style="text-align:left">24 hours (1 day)</td><td>0.00078%</td><td>0.02%</td></tr>
+          <tr><td style="text-align:left">168 hours (1 week)</td><td>0.005%</td><td>0.12%</td></tr>
+          <tr><td style="text-align:left">720 hours (1 month)</td><td>0.015%</td><td>0.37%</td></tr>
+          <tr><td style="text-align:left">2,163 hours (~90 days)</td><td>0.025%</td><td>0.60%</td></tr>
+          <tr><td style="text-align:left">8,760 hours (1 year)</td><td>0.023%</td><td>0.55%</td></tr>
         </tbody>
       </table>
 
@@ -290,11 +290,11 @@ import WarningText from '../components/WarningText.astro';
         <caption>Table 7: 30-day net balance change by player behaviour ($10M starting balance)</caption>
         <thead><tr><th>Player Type</th><th>Interest Earned</th><th>Wealth Tax Paid</th><th>Net Change</th></tr></thead>
         <tbody>
-          <tr><td style="text-align:left">Daily active (1h+/day)</td><td>+$3,168,000</td><td>-$21,600</td><td style="color:#00703c;font-weight:700">+$3,146,400</td></tr>
-          <tr><td style="text-align:left">Weekly active (1h/week)</td><td>+$1,584,000</td><td>-$151,200</td><td style="color:#00703c;font-weight:700">+$1,432,800</td></tr>
-          <tr><td style="text-align:left">Idle 30 days</td><td>+$86,400</td><td>-$1,231,200</td><td style="color:#d4351c;font-weight:700">-$1,144,800</td></tr>
-          <tr><td style="text-align:left">Idle 90 days</td><td>+$7,200</td><td>-$2,030,400</td><td style="color:#d4351c;font-weight:700">-$2,023,200</td></tr>
-          <tr><td style="text-align:left">Idle 365 days</td><td>~$0</td><td>-$3,369,600</td><td style="color:#d4351c;font-weight:700">-$3,369,600</td></tr>
+          <tr><td style="text-align:left">Daily active (1h+/day)</td><td>+$3,168,000</td><td>-$5,400</td><td style="color:#00703c;font-weight:700">+$3,162,600</td></tr>
+          <tr><td style="text-align:left">Weekly active (1h/week)</td><td>+$1,584,000</td><td>-$37,800</td><td style="color:#00703c;font-weight:700">+$1,546,200</td></tr>
+          <tr><td style="text-align:left">Idle 30 days</td><td>+$1,213,496</td><td>-$260,112</td><td style="color:#00703c;font-weight:700">+$953,384</td></tr>
+          <tr><td style="text-align:left">Idle 90 days</td><td>+$3,204,487</td><td>-$1,597,596</td><td style="color:#00703c;font-weight:700">+$1,606,891</td></tr>
+          <tr><td style="text-align:left">Idle 365 days</td><td>+$11,379,579</td><td>-$9,196,040</td><td style="color:#00703c;font-weight:700">+$2,183,539</td></tr>
         </tbody>
       </table>
 
@@ -315,7 +315,7 @@ import WarningText from '../components/WarningText.astro';
               <tr><td style="text-align:left"><code>INTEREST_THRESHOLD</code></td><td>10,000,000</td><td style="text-align:left">Balance above which interest is scaled down</td></tr>
               <tr><td style="text-align:left"><code>INTEREST_SCALE</code></td><td>40,000,000</td><td style="text-align:left">Exponential decay scale constant</td></tr>
               <tr><td style="text-align:left"><code>INTEREST_DECAY_K</code></td><td>2.0</td><td style="text-align:left">Offline interest decay factor</td></tr>
-              <tr><td style="text-align:left"><code>WEALTH_TAX_EXEMPT</code></td><td>500,000</td><td style="text-align:left">Balance exempt from wealth tax</td></tr>
+              <tr><td style="text-align:left"><code>WEALTH_TAX_EXEMPT</code></td><td>1,000,000</td><td style="text-align:left">Balance exempt from wealth tax</td></tr>
               <tr><td style="text-align:left"><code>WEALTH_TAX_S</code></td><td>2,163</td><td style="text-align:left">Log-plateau time scale (hours, ~90 days)</td></tr>
               <tr><td style="text-align:left"><code>NIRC_MONTHLY_RATE</code></td><td>0.05</td><td style="text-align:left">5% of reserves drips to treasury per month</td></tr>
             </tbody>
@@ -330,7 +330,7 @@ import WarningText from '../components/WarningText.astro';
             <thead><tr><th>Job</th><th>Schedule</th><th>Description</th></tr></thead>
             <tbody>
               <tr><td>Bank Interest</td><td>Every hour, minute 0</td><td>Applies interest to all eligible accounts</td></tr>
-              <tr><td>Wealth Tax</td><td>Every hour, minute 0, second 30</td><td>Applies progressive tax to offline accounts &gt;$500K</td></tr>
+              <tr><td>Wealth Tax</td><td>Every hour, minute 0, second 30</td><td>Applies progressive tax to offline accounts &gt;$1M</td></tr>
               <tr><td>NIRC Transfer</td><td>Daily at 00:05</td><td>Transfers 5%/30 of Sovereign Reserves to Treasury Fund</td></tr>
               <tr><td>Credit Score</td><td>Daily at 00:15</td><td>Evaluates all character credit scores</td></tr>
             </tbody>
@@ -381,6 +381,7 @@ import WarningText from '../components/WarningText.astro';
         <ul class="govuk-list">
           <li><a href="/treasury-dashboard">Treasury Dashboard</a></li>
           <li><a href="/fiscal-analysis">Fiscal Analysis</a></li>
+          <li><a href="/banking/calculator">Balance Calculator</a></li>
         </ul>
       </div>
     </div>

@@ -1,0 +1,32 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+---
+<GovLayout title="Reports & Statistics" department="Office of the Treasury" description="Official government reports and statistical publications from the ASEAN Motor Club.">
+
+<PhaseBanner tag="GOV" text="Official government publications" />
+<Breadcrumbs items={[
+  { label: "Reports & Statistics", href: "/reports" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-column-full">
+    <h1>Reports & Statistics</h1>
+    <p>Official government reports and statistical publications from ASEAN Motor Club departments.</p>
+
+    <h2 class="govuk-heading-section">Economic Reports</h2>
+    <ul class="govuk-topic-list">
+      <li>
+        <a href="/reports/economic-inequality">Economic Inequality Report</a>
+        <p>Wealth distribution analysis — Gini coefficient, Lorenz curve, and bracket breakdown for 688 citizen accounts. Published 25 March 2026.</p>
+      </li>
+      <li>
+        <a href="/reports/economic-activity-q1-2026">Q1 2026 Economic Activity Report</a>
+        <p>Quarterly summary of player activity and delivery economics. Published 25 March 2026.</p>
+      </li>
+    </ul>
+  </div>
+</main>
+
+</GovLayout>

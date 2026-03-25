@@ -1,0 +1,123 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+
+import reportData from '../../data/economic_report_q1_2026.json';
+
+const { generated_at, start_date, end_date, weeks } = reportData;
+
+// Max values for scaling
+const maxDap = Math.max(...weeks.map(w => w.metrics.dap.avg));
+let maxValue = Math.max(...weeks.map(w => w.metrics.deliveries.value));
+// If maxValue is 0 (no deliveries), give it a reasonable default to avoid NaN
+if (maxValue <= 0) maxValue = 1000000;
+
+const maxDapRounded = Math.ceil(maxDap / 100) * 100;
+
+// simple currency formatter
+const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(val).replace('$', '$');
+---
+
+<GovLayout title="Q1 2026 Economic Activity Report" department="Ministry of Finance & Treasury" description="Quarterly report on player activity and economic metrics.">
+
+<PhaseBanner tag="Report" text={`Published ${new Date(generated_at).toLocaleDateString('en-GB')}`} />
+<Breadcrumbs items={[{ label: "Reports", href: "/reports" }, { label: "Q1 2026", href: "#" }]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Q1 2026 Economic Activity Report</h1>
+
+      <SummaryBox title="Summary">
+        <p>This report covers the 12-week period from <strong>{start_date}</strong> to <strong>{end_date}</strong>.</p>
+        <p>It tracks the Daily Active Players (DAP) and the total value of logistics deliveries flowing through the economy.</p>
+      </SummaryBox>
+
+      <h2 class="govuk-heading-m">Weekly Active Players (Average DAP)</h2>
+      <p class="govuk-body">The chart below shows the average daily active players for each week. It provides a measure of overall community scale and health.</p>
+      
+      <div class="govuk-!-margin-bottom-8" style="background: #f3f2f1; padding: 2rem 1rem 3rem 1rem; border: 1px solid #b1b4b6;">
+        <svg width="100%" height="250" viewBox="0 0 650 250" style="overflow: visible; font-family: 'GDS Transport', Arial, sans-serif;">
+          <!-- Grid lines -->
+          <line x1="40" y1="200" x2="650" y2="200" stroke="#b1b4b6" stroke-width="1" />
+          <line x1="40" y1="100" x2="650" y2="100" stroke="#b1b4b6" stroke-width="1" stroke-dasharray="4,4" />
+          <line x1="40" y1="0" x2="650" y2="0" stroke="#b1b4b6" stroke-width="1" stroke-dasharray="4,4" />
+          
+          <text x="30" y="200" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">0</text>
+          <text x="30" y="100" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">{maxDapRounded / 2}</text>
+          <text x="30" y="0" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">{maxDapRounded}</text>
+          
+          {weeks.map((w, i) => {
+             const xOffset = 60 + (i * (580 / weeks.length));
+             const barHeight = (w.metrics.dap.avg / maxDapRounded) * 200;
+             const y = 200 - barHeight;
+             const label = w.week_label.replace('Wk of ', '');
+             return (
+               <g>
+                 <rect x={xOffset} y={y} width="30" height={barHeight} fill="#1d70b8" />
+                 <text x={xOffset + 15} y="220" font-size="11" fill="#0b0c0c" text-anchor="end" transform={`rotate(-45 ${xOffset + 15} 220)`}>{label}</text>
+                 <text x={xOffset + 15} y={y - 8} font-size="11" fill="#0b0c0c" text-anchor="middle" font-weight="bold">{Math.round(w.metrics.dap.avg)}</text>
+               </g>
+             );
+          })}
+        </svg>
+      </div>
+
+      <h2 class="govuk-heading-m">Weekly Delivery Value ($)</h2>
+      <p class="govuk-body">The total monetary value of all cargo deliveries completed each week.</p>
+      
+      <div class="govuk-!-margin-bottom-8" style="background: #f3f2f1; padding: 2rem 1rem 3rem 1rem; border: 1px solid #b1b4b6;">
+        <svg width="100%" height="250" viewBox="0 0 650 250" style="overflow: visible; font-family: 'GDS Transport', Arial, sans-serif;">
+          <!-- Grid lines -->
+          <line x1="60" y1="200" x2="650" y2="200" stroke="#b1b4b6" stroke-width="1" />
+          <line x1="60" y1="100" x2="650" y2="100" stroke="#b1b4b6" stroke-width="1" stroke-dasharray="4,4" />
+          <line x1="60" y1="0" x2="650" y2="0" stroke="#b1b4b6" stroke-width="1" stroke-dasharray="4,4" />
+          
+          <text x="50" y="200" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">$0M</text>
+          <text x="50" y="100" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">${Math.round(maxValue / 2 / 1000000)}M</text>
+          <text x="50" y="0" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">${Math.ceil(maxValue / 1000000)}M</text>
+          
+          {weeks.map((w, i) => {
+             const xOffset = 80 + (i * (560 / weeks.length));
+             const barHeight = (w.metrics.deliveries.value / maxValue) * 200;
+             const y = 200 - barHeight;
+             const label = w.week_label.replace('Wk of ', '');
+             return (
+               <g>
+                 <rect x={xOffset} y={y} width="30" height={barHeight} fill="#00703c" />
+                 <text x={xOffset + 15} y="220" font-size="11" fill="#0b0c0c" text-anchor="end" transform={`rotate(-45 ${xOffset + 15} 220)`}>{label}</text>
+                 <text x={xOffset + 15} y={y - 8} font-size="10" fill="#0b0c0c" text-anchor="middle" font-weight="bold">${(w.metrics.deliveries.value/1000000).toFixed(1)}M</text>
+               </g>
+             );
+          })}
+        </svg>
+      </div>
+
+      <h2 class="govuk-heading-m">Raw Data Table</h2>
+      <table class="govuk-table govuk-table--numeric">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" style="text-align:left">Week</th>
+            <th scope="col" class="govuk-table__header">DAP (Avg)</th>
+            <th scope="col" class="govuk-table__header">Deliveries</th>
+            <th scope="col" class="govuk-table__header">Delivery Value</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          {weeks.map(w => (
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell" style="text-align:left">{w.week_label}</td>
+              <td class="govuk-table__cell">{w.metrics.dap.avg.toFixed(1)}</td>
+              <td class="govuk-table__cell">{w.metrics.deliveries.count.toLocaleString()}</td>
+              <td class="govuk-table__cell">{formatCurrency(w.metrics.deliveries.value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+    </div>
+  </div>
+</main>
+</GovLayout>

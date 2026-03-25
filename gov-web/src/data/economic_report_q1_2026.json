@@ -1,0 +1,187 @@
+{
+  "generated_at": "2026-03-25T06:09:44.826136+00:00",
+  "start_date": "2025-12-29",
+  "end_date": "2026-03-23",
+  "weeks": [
+    {
+      "week_label": "Wk of 29 Dec",
+      "week_start": "2025-12-29T00:00:00+00:00",
+      "metrics": {
+        "dap": {
+          "avg": 1602.3,
+          "min": 1597,
+          "max": 1608
+        },
+        "deliveries": {
+          "count": 22470,
+          "value": 74048349.0
+        }
+      }
+    },
+    {
+      "week_label": "Wk of 05 Jan",
+      "week_start": "2026-01-05T00:00:00+00:00",
+      "metrics": {
+        "dap": {
+          "avg": 1588.3,
+          "min": 1579,
+          "max": 1597
+        },
+        "deliveries": {
+          "count": 14576,
+          "value": 53620075.0
+        }
+      }
+    },
+    {
+      "week_label": "Wk of 12 Jan",
+      "week_start": "2026-01-12T00:00:00+00:00",
+      "metrics": {
+        "dap": {
+          "avg": 1587.6,
+          "min": 1583,
+          "max": 1596
+        },
+        "deliveries": {
+          "count": 13193,
+          "value": 35002708.0
+        }
+      }
+    },
+    {
+      "week_label": "Wk of 19 Jan",
+      "week_start": "2026-01-19T00:00:00+00:00",
+      "metrics": {
+        "dap": {
+          "avg": 1592.3,
+          "min": 1588,
+          "max": 1595
+        },
+        "deliveries": {
+          "count": 15565,
+          "value": 38874456.0
+        }
+      }
+    },
+    {
+      "week_label": "Wk of 26 Jan",
+      "week_start": "2026-01-26T00:00:00+00:00",
+      "metrics": {
+        "dap": {
+          "avg": 1583.7,
+          "min": 1579,
+          "max": 1586
+        },
+        "deliveries": {
+          "count": 14947,
+          "value": 51360561.0
+        }
+      }
+    },
+    {
+      "week_label": "Wk of 02 Feb",
+      "week_start": "2026-02-02T00:00:00+00:00",
+      "metrics": {
+        "dap": {
+          "avg": 1585.3,
+          "min": 1580,
+          "max": 1588
+        },
+        "deliveries": {
+          "count": 17656,
+          "value": 72249258.0
+        }
+      }
+    },
+    {
+      "week_label": "Wk of 09 Feb",
+      "week_start": "2026-02-09T00:00:00+00:00",
+      "metrics": {
+        "dap": {
+          "avg": 1582.0,
+          "min": 1577,
+          "max": 1586
+        },
+        "deliveries": {
+          "count": 20593,
+          "value": 120736262.0
+        }
+      }
+    },
+    {
+      "week_label": "Wk of 16 Feb",
+      "week_start": "2026-02-16T00:00:00+00:00",
+      "metrics": {
+        "dap": {
+          "avg": 1577.1,
+          "min": 1569,
+          "max": 1583
+        },
+        "deliveries": {
+          "count": 22292,
+          "value": 98859150.0
+        }
+      }
+    },
+    {
+      "week_label": "Wk of 23 Feb",
+      "week_start": "2026-02-23T00:00:00+00:00",
+      "metrics": {
+        "dap": {
+          "avg": 1582.0,
+          "min": 1579,
+          "max": 1583
+        },
+        "deliveries": {
+          "count": 22508,
+          "value": 90339678.0
+        }
+      }
+    },
+    {
+      "week_label": "Wk of 02 Mar",
+      "week_start": "2026-03-02T00:00:00+00:00",
+      "metrics": {
+        "dap": {
+          "avg": 1576.4,
+          "min": 1572,
+          "max": 1581
+        },
+        "deliveries": {
+          "count": 18970,
+          "value": 91686305.0
+        }
+      }
+    },
+    {
+      "week_label": "Wk of 09 Mar",
+      "week_start": "2026-03-09T00:00:00+00:00",
+      "metrics": {
+        "dap": {
+          "avg": 1569.0,
+          "min": 1563,
+          "max": 1574
+        },
+        "deliveries": {
+          "count": 19472,
+          "value": 86795726.0
+        }
+      }
+    },
+    {
+      "week_label": "Wk of 16 Mar",
+      "week_start": "2026-03-16T00:00:00+00:00",
+      "metrics": {
+        "dap": {
+          "avg": 1600.9,
+          "min": 1573,
+          "max": 1638
+        },
+        "deliveries": {
+          "count": 39221,
+          "value": 144155266.0
+        }
+      }
+    }
+  ]
+}
