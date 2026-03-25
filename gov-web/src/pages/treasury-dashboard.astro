@@ -1,0 +1,531 @@
+---
+import GovLayout from '../layouts/GovLayout.astro';
+import PhaseBanner from '../components/PhaseBanner.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import SummaryBox from '../components/SummaryBox.astro';
+import Sidebar from '../components/Sidebar.astro';
+---
+<GovLayout title="Treasury Dashboard" department="Ministry of Finance & Treasury" description="Live treasury income, expenses, and surplus/deficit dashboard with trend charts for the ASEAN Motor Club.">
+
+<PhaseBanner tag="Dashboard" text="Live data from Treasury API" />
+<Breadcrumbs items={[
+  { label: "Fiscal Policy", href: "/fiscal-policy" },
+  { label: "Treasury Dashboard", href: "/treasury-dashboard" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Treasury Dashboard</h1>
+
+      <SummaryBox title="About this dashboard">
+        <p>Real-time view of operating treasury income, expenses, and surplus/deficit. Data sourced from the <a href="/fiscal-policy">fiscal policy</a> accounting system.</p>
+      </SummaryBox>
+
+      <!-- Reporting Period + Date Navigation -->
+      <div id="reporting-period" class="reporting-period">
+        <div class="period-controls">
+          <button id="prev-day" class="govuk-button govuk-button--secondary period-nav" aria-label="Previous day">◀</button>
+          <div class="period-info">
+            <strong>Reporting period:</strong> <span id="period-label">Loading...</span>
+            <span id="snapshot-badge" class="snapshot-badge" style="display:none;">📸 Snapshot</span>
+            <span id="live-badge" class="live-badge" style="display:none;">⚡ Live</span>
+          </div>
+          <button id="next-day" class="govuk-button govuk-button--secondary period-nav" aria-label="Next day">▶</button>
+          <input type="date" id="date-picker" class="govuk-input date-picker" />
+        </div>
+      </div>
+
+      <!-- Summary Cards -->
+      <div id="summary-cards" class="dashboard-cards">
+        <div class="dashboard-card" id="card-surplus">
+          <span class="card-label">Daily Surplus / Deficit</span>
+          <span class="card-value" id="surplus-value">Loading...</span>
+        </div>
+        <div class="dashboard-card" id="card-treasury">
+          <span class="card-label">Treasury Balance</span>
+          <span class="card-value" id="treasury-balance">Loading...</span>
+        </div>
+        <div class="dashboard-card" id="card-reserves">
+          <span class="card-label">Sovereign Reserves</span>
+          <span class="card-value" id="reserves-balance">Loading...</span>
+        </div>
+      </div>
+
+      <!-- Income Breakdown -->
+      <h2 id="income">Income Breakdown</h2>
+      <table class="govuk-table" id="income-table">
+        <thead><tr><th>Category</th><th>Amount</th></tr></thead>
+        <tbody id="income-tbody">
+          <tr><td colspan="2">Loading...</td></tr>
+        </tbody>
+        <tfoot>
+          <tr class="govuk-table__row--total"><td><strong>Total Income</strong></td><td id="income-total"><strong>–</strong></td></tr>
+        </tfoot>
+      </table>
+
+      <!-- Expense Breakdown -->
+      <h2 id="expenses">Expense Breakdown</h2>
+      <table class="govuk-table" id="expense-table">
+        <thead><tr><th>Category</th><th>Amount</th></tr></thead>
+        <tbody id="expense-tbody">
+          <tr><td colspan="2">Loading...</td></tr>
+        </tbody>
+        <tfoot>
+          <tr class="govuk-table__row--total"><td><strong>Total Expenses</strong></td><td id="expense-total"><strong>–</strong></td></tr>
+        </tfoot>
+      </table>
+
+      <!-- Wealth Tax -->
+      <div id="wealth-tax-section" style="display:none;">
+        <h3>Wealth Tax → Sovereign Reserves</h3>
+        <p>Wealth tax collected today: <strong id="wealth-tax-value">–</strong></p>
+      </div>
+
+      <!-- Trend Charts -->
+      <h2 id="trends">7-Day Trends</h2>
+
+      <h3>Income vs Expenses</h3>
+      <div class="chart-container">
+        <canvas id="income-expense-chart"></canvas>
+      </div>
+
+      <h3>Daily Surplus / Deficit</h3>
+      <div class="chart-container">
+        <canvas id="surplus-chart"></canvas>
+      </div>
+
+      <h3>Fund Balances</h3>
+      <div class="chart-container">
+        <canvas id="balance-chart"></canvas>
+      </div>
+
+      <!-- Notes -->
+      <details class="govuk-details">
+        <summary class="govuk-details__summary">
+          <span class="govuk-details__summary-text">Accounting notes</span>
+        </summary>
+        <div class="govuk-details__text">
+          <h4>Income categories</h4>
+          <ul class="govuk-list govuk-list--bullet">
+            <li><strong>Government Employee Contributions</strong> — confiscation of earnings from government services</li>
+            <li><strong>Player Donations</strong> — voluntary donations and admin bills</li>
+            <li><strong>NIRC</strong> — Net Investment Returns Contribution from Sovereign Reserves (5% monthly drip)</li>
+            <li><strong>Performance Grants</strong> — 20% rebate on completed ministry jobs</li>
+          </ul>
+          <h4>Expense categories</h4>
+          <ul class="govuk-list govuk-list--bullet">
+            <li><strong>Job Subsidies</strong> — delivery and contract subsidies paid to players</li>
+            <li><strong>Job Completion Payouts</strong> — treasury-funded job completion rewards</li>
+            <li><strong>UBI & Gov Salary</strong> — Universal Basic Income and government employee salary payments</li>
+            <li><strong>Government Funding (Manual)</strong> — admin-initiated direct funding via /fund command</li>
+            <li><strong>Job Expiration Penalties</strong> — treasury penalty for unfulfilled expired jobs</li>
+          </ul>
+          <h4>Sovereign Reserves</h4>
+          <p>Wealth tax revenue flows to the locked Sovereign Reserves fund, not to the operating treasury. Only the daily NIRC drip enters the operating budget. See <a href="/fiscal-policy#sovereign-reserves">Sovereign Reserves policy</a>.</p>
+        </div>
+      </details>
+
+    </div>
+
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Income Breakdown", href: "#income" },
+        { label: "Expense Breakdown", href: "#expenses" },
+        { label: "7-Day Trends", href: "#trends" },
+      ]} />
+
+      <!-- Archive -->
+      <div id="archive-section" class="sidebar-links">
+        <h3>Report Archive</h3>
+        <ul class="govuk-list" id="archive-list">
+          <li>Loading...</li>
+        </ul>
+      </div>
+
+      <div class="sidebar-links">
+        <h3>Related</h3>
+        <ul class="govuk-list">
+          <li><a href="/fiscal-policy">Fiscal Policy</a></li>
+          <li><a href="/fiscal-analysis">Fiscal Analysis</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</main>
+
+</GovLayout>
+
+<style>
+  .reporting-period {
+    background: #f3f2f1;
+    border-left: 4px solid #505a5f;
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+    font-size: 0.95rem;
+    color: #0b0c0c;
+  }
+  .period-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .period-info { flex: 1; }
+  .period-nav {
+    margin: 0 !important;
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.875rem !important;
+    min-width: auto !important;
+  }
+  .date-picker {
+    width: auto !important;
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.875rem !important;
+  }
+  .snapshot-badge {
+    display: inline-block;
+    background: #1d70b8;
+    color: white;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    margin-left: 0.5rem;
+  }
+  .live-badge {
+    display: inline-block;
+    background: #f47738;
+    color: white;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    margin-left: 0.5rem;
+  }
+
+  .dashboard-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+  .dashboard-card {
+    background: #f3f2f1;
+    border-left: 4px solid #1d70b8;
+    padding: 1rem 1.25rem;
+  }
+  .dashboard-card .card-label {
+    display: block;
+    font-size: 0.875rem;
+    color: #505a5f;
+    margin-bottom: 0.25rem;
+  }
+  .dashboard-card .card-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #0b0c0c;
+  }
+  #card-surplus.surplus .card-value { color: #00703c; }
+  #card-surplus.deficit .card-value { color: #d4351c; }
+  #card-surplus.surplus { border-left-color: #00703c; }
+  #card-surplus.deficit { border-left-color: #d4351c; }
+
+  .chart-container {
+    position: relative;
+    height: 300px;
+    margin: 1rem 0 2rem 0;
+  }
+
+  .govuk-table__row--total td {
+    border-top: 2px solid #0b0c0c;
+    font-weight: 700;
+  }
+
+  .sidebar-links {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #b1b4b6;
+  }
+  .sidebar-links h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script is:inline>
+  const API_BASE = 'https://api.aseanmotorclub.com/api/v1/treasury';
+
+  function fmt(n) {
+    return '$' + Math.round(n).toLocaleString();
+  }
+
+  // --- Chart colors ---
+  const INCOME_COLORS = {
+    gov_employee: '#00703c',
+    donations: '#d53880',
+    nirc: '#1d70b8',
+    performance_grants: '#f47738',
+    other: '#b1b4b6',
+  };
+  const EXPENSE_COLORS = {
+    subsidies: '#d4351c',
+    job_payouts: '#912b88',
+    ubi: '#f47738',
+    gov_funding: '#1d70b8',
+    penalties: '#0b0c0c',
+    other: '#b1b4b6',
+  };
+
+  // --- State ---
+  let currentDate = null; // ISO string, null = default (yesterday)
+
+  function getYesterday() {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  }
+
+  function shiftDate(isoStr, delta) {
+    const d = new Date(isoStr);
+    d.setDate(d.getDate() + delta);
+    return d.toISOString().split('T')[0];
+  }
+
+  async function loadSummary(targetDate) {
+    try {
+      const dateParam = targetDate || getYesterday();
+      currentDate = dateParam;
+      const res = await fetch(API_BASE + '/summary/?days=1&target_date=' + dateParam);
+      const data = await res.json();
+
+      // Reporting period
+      const startDate = new Date(data.date_start);
+      const endDate = new Date(data.date_end);
+      const fmtDate = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+      const periodEl = document.getElementById('period-label');
+      if (data.date_start === data.date_end) {
+        periodEl.textContent = fmtDate(startDate);
+      } else {
+        periodEl.textContent = fmtDate(startDate) + ' \u2013 ' + fmtDate(endDate);
+      }
+
+      // Snapshot/live badge
+      document.getElementById('snapshot-badge').style.display = data.is_snapshot ? 'inline-block' : 'none';
+      document.getElementById('live-badge').style.display = data.is_snapshot ? 'none' : 'inline-block';
+
+      // Update date picker
+      document.getElementById('date-picker').value = dateParam;
+
+      // Summary cards
+      const surplus = data.surplus;
+      const surplusEl = document.getElementById('card-surplus');
+      const surplusVal = document.getElementById('surplus-value');
+      surplusVal.textContent = fmt(surplus);
+      surplusEl.classList.toggle('surplus', surplus >= 0);
+      surplusEl.classList.toggle('deficit', surplus < 0);
+
+      document.getElementById('treasury-balance').textContent = fmt(data.treasury_balance);
+      document.getElementById('reserves-balance').textContent = fmt(data.reserves_balance);
+
+      // Income table
+      const iTbody = document.getElementById('income-tbody');
+      iTbody.innerHTML = '';
+      const incomeItems = Object.entries(data.income.breakdown);
+      if (incomeItems.length === 0) {
+        iTbody.innerHTML = '<tr><td colspan="2">No income recorded.</td></tr>';
+      } else {
+        for (const [key, item] of incomeItems) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${item.emoji} ${item.label}</td><td>${fmt(item.amount)}</td>`;
+          iTbody.appendChild(tr);
+        }
+      }
+      document.getElementById('income-total').innerHTML = `<strong>${fmt(data.income.total)}</strong>`;
+
+      // Expense table
+      const eTbody = document.getElementById('expense-tbody');
+      eTbody.innerHTML = '';
+      const expenseItems = Object.entries(data.expenses.breakdown);
+      if (expenseItems.length === 0) {
+        eTbody.innerHTML = '<tr><td colspan="2">No expenses recorded.</td></tr>';
+      } else {
+        for (const [key, item] of expenseItems) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${item.emoji} ${item.label}</td><td>${fmt(item.amount)}</td>`;
+          eTbody.appendChild(tr);
+        }
+      }
+      document.getElementById('expense-total').innerHTML = `<strong>${fmt(data.expenses.total)}</strong>`;
+
+      // Wealth tax
+      if (data.wealth_tax_collected > 0) {
+        document.getElementById('wealth-tax-section').style.display = 'block';
+        document.getElementById('wealth-tax-value').textContent = fmt(data.wealth_tax_collected);
+      }
+    } catch (e) {
+      console.error('Failed to load treasury summary:', e);
+    }
+  }
+
+  async function loadTrend() {
+    try {
+      const res = await fetch(API_BASE + '/trend/?days=7');
+      const data = await res.json();
+
+      const labels = data.labels.map(d => {
+        const date = new Date(d);
+        return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      });
+
+      // --- Income vs Expenses chart ---
+      const ieCtx = document.getElementById('income-expense-chart').getContext('2d');
+      new Chart(ieCtx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Income',
+              data: data.income.totals,
+              backgroundColor: '#00703c',
+              borderRadius: 3,
+            },
+            {
+              label: 'Expenses',
+              data: data.expenses.totals,
+              backgroundColor: '#d4351c',
+              borderRadius: 3,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt(ctx.raw) },
+            },
+          },
+          scales: {
+            y: { ticks: { callback: v => fmt(v) } },
+          },
+        },
+      });
+
+      // --- Surplus chart ---
+      const sCtx = document.getElementById('surplus-chart').getContext('2d');
+      new Chart(sCtx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Surplus / Deficit',
+            data: data.surplus,
+            backgroundColor: data.surplus.map(v => v >= 0 ? '#00703c' : '#d4351c'),
+            borderRadius: 3,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: { label: ctx => fmt(ctx.raw) },
+            },
+          },
+          scales: {
+            y: { ticks: { callback: v => fmt(v) } },
+          },
+        },
+      });
+
+      // --- Balance chart ---
+      const bCtx = document.getElementById('balance-chart').getContext('2d');
+      new Chart(bCtx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Treasury Fund',
+              data: data.treasury_balance,
+              borderColor: '#1d70b8',
+              backgroundColor: 'rgba(29,112,184,0.1)',
+              fill: true,
+              tension: 0.3,
+            },
+            {
+              label: 'Sovereign Reserves',
+              data: data.reserves_balance,
+              borderColor: '#00703c',
+              backgroundColor: 'rgba(0,112,60,0.1)',
+              fill: true,
+              tension: 0.3,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt(ctx.raw) },
+            },
+          },
+          scales: {
+            y: { ticks: { callback: v => fmt(v) } },
+          },
+        },
+      });
+    } catch (e) {
+      console.error('Failed to load treasury trend:', e);
+    }
+  }
+
+  async function loadArchive() {
+    try {
+      const res = await fetch(API_BASE + '/archive/?limit=14');
+      const data = await res.json();
+      const list = document.getElementById('archive-list');
+      if (data.length === 0) {
+        list.innerHTML = '<li>No archived reports yet.</li>';
+        return;
+      }
+      list.innerHTML = data.map(s => {
+        const d = new Date(s.date);
+        const label = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        const icon = s.surplus >= 0 ? '🟢' : '🔴';
+        return `<li><a href="#" class="archive-link" data-date="${s.date}">${icon} ${label}</a> — ${fmt(s.surplus)}</li>`;
+      }).join('');
+      // Click handlers
+      list.querySelectorAll('.archive-link').forEach(a => {
+        a.addEventListener('click', e => {
+          e.preventDefault();
+          loadSummary(a.dataset.date);
+        });
+      });
+    } catch (e) {
+      console.error('Failed to load archive:', e);
+    }
+  }
+
+  // --- Date navigation ---
+  document.addEventListener('DOMContentLoaded', () => {
+    loadSummary();
+    loadTrend();
+    loadArchive();
+
+    document.getElementById('prev-day').addEventListener('click', () => {
+      loadSummary(shiftDate(currentDate || getYesterday(), -1));
+    });
+    document.getElementById('next-day').addEventListener('click', () => {
+      const next = shiftDate(currentDate || getYesterday(), 1);
+      if (next <= getYesterday()) loadSummary(next);
+    });
+    document.getElementById('date-picker').addEventListener('change', e => {
+      if (e.target.value) loadSummary(e.target.value);
+    });
+  });
+</script>
