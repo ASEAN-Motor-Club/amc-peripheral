@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-25T06:09:44.826136+00:00",
+  "generated_at": "2026-03-25T10:01:48.595331+00:00",
   "start_date": "2025-12-29",
   "end_date": "2026-03-23",
   "weeks": [
@@ -7,10 +7,10 @@
       "week_label": "Wk of 29 Dec",
       "week_start": "2025-12-29T00:00:00+00:00",
       "metrics": {
-        "dap": {
-          "avg": 1602.3,
-          "min": 1597,
-          "max": 1608
+        "online_players": {
+          "avg": 7.3,
+          "min": 0,
+          "max": 20
         },
         "deliveries": {
           "count": 22470,
@@ -22,10 +22,10 @@
       "week_label": "Wk of 05 Jan",
       "week_start": "2026-01-05T00:00:00+00:00",
       "metrics": {
-        "dap": {
-          "avg": 1588.3,
-          "min": 1579,
-          "max": 1597
+        "online_players": {
+          "avg": 5.1,
+          "min": 0,
+          "max": 18
         },
         "deliveries": {
           "count": 14576,
@@ -37,10 +37,10 @@
       "week_label": "Wk of 12 Jan",
       "week_start": "2026-01-12T00:00:00+00:00",
       "metrics": {
-        "dap": {
-          "avg": 1587.6,
-          "min": 1583,
-          "max": 1596
+        "online_players": {
+          "avg": 3.9,
+          "min": 0,
+          "max": 13
         },
         "deliveries": {
           "count": 13193,
@@ -52,10 +52,10 @@
       "week_label": "Wk of 19 Jan",
       "week_start": "2026-01-19T00:00:00+00:00",
       "metrics": {
-        "dap": {
-          "avg": 1592.3,
-          "min": 1588,
-          "max": 1595
+        "online_players": {
+          "avg": 4.5,
+          "min": 0,
+          "max": 13
         },
         "deliveries": {
           "count": 15565,
@@ -67,10 +67,10 @@
       "week_label": "Wk of 26 Jan",
       "week_start": "2026-01-26T00:00:00+00:00",
       "metrics": {
-        "dap": {
-          "avg": 1583.7,
-          "min": 1579,
-          "max": 1586
+        "online_players": {
+          "avg": 3.5,
+          "min": 0,
+          "max": 12
         },
         "deliveries": {
           "count": 14947,
@@ -82,10 +82,10 @@
       "week_label": "Wk of 02 Feb",
       "week_start": "2026-02-02T00:00:00+00:00",
       "metrics": {
-        "dap": {
-          "avg": 1585.3,
-          "min": 1580,
-          "max": 1588
+        "online_players": {
+          "avg": 4.5,
+          "min": 0,
+          "max": 15
         },
         "deliveries": {
           "count": 17656,
@@ -97,10 +97,10 @@
       "week_label": "Wk of 09 Feb",
       "week_start": "2026-02-09T00:00:00+00:00",
       "metrics": {
-        "dap": {
-          "avg": 1582.0,
-          "min": 1577,
-          "max": 1586
+        "online_players": {
+          "avg": 4.7,
+          "min": 0,
+          "max": 16
         },
         "deliveries": {
           "count": 20593,
@@ -112,10 +112,10 @@
       "week_label": "Wk of 16 Feb",
       "week_start": "2026-02-16T00:00:00+00:00",
       "metrics": {
-        "dap": {
-          "avg": 1577.1,
-          "min": 1569,
-          "max": 1583
+        "online_players": {
+          "avg": 5.5,
+          "min": 0,
+          "max": 16
         },
         "deliveries": {
           "count": 22292,
@@ -127,10 +127,10 @@
       "week_label": "Wk of 23 Feb",
       "week_start": "2026-02-23T00:00:00+00:00",
       "metrics": {
-        "dap": {
-          "avg": 1582.0,
-          "min": 1579,
-          "max": 1583
+        "online_players": {
+          "avg": 6.5,
+          "min": 0,
+          "max": 20
         },
         "deliveries": {
           "count": 22508,
@@ -142,10 +142,10 @@
       "week_label": "Wk of 02 Mar",
       "week_start": "2026-03-02T00:00:00+00:00",
       "metrics": {
-        "dap": {
-          "avg": 1576.4,
-          "min": 1572,
-          "max": 1581
+        "online_players": {
+          "avg": 5.6,
+          "min": 0,
+          "max": 15
         },
         "deliveries": {
           "count": 18970,
@@ -157,10 +157,10 @@
       "week_label": "Wk of 09 Mar",
       "week_start": "2026-03-09T00:00:00+00:00",
       "metrics": {
-        "dap": {
-          "avg": 1569.0,
-          "min": 1563,
-          "max": 1574
+        "online_players": {
+          "avg": 6.6,
+          "min": 0,
+          "max": 21
         },
         "deliveries": {
           "count": 19472,
@@ -172,16 +172,175 @@
       "week_label": "Wk of 16 Mar",
       "week_start": "2026-03-16T00:00:00+00:00",
       "metrics": {
-        "dap": {
-          "avg": 1600.9,
-          "min": 1573,
-          "max": 1638
+        "online_players": {
+          "avg": 10.1,
+          "min": 0,
+          "max": 28
         },
         "deliveries": {
           "count": 39221,
           "value": 144155266.0
         }
       }
+    }
+  ],
+  "by_hour": [
+    {
+      "hour": 0,
+      "avg_players": 6.074653982096257,
+      "max_players": 18
+    },
+    {
+      "hour": 1,
+      "avg_players": 4.996722722457627,
+      "max_players": 17
+    },
+    {
+      "hour": 2,
+      "avg_players": 4.119347739095638,
+      "max_players": 15
+    },
+    {
+      "hour": 3,
+      "avg_players": 3.514404826464208,
+      "max_players": 14
+    },
+    {
+      "hour": 4,
+      "avg_players": 3.1541546894845913,
+      "max_players": 12
+    },
+    {
+      "hour": 5,
+      "avg_players": 2.934843718626598,
+      "max_players": 12
+    },
+    {
+      "hour": 6,
+      "avg_players": 3.0368759202248694,
+      "max_players": 14
+    },
+    {
+      "hour": 7,
+      "avg_players": 3.374460395542616,
+      "max_players": 16
+    },
+    {
+      "hour": 8,
+      "avg_players": 3.4301248489730165,
+      "max_players": 13
+    },
+    {
+      "hour": 9,
+      "avg_players": 4.061566089519872,
+      "max_players": 12
+    },
+    {
+      "hour": 10,
+      "avg_players": 4.487748851454824,
+      "max_players": 13
+    },
+    {
+      "hour": 11,
+      "avg_players": 4.765751158173395,
+      "max_players": 17
+    },
+    {
+      "hour": 12,
+      "avg_players": 5.802171969671887,
+      "max_players": 18
+    },
+    {
+      "hour": 13,
+      "avg_players": 6.798623291524638,
+      "max_players": 21
+    },
+    {
+      "hour": 14,
+      "avg_players": 6.981518415104374,
+      "max_players": 22
+    },
+    {
+      "hour": 15,
+      "avg_players": 7.237098054783644,
+      "max_players": 22
+    },
+    {
+      "hour": 16,
+      "avg_players": 7.605469655332252,
+      "max_players": 22
+    },
+    {
+      "hour": 17,
+      "avg_players": 8.28977934569175,
+      "max_players": 28
+    },
+    {
+      "hour": 18,
+      "avg_players": 7.904465178273909,
+      "max_players": 27
+    },
+    {
+      "hour": 19,
+      "avg_players": 7.955033265353883,
+      "max_players": 27
+    },
+    {
+      "hour": 20,
+      "avg_players": 7.780083682008368,
+      "max_players": 21
+    },
+    {
+      "hour": 21,
+      "avg_players": 7.437358324593159,
+      "max_players": 20
+    },
+    {
+      "hour": 22,
+      "avg_players": 6.99990012983122,
+      "max_players": 22
+    },
+    {
+      "hour": 23,
+      "avg_players": 6.713167236174236,
+      "max_players": 22
+    }
+  ],
+  "by_day": [
+    {
+      "day": 1,
+      "avg_players": 5.044094363521216,
+      "max_players": 17
+    },
+    {
+      "day": 2,
+      "avg_players": 5.261854135658091,
+      "max_players": 19
+    },
+    {
+      "day": 3,
+      "avg_players": 5.454335828959556,
+      "max_players": 15
+    },
+    {
+      "day": 4,
+      "avg_players": 4.830914936136936,
+      "max_players": 17
+    },
+    {
+      "day": 5,
+      "avg_players": 5.622645882830156,
+      "max_players": 28
+    },
+    {
+      "day": 6,
+      "avg_players": 6.334682965574691,
+      "max_players": 21
+    },
+    {
+      "day": 7,
+      "avg_players": 7.012087879477313,
+      "max_players": 21
     }
   ]
 }

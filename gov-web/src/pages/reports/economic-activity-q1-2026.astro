@@ -6,15 +6,26 @@ import SummaryBox from '../../components/SummaryBox.astro';
 
 import reportData from '../../data/economic_report_q1_2026.json';
 
-const { generated_at, start_date, end_date, weeks } = reportData;
+const { generated_at, start_date, end_date, weeks, by_hour, by_day } = reportData;
 
 // Max values for scaling
-const maxDap = Math.max(...weeks.map(w => w.metrics.dap.avg));
+const absoluteMaxOnline = Math.max(...weeks.map(w => w.metrics.online_players.max));
 let maxValue = Math.max(...weeks.map(w => w.metrics.deliveries.value));
 // If maxValue is 0 (no deliveries), give it a reasonable default to avoid NaN
 if (maxValue <= 0) maxValue = 1000000;
 
-const maxDapRounded = Math.ceil(maxDap / 100) * 100;
+const maxOnlineRounded = Math.ceil(absoluteMaxOnline / 10) * 10;
+
+// Scaling for Hour and Day charts
+const maxHourlyAvg = Math.max(...by_hour.map(h => h.avg_players));
+const maxHourlyMax = Math.max(...by_hour.map(h => h.max_players));
+const maxHourlyRounded = Math.ceil(maxHourlyMax / 5) * 5;
+
+const maxDailyAvg = Math.max(...by_day.map(d => d.avg_players));
+const maxDailyMax = Math.max(...by_day.map(d => d.max_players));
+const maxDailyRounded = Math.ceil(maxDailyMax / 5) * 5;
+
+const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 // simple currency formatter
 const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(val).replace('$', '$');
@@ -32,11 +43,11 @@ const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currenc
 
       <SummaryBox title="Summary">
         <p>This report covers the 12-week period from <strong>{start_date}</strong> to <strong>{end_date}</strong>.</p>
-        <p>It tracks the Daily Active Players (DAP) and the total value of logistics deliveries flowing through the economy.</p>
+        <p>It tracks the average concurrent players online and the total value of logistics deliveries flowing through the economy.</p>
       </SummaryBox>
 
-      <h2 class="govuk-heading-m">Weekly Active Players (Average DAP)</h2>
-      <p class="govuk-body">The chart below shows the average daily active players for each week. It provides a measure of overall community scale and health.</p>
+      <h2 class="govuk-heading-m">Average Online Players</h2>
+      <p class="govuk-body">The chart below shows the average number of players connected to the server simultaneously during each week.</p>
       
       <div class="govuk-!-margin-bottom-8" style="background: #f3f2f1; padding: 2rem 1rem 3rem 1rem; border: 1px solid #b1b4b6;">
         <svg width="100%" height="250" viewBox="0 0 650 250" style="overflow: visible; font-family: 'GDS Transport', Arial, sans-serif;">
@@ -46,19 +57,113 @@ const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currenc
           <line x1="40" y1="0" x2="650" y2="0" stroke="#b1b4b6" stroke-width="1" stroke-dasharray="4,4" />
           
           <text x="30" y="200" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">0</text>
-          <text x="30" y="100" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">{maxDapRounded / 2}</text>
-          <text x="30" y="0" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">{maxDapRounded}</text>
+          <text x="30" y="100" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">{maxOnlineRounded / 2}</text>
+          <text x="30" y="0" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">{maxOnlineRounded}</text>
           
           {weeks.map((w, i) => {
              const xOffset = 60 + (i * (580 / weeks.length));
-             const barHeight = (w.metrics.dap.avg / maxDapRounded) * 200;
+             const barHeight = (w.metrics.online_players.avg / maxOnlineRounded) * 200;
              const y = 200 - barHeight;
+             const yMax = 200 - (w.metrics.online_players.max / maxOnlineRounded) * 200;
              const label = w.week_label.replace('Wk of ', '');
              return (
                <g>
+                 <!-- Line from Avg to Max -->
+                 <line x1={xOffset + 15} y1={y} x2={xOffset + 15} y2={yMax} stroke="#505a5f" stroke-width="2" />
+                 <!-- Max tick (centered 20px over 30px bar) -->
+                 <line x1={xOffset + 5} y1={yMax} x2={xOffset + 25} y2={yMax} stroke="#505a5f" stroke-width="2" />
+                 
+                 <!-- Average Bar -->
                  <rect x={xOffset} y={y} width="30" height={barHeight} fill="#1d70b8" />
+                 
+                 <!-- Avg Text (inside top of bar) -->
+                 <text x={xOffset + 15} y={y + 15} font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">{w.metrics.online_players.avg.toFixed(1)}</text>
+                 
                  <text x={xOffset + 15} y="220" font-size="11" fill="#0b0c0c" text-anchor="end" transform={`rotate(-45 ${xOffset + 15} 220)`}>{label}</text>
-                 <text x={xOffset + 15} y={y - 8} font-size="11" fill="#0b0c0c" text-anchor="middle" font-weight="bold">{Math.round(w.metrics.dap.avg)}</text>
+                 <!-- Max Text -->
+                 <text x={xOffset + 15} y={yMax - 5} font-size="11" fill="#0b0c0c" text-anchor="middle" font-weight="bold">{w.metrics.online_players.max}</text>
+               </g>
+             );
+          })}
+        </svg>
+      </div>
+
+      <h2 class="govuk-heading-m">Activity by Hour of Day</h2>
+      <p class="govuk-body">Average and maximum concurrent players by time of day (server time).</p>
+      
+      <div class="govuk-!-margin-bottom-8" style="background: #f3f2f1; padding: 2rem 1rem 3rem 1rem; border: 1px solid #b1b4b6;">
+        <svg width="100%" height="250" viewBox="0 0 650 250" style="overflow: visible; font-family: 'GDS Transport', Arial, sans-serif;">
+          <!-- Grid lines -->
+          <line x1="40" y1="200" x2="650" y2="200" stroke="#b1b4b6" stroke-width="1" />
+          <line x1="40" y1="100" x2="650" y2="100" stroke="#b1b4b6" stroke-width="1" stroke-dasharray="4,4" />
+          <line x1="40" y1="0" x2="650" y2="0" stroke="#b1b4b6" stroke-width="1" stroke-dasharray="4,4" />
+          
+          <text x="30" y="200" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">0</text>
+          <text x="30" y="100" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">{maxHourlyRounded / 2}</text>
+          <text x="30" y="0" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">{maxHourlyRounded}</text>
+          
+          {by_hour.map((h, i) => {
+             const xOffset = 50 + (i * (590 / 24));
+             const barHeight = (h.avg_players / maxHourlyRounded) * 200;
+             const y = 200 - barHeight;
+             const yMax = 200 - (h.max_players / maxHourlyRounded) * 200;
+             const label = `${h.hour}:00`;
+             return (
+               <g>
+                 <!-- Line from Avg to Max -->
+                 <line x1={xOffset + 10} y1={y} x2={xOffset + 10} y2={yMax} stroke="#505a5f" stroke-width="2" />
+                 <!-- Max tick -->
+                 <line x1={xOffset + 5} y1={yMax} x2={xOffset + 15} y2={yMax} stroke="#505a5f" stroke-width="2" />
+                 
+                 <!-- Average Bar -->
+                 <rect x={xOffset} y={y} width="20" height={barHeight} fill="#1d70b8" />
+                 
+                 <!-- X label -->
+                 {(h.hour % 2 === 0) && <text x={xOffset + 10} y="220" font-size="10" fill="#0b0c0c" text-anchor="end" transform={`rotate(-45 ${xOffset + 10} 220)`}>{label}</text>}
+               </g>
+             );
+          })}
+        </svg>
+      </div>
+
+      <h2 class="govuk-heading-m">Activity by Day of Week</h2>
+      <p class="govuk-body">Average and maximum concurrent players by day of the week.</p>
+      
+      <div class="govuk-!-margin-bottom-8" style="background: #f3f2f1; padding: 2rem 1rem 3rem 1rem; border: 1px solid #b1b4b6;">
+        <svg width="100%" height="250" viewBox="0 0 650 250" style="overflow: visible; font-family: 'GDS Transport', Arial, sans-serif;">
+          <!-- Grid lines -->
+          <line x1="40" y1="200" x2="650" y2="200" stroke="#b1b4b6" stroke-width="1" />
+          <line x1="40" y1="100" x2="650" y2="100" stroke="#b1b4b6" stroke-width="1" stroke-dasharray="4,4" />
+          <line x1="40" y1="0" x2="650" y2="0" stroke="#b1b4b6" stroke-width="1" stroke-dasharray="4,4" />
+          
+          <text x="30" y="200" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">0</text>
+          <text x="30" y="100" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">{maxDailyRounded / 2}</text>
+          <text x="30" y="0" font-size="12" fill="#505a5f" text-anchor="end" alignment-baseline="middle">{maxDailyRounded}</text>
+          
+          {by_day.map((d, i) => {
+             const xOffset = 90 + (i * (500 / 7));
+             const barHeight = (d.avg_players / maxDailyRounded) * 200;
+             const y = 200 - barHeight;
+             const yMax = 200 - (d.max_players / maxDailyRounded) * 200;
+             const label = daysOfWeek[d.day - 1]; // day is 1-7
+             return (
+               <g>
+                 <!-- Line from Avg to Max -->
+                 <line x1={xOffset + 20} y1={y} x2={xOffset + 20} y2={yMax} stroke="#505a5f" stroke-width="2" />
+                 <!-- Max tick -->
+                 <line x1={xOffset + 10} y1={yMax} x2={xOffset + 30} y2={yMax} stroke="#505a5f" stroke-width="2" />
+                 
+                 <!-- Average Bar -->
+                 <rect x={xOffset} y={y} width="40" height={barHeight} fill="#1d70b8" />
+                 
+                 <!-- Avg Text -->
+                 <text x={xOffset + 20} y={y + 15} font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">{d.avg_players.toFixed(1)}</text>
+                 
+                 <!-- X label -->
+                 <text x={xOffset + 20} y="220" font-size="12" fill="#0b0c0c" text-anchor="middle">{label}</text>
+                 
+                 <!-- Max Text -->
+                 <text x={xOffset + 20} y={yMax - 5} font-size="11" fill="#0b0c0c" text-anchor="middle" font-weight="bold">{d.max_players}</text>
                </g>
              );
           })}
@@ -100,7 +205,8 @@ const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currenc
         <thead class="govuk-table__head">
           <tr class="govuk-table__row">
             <th scope="col" class="govuk-table__header" style="text-align:left">Week</th>
-            <th scope="col" class="govuk-table__header">DAP (Avg)</th>
+            <th scope="col" class="govuk-table__header">Avg Online</th>
+            <th scope="col" class="govuk-table__header">Maximum Peak</th>
             <th scope="col" class="govuk-table__header">Deliveries</th>
             <th scope="col" class="govuk-table__header">Delivery Value</th>
           </tr>
@@ -109,7 +215,8 @@ const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currenc
           {weeks.map(w => (
             <tr class="govuk-table__row">
               <td class="govuk-table__cell" style="text-align:left">{w.week_label}</td>
-              <td class="govuk-table__cell">{w.metrics.dap.avg.toFixed(1)}</td>
+              <td class="govuk-table__cell">{w.metrics.online_players.avg.toFixed(1)}</td>
+              <td class="govuk-table__cell">{w.metrics.online_players.max}</td>
               <td class="govuk-table__cell">{w.metrics.deliveries.count.toLocaleString()}</td>
               <td class="govuk-table__cell">{formatCurrency(w.metrics.deliveries.value)}</td>
             </tr>
