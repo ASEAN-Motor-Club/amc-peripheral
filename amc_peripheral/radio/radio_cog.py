@@ -23,7 +23,7 @@ from discord import app_commands
 import yt_dlp
 import logging
 from openai import AsyncOpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 
 from amc_peripheral.settings import (
@@ -638,16 +638,11 @@ The current date (in Bangkok GMT+7 timezone) is: {now.strftime("%A, %Y-%m-%d %H:
 
     async def generate_jingles_gen(self):
         context = await self.fetch_news_context()
-        completion = await self.openai_client_openrouter.beta.chat.completions.parse(
-            model=DEFAULT_AI_MODEL,
-            reasoning_effort="high",
-            response_format=Scripts,
-            # pyrefly: ignore [bad-argument-type]
-            messages=[
-                *context,
-                {
-                    "role": "user",
-                    "content": f"""\
+        messages = [
+            *context,
+            {
+                "role": "user",
+                "content": f"""\
 You are DJ Annie, working for a parody radio news section ("ASEAN Motor Club Minute").
 Your output will be fed directly to TTS, so only include spoken words, as if it were transcribed from a live recording. Do not include any sound effect cues, stage directions, or speaker labels—just the natural spoken words.
 {TTS_SCRIPT_MARKUP_INSTRUCTIONS}
@@ -656,22 +651,54 @@ Your output will be fed directly to TTS, so only include spoken words, as if it 
 Write 6 different humorous scripts for short sections between songs, like those by DJ Kara on GTA 5's Radio Mirror Park.
 Do not make up the name of the previous or next songs, as they are unknown.
 """,
-                },
-            ],
-        )
+            },
+        ]
+
+        # Retry once if the LLM returns plain text instead of valid JSON
+        max_attempts = 2
+        for attempt in range(1, max_attempts + 1):
+            try:
+                completion = await self.openai_client_openrouter.beta.chat.completions.parse(
+                    model=DEFAULT_AI_MODEL,
+                    reasoning_effort="high",
+                    response_format=Scripts,
+                    # pyrefly: ignore [bad-argument-type]
+                    messages=messages,
+                )
+                break
+            except (ValidationError, Exception) as exc:
+                if "json_invalid" in str(exc) or "ValidationError" in type(exc).__name__:
+                    log.warning(
+                        f"generate_jingles_gen: structured output parse failed "
+                        f"(attempt {attempt}/{max_attempts}): {exc}"
+                    )
+                    if attempt < max_attempts:
+                        continue
+                    log.error("generate_jingles_gen: all retries exhausted, skipping this cycle.")
+                    return
+                raise
 
         if not completion.choices:
-            raise Exception("Failed to generate jingles.")
+            log.error("generate_jingles_gen: no choices returned, skipping.")
+            return
 
         answer = completion.choices[0].message.parsed
+        if not answer:
+            log.error("generate_jingles_gen: parsed result is None (refusal?), skipping.")
+            return
+
         # pyrefly: ignore [missing-attribute]
         jingles = answer.scripts
 
         for jingle in jingles[:6]:
-            audio_bytes = await asyncio.to_thread(
-                tts_google, discord.utils.remove_markdown(jingle), use_markup=True
-            )
-            yield (jingle, audio_bytes)
+            try:
+                audio_bytes = await asyncio.to_thread(
+                    tts_google, discord.utils.remove_markdown(jingle), use_markup=True
+                )
+                yield (jingle, audio_bytes)
+            except Exception as exc:
+                log.error(f"generate_jingles_gen: TTS failed for jingle, skipping: {exc}")
+                continue
 
     async def generate_news_content(self):
         context = await self.fetch_news_context()
