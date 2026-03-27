@@ -47,15 +47,17 @@ in {
       # songs = playlist(reload_mode="watch", "/var/lib/radio/songs")
       songs = playlist("/var/lib/radio/prev_requests")
       # songs = random(weights=[1, 2], [songs, prev_requests])
-      q_or_songs = fallback(track_sensitive=true, [queue, songs])
-      q_or_songs = q_or_songs
+      q_or_songs = amplify(1., override="replaygain_track_gain",
+        fallback(track_sensitive=true, [queue, songs]))
 
-      event_songs = crossfade(playlist(reload_mode="watch", "/var/lib/radio/event_songs"))
+      event_songs = crossfade(amplify(1., override="replaygain_track_gain",
+        playlist(reload_mode="watch", "/var/lib/radio/event_songs")))
 
       event_jingles = playlist("/var/lib/radio/event_jingles")
       event_jingles = delay(180., event_jingles)
 
-      race_songs = crossfade(playlist(reload_mode="watch", "/var/lib/radio/race_songs"))
+      race_songs = crossfade(amplify(1., override="replaygain_track_gain",
+        playlist(reload_mode="watch", "/var/lib/radio/race_songs")))
       current_source_type = ref("music")
       talkshows_or_jingles = rotate(weights=[1, 2], [talkshows, jingles])
       segments_or_talking = fallback(track_sensitive=true, [segments, talkshows_or_jingles])
@@ -75,7 +77,7 @@ in {
 
       live = blank.strip(max_blank=2., min_noise=.1, threshold=-20., live)
 
-      radio = amplify(1., override="replaygain_track_gain", radio_unnormaliszed)
+      radio = amplify(2., radio_unnormaliszed)
 
       radio = switch(
         track_sensitive=false,
