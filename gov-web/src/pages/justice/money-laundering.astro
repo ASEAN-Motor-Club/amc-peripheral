@@ -1,0 +1,57 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+---
+<GovLayout title="Money Laundering & Criminal Faction" description="Mechanics of the Criminal Faction, Money Laundering, and Police interactions.">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <span class="govuk-caption-xl">Justice & Law Enforcement</span>
+      <h1 class="govuk-heading-xl">Money Laundering & Criminal Faction</h1>
+
+      <p class="govuk-body-l">
+        Delivering illicit cargo allows players to launder money, entering the Criminal Faction and participating in an active cat-and-mouse game with law enforcement. 
+      </p>
+
+      <div class="govuk-warning-text">
+        <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+        <strong class="govuk-warning-text__text">
+          <span class="govuk-warning-text__assistive">Warning</span>
+          Participating in these activities will put you at risk of being arrested by the Police and having your cargo confiscated. Both Criminals and Police require a custom mod map to participate.
+        </strong>
+      </div>
+
+      <h2 class="govuk-heading-m">Required Mod Installation</h2>
+      <p class="govuk-body">
+        To properly participate as a Criminal or a Police officer, you must install the <a href="/mods/MoneyRun_P.pak" class="govuk-link govuk-link--no-visited-state">MoneyRun_P.pak</a> custom mod map.
+      </p>
+      <ol class="govuk-list govuk-list--number">
+        <li>Download the mod pak: <strong><a href="/mods/MoneyRun_P.pak" class="govuk-link">Download MoneyRun_P.pak</a></strong></li>
+        <li>Locate your Motor Town install directory.</li>
+        <li>Place the downloaded <code>MoneyRun_P.pak</code> file inside the <code>Motor Town/MotorTown/Content/Paks/~mods/</code> folder (create the <code>~mods</code> folder if it doesn't exist).</li>
+        <li>Restart your game client.</li>
+      </ol>
+
+      <h2 class="govuk-heading-m">Money Laundering Mechanics</h2>
+      <p class="govuk-body">
+        Players can deliver "Money" cargo to designated illicit drop-off points. Completing these deliveries triggers the money laundering process:
+      </p>
+
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Treasury Cost:</strong> Money laundering deducts 20% of the laundered payment from the overall Treasury Fund, actively draining public reserves.</li>
+        <li><strong>Criminal Record:</strong> Successfully laundering money gives you an active Criminal Record lasting for 7 days. Any subsequent money deliveries will extend this duration by another 7 days.</li>
+        <li><strong>Player Tag:</strong> While you have an active criminal record, you will be assigned a <code>[C]</code> tag in-game. As you launder more money, your criminal tier will increase (e.g., <code>[C2]</code>, <code>[C3]</code>) with every $100,000 laundered.</li>
+      </ul>
+
+      <h2 class="govuk-heading-m">Law Enforcement & Confiscation</h2>
+      <p class="govuk-body">
+        Players serving in the Police Faction are tasked with intercepting criminal activity.
+      </p>
+
+      <ul class="govuk-list govuk-list--bullet">
+        <li>If an on-duty Police officer picks up your Money cargo before you can deliver it, it will be immediately <strong>confiscated</strong>.</li>
+        <li>The full value of the cargo will be deducted from your wallet and credited back to the Treasury Fund.</li>
+        <li>The Police officer responsible will gain confiscation experience, progressing their <code>[P]</code> police tier.</li>
+      </ul>
+
+    </div>
+  </div>
+</GovLayout>
