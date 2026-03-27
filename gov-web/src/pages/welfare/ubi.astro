@@ -20,40 +20,49 @@ import Sidebar from '../../components/Sidebar.astro';
       <h1>Universal Basic Income</h1>
 
       <SummaryBox title="Summary">
-        <p>Every online citizen receives a regular income payment from the government. The amount depends on activity level, driver experience, and government employment status.</p>
+        <p>Every eligible online citizen receives a regular income payment from the government. The amount depends on activity level, driver level, and government employment status.</p>
       </SummaryBox>
 
       <h2 id="rates">1. Payment Rates</h2>
-      <p>UBI is distributed hourly to all online players:</p>
+      <p>UBI is distributed every 20 minutes to all eligible online players. The table below shows the equivalent hourly rate (paid in 3 instalments):</p>
 
       <table class="govuk-table govuk-table--numeric">
         <caption>UBI Payment Schedule</caption>
-        <thead><tr><th>Status</th><th>Hourly Rate</th><th>Note</th></tr></thead>
+        <thead><tr><th>Status</th><th>Per Payment</th><th>Hourly Total</th><th>Note</th></tr></thead>
         <tbody>
-          <tr><td style="text-align:left">Active player</td><td>$18,000</td><td style="text-align:left">Currently driving or doing activities</td></tr>
-          <tr><td style="text-align:left">AFK player</td><td>$6,000</td><td style="text-align:left">Online but idle</td></tr>
-          <tr><td style="text-align:left">Government employee (active)</td><td>$36,000</td><td style="text-align:left">2× standard UBI rate</td></tr>
-          <tr><td style="text-align:left">Government employee (AFK)</td><td>$12,000</td><td style="text-align:left">2× AFK rate</td></tr>
+          <tr><td style="text-align:left">Active player</td><td>$6,000</td><td>$18,000</td><td style="text-align:left">Currently driving or doing activities</td></tr>
+          <tr><td style="text-align:left">AFK player</td><td>$2,000</td><td>$6,000</td><td style="text-align:left">Online but idle</td></tr>
+          <tr><td style="text-align:left">Government employee (active)</td><td>$12,000</td><td>$36,000</td><td style="text-align:left">2× standard rate; logged as <em>Government Salary</em></td></tr>
+          <tr><td style="text-align:left">Government employee (AFK)</td><td>$4,000</td><td>$12,000</td><td style="text-align:left">2× AFK rate; logged as <em>Government Salary</em></td></tr>
         </tbody>
       </table>
 
-      <h2 id="scaling">2. Driver Level Scaling</h2>
-      <p>UBI payments scale with the recipient's <strong>driver level</strong>. Higher-level drivers receive a larger payment, reflecting their greater contribution to the economy.</p>
+      <h2 id="eligibility">2. Eligibility</h2>
+      <p>To receive UBI a citizen must:</p>
+      <ul>
+        <li>Have a <strong>driver level of 1 or above</strong> — level 0 players are excluded.</li>
+        <li>Not have opted out of UBI (<code>reject_ubi</code> flag).</li>
+      </ul>
+
+      <h2 id="scaling">3. Driver Level Scaling</h2>
+      <p>UBI payments scale with the recipient's <strong>driver level</strong> up to a cap of level 400. The formula is:</p>
 
       <InsetText>
-        The exact scaling formula ensures that new players still receive a meaningful income, while experienced drivers earn proportionally more. This encourages continued progression.
+        <code>payment = min(base, driver_level × base × ubi_multiplier / 400)</code><br/>
+        Lower-level drivers receive a proportionally smaller payment. At level 400 (or above) the full base amount is paid out.
       </InsetText>
 
-      <h2 id="auto-repay">3. Loan Auto-Repayment</h2>
-      <p>If a UBI recipient has an outstanding loan at Bank of ASEAN, a portion of their UBI payment is automatically applied to loan repayment before the remainder is deposited. This ensures that borrowed public funds are returned to the treasury.</p>
+      <h2 id="auto-repay">4. Loan Auto-Repayment</h2>
+      <p>If a UBI recipient has an outstanding loan at Bank of ASEAN, the lesser of the UBI payment or the remaining loan balance is automatically deducted as repayment before the remainder is deposited.</p>
 
-      <h2 id="frequency">4. Distribution Frequency</h2>
-      <p>UBI runs as a <strong>scheduled task every 60 minutes</strong>. The system checks all online players and distributes payments in bulk. Payments are logged as <code>Government Funding: UBI</code> in the financial ledger.</p>
+      <h2 id="frequency">5. Distribution Frequency</h2>
+      <p>UBI runs as a <strong>scheduled task every 20 minutes</strong>. The system checks all online players and distributes payments in bulk. Payments are logged as <code>Universal Basic Income</code> (or <code>Government Salary</code> for government employees) in the financial ledger.</p>
 
     </div>
     <div class="govuk-grid-column-one-third">
       <Sidebar items={[
         { label: "Payment Rates", href: "#rates" },
+        { label: "Eligibility", href: "#eligibility" },
         { label: "Driver Level Scaling", href: "#scaling" },
         { label: "Loan Auto-Repayment", href: "#auto-repay" },
         { label: "Distribution Frequency", href: "#frequency" },
