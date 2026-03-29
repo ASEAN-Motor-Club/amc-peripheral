@@ -1,5 +1,6 @@
+import time
 import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock, AsyncMock, patch
 from discord.ext import tasks
 from amc_peripheral.bot.utils_cog import UtilsCog
 
@@ -69,3 +70,76 @@ async def test_cog_unload_cancels_tasks(cog):
     cog.regular_announcement.cancel.assert_called_once()
     cog.rent_reminders.cancel.assert_called_once()
     cog.update_time_embed.cancel.assert_called_once()
+
+
+# --- on_message debounce listener tests ---
+
+
+@pytest.mark.asyncio
+async def test_on_message_updates_timestamp_for_game_announcements_channel(cog):
+    """on_message should update _last_channel_message_time for messages in GAME_ANNOUNCEMENTS_CHANNEL_ID."""
+    from amc_peripheral.settings import GAME_ANNOUNCEMENTS_CHANNEL_ID
+
+    message = MagicMock()
+    message.author.bot = False
+    message.channel.id = GAME_ANNOUNCEMENTS_CHANNEL_ID
+
+    before = cog._last_channel_message_time
+    with patch("amc_peripheral.bot.utils_cog.time.time", return_value=12345.0):
+        await cog.on_message(message)
+    assert cog._last_channel_message_time == 12345.0
+    assert cog._last_channel_message_time != before
+
+
+@pytest.mark.asyncio
+async def test_on_message_ignores_bot_messages(cog):
+    """on_message should ignore messages from bots."""
+    from amc_peripheral.settings import GAME_ANNOUNCEMENTS_CHANNEL_ID
+
+    message = MagicMock()
+    message.author.bot = True
+    message.channel.id = GAME_ANNOUNCEMENTS_CHANNEL_ID
+
+    await cog.on_message(message)
+    assert cog._last_channel_message_time == 0.0
+
+
+@pytest.mark.asyncio
+async def test_on_message_ignores_other_channels(cog):
+    """on_message should not update timestamp for messages in other channels."""
+    message = MagicMock()
+    message.author.bot = False
+    message.channel.id = 999999999  # some other channel
+
+    await cog.on_message(message)
+    assert cog._last_channel_message_time == 0.0
+
+
+# --- regular_announcement debounce tests ---
+
+
+@pytest.mark.asyncio
+async def test_regular_announcement_skips_when_channel_active(cog):
+    """regular_announcement should skip if last message was less than 15s ago."""
+    cog._last_channel_message_time = time.time()  # just now
+    cog.bot.guilds = []
+
+    with patch("amc_peripheral.bot.utils_cog.announce_in_game", new_callable=AsyncMock) as mock_announce:
+        await cog.regular_announcement()
+
+    mock_announce.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_regular_announcement_proceeds_when_channel_quiet(cog):
+    """regular_announcement should proceed if last message was more than 15s ago."""
+    cog._last_channel_message_time = time.time() - 60  # 60s ago
+    guild = MagicMock()
+    guild.scheduled_events = []
+    cog.bot.guilds = [guild]
+    cog.announcement_index = 0
+
+    with patch("amc_peripheral.bot.utils_cog.announce_in_game", new_callable=AsyncMock) as mock_announce:
+        await cog.regular_announcement()
+
+    mock_announce.assert_called_once()

@@ -2,6 +2,7 @@ import os
 import json
 import random
 import logging
+import time
 import discord
 import urllib.parse
 from datetime import datetime, timedelta, timezone, time as dt_time
@@ -12,6 +13,7 @@ from amc_peripheral.settings import (
     LOCAL_TIMEZONE,
     STATIC_PATH,
     GENERAL_CHANNEL_ID,
+    GAME_ANNOUNCEMENTS_CHANNEL_ID,
     TIMEZONES_CHANNEL_ID,
     ADMIN_ROLE_ID,
 )
@@ -29,6 +31,7 @@ class UtilsCog(commands.Cog):
         # State for announcements
         self.announcement_index = random.randint(0, 100)
         self.announcements_db = AnnouncementsDB()
+        self._last_channel_message_time = 0.0
         
         # Seed database with default announcements if empty
         default_announcements = [
@@ -149,9 +152,12 @@ class UtilsCog(commands.Cog):
 
     @tasks.loop(minutes=15)
     async def regular_announcement(self):
-        now = datetime.now(self.local_tz)
         if not self.bot.guilds:
             return
+        if time.time() - self._last_channel_message_time < 15:
+            log.info("Channel active, deferring announcement")
+            return
+        now = datetime.now(self.local_tz)
         events = self.bot.guilds[0].scheduled_events
         events = [
             f"The {event.name} is happening on {event.start_time.replace(tzinfo=ZoneInfo('UTC')).astimezone(self.local_tz).strftime('%A at %H:%M')} GMT+7, check /events for more info!"
@@ -242,6 +248,15 @@ class UtilsCog(commands.Cog):
             )
             # pyrefly: ignore [missing-attribute]
             await interaction.message.delete()
+
+    # --- Listeners ---
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot:
+            return
+        if message.channel.id == GAME_ANNOUNCEMENTS_CHANNEL_ID:
+            self._last_channel_message_time = time.time()
 
     # --- Commands ---
 
