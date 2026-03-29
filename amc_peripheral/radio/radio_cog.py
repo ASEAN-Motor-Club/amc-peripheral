@@ -655,40 +655,54 @@ Do not make up the name of the previous or next songs, as they are unknown.
         ]
 
         # Retry once if the LLM returns plain text instead of valid JSON
+        jingles = []
         max_attempts = 2
         for attempt in range(1, max_attempts + 1):
             try:
-                completion = await self.openai_client_openrouter.beta.chat.completions.parse(
+                # Add explicit JSON instructions to the last message
+                messages_with_instructions = messages[:-1] + [
+                    {
+                        "role": "user",
+                        "content": messages[-1]["content"] + "\n\nIMPORTANT: Return your response as a raw JSON object with a single 'scripts' key containing a list of strings. Do not include markdown codeblocks."
+                    }
+                ]
+                completion = await self.openai_client_openrouter.chat.completions.create(
                     model=DEFAULT_AI_MODEL,
-                    reasoning_effort="high",
-                    response_format=Scripts,
                     # pyrefly: ignore [bad-argument-type]
-                    messages=messages,
+                    messages=messages_with_instructions,
                 )
+                
+                if not completion.choices:
+                    raise ValueError("No choices returned from LLM")
+                    
+                content = completion.choices[0].message.content
+                if not content:
+                    raise ValueError("Empty content from LLM")
+                    
+                # Clean up potential markdown wrapper
+                content = content.strip()
+                if content.startswith("```json"):
+                    content = content.split("```json")[-1].split("```")[0].strip()
+                elif content.startswith("```"):
+                    content = content.split("```")[-1].split("```")[0].strip()
+                    
+                import json
+                data = json.loads(content)
+                jingles = data.get("scripts", [])
+                
+                if not jingles or not isinstance(jingles, list):
+                    raise ValueError("JSON did not contain a valid 'scripts' list")
+                    
                 break
-            except (ValidationError, Exception) as exc:
-                if "json_invalid" in str(exc) or "ValidationError" in type(exc).__name__:
-                    log.warning(
-                        f"generate_jingles_gen: structured output parse failed "
-                        f"(attempt {attempt}/{max_attempts}): {exc}"
-                    )
-                    if attempt < max_attempts:
-                        continue
-                    log.error("generate_jingles_gen: all retries exhausted, skipping this cycle.")
-                    return
-                raise
-
-        if not completion.choices:
-            log.error("generate_jingles_gen: no choices returned, skipping.")
-            return
-
-        answer = completion.choices[0].message.parsed
-        if not answer:
-            log.error("generate_jingles_gen: parsed result is None (refusal?), skipping.")
-            return
-
-        # pyrefly: ignore [missing-attribute]
-        jingles = answer.scripts
+            except Exception as exc:
+                log.warning(
+                    f"generate_jingles_gen: parse failed "
+                    f"(attempt {attempt}/{max_attempts}): {exc}"
+                )
+                if attempt < max_attempts:
+                    continue
+                log.error("generate_jingles_gen: all retries exhausted, skipping this cycle.")
+                return
 
         for jingle in jingles[:6]:
             try:

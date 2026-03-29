@@ -57,3 +57,72 @@ async def test_translate_to_language_method_exists(cog):
     """Verify translate_to_language method exists and has correct signature."""
     assert hasattr(cog, 'translate_to_language')
     assert callable(cog.translate_to_language)
+
+
+# --- _safe_parse tests ---
+
+def test_safe_parse_returns_parsed_when_available(cog):
+    """When parsed is not None, _safe_parse should return it directly."""
+    from amc_peripheral.bot.ai_models import TranslationResponse
+    expected = TranslationResponse(translation="hello")
+    
+    completion = MagicMock()
+    completion.choices = [MagicMock()]
+    completion.choices[0].message.parsed = expected
+    
+    result = cog._safe_parse(TranslationResponse, completion)
+    assert result is expected
+
+
+def test_safe_parse_fallback_from_content(cog):
+    """When parsed is None but content has valid JSON, should parse manually."""
+    from amc_peripheral.bot.ai_models import TranslationResponse
+    
+    completion = MagicMock()
+    completion.choices = [MagicMock()]
+    completion.choices[0].message.parsed = None
+    completion.choices[0].message.content = '{"translation": "hello world"}'
+    
+    result = cog._safe_parse(TranslationResponse, completion)
+    assert result is not None
+    assert result.translation == "hello world"
+
+
+def test_safe_parse_strips_think_tags(cog):
+    """When content has <think> tags, should strip them and parse the JSON."""
+    from amc_peripheral.bot.ai_models import TranslationResponse
+    
+    completion = MagicMock()
+    completion.choices = [MagicMock()]
+    completion.choices[0].message.parsed = None
+    completion.choices[0].message.content = '<think>I need to translate this...</think>{"translation": "bonjour"}'
+    
+    result = cog._safe_parse(TranslationResponse, completion)
+    assert result is not None
+    assert result.translation == "bonjour"
+
+
+def test_safe_parse_empty_content_returns_none(cog):
+    """When parsed is None and content is empty, should return None."""
+    from amc_peripheral.bot.ai_models import TranslationResponse
+    
+    completion = MagicMock()
+    completion.choices = [MagicMock()]
+    completion.choices[0].message.parsed = None
+    completion.choices[0].message.content = ""
+    
+    result = cog._safe_parse(TranslationResponse, completion)
+    assert result is None
+
+
+def test_safe_parse_invalid_json_returns_none(cog):
+    """When content is not valid JSON, should return None."""
+    from amc_peripheral.bot.ai_models import TranslationResponse
+    
+    completion = MagicMock()
+    completion.choices = [MagicMock()]
+    completion.choices[0].message.parsed = None
+    completion.choices[0].message.content = "this is not json at all"
+    
+    result = cog._safe_parse(TranslationResponse, completion)
+    assert result is None

@@ -1,4 +1,5 @@
 import logging
+import re
 import discord
 from discord import app_commands, Locale
 from discord.ext import commands
@@ -89,6 +90,39 @@ class TranslationCog(commands.Cog):
         self.bot.tree.add_command(translate_message_menu)
         self.bot.tree.add_command(translate_batch_menu)
 
+    # --- Parsing Helpers ---
+
+    def _safe_parse(self, model_cls, completion):
+        """Extract structured output from completion, with fallback for thinking models.
+        
+        If beta.parse() returned a valid parsed result, use it.
+        Otherwise, fall back to manual JSON extraction from content,
+        stripping <think> tags that some models (e.g., Qwen) include.
+        """
+        msg = completion.choices[0].message
+        if msg.parsed is not None:
+            return msg.parsed
+        
+        # Fallback: extract JSON from content
+        content = msg.content
+        if not content:
+            log.warning("Translation model returned empty content (parsed=None)")
+            return None
+        
+        # Strip <think>...</think> blocks from thinking models
+        cleaned = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+        
+        try:
+            result = model_cls.model_validate_json(cleaned)
+            log.info(f"Recovered translation via fallback parsing ({model_cls.__name__})")
+            return result
+        except Exception as e:
+            log.error(
+                f"Failed to parse translation response as {model_cls.__name__}: {e}, "
+                f"content: {cleaned[:300]}"
+            )
+            return None
+
     # --- Translation Methods ---
 
     def extract_username_and_content(self, message: str) -> tuple[str | None, str]:
@@ -152,7 +186,7 @@ class TranslationCog(commands.Cog):
             response_format=TranslationResponse,
             max_tokens=2048,
         )
-        return completion.choices[0].message.parsed
+        return self._safe_parse(TranslationResponse, completion)
 
     async def translate_multi_with_english(self, player_name, message, messages=[]):
         """Translate message into English, Chinese, Indonesian, Thai, Vietnamese, and Japanese."""
@@ -182,7 +216,7 @@ class TranslationCog(commands.Cog):
             response_format=MultiTranslationWithEnglish,
             max_tokens=2048,
         )
-        return completion.choices[0].message.parsed
+        return self._safe_parse(MultiTranslationWithEnglish, completion)
 
     async def translate_multi(self, message, messages=[], sender=None):
         """Translate message into multiple languages (without English)."""
@@ -207,7 +241,7 @@ class TranslationCog(commands.Cog):
             response_format=MultiTranslation,
             max_tokens=2048,
         )
-        return completion.choices[0].message.parsed
+        return self._safe_parse(MultiTranslation, completion)
 
     async def translate_to_language(self, message: str, target_language: str, messages: list = [], sender=None):
         """Translate a message to a specific target language."""
@@ -233,7 +267,7 @@ class TranslationCog(commands.Cog):
             response_format=TranslationResponse,
             max_tokens=2048,
         )
-        return completion.choices[0].message.parsed
+        return self._safe_parse(TranslationResponse, completion)
 
     # --- Message Handlers ---
 
@@ -311,7 +345,7 @@ class TranslationCog(commands.Cog):
                             await japanese_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     
                 except Exception as e:
-                    log.error(f"Error translating game message: {e}")
+                    log.error(f"Error translating game message: {e}", exc_info=True)
 
             self.bot.loop.create_task(translate_game())
 
@@ -377,7 +411,7 @@ class TranslationCog(commands.Cog):
                                         )
                                         await target_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                             except Exception as e:
-                                log.error(f"Error translating from {lang} to {target_lang}: {e}")
+                                log.error(f"Error translating from {lang} to {target_lang}: {e}", exc_info=True)
                     
                     # Track context for future translations
                     username, content = self.extract_username_and_content(message.content)
@@ -434,7 +468,7 @@ class TranslationCog(commands.Cog):
                                 )
                                 await target_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     except Exception as e:
-                        log.error(f"Error translating from general to {lang}: {e}")
+                        log.error(f"Error translating from general to {lang}: {e}", exc_info=True)
                 # Track context for future translations
                 username, content = self.extract_username_and_content(message.content)
                 self.general_messages.append(f"{username or message.author.display_name}: {content}")
@@ -470,7 +504,7 @@ class TranslationCog(commands.Cog):
                     if len(self.eco_game_messages) > 15:
                         self.eco_game_messages.pop(0)
                 except Exception as e:
-                    log.error(f"Error translating Eco game chat message to Chinese: {e}")
+                    log.error(f"Error translating Eco game chat message to Chinese: {e}", exc_info=True)
 
             self.bot.loop.create_task(translate_eco_game_to_chinese())
         
@@ -502,7 +536,7 @@ class TranslationCog(commands.Cog):
                     if len(self.eco_game_messages) > 15:
                         self.eco_game_messages.pop(0)
                 except Exception as e:
-                    log.error(f"Error translating Chinese message to Eco game chat: {e}")
+                    log.error(f"Error translating Chinese message to Eco game chat: {e}", exc_info=True)
 
             self.bot.loop.create_task(translate_chinese_to_eco_game())
 
@@ -620,7 +654,7 @@ class TranslationCog(commands.Cog):
                 max_tokens=4096,
             )
             
-            result = completion.choices[0].message.parsed
+            result = self._safe_parse(ThreadTranslationResponse, completion)
             # pyrefly: ignore [missing-attribute]
             if result and result.translated_thread:
                 output = result.translated_thread
@@ -638,7 +672,7 @@ class TranslationCog(commands.Cog):
                 await interaction.followup.send("❌ Translation failed: No result returned", ephemeral=True)
                 
         except Exception as e:
-            log.error(f"Error in translate_thread: {e}")
+            log.error(f"Error in translate_thread: {e}", exc_info=True)
             await interaction.followup.send(f"❌ Translation failed: {str(e)}", ephemeral=True)
 
     async def _handle_translate_message(self, interaction: discord.Interaction, message: discord.Message):
