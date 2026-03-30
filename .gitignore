@@ -13,6 +13,7 @@ develop-eggs/
 dist/
 eggs/
 lib/
+!tire-web/src/lib/
 lib64/
 parts/
 sdist/
