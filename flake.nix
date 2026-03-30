@@ -223,6 +223,11 @@
                 default = "gov.aseanmotorclub.com";
                 description = "Domain for the government portal.";
               };
+              mods = lib.mkOption {
+                type = lib.types.str;
+                default = "mods.aseanmotorclub.com";
+                description = "Domain for the tire mod creator web app.";
+              };
             };
 
             # Radio web UI package
@@ -244,6 +249,13 @@
               type = lib.types.package;
               default = (import ./gov-web {inherit pkgs;}).package;
               description = "Government portal static build package.";
+            };
+
+            # Tire mod creator static site
+            tireWeb.package = lib.mkOption {
+              type = lib.types.package;
+              default = (import ./tire-web {inherit pkgs;}).package;
+              description = "Tire mod creator static build package.";
             };
 
             # Sharry file sharing service
@@ -411,6 +423,30 @@
               };
             };
 
+            # Tire Mod Creator (static site + build API)
+            services.nginx.virtualHosts.${cfg.nginx.domains.mods} = {
+              enableACME = true;
+              forceSSL = true;
+              locations."/" = {
+                root = "${cfg.tireWeb.package}";
+                tryFiles = "$uri $uri/index.html /index.html";
+                extraConfig = ''
+                  add_header Cache-Control "public, max-age=3600";
+                '';
+              };
+              locations."/api" = {
+                proxyPass = "http://127.0.0.1:7002/api";
+                extraConfig = ''
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_read_timeout 120s;
+                  client_max_body_size 50M;
+                '';
+              };
+            };
+
             systemd.services.amc-radio = {
               wantedBy = ["multi-user.target"];
               after = ["network.target" "motortown-server.service"];
@@ -469,6 +505,35 @@
               '';
             };
 
+
+            # Tire Mod Build API
+            systemd.services.amc-mods = {
+              wantedBy = ["multi-user.target"];
+              after = ["network.target"];
+              description = "AMC Tire Mod Build API";
+              environment = {
+                # These will be set when mt-pak-extract toolchain is packaged as a flake input.
+                # For now, they default to binaries available in PATH.
+                # TIRE_BUILDER_DOTNET_TOOL = "...";
+                # TIRE_BUILDER_MOD_PACK = "...";
+                # TIRE_BUILDER_MOD_EXPLORE = "...";
+                # TIRE_BUILDER_TEMPLATES_DIR = "...";
+              };
+              restartIfChanged = true;
+              serviceConfig = {
+                Type = "simple";
+                Restart = "on-failure";
+                RestartSec = "10";
+                DynamicUser = true;
+                PrivateTmp = true;
+                ProtectSystem = "strict";
+                ReadWritePaths = ["/tmp"];
+                EnvironmentFile = "${cfg.environmentFile}";
+              };
+              script = ''
+                ${self.packages.${pkgs.system}.default}/bin/amc_mods
+              '';
+            };
 
             # Sharry file sharing service
             services.sharry = lib.mkIf cfg.sharry.enable {
