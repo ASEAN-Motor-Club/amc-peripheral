@@ -113,15 +113,39 @@ def validate_schema() -> bool:
         return False
 
 
+def _load_knowledge_guide() -> str | None:
+    """Load the curated knowledge guide from the knowledge_guides directory."""
+    guide_path = os.path.join(os.path.dirname(__file__), "knowledge_guides", "game_db_guide.md")
+    try:
+        with open(guide_path, "r") as f:
+            content = f.read()
+        log.info(f"Game DB knowledge guide loaded: {len(content)} chars from {guide_path}")
+        return content
+    except FileNotFoundError:
+        log.info(f"No knowledge guide at {guide_path}, falling back to schema introspection")
+        return None
+    except Exception as e:
+        log.warning(f"Failed to load knowledge guide: {e}")
+        return None
+
+
 def get_schema_description() -> str:
     """
-    Generate a comprehensive description of the database schema for LLM tool descriptions.
+    Get a description of the database for LLM tool descriptions.
     
-    Uses PRAGMA queries to introspect tables and views, providing column names and types.
+    Prefers a curated knowledge guide (knowledge_guides/game_db_guide.md) which includes
+    annotated columns, domain context, enum values, and query recipes. Falls back to
+    PRAGMA-based schema introspection if the guide is not available.
     
     Returns:
-        Formatted schema description string
+        Formatted schema/guide description string
     """
+    # Try curated guide first
+    guide = _load_knowledge_guide()
+    if guide:
+        return guide
+
+    # Fallback: PRAGMA introspection
     try:
         with get_connection() as conn:
             cursor = conn.cursor()

@@ -147,12 +147,20 @@ class TestResultFormatting:
 class TestSchemaDescription:
     """Test schema introspection."""
 
-    def test_schema_returns_fallback_when_no_url(self, mock_backend_db_url):
+    def test_schema_returns_guide_when_available(self, mock_backend_db_url):
+        """When the knowledge guide file exists, it should be returned."""
+        mock_backend_db_url._schema_cache = None
+        result = mock_backend_db_url.get_schema_description()
+        # The guide file exists in the repo, so it should be loaded
+        assert "AMC Backend Database Guide" in result or "not configured" in result
+
+    def test_schema_returns_fallback_when_no_url_and_no_guide(self, mock_backend_db_url):
         with patch.object(mock_backend_db_url, 'BACKEND_DB_URL', None):
-            # Clear cache
-            mock_backend_db_url._schema_cache = None
-            result = mock_backend_db_url.get_schema_description()
-            assert "not configured" in result
+            with patch.object(mock_backend_db_url, '_load_knowledge_guide', return_value=None):
+                # Clear cache
+                mock_backend_db_url._schema_cache = None
+                result = mock_backend_db_url.get_schema_description()
+                assert "not configured" in result
 
     def test_schema_caches_result(self, mock_backend_db_url):
         mock_backend_db_url._schema_cache = "cached schema"

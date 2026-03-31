@@ -8,6 +8,7 @@ PostgreSQL instance running in the amc-backend container.
 
 import json
 import logging
+import os
 from typing import Optional
 
 from amc_peripheral.settings import BACKEND_DB_URL
@@ -44,10 +45,31 @@ def _get_connection():
     return conn
 
 
+def _load_knowledge_guide() -> str | None:
+    """Load the curated knowledge guide from the knowledge_guides directory."""
+    guide_path = os.path.join(
+        os.path.dirname(__file__), "knowledge_guides", "backend_db_guide.md"
+    )
+    try:
+        with open(guide_path, "r") as f:
+            content = f.read()
+        log.info(f"Backend DB knowledge guide loaded: {len(content)} chars from {guide_path}")
+        return content
+    except FileNotFoundError:
+        log.info(f"No knowledge guide at {guide_path}, falling back to schema introspection")
+        return None
+    except Exception as e:
+        log.warning(f"Failed to load knowledge guide: {e}")
+        return None
+
+
 def get_schema_description() -> str:
     """
-    Introspect PostgreSQL tables and return a formatted schema description
-    for use as LLM context.
+    Get a description of the database for LLM tool descriptions.
+
+    Prefers a curated knowledge guide (knowledge_guides/backend_db_guide.md) which includes
+    annotated columns, relationships, domain context, and query recipes. Falls back to
+    information_schema introspection if the guide is not available.
 
     Returns cached result after first call.
     """
@@ -56,16 +78,21 @@ def get_schema_description() -> str:
     if _schema_cache is not None:
         return _schema_cache
 
+    # Try curated guide first
+    guide = _load_knowledge_guide()
+    if guide:
+        _schema_cache = guide
+        return _schema_cache
+
     if not BACKEND_DB_URL:
         return "Backend database not configured (BACKEND_DB_URL not set)"
 
+    # Fallback: information_schema introspection
     try:
 
         conn = _get_connection()
         cursor = conn.cursor()
 
-        # Get all tables accessible to us (excludes RLS-blocked tables effectively,
-        # since we can still see the table names but not the data)
         cursor.execute("""
             SELECT table_name
             FROM information_schema.tables
