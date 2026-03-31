@@ -1,16 +1,90 @@
 <script lang="ts">
 	import '../app.css';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import PiPPlayer from '$lib/components/PiPPlayer.svelte';
 	import { authenticateWithDiscord, isInDiscordActivity, layoutMode, subscribeToLayoutMode } from '$lib/discord';
 	import { setAccessToken, setApiBase } from '$lib/api';
 	import { authStore } from '$lib/stores/auth';
+	import { streamStatus } from '$lib/stores/radio';
 
 	let { children } = $props();
 
 	let streamUrl = $state('/stream');
+	let audioEl: HTMLAudioElement | undefined = $state();
+
+	// --- Auto-reconnect state ---
+	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	let backoffMs = 2000;
+	const MAX_BACKOFF_MS = 30_000;
+	let wasPlaying = false; // track if user had started playback
+
+	function scheduleReconnect() {
+		if (reconnectTimer) return; // already scheduled
+		streamStatus.set('reconnecting');
+		console.warn(`[Radio] Stream lost — reconnecting in ${backoffMs / 1000}s...`);
+
+		reconnectTimer = setTimeout(() => {
+			reconnectTimer = null;
+			reconnectStream();
+		}, backoffMs);
+
+		// Exponential backoff, capped
+		backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+	}
+
+	function reconnectStream() {
+		if (!audioEl) return;
+		// Append cache-buster so the browser doesn't serve a cached error
+		const base = streamUrl.split('?')[0];
+		const bustUrl = `${base}?_t=${Date.now()}`;
+		console.log('[Radio] Attempting reconnect:', bustUrl);
+		audioEl.src = bustUrl;
+		audioEl.load();
+		audioEl.play().catch(() => {
+			// Autoplay may be blocked; schedule another retry
+			scheduleReconnect();
+		});
+	}
+
+	function resetBackoff() {
+		backoffMs = 2000;
+		streamStatus.set('connected');
+		if (reconnectTimer) {
+			clearTimeout(reconnectTimer);
+			reconnectTimer = null;
+		}
+	}
+
+	function handleAudioError() {
+		// Only reconnect if user had started playback
+		if (wasPlaying) {
+			scheduleReconnect();
+		}
+	}
+
+	function handleAudioStalled() {
+		if (wasPlaying) {
+			scheduleReconnect();
+		}
+	}
+
+	function handleAudioEnded() {
+		// Live streams shouldn't end — treat as disconnect
+		if (wasPlaying) {
+			scheduleReconnect();
+		}
+	}
+
+	function handleAudioPlaying() {
+		wasPlaying = true;
+		resetBackoff();
+	}
+
+	function handleAudioPlay() {
+		wasPlaying = true;
+	}
 
 	onMount(async () => {
 		if (isInDiscordActivity()) {
@@ -49,6 +123,13 @@
 		}
 	});
 
+	onDestroy(() => {
+		if (reconnectTimer) {
+			clearTimeout(reconnectTimer);
+			reconnectTimer = null;
+		}
+	});
+
 	let auth = $state({ loading: true, authenticated: false, user: null as any, error: null as string | null });
 	authStore.subscribe(v => { auth = v; });
 
@@ -56,6 +137,9 @@
 	layoutMode.subscribe(v => { currentLayout = v; });
 
 	let isPiP = $derived(currentLayout === 1);
+
+	let currentStreamStatus = $state<'connected' | 'reconnecting' | 'error'>('connected');
+	streamStatus.subscribe(v => { currentStreamStatus = v; });
 </script>
 
 <!--
@@ -74,6 +158,15 @@
 	<Sidebar />
 	<div class="app-main">
 		<Header />
+
+		<!-- Stream reconnect banner -->
+		{#if currentStreamStatus === 'reconnecting'}
+			<div class="reconnect-banner">
+				<div class="reconnect-spinner"></div>
+				<span>Reconnecting to stream…</span>
+			</div>
+		{/if}
+
 		<main class="app-content">
 			{#if auth.loading}
 				<div class="loading-screen">
@@ -98,7 +191,18 @@
 
 <!-- Persistent audio player — lives at layout level, never destroyed -->
 {#if auth.authenticated}
-	<audio class="persistent-audio" src={streamUrl} preload="none" controls>
+	<audio
+		class="persistent-audio"
+		bind:this={audioEl}
+		src={streamUrl}
+		preload="none"
+		controls
+		onerror={handleAudioError}
+		onstalled={handleAudioStalled}
+		onended={handleAudioEnded}
+		onplaying={handleAudioPlaying}
+		onplay={handleAudioPlay}
+	>
 		<track kind="captions" />
 	</audio>
 {/if}
@@ -163,4 +267,46 @@
 	.persistent-audio::-webkit-media-controls-panel {
 		background: var(--bg-elevated);
 	}
+
+	/* --- Reconnect banner --- */
+	.reconnect-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-xs) var(--space-xl);
+		background: linear-gradient(90deg, rgba(255, 170, 0, 0.12), rgba(255, 170, 0, 0.04));
+		border-bottom: 1px solid rgba(255, 170, 0, 0.25);
+		color: #ffaa00;
+		font-size: 0.75rem;
+		font-family: var(--font-mono);
+		letter-spacing: 0.02em;
+		animation: reconnect-slide-in 0.25s ease-out;
+	}
+
+	@keyframes reconnect-slide-in {
+		from {
+			opacity: 0;
+			transform: translateY(-100%);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.reconnect-spinner {
+		width: 12px;
+		height: 12px;
+		border: 2px solid rgba(255, 170, 0, 0.3);
+		border-top-color: #ffaa00;
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
 </style>
+

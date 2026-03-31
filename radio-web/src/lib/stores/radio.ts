@@ -1,5 +1,5 @@
 /**
- * Radio state store — now-playing with polling, recent requests.
+ * Radio state store — now-playing with polling, recent requests, stream status.
  */
 import { writable } from 'svelte/store';
 import type { NowPlaying, SongRequest } from '$lib/api';
@@ -7,3 +7,6 @@ import type { NowPlaying, SongRequest } from '$lib/api';
 export const nowPlaying = writable<NowPlaying>({ playing: false });
 export const recentRequests = writable<SongRequest[]>([]);
 export const isPolling = writable(false);
+
+/** Stream connection status: 'connected' | 'reconnecting' | 'error' */
+export const streamStatus = writable<'connected' | 'reconnecting' | 'error'>('connected');
