@@ -2,6 +2,7 @@ import os
 import json
 
 OPENAI_API_KEY_OPENROUTER = os.environ.get("OPENAI_API_KEY_OPENROUTER")
+MIMO_API_KEY = os.environ.get("MIMO_API_KEY")
 LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY", "")
 
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
@@ -26,7 +27,7 @@ DENO_PATH = os.environ.get("DENO_PATH")
 
 # AI Config
 DEFAULT_AI_MODEL = os.environ.get("DEFAULT_AI_MODEL", "xiaomi/mimo-v2-pro")
-TRANSLATION_AI_MODEL = os.environ.get("TRANSLATION_AI_MODEL", "openai/gpt-oss-20b")
+TRANSLATION_AI_MODEL = os.environ.get("TRANSLATION_AI_MODEL", "google/gemini-2.0-flash-001")
 LOCAL_TIMEZONE = os.environ.get("LOCAL_TIMEZONE", "Asia/Bangkok")
 
 # Bot Agentic Loop Configuration

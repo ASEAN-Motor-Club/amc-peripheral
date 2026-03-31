@@ -171,3 +171,57 @@ def tts_gemini_multi(
     )
 
     return response.audio_content  # bytes
+
+
+def tts_mimo(
+    text: str,
+    voice: str = "default_en",
+    style: str | None = None,
+    audio_format: str = "mp3",
+) -> bytes:
+    """Synthesize speech using Xiaomi MiMo v2 TTS.
+
+    Uses the OpenAI-compatible chat completions endpoint with the mimo-v2-tts
+    model. The text to synthesize must be in an assistant message.
+
+    Args:
+        text: The text to synthesize.
+        voice: Voice ID — "mimo_default", "default_zh", or "default_en".
+        style: Optional style tag (e.g. "Happy", "Sad", "Whisper").
+            Prepended as <style>...</style> to the assistant content.
+        audio_format: Output format — "mp3", "wav", or "pcm16".
+
+    Returns:
+        Audio content as bytes.
+    """
+    import base64
+
+    from openai import OpenAI
+
+    from amc_peripheral.settings import MIMO_API_KEY
+
+    client = OpenAI(
+        api_key=MIMO_API_KEY,
+        base_url="https://api.xiaomimimo.com/v1",
+    )
+
+    # Build assistant content with optional style tag
+    content = text
+    if style:
+        content = f"<style>{style}</style>{text}"
+
+    completion = client.chat.completions.create(
+        model="mimo-v2-tts",
+        messages=[
+            {"role": "assistant", "content": content},
+        ],
+        extra_body={
+            "audio": {
+                "format": audio_format,
+                "voice": voice,
+            },
+        },
+    )
+
+    audio_data = completion.choices[0].message.audio.data
+    return base64.b64decode(audio_data)

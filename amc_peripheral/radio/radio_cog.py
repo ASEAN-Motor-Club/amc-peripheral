@@ -23,7 +23,7 @@ from discord import app_commands
 import yt_dlp
 import logging
 from openai import AsyncOpenAI
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 
 from amc_peripheral.settings import (
@@ -1480,14 +1480,14 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         except OSError:
             pass
 
-    async def _execute_annie_tool(self, name: str, args: dict, requester: str, notify_fn) -> str:
+    async def _execute_annie_tool(self, name: str, args: dict, requester: str, notify_fn, bypass_throttling: bool = False) -> str:
         """Execute a tool call from Annie's agentic loop."""
         try:
             if name == "search_and_queue_song":
                 query = args.get("query", "")
                 # Validate before dispatching — catches blacklist, throttling
                 try:
-                    self._validate_song_request(query, requester, bypass_throttling=False)
+                    self._validate_song_request(query, requester, bypass_throttling=bypass_throttling)
                 except Exception as e:
                     return f"Song rejected: {e}"
                 # Content screening — LLM checks for racially/religiously offensive content
@@ -1495,7 +1495,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 if screening:
                     return f"Song rejected: {screening}"
                 self.bot.loop.create_task(
-                    self._fire_and_forget_queue(query, requester, notify_fn)
+                    self._fire_and_forget_queue(query, requester, notify_fn, bypass_throttling=bypass_throttling)
                 )
                 return f"Download started for '{query}'. I'll notify the listener when it's ready."
 
@@ -1815,7 +1815,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             collected_notifications.append(msg)
 
         response = await self._call_annie_llm(
-            messages, tools, requester_name, collect_notify
+            messages, tools, requester_name, collect_notify, bypass_throttling=is_dj
         )
 
         # Combine agent response with any background notifications
@@ -1880,8 +1880,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         async def discord_notify(msg: str):
             await message.channel.send(msg)
 
+        is_dj = any(r.id == DJ_ROLE_ID for r in message.author.roles) if hasattr(message.author, "roles") else False
         async with message.channel.typing():
-            response = await self._call_annie_llm(messages, tools, message.author.display_name, discord_notify)
+            response = await self._call_annie_llm(messages, tools, message.author.display_name, discord_notify, bypass_throttling=is_dj)
 
         for chunk in split_markdown(response):
             await message.reply(chunk, mention_author=False)
@@ -1916,7 +1917,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         response = await self._call_annie_llm(messages, tools, player_name, ingame_notify)
         await announce_in_game(self.bot.http_session, response[:520])
 
-    async def _call_annie_llm(self, messages: list, tools: list, requester: str, notify_fn) -> str:
+    async def _call_annie_llm(self, messages: list, tools: list, requester: str, notify_fn, bypass_throttling: bool = False) -> str:
         """Agentic loop for Annie — calls LLM with tools until a final response."""
         max_iterations = 20
 
@@ -1945,6 +1946,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     json.loads(tool_call.function.arguments),
                     requester,
                     notify_fn,
+                    bypass_throttling=bypass_throttling,
                 )
                 messages.append({
                     "tool_call_id": tool_call.id,

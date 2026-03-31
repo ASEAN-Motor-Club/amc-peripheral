@@ -9,22 +9,22 @@ class TranslationResponse(BaseModel):
 class MultiTranslation(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    indonesian: str = Field(alias="Indonesian")
-    thai: str = Field(alias="Thai")
-    vietnamese: str = Field(alias="Vietnamese")
-    chinese: str = Field(alias="Chinese")
-    japanese: str = Field(alias="Japanese")
+    indonesian: Optional[str] = Field(default="", alias="Indonesian")
+    thai: Optional[str] = Field(default="", alias="Thai")
+    vietnamese: Optional[str] = Field(default="", alias="Vietnamese")
+    chinese: Optional[str] = Field(default="", alias="Chinese")
+    japanese: Optional[str] = Field(default="", alias="Japanese")
 
 
 class MultiTranslationWithEnglish(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    english: str = Field(alias="English")
-    indonesian: str = Field(alias="Indonesian")
-    thai: str = Field(alias="Thai")
-    vietnamese: str = Field(alias="Vietnamese")
-    chinese: str = Field(alias="Chinese")
-    japanese: str = Field(alias="Japanese")
+    english: Optional[str] = Field(default="", alias="English")
+    indonesian: Optional[str] = Field(default="", alias="Indonesian")
+    thai: Optional[str] = Field(default="", alias="Thai")
+    vietnamese: Optional[str] = Field(default="", alias="Vietnamese")
+    chinese: Optional[str] = Field(default="", alias="Chinese")
+    japanese: Optional[str] = Field(default="", alias="Japanese")
 
 
 class ModerationResponse(BaseModel):
