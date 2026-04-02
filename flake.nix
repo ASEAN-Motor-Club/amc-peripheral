@@ -462,8 +462,9 @@
                 OPUS_PATH = "${pkgs.libopus}/lib/libopus.so";
                 YT_COOKIES_PATH = "${cfg.cookiesPath}";
                 RADIO_DB_PATH = "${cfg.dbPath}";
+                TTS_PROVIDER = "qwen3";
               };
-              restartIfChanged = true;
+              restartIfChanged = false;
               serviceConfig = {
                 Type = "simple";
                 Restart = "on-failure";
@@ -488,7 +489,7 @@
                 # DEFAULT_AI_MODEL = "xiaomi/mimo-v2-flash:free";
                 TRANSLATION_AI_MODEL = "openai/gpt-oss-120b";
               };
-              restartIfChanged = true;
+              restartIfChanged = false;
               serviceConfig = {
                 Type = "notify";
                 NotifyAccess = "all";
@@ -519,7 +520,7 @@
                 # TIRE_BUILDER_MOD_EXPLORE = "...";
                 # TIRE_BUILDER_TEMPLATES_DIR = "...";
               };
-              restartIfChanged = true;
+              restartIfChanged = false;
               serviceConfig = {
                 Type = "simple";
                 Restart = "on-failure";

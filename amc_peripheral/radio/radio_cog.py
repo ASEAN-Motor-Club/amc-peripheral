@@ -58,9 +58,14 @@ from amc_peripheral.settings import (
 )
 from amc_peripheral.db import RadioDB
 from amc_peripheral.utils.text_utils import split_markdown
-from amc_peripheral.radio.tts import tts as tts_google, tts_gemini_multi
+from amc_peripheral.radio.tts import tts_dispatch, tts_gemini_multi
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
-from amc_peripheral.radio.radio_server import get_current_song_metadata, get_current_song, get_listener_count, parse_song_info
+from amc_peripheral.radio.radio_server import (
+    get_current_song_metadata,
+    get_current_song,
+    get_listener_count,
+    parse_song_info,
+)
 from amc_peripheral.utils.game_utils import announce_in_game
 
 log = logging.getLogger(__name__)
@@ -161,7 +166,6 @@ If you reject a song, explain briefly why. Be concise.
 """
 
 
-
 # Pydantic Models
 class Editorial(BaseModel):
     title: str
@@ -254,15 +258,38 @@ Do NOT overuse tags. Most sentences need no tags at all — only add them where 
 
 # Voice registry — all available Gemini TTS voices
 VOICES_FEMALE = [
-    "Achernar", "Aoede", "Autonoe", "Callirrhoe", "Despina",
-    "Erinome", "Gacrux", "Kore", "Laomedeia", "Leda",
-    "Pulcherrima", "Sulafat", "Vindemiatrix", "Zephyr",
+    "Achernar",
+    "Aoede",
+    "Autonoe",
+    "Callirrhoe",
+    "Despina",
+    "Erinome",
+    "Gacrux",
+    "Kore",
+    "Laomedeia",
+    "Leda",
+    "Pulcherrima",
+    "Sulafat",
+    "Vindemiatrix",
+    "Zephyr",
 ]
 VOICES_MALE = [
-    "Achird", "Algenib", "Algieba", "Alnilam", "Charon",
-    "Enceladus", "Fenrir", "Iapetus", "Orus", "Puck",
-    "Rasalgethi", "Sadachbia", "Sadaltager", "Schedar",
-    "Umbriel", "Zubenelgenubi",
+    "Achird",
+    "Algenib",
+    "Algieba",
+    "Alnilam",
+    "Charon",
+    "Enceladus",
+    "Fenrir",
+    "Iapetus",
+    "Orus",
+    "Puck",
+    "Rasalgethi",
+    "Sadachbia",
+    "Sadaltager",
+    "Schedar",
+    "Umbriel",
+    "Zubenelgenubi",
 ]
 
 # Annie is always Leda
@@ -303,18 +330,26 @@ class NowPlayingView(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="Like", style=discord.ButtonStyle.secondary,
-        custom_id="radio_like", emoji="❤️",
+        label="Like",
+        style=discord.ButtonStyle.secondary,
+        custom_id="radio_like",
+        emoji="❤️",
     )
-    async def like_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def like_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         await interaction.response.defer(ephemeral=True)
         metadata = await get_current_song_metadata(self.cog.bot.http_session)
         if not metadata:
-            await interaction.followup.send("No song is currently playing.", ephemeral=True)
+            await interaction.followup.send(
+                "No song is currently playing.", ephemeral=True
+            )
             return
         song_info = parse_song_info(metadata)
         if not song_info:
-            await interaction.followup.send("Could not identify the current song.", ephemeral=True)
+            await interaction.followup.send(
+                "Could not identify the current song.", ephemeral=True
+            )
             return
         song_title = song_info["song_title"]
         self.cog.db.add_like(discord_id=str(interaction.user.id), song_title=song_title)
@@ -334,38 +369,50 @@ class TrackConfirmView(discord.ui.View):
         self.filename = filename
 
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, emoji="✅")
-    async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def confirm_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         await interaction.response.defer()
         pending = self.cog._pending_tracks.pop(self.track_id, None)
         if not pending:
-            await interaction.followup.send("Track expired or already added.", ephemeral=True)
+            await interaction.followup.send(
+                "Track expired or already added.", ephemeral=True
+            )
             return
         transcript, audio_bytes = pending
         playlist_channel = self.cog.bot.get_channel(PLAYLIST_CHANNEL)
         if not playlist_channel:
-            await interaction.followup.send("Could not access the playlist channel.", ephemeral=True)
+            await interaction.followup.send(
+                "Could not access the playlist channel.", ephemeral=True
+            )
             return
         await playlist_channel.send(
             file=discord.File(BytesIO(audio_bytes), filename=self.filename)
         )
-        await interaction.followup.send(f"✅ Added **{self.filename}** to the playlist!")
+        await interaction.followup.send(
+            f"✅ Added **{self.filename}** to the playlist!"
+        )
         self.stop()
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, emoji="❌")
-    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def cancel_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         self.cog._pending_tracks.pop(self.track_id, None)
         await interaction.response.send_message("Track discarded.", ephemeral=True)
         self.stop()
 
 
 # Download guard constants
-METADATA_TIMEOUT = 45   # Max seconds for YouTube metadata extraction (search + info)
+METADATA_TIMEOUT = 45  # Max seconds for YouTube metadata extraction (search + info)
 DOWNLOAD_TIMEOUT = 120  # Max seconds for the actual audio download + ffmpeg conversion
 MAX_SONG_DURATION = 10 * 60  # Max song length in seconds (10 minutes)
 
 
 class RadioCog(commands.Cog):
-    playlist_group = app_commands.Group(name="playlist", description="Manage your playlists", guild_ids=[GUILD_ID])
+    playlist_group = app_commands.Group(
+        name="playlist", description="Manage your playlists", guild_ids=[GUILD_ID]
+    )
 
     def __init__(self, bot):
         self.bot = bot
@@ -406,6 +453,7 @@ class RadioCog(commands.Cog):
         # Initialize knowledge store
         try:
             from amc_peripheral.knowledge_store import KnowledgeStore
+
             knowledge_path = os.path.join(MEMORY_DATA_DIR, "knowledge.json")
             self.knowledge_store = KnowledgeStore(knowledge_path)
             log.info(
@@ -663,36 +711,40 @@ Do not make up the name of the previous or next songs, as they are unknown.
                 messages_with_instructions = messages[:-1] + [
                     {
                         "role": "user",
-                        "content": messages[-1]["content"] + "\n\nIMPORTANT: Return your response as a raw JSON object with a single 'scripts' key containing a list of strings. Do not include markdown codeblocks."
+                        "content": messages[-1]["content"]
+                        + "\n\nIMPORTANT: Return your response as a raw JSON object with a single 'scripts' key containing a list of strings. Do not include markdown codeblocks.",
                     }
                 ]
-                completion = await self.openai_client_openrouter.chat.completions.create(
-                    model=DEFAULT_AI_MODEL,
-                    # pyrefly: ignore [bad-argument-type]
-                    messages=messages_with_instructions,
+                completion = (
+                    await self.openai_client_openrouter.chat.completions.create(
+                        model=DEFAULT_AI_MODEL,
+                        # pyrefly: ignore [bad-argument-type]
+                        messages=messages_with_instructions,
+                    )
                 )
-                
+
                 if not completion.choices:
                     raise ValueError("No choices returned from LLM")
-                    
+
                 content = completion.choices[0].message.content
                 if not content:
                     raise ValueError("Empty content from LLM")
-                    
+
                 # Clean up potential markdown wrapper
                 content = content.strip()
                 if content.startswith("```json"):
                     content = content.split("```json")[-1].split("```")[0].strip()
                 elif content.startswith("```"):
                     content = content.split("```")[-1].split("```")[0].strip()
-                    
+
                 import json
+
                 data = json.loads(content)
                 jingles = data.get("scripts", [])
-                
+
                 if not jingles or not isinstance(jingles, list):
                     raise ValueError("JSON did not contain a valid 'scripts' list")
-                    
+
                 break
             except Exception as exc:
                 log.warning(
@@ -701,17 +753,21 @@ Do not make up the name of the previous or next songs, as they are unknown.
                 )
                 if attempt < max_attempts:
                     continue
-                log.error("generate_jingles_gen: all retries exhausted, skipping this cycle.")
+                log.error(
+                    "generate_jingles_gen: all retries exhausted, skipping this cycle."
+                )
                 return
 
         for jingle in jingles[:6]:
             try:
                 audio_bytes = await asyncio.to_thread(
-                    tts_google, discord.utils.remove_markdown(jingle), use_markup=True
+                    tts_dispatch, discord.utils.remove_markdown(jingle), use_markup=True
                 )
                 yield (jingle, audio_bytes)
             except Exception as exc:
-                log.error(f"generate_jingles_gen: TTS failed for jingle, skipping: {exc}")
+                log.error(
+                    f"generate_jingles_gen: TTS failed for jingle, skipping: {exc}"
+                )
                 continue
 
     async def generate_news_content(self):
@@ -773,7 +829,7 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
 
         system_message = f"""You are DJ Annie, a charismatic host for Radio ASEAN in Motor Town.
 
-{self.knowledge_store.build_index() if self.knowledge_store else ''}
+{self.knowledge_store.build_index() if self.knowledge_store else ""}
 
 If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
 
@@ -806,18 +862,20 @@ Output only the spoken words, as if transcribed from a live recording.""",
 
         # Generate TTS audio
         audio_bytes = await asyncio.to_thread(
-            tts_google, clean_transcript, use_markup=True
+            tts_dispatch, clean_transcript, use_markup=True
         )
 
         return clean_transcript, audio_bytes
 
-    async def generate_track(self, topic: str, duration_hint: str = "1-2 minutes") -> tuple[str, bytes]:
+    async def generate_track(
+        self, topic: str, duration_hint: str = "1-2 minutes"
+    ) -> tuple[str, bytes]:
         """Generate a long-form TTS audio track for a given topic."""
         now = datetime.now(self.local_tz)
 
         system_message = f"""You are DJ Annie, a charismatic host for Radio ASEAN in Motor Town.
 
-{self.knowledge_store.build_index() if self.knowledge_store else ''}
+{self.knowledge_store.build_index() if self.knowledge_store else ""}
 
 If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
 
@@ -847,18 +905,20 @@ Make it engaging, fun, and in Annie's signature style — witty, warm, and enter
         clean_transcript = discord.utils.remove_markdown(transcript)
 
         audio_bytes = await asyncio.to_thread(
-            tts_google, clean_transcript, use_markup=True
+            tts_dispatch, clean_transcript, use_markup=True
         )
 
         return clean_transcript, audio_bytes
 
-    async def generate_talkshow(self, topic: str, duration_hint: str = "1-2 minutes") -> tuple[str, bytes]:
+    async def generate_talkshow(
+        self, topic: str, duration_hint: str = "1-2 minutes"
+    ) -> tuple[str, bytes]:
         """Generate a multi-speaker talkshow segment using Gemini TTS."""
         now = datetime.now(self.local_tz)
 
         system_message = f"""You are a scriptwriter for Radio ASEAN in Motor Town.
 
-{self.knowledge_store.build_index() if self.knowledge_store else ''}
+{self.knowledge_store.build_index() if self.knowledge_store else ""}
 
 If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
 
@@ -898,13 +958,14 @@ CRITICAL:
         raw_script = await self._call_llm_with_tools_internal(messages, tools)
 
         # Second pass: parse the raw script into structured turns
-        parse_completion = await self.openai_client_openrouter.beta.chat.completions.parse(
-            model=DEFAULT_AI_MODEL,
-            response_format=TalkshowScript,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"""Parse the following radio talkshow script into structured speaker turns.
+        parse_completion = (
+            await self.openai_client_openrouter.beta.chat.completions.parse(
+                model=DEFAULT_AI_MODEL,
+                response_format=TalkshowScript,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"""Parse the following radio talkshow script into structured speaker turns.
 Each turn has a "speaker" (one of: Host, Guest, Caller) and "text" (the spoken words).
 Preserve the exact words but remove any speaker labels or colons from the text.
 
@@ -914,11 +975,15 @@ makes sense for the topic being discussed.
 
 Script:
 {raw_script}""",
-                },
-            ],
+                    },
+                ],
+            )
         )
 
-        if not parse_completion.choices or not parse_completion.choices[0].message.parsed:
+        if (
+            not parse_completion.choices
+            or not parse_completion.choices[0].message.parsed
+        ):
             raise Exception("Failed to parse talkshow script into structured turns.")
 
         script = parse_completion.choices[0].message.parsed
@@ -934,7 +999,11 @@ Script:
             for speaker_meta in script.speakers:
                 if speaker_meta.name == "Host":
                     continue
-                pool = GUEST_VOICES_FEMALE if speaker_meta.gender == "female" else GUEST_VOICES_MALE
+                pool = (
+                    GUEST_VOICES_FEMALE
+                    if speaker_meta.gender == "female"
+                    else GUEST_VOICES_MALE
+                )
                 available = [v for v in pool if v not in used_voices]
                 if not available:
                     available = pool  # fallback if we exhaust the pool
@@ -1107,7 +1176,10 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "limit": {"type": "integer", "description": "Number of requests to fetch (default 10)"},
+                            "limit": {
+                                "type": "integer",
+                                "description": "Number of requests to fetch (default 10)",
+                            },
                         },
                         "required": [],
                     },
@@ -1129,7 +1201,10 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "limit": {"type": "integer", "description": "Number of news items (default 5)"},
+                            "limit": {
+                                "type": "integer",
+                                "description": "Number of news items (default 5)",
+                            },
                         },
                         "required": [],
                     },
@@ -1143,7 +1218,10 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "limit": {"type": "integer", "description": "Number of jingles (default 10)"},
+                            "limit": {
+                                "type": "integer",
+                                "description": "Number of jingles (default 10)",
+                            },
                         },
                         "required": [],
                     },
@@ -1329,7 +1407,10 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "limit": {"type": "integer", "description": "Number of songs to return (default 10)"},
+                            "limit": {
+                                "type": "integer",
+                                "description": "Number of songs to return (default 10)",
+                            },
                         },
                         "required": [],
                     },
@@ -1394,7 +1475,6 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     },
                 },
             },
-
             {
                 "type": "function",
                 "function": {
@@ -1445,7 +1525,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         # Generate TTS audio
         try:
             audio_bytes = await asyncio.to_thread(
-                tts_google, discord.utils.remove_markdown(text), use_markup=True
+                tts_dispatch, discord.utils.remove_markdown(text), use_markup=True
             )
         except Exception as e:
             log.error(f"TTS generation failed: {e}")
@@ -1454,7 +1534,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         # Write to a temp file in the radio tmp dir so Liquidsoap can access it
         try:
             os.makedirs(RADIO_TMP_PATH, exist_ok=True)
-            fd, tmp_path = tempfile.mkstemp(suffix=".mp3", prefix="voice_", dir=RADIO_TMP_PATH)
+            fd, tmp_path = tempfile.mkstemp(
+                suffix=".mp3", prefix="voice_", dir=RADIO_TMP_PATH
+            )
             with os.fdopen(fd, "wb") as f:
                 f.write(audio_bytes)
             os.chmod(tmp_path, 0o644)  # Liquidsoap runs as a different user
@@ -1468,7 +1550,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             # Wait for the audio to actually reach listeners (streaming buffer delay)
             await asyncio.sleep(10)
         # Clean up temp file (deferred on success, immediate on failure)
-        self.bot.loop.create_task(self._deferred_cleanup(tmp_path, delay=60 if success else 0))
+        self.bot.loop.create_task(
+            self._deferred_cleanup(tmp_path, delay=60 if success else 0)
+        )
         return success
 
     async def _deferred_cleanup(self, path: str, delay: int = 1800):
@@ -1480,14 +1564,23 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         except OSError:
             pass
 
-    async def _execute_annie_tool(self, name: str, args: dict, requester: str, notify_fn, bypass_throttling: bool = False) -> str:
+    async def _execute_annie_tool(
+        self,
+        name: str,
+        args: dict,
+        requester: str,
+        notify_fn,
+        bypass_throttling: bool = False,
+    ) -> str:
         """Execute a tool call from Annie's agentic loop."""
         try:
             if name == "search_and_queue_song":
                 query = args.get("query", "")
                 # Validate before dispatching — catches blacklist, throttling
                 try:
-                    self._validate_song_request(query, requester, bypass_throttling=bypass_throttling)
+                    self._validate_song_request(
+                        query, requester, bypass_throttling=bypass_throttling
+                    )
                 except Exception as e:
                     return f"Song rejected: {e}"
                 # Content screening — LLM checks for racially/religiously offensive content
@@ -1495,27 +1588,38 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 if screening:
                     return f"Song rejected: {screening}"
                 self.bot.loop.create_task(
-                    self._fire_and_forget_queue(query, requester, notify_fn, bypass_throttling=bypass_throttling)
+                    self._fire_and_forget_queue(
+                        query, requester, notify_fn, bypass_throttling=bypass_throttling
+                    )
                 )
                 return f"Download started for '{query}'. I'll notify the listener when it's ready."
 
             elif name == "get_currently_playing":
                 current = await get_current_song(self.bot.http_session)
-                return current or "Nothing is playing right now, or I can't reach the radio server."
+                return (
+                    current
+                    or "Nothing is playing right now, or I can't reach the radio server."
+                )
 
             elif name == "get_recent_requests":
                 limit = args.get("limit", 10)
                 requests = self.db.get_top_requested_songs(limit=limit)
                 if not requests:
                     return "No song requests recorded yet."
-                lines = [f"- {r['song_title']} (requested {r['request_count']}x)" for r in requests]
+                lines = [
+                    f"- {r['song_title']} (requested {r['request_count']}x)"
+                    for r in requests
+                ]
                 return "Recent popular requests:\n" + "\n".join(lines)
 
             elif name == "get_song_stats":
                 stats = self.db.get_all_song_stats()
                 if not stats:
                     return "No song stats yet."
-                lines = [f"- {s['song_title']}: ❤️ {s['like_count']} | 👎 {s['dislike_count']}" for s in stats[:15]]
+                lines = [
+                    f"- {s['song_title']}: ❤️ {s['like_count']} | 👎 {s['dislike_count']}"
+                    for s in stats[:15]
+                ]
                 return "Song stats:\n" + "\n".join(lines)
 
             elif name == "get_recent_news":
@@ -1523,7 +1627,10 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 news = self.db.get_recent_news(limit=limit)
                 if not news:
                     return "No news segments generated yet."
-                lines = [f"### {n['generated_at'][:10]}\n{n['content'][:300]}..." for n in news]
+                lines = [
+                    f"### {n['generated_at'][:10]}\n{n['content'][:300]}..."
+                    for n in news
+                ]
                 return "\n\n".join(lines)
 
             elif name == "get_recent_jingles":
@@ -1531,7 +1638,10 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 jingles = self.db.get_recent_jingles(limit=limit)
                 if not jingles:
                     return "No jingles generated yet."
-                lines = [f"- [{j['generated_at'][:10]}] {j['script'][:100]}..." for j in jingles]
+                lines = [
+                    f"- [{j['generated_at'][:10]}] {j['script'][:100]}..."
+                    for j in jingles
+                ]
                 return "Recent jingles:\n" + "\n".join(lines)
 
             elif name == "skip_current_track":
@@ -1541,7 +1651,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             elif name == "queue_trending_song":
                 song_query = await self._pick_trending_song()
                 self.bot.loop.create_task(
-                    self._fire_and_forget_queue(song_query, "DJ Annie", notify_fn, bypass_throttling=True)
+                    self._fire_and_forget_queue(
+                        song_query, "DJ Annie", notify_fn, bypass_throttling=True
+                    )
                 )
                 return "Queueing a trending song for you..."
 
@@ -1570,22 +1682,31 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             elif name == "add_to_user_playlist":
                 playlist_name = args.get("playlist_name", "")
                 song_query = args.get("song_query", "")
-                playlist = self.db.get_playlist_by_name(discord_id=requester, name=playlist_name)
+                playlist = self.db.get_playlist_by_name(
+                    discord_id=requester, name=playlist_name
+                )
                 if not playlist:
                     return f"Playlist '{playlist_name}' not found. Create it first!"
-                self.db.add_song_to_playlist(playlist["id"], song_query=song_query, song_title=song_query)
+                self.db.add_song_to_playlist(
+                    playlist["id"], song_query=song_query, song_title=song_query
+                )
                 return f"Added '{song_query}' to playlist '{playlist['name']}'."
 
             elif name == "view_user_playlist":
                 playlist_name = args.get("playlist_name", "")
-                playlist = self.db.get_playlist_by_name(discord_id=requester, name=playlist_name)
+                playlist = self.db.get_playlist_by_name(
+                    discord_id=requester, name=playlist_name
+                )
                 if not playlist:
                     return f"Playlist '{playlist_name}' not found."
                 songs = self.db.get_playlist_songs(playlist["id"])
                 if not songs:
                     return f"Playlist '{playlist['name']}' is empty."
                 lines = [f"{s['position']}. {s['song_title']}" for s in songs]
-                return f"Playlist '{playlist['name']}' ({len(songs)} songs):\n" + "\n".join(lines)
+                return (
+                    f"Playlist '{playlist['name']}' ({len(songs)} songs):\n"
+                    + "\n".join(lines)
+                )
 
             elif name == "list_user_playlists":
                 playlists = self.db.get_playlists(discord_id=requester)
@@ -1596,7 +1717,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 
             elif name == "play_user_playlist":
                 playlist_name = args.get("playlist_name", "")
-                playlist = self.db.get_playlist_by_name(discord_id=requester, name=playlist_name)
+                playlist = self.db.get_playlist_by_name(
+                    discord_id=requester, name=playlist_name
+                )
                 if not playlist:
                     return f"Playlist '{playlist_name}' not found."
                 songs = self.db.get_playlist_songs(playlist["id"])
@@ -1649,9 +1772,12 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                         f.write(audio_bytes)
                     os.chmod(tmp_path, 0o644)
                     await self.lq.push_segment(
-                        self.bot.http_session, tmp_path,
+                        self.bot.http_session,
+                        tmp_path,
                     )
-                    self.bot.loop.create_task(self._deferred_cleanup(tmp_path, delay=1800))
+                    self.bot.loop.create_task(
+                        self._deferred_cleanup(tmp_path, delay=1800)
+                    )
                     return "Track generated and queued for playback. It will play after the current track."
                 except Exception as e:
                     return f"Failed to generate track: {e}"
@@ -1660,7 +1786,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 topic = args.get("topic", "")
                 duration = args.get("duration", "1-2 minutes")
                 try:
-                    transcript, audio_bytes = await self.generate_talkshow(topic, duration)
+                    transcript, audio_bytes = await self.generate_talkshow(
+                        topic, duration
+                    )
                     # Write to temp dir and push to request queue for immediate playback
                     safe_title = re.sub(r"[^a-zA-Z0-9]", "_", transcript[:40])
                     filename = f"talkshow_{safe_title}.mp3"
@@ -1670,9 +1798,12 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                         f.write(audio_bytes)
                     os.chmod(tmp_path, 0o644)
                     await self.lq.push_segment(
-                        self.bot.http_session, tmp_path,
+                        self.bot.http_session,
+                        tmp_path,
                     )
-                    self.bot.loop.create_task(self._deferred_cleanup(tmp_path, delay=1800))
+                    self.bot.loop.create_task(
+                        self._deferred_cleanup(tmp_path, delay=1800)
+                    )
                     return "Talkshow segment generated and queued for playback. It will play after the current track."
                 except Exception as e:
                     return f"Failed to generate talkshow segment: {e}"
@@ -1684,7 +1815,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 self.bot.loop.create_task(
                     self._voice_reply_background(message_text, notify_fn)
                 )
-                return "Voice reply is being generated and will play on the radio shortly."
+                return (
+                    "Voice reply is being generated and will play on the radio shortly."
+                )
 
             elif name == "ask_game_knowledge":
                 from amc_peripheral.radio.game_knowledge import ask_game_knowledge
@@ -1732,7 +1865,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 
     async def _play_user_playlist(self, songs: list[dict], requester: str, notify_fn):
         """Queue songs from a user playlist one by one (fire-and-forget)."""
-        capped = songs[:self.PLAYLIST_PLAY_CAP]
+        capped = songs[: self.PLAYLIST_PLAY_CAP]
         for i, song in enumerate(capped, 1):
             try:
                 title, _ = await self.request_song(
@@ -1740,9 +1873,13 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 )
                 await notify_fn(f"🎵 [{i}/{len(capped)}] Queued **{title}**")
             except Exception as e:
-                await notify_fn(f"⚠️ [{i}/{len(capped)}] Failed to queue '{song['song_title']}': {e}")
+                await notify_fn(
+                    f"⚠️ [{i}/{len(capped)}] Failed to queue '{song['song_title']}': {e}"
+                )
         if len(songs) > self.PLAYLIST_PLAY_CAP:
-            await notify_fn(f"ℹ️ Only the first {self.PLAYLIST_PLAY_CAP} songs were queued (playlist has {len(songs)}).")
+            await notify_fn(
+                f"ℹ️ Only the first {self.PLAYLIST_PLAY_CAP} songs were queued (playlist has {len(songs)})."
+            )
 
     async def _screen_song_content(self, query: str) -> str | None:
         """Screen a song query for racially/religiously offensive content.
@@ -1843,7 +1980,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             if channel:
                 await channel.send(f"Failed to process request for {requester}: {e}")
 
-    async def _fire_and_forget_queue(self, query: str, requester: str, notify_fn, bypass_throttling=False):
+    async def _fire_and_forget_queue(
+        self, query: str, requester: str, notify_fn, bypass_throttling=False
+    ):
         """Download and queue a song in the background, then notify."""
         try:
             title, _ = await self.request_song(
@@ -1851,7 +1990,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             )
             if bypass_throttling:
                 self.db.add_auto_queue(song_title=str(title))
-            await notify_fn(f'🎵 Queued **{title}** — coming up next!')
+            await notify_fn(f"🎵 Queued **{title}** — coming up next!")
         except Exception as e:
             await notify_fn(f"Couldn't queue that song: {e}")
 
@@ -1867,12 +2006,26 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             prev = f"{m.author.display_name}: {m.content}\n" + prev
 
         messages = [
-            {"role": "system", "content": ANNIE_SYSTEM_PROMPT.format(knowledge_index=self.knowledge_store.build_index() if self.knowledge_store else "")},
-            {"role": "user", "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)"},
+            {
+                "role": "system",
+                "content": ANNIE_SYSTEM_PROMPT.format(
+                    knowledge_index=self.knowledge_store.build_index()
+                    if self.knowledge_store
+                    else ""
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)",
+            },
         ]
         if prev:
-            messages.append({"role": "user", "content": f"Recent chat history:\n{prev}"})
-        messages.append({"role": "user", "content": f"{message.author.display_name}: {question}"})
+            messages.append(
+                {"role": "user", "content": f"Recent chat history:\n{prev}"}
+            )
+        messages.append(
+            {"role": "user", "content": f"{message.author.display_name}: {question}"}
+        )
 
         tools = self._get_annie_tools()
 
@@ -1880,9 +2033,19 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         async def discord_notify(msg: str):
             await message.channel.send(msg)
 
-        is_dj = any(r.id == DJ_ROLE_ID for r in message.author.roles) if hasattr(message.author, "roles") else False
+        is_dj = (
+            any(r.id == DJ_ROLE_ID for r in message.author.roles)
+            if hasattr(message.author, "roles")
+            else False
+        )
         async with message.channel.typing():
-            response = await self._call_annie_llm(messages, tools, message.author.display_name, discord_notify, bypass_throttling=is_dj)
+            response = await self._call_annie_llm(
+                messages,
+                tools,
+                message.author.display_name,
+                discord_notify,
+                bypass_throttling=is_dj,
+            )
 
         for chunk in split_markdown(response):
             await message.reply(chunk, mention_author=False)
@@ -1899,11 +2062,24 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 prev = f"{m.content}\n" + prev
 
         messages = [
-            {"role": "system", "content": ANNIE_SYSTEM_PROMPT.format(knowledge_index=self.knowledge_store.build_index() if self.knowledge_store else "") + "\nRespond briefly — game chat has a character limit. Keep it under 500 chars.\nDo NOT use any emojis — the game client cannot render them."},
-            {"role": "user", "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)"},
+            {
+                "role": "system",
+                "content": ANNIE_SYSTEM_PROMPT.format(
+                    knowledge_index=self.knowledge_store.build_index()
+                    if self.knowledge_store
+                    else ""
+                )
+                + "\nRespond briefly — game chat has a character limit. Keep it under 500 chars.\nDo NOT use any emojis — the game client cannot render them.",
+            },
+            {
+                "role": "user",
+                "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)",
+            },
         ]
         if prev:
-            messages.append({"role": "user", "content": f"Recent in-game chat:\n{prev}"})
+            messages.append(
+                {"role": "user", "content": f"Recent in-game chat:\n{prev}"}
+            )
         messages.append({"role": "user", "content": f"{player_name}: {question}"})
 
         tools = self._get_annie_tools()
@@ -1914,10 +2090,19 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 await channel.send(msg)
             await announce_in_game(self.bot.http_session, msg[:520])
 
-        response = await self._call_annie_llm(messages, tools, player_name, ingame_notify)
+        response = await self._call_annie_llm(
+            messages, tools, player_name, ingame_notify
+        )
         await announce_in_game(self.bot.http_session, response[:520])
 
-    async def _call_annie_llm(self, messages: list, tools: list, requester: str, notify_fn, bypass_throttling: bool = False) -> str:
+    async def _call_annie_llm(
+        self,
+        messages: list,
+        tools: list,
+        requester: str,
+        notify_fn,
+        bypass_throttling: bool = False,
+    ) -> str:
         """Agentic loop for Annie — calls LLM with tools until a final response."""
         max_iterations = 20
 
@@ -1948,12 +2133,14 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     notify_fn,
                     bypass_throttling=bypass_throttling,
                 )
-                messages.append({
-                    "tool_call_id": tool_call.id,
-                    "role": "tool",
-                    "name": tool_call.function.name,
-                    "content": result,
-                })
+                messages.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "role": "tool",
+                        "name": tool_call.function.name,
+                        "content": result,
+                    }
+                )
 
         return "Okay I got a bit carried away there. What were we talking about?"
 
@@ -2102,11 +2289,19 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     matches.append(attachment.filename)
 
         if not matches:
-            return f"No songs found matching '{query}'." if query else "The playlist is empty."
+            return (
+                f"No songs found matching '{query}'."
+                if query
+                else "The playlist is empty."
+            )
 
         matches.sort()
         lines = [f"- {name}" for name in matches[:50]]
-        header = f"Found {len(matches)} song(s)" + (f" matching '{query}'" if query else "") + ":\n"
+        header = (
+            f"Found {len(matches)} song(s)"
+            + (f" matching '{query}'" if query else "")
+            + ":\n"
+        )
         return header + "\n".join(lines)
 
     async def _tool_remove_from_playlist(self, filename: str) -> str:
@@ -2140,14 +2335,14 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 await notify_fn("Could not access the playlist channel.")
                 return
 
-            await playlist_channel.send(
-                file=discord.File(local_path)
-            )
-            await notify_fn(f'🎵 Added **{title}** to the playlist!')
+            await playlist_channel.send(file=discord.File(local_path))
+            await notify_fn(f"🎵 Added **{title}** to the playlist!")
         except Exception as e:
             await notify_fn(f"Couldn't add that song to the playlist: {e}")
 
-    def _validate_song_request(self, query: str, requester: str, bypass_throttling: bool = False):
+    def _validate_song_request(
+        self, query: str, requester: str, bypass_throttling: bool = False
+    ):
         """Run pre-download validation checks (blacklist, throttling).
 
         Raises Exception on rejection. These checks don't require resolved
@@ -2205,7 +2400,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         normalized_queue = [t.lower().strip() for t in self.recent_song_queue]
         if normalized_title in normalized_queue:
             raise Exception(
-                f'"{ title}" has been queued recently. Please choose a different song.'
+                f'"{title}" has been queued recently. Please choose a different song.'
             )
 
         # pyrefly: ignore [unsupported-operation]
@@ -2213,14 +2408,17 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             # pyrefly: ignore [unsupported-operation]
             raise Exception(
                 # pyrefly: ignore [unsupported-operation]
-                f'"{ title}" is too long ({duration // 60}m). Max duration is {MAX_SONG_DURATION // 60} minutes.'
+                f'"{title}" is too long ({duration // 60}m). Max duration is {MAX_SONG_DURATION // 60} minutes.'
             )
 
         # --- Push to Queue ---
         try:
             await self.lq.push_to_queue(
-                self.bot.http_session, "song_requests", local_path,
-                title=str(title), requester=requester,
+                self.bot.http_session,
+                "song_requests",
+                local_path,
+                title=str(title),
+                requester=requester,
             )
         except Exception as e:
             log.error(f"Failed to push song to queue: {e}")
@@ -2261,9 +2459,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             # pyrefly: ignore [bad-argument-type]
             with yt_dlp.YoutubeDL(ydl_info_opts) as ydl:
                 info_dict = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        ydl.extract_info, search_query, download=False
-                    ),
+                    asyncio.to_thread(ydl.extract_info, search_query, download=False),
                     timeout=METADATA_TIMEOUT,
                 )
             # pyrefly: ignore [bad-typed-dict-key]
@@ -2350,7 +2546,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     if p.exists():
                         p.unlink()
                     self.db.delete_cached_song(entry["video_id"])
-                    log.info(f"Evicted cached song: {entry['title']} ({entry['video_id']})")
+                    log.info(
+                        f"Evicted cached song: {entry['title']} ({entry['video_id']})"
+                    )
                 except Exception as e:
                     log.error(f"Failed to evict cache entry {entry['video_id']}: {e}")
             stats = self.db.get_cache_stats()
@@ -2519,7 +2717,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         """Handle /playlist_play from in-game chat."""
         channel = self.bot.get_channel(GAME_ANNOUNCEMENTS_CHANNEL_ID)
         # In-game users are identified by player name (same as game_like_song)
-        playlist = self.db.get_playlist_by_name(discord_id=requester, name=playlist_name)
+        playlist = self.db.get_playlist_by_name(
+            discord_id=requester, name=playlist_name
+        )
         if not playlist:
             msg = f"Playlist '{playlist_name}' not found, {requester}."
             if channel:
@@ -2549,7 +2749,6 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         await self._play_user_playlist(songs, requester, ingame_notify)
 
     # --- Commands ---
-
 
     @app_commands.command(name="update_jingles", description="Update jingles")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
@@ -2611,12 +2810,16 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         )
 
     @app_commands.command(
-        name="create_track", description="Generate a custom TTS audio track for the radio playlist"
+        name="create_track",
+        description="Generate a custom TTS audio track for the radio playlist",
     )
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     @app_commands.checks.has_permissions(administrator=True)
     async def create_track_cmd(
-        self, interaction: discord.Interaction, topic: str, duration: str = "1-2 minutes"
+        self,
+        interaction: discord.Interaction,
+        topic: str,
+        duration: str = "1-2 minutes",
     ):
         await interaction.response.defer()
 
@@ -2641,16 +2844,28 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         )
 
     @app_commands.command(
-        name="create_talkshow", description="Generate a multi-speaker radio talkshow segment"
+        name="create_talkshow",
+        description="Generate a multi-speaker radio talkshow segment",
     )
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def create_talkshow_cmd(
-        self, interaction: discord.Interaction, topic: str, duration: str = "1-2 minutes"
+        self,
+        interaction: discord.Interaction,
+        topic: str,
+        duration: str = "1-2 minutes",
     ):
         # Allow admins or DJ role
         member = interaction.user
-        is_admin = member.guild_permissions.administrator if hasattr(member, "guild_permissions") else False
-        is_dj = any(r.id == DJ_ROLE_ID for r in member.roles) if hasattr(member, "roles") else False
+        is_admin = (
+            member.guild_permissions.administrator
+            if hasattr(member, "guild_permissions")
+            else False
+        )
+        is_dj = (
+            any(r.id == DJ_ROLE_ID for r in member.roles)
+            if hasattr(member, "roles")
+            else False
+        )
         if not is_admin and not is_dj:
             await interaction.response.send_message(
                 "Only admins and DJs can create talkshow segments.", ephemeral=True
@@ -2680,7 +2895,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         )
 
     @app_commands.command(
-        name="voice_announce", description="Speak a message over the radio via TTS (Admin only)"
+        name="voice_announce",
+        description="Speak a message over the radio via TTS (Admin only)",
     )
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     @app_commands.checks.has_permissions(administrator=True)
@@ -2801,13 +3017,17 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         for chunk in split_markdown(content):
             await interaction.followup.send(chunk, ephemeral=True)
 
-    @app_commands.command(name="top_likes", description="See the most liked songs on the radio")
+    @app_commands.command(
+        name="top_likes", description="See the most liked songs on the radio"
+    )
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def top_likes_cmd(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         top = self.db.get_top_liked_songs(limit=10)
         if not top:
-            await interaction.followup.send("No songs have been liked yet.", ephemeral=True)
+            await interaction.followup.send(
+                "No songs have been liked yet.", ephemeral=True
+            )
             return
         lines = ["**❤️ Most Liked Songs**\n"]
         for i, s in enumerate(top, 1):
@@ -2832,7 +3052,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         await self._update_news_logic()
         await interaction.followup.send("Updated")
 
-    @app_commands.command(name="queue_trending", description="Queue a trending song from the charts")
+    @app_commands.command(
+        name="queue_trending", description="Queue a trending song from the charts"
+    )
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     @app_commands.checks.has_permissions(administrator=True)
     async def queue_trending_cmd(self, interaction: discord.Interaction):
@@ -2865,92 +3087,159 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         await interaction.response.defer(ephemeral=True)
         try:
             self.db.create_playlist(discord_id=str(interaction.user.id), name=name)
-            await interaction.followup.send(f"✅ Created playlist **{name.strip().lower()}**!", ephemeral=True)
+            await interaction.followup.send(
+                f"✅ Created playlist **{name.strip().lower()}**!", ephemeral=True
+            )
         except Exception as e:
             await interaction.followup.send(f"Failed: {e}", ephemeral=True)
 
     @playlist_group.command(name="delete", description="Delete one of your playlists")
     async def playlist_delete_cmd(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer(ephemeral=True)
-        deleted = self.db.delete_playlist(discord_id=str(interaction.user.id), name=name)
+        deleted = self.db.delete_playlist(
+            discord_id=str(interaction.user.id), name=name
+        )
         if deleted:
-            await interaction.followup.send(f"🗑️ Deleted playlist **{name.strip().lower()}** and all its songs.", ephemeral=True)
+            await interaction.followup.send(
+                f"🗑️ Deleted playlist **{name.strip().lower()}** and all its songs.",
+                ephemeral=True,
+            )
         else:
-            await interaction.followup.send(f"Playlist '{name}' not found.", ephemeral=True)
+            await interaction.followup.send(
+                f"Playlist '{name}' not found.", ephemeral=True
+            )
 
-    @playlist_group.command(name="add", description="Add a song to one of your playlists")
-    async def playlist_add_cmd(self, interaction: discord.Interaction, playlist: str, song: str):
+    @playlist_group.command(
+        name="add", description="Add a song to one of your playlists"
+    )
+    async def playlist_add_cmd(
+        self, interaction: discord.Interaction, playlist: str, song: str
+    ):
         await interaction.response.defer(ephemeral=True)
-        pl = self.db.get_playlist_by_name(discord_id=str(interaction.user.id), name=playlist)
+        pl = self.db.get_playlist_by_name(
+            discord_id=str(interaction.user.id), name=playlist
+        )
         if not pl:
-            await interaction.followup.send(f"Playlist '{playlist}' not found. Create it first with `/playlist create`.", ephemeral=True)
+            await interaction.followup.send(
+                f"Playlist '{playlist}' not found. Create it first with `/playlist create`.",
+                ephemeral=True,
+            )
             return
         self.db.add_song_to_playlist(pl["id"], song_query=song, song_title=song)
-        await interaction.followup.send(f"🎵 Added **{song}** to playlist **{pl['name']}**!", ephemeral=True)
+        await interaction.followup.send(
+            f"🎵 Added **{song}** to playlist **{pl['name']}**!", ephemeral=True
+        )
 
-    @playlist_group.command(name="remove", description="Remove a song from one of your playlists")
-    async def playlist_remove_cmd(self, interaction: discord.Interaction, playlist: str, song_title: str):
+    @playlist_group.command(
+        name="remove", description="Remove a song from one of your playlists"
+    )
+    async def playlist_remove_cmd(
+        self, interaction: discord.Interaction, playlist: str, song_title: str
+    ):
         await interaction.response.defer(ephemeral=True)
-        pl = self.db.get_playlist_by_name(discord_id=str(interaction.user.id), name=playlist)
+        pl = self.db.get_playlist_by_name(
+            discord_id=str(interaction.user.id), name=playlist
+        )
         if not pl:
-            await interaction.followup.send(f"Playlist '{playlist}' not found.", ephemeral=True)
+            await interaction.followup.send(
+                f"Playlist '{playlist}' not found.", ephemeral=True
+            )
             return
         removed = self.db.remove_song_from_playlist(pl["id"], song_title=song_title)
         if removed:
-            await interaction.followup.send(f"Removed **{song_title}** from **{pl['name']}**.", ephemeral=True)
+            await interaction.followup.send(
+                f"Removed **{song_title}** from **{pl['name']}**.", ephemeral=True
+            )
         else:
-            await interaction.followup.send(f"Song '{song_title}' not found in playlist '{pl['name']}'.", ephemeral=True)
+            await interaction.followup.send(
+                f"Song '{song_title}' not found in playlist '{pl['name']}'.",
+                ephemeral=True,
+            )
 
-    @playlist_group.command(name="view", description="View songs in one of your playlists")
+    @playlist_group.command(
+        name="view", description="View songs in one of your playlists"
+    )
     async def playlist_view_cmd(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer(ephemeral=True)
-        pl = self.db.get_playlist_by_name(discord_id=str(interaction.user.id), name=name)
+        pl = self.db.get_playlist_by_name(
+            discord_id=str(interaction.user.id), name=name
+        )
         if not pl:
-            await interaction.followup.send(f"Playlist '{name}' not found.", ephemeral=True)
+            await interaction.followup.send(
+                f"Playlist '{name}' not found.", ephemeral=True
+            )
             return
         songs = self.db.get_playlist_songs(pl["id"])
         if not songs:
-            await interaction.followup.send(f"Playlist **{pl['name']}** is empty.", ephemeral=True)
+            await interaction.followup.send(
+                f"Playlist **{pl['name']}** is empty.", ephemeral=True
+            )
             return
         lines = [f"{s['position']}. {s['song_title']}" for s in songs]
-        await interaction.followup.send(f"📋 **{pl['name']}** ({len(songs)} songs):\n" + "\n".join(lines), ephemeral=True)
+        await interaction.followup.send(
+            f"📋 **{pl['name']}** ({len(songs)} songs):\n" + "\n".join(lines),
+            ephemeral=True,
+        )
 
     @playlist_group.command(name="list", description="List all your playlists")
     async def playlist_list_cmd(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         playlists = self.db.get_playlists(discord_id=str(interaction.user.id))
         if not playlists:
-            await interaction.followup.send("You don't have any playlists yet. Use `/playlist create` to make one!", ephemeral=True)
+            await interaction.followup.send(
+                "You don't have any playlists yet. Use `/playlist create` to make one!",
+                ephemeral=True,
+            )
             return
         lines = [f"- **{p['name']}** ({p['song_count']} songs)" for p in playlists]
-        await interaction.followup.send("📻 **Your Playlists:**\n" + "\n".join(lines), ephemeral=True)
+        await interaction.followup.send(
+            "📻 **Your Playlists:**\n" + "\n".join(lines), ephemeral=True
+        )
 
-    @playlist_group.command(name="play", description="Queue all songs from one of your playlists")
+    @playlist_group.command(
+        name="play", description="Queue all songs from one of your playlists"
+    )
     async def playlist_play_cmd(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer(ephemeral=True)
-        pl = self.db.get_playlist_by_name(discord_id=str(interaction.user.id), name=name)
+        pl = self.db.get_playlist_by_name(
+            discord_id=str(interaction.user.id), name=name
+        )
         if not pl:
-            await interaction.followup.send(f"Playlist '{name}' not found.", ephemeral=True)
+            await interaction.followup.send(
+                f"Playlist '{name}' not found.", ephemeral=True
+            )
             return
         songs = self.db.get_playlist_songs(pl["id"])
         if not songs:
-            await interaction.followup.send(f"Playlist **{pl['name']}** is empty.", ephemeral=True)
+            await interaction.followup.send(
+                f"Playlist **{pl['name']}** is empty.", ephemeral=True
+            )
             return
         capped = min(len(songs), self.PLAYLIST_PLAY_CAP)
-        await interaction.followup.send(f"🎶 Queueing {capped} song(s) from **{pl['name']}**. Each download takes ~30-60s — I'll notify you as each one is ready!", ephemeral=True)
+        await interaction.followup.send(
+            f"🎶 Queueing {capped} song(s) from **{pl['name']}**. Each download takes ~30-60s — I'll notify you as each one is ready!",
+            ephemeral=True,
+        )
 
         async def discord_notify(msg: str):
             await interaction.followup.send(msg, ephemeral=True)
 
         self.bot.loop.create_task(
-            self._play_user_playlist(songs, interaction.user.display_name, discord_notify)
+            self._play_user_playlist(
+                songs, interaction.user.display_name, discord_notify
+            )
         )
 
-    @playlist_group.command(name="elevate", description="Promote a song to the permanent base radio playlist")
+    @playlist_group.command(
+        name="elevate",
+        description="Promote a song to the permanent base radio playlist",
+    )
     async def playlist_elevate_cmd(self, interaction: discord.Interaction, song: str):
         # Check DJ role
         if not any(r.id == DJ_ROLE_ID for r in interaction.user.roles):
-            await interaction.response.send_message("Only DJs can elevate songs to the base playlist.", ephemeral=True)
+            await interaction.response.send_message(
+                "Only DJs can elevate songs to the base playlist.", ephemeral=True
+            )
             return
         await interaction.response.defer(ephemeral=True)
 
@@ -2960,7 +3249,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         self.bot.loop.create_task(
             self._fire_and_forget_playlist_add(song, discord_notify)
         )
-        await interaction.followup.send(f"Elevating **{song}** to the base playlist...", ephemeral=True)
+        await interaction.followup.send(
+            f"Elevating **{song}** to the base playlist...", ephemeral=True
+        )
 
     @app_commands.command(name="set_event_mode", description="Set event mode")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
@@ -3002,9 +3293,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 self.bot.loop.create_task(
                     channel.send(
                         jingle[:2000],
-                        file=discord.File(
-                            BytesIO(jingle_audio), filename=filename
-                        ),
+                        file=discord.File(BytesIO(jingle_audio), filename=filename),
                     )
                 )
             i += 1
@@ -3045,24 +3334,49 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
     # --- Auto-Queue Trending Songs ---
 
     FALLBACK_QUERIES = [
-        "top driving songs", "best road trip songs",
-        "popular chill songs", "indie rock hits",
-        "classic rock driving", "summer hits playlist",
-        "feel good songs", "upbeat pop songs",
+        "top driving songs",
+        "best road trip songs",
+        "popular chill songs",
+        "indie rock hits",
+        "classic rock driving",
+        "summer hits playlist",
+        "feel good songs",
+        "upbeat pop songs",
     ]
 
     # Tags for tag.gettoptracks — driving/radio-friendly genres
     LASTFM_TAGS = [
-        "rock", "pop", "indie", "electronic", "hip-hop", "r&b",
-        "alternative", "classic rock", "soul", "funk", "dance",
-        "80s", "90s", "chill", "driving", "summer",
+        "rock",
+        "pop",
+        "indie",
+        "electronic",
+        "hip-hop",
+        "r&b",
+        "alternative",
+        "classic rock",
+        "soul",
+        "funk",
+        "dance",
+        "80s",
+        "90s",
+        "chill",
+        "driving",
+        "summer",
     ]
 
     # Countries for geo.gettoptracks — ASEAN + popular music markets
     LASTFM_COUNTRIES = [
-        "Thailand", "Indonesia", "Malaysia", "Philippines", "Vietnam",
-        "Singapore", "Japan", "South Korea", "United States",
-        "United Kingdom", "Australia",
+        "Thailand",
+        "Indonesia",
+        "Malaysia",
+        "Philippines",
+        "Vietnam",
+        "Singapore",
+        "Japan",
+        "South Korea",
+        "United States",
+        "United Kingdom",
+        "Australia",
     ]
 
     async def _pick_trending_song(self) -> str:
@@ -3121,7 +3435,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             recent_auto = self.db.get_recent_auto_queued(hours=24)
             recent_titles = {r["song_title"].lower() for r in recent_auto}
             candidates = [
-                t for t in tracks
+                t
+                for t in tracks
                 if f"{t['artist']['name']} - {t['name']}".lower() not in recent_titles
             ]
             if not candidates:
@@ -3141,9 +3456,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 self.bot.http_session, "song_requests"
             )
             if queue_len is not None and queue_len > 0:
-                log.info(
-                    f"Skipping auto-queue: {queue_len} song(s) already in queue"
-                )
+                log.info(f"Skipping auto-queue: {queue_len} song(s) already in queue")
                 return
 
             song_query = await self._pick_trending_song()
@@ -3168,7 +3481,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             return
         news = await self.generate_news_content()
         news_audio = await asyncio.to_thread(
-            tts_google, discord.utils.remove_markdown(news), use_markup=True
+            tts_dispatch, discord.utils.remove_markdown(news), use_markup=True
         )
         message = await channel.send(
             news[:2000], file=discord.File(BytesIO(news_audio), filename="news.mp3")
@@ -3209,6 +3522,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         # Send systemd watchdog heartbeat (proves the event loop is alive)
         try:
             import systemd.daemon  # type: ignore[import-untyped]
+
             systemd.daemon.notify("WATCHDOG=1")
         except ImportError:
             pass
@@ -3254,13 +3568,17 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         listener_count = await get_listener_count(self.bot.http_session)
         if listener_count > 0:
             embed.add_field(
-                name="🎧 Listeners", value=str(listener_count), inline=True,
+                name="🎧 Listeners",
+                value=str(listener_count),
+                inline=True,
             )
 
         like_count = self.db.get_song_like_count(song_title)
         if like_count > 0:
             embed.add_field(
-                name="❤️ Likes", value=str(like_count), inline=True,
+                name="❤️ Likes",
+                value=str(like_count),
+                inline=True,
             )
 
         # Show queued songs
@@ -3272,12 +3590,14 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             upcoming = list(self.recent_song_queue)[-queue_len:]
             if upcoming:
                 queue_text = "\n".join(
-                    f"{i+1}. *{title}*" for i, title in enumerate(upcoming)
+                    f"{i + 1}. *{title}*" for i, title in enumerate(upcoming)
                 )
             else:
                 queue_text = f"{queue_len} song(s) queued"
             embed.add_field(
-                name="📋 Up Next", value=queue_text, inline=False,
+                name="📋 Up Next",
+                value=queue_text,
+                inline=False,
             )
 
         view = self._now_playing_view
@@ -3324,9 +3644,15 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 
         # Discord @mention → Annie agentic chat
         if self.bot.user in message.mentions and message.content:
-            question = message.content.replace(f"<@{self.bot.user.id}>", "").replace(f"<@!{self.bot.user.id}>", "").strip()
+            question = (
+                message.content.replace(f"<@{self.bot.user.id}>", "")
+                .replace(f"<@!{self.bot.user.id}>", "")
+                .strip()
+            )
             if question:
-                self.bot.loop.create_task(self._handle_annie_chat_discord(message, question))
+                self.bot.loop.create_task(
+                    self._handle_annie_chat_discord(message, question)
+                )
                 return
 
         if channel_id == RADIO_CHANNEL_ID:
@@ -3370,7 +3696,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     song_name = args
                     if name in self.banned_requesters:
                         return
-                    self.bot.loop.create_task(self._agent_game_request_song(song_name, name))
+                    self.bot.loop.create_task(
+                        self._agent_game_request_song(song_name, name)
+                    )
                 elif command == "like":
                     self.bot.loop.create_task(self.game_like_song(name))
                 elif command == "dislike":
@@ -3381,7 +3709,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     )
                 elif command == "skip":
                     self.bot.loop.create_task(
-                        self.lq.skip_current_track(self.bot.http_session, "song_requests")
+                        self.lq.skip_current_track(
+                            self.bot.http_session, "song_requests"
+                        )
                     )
                 elif command == "current_song":
                     self.bot.loop.create_task(self.game_current_song(name))
@@ -3399,7 +3729,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 name = annie_match.group("name")
                 question = annie_match.group("question")
                 if name not in self.banned_requesters:
-                    self.bot.loop.create_task(self._handle_annie_chat_ingame(name, question))
+                    self.bot.loop.create_task(
+                        self._handle_annie_chat_ingame(name, question)
+                    )
 
     @commands.Cog.listener()
     async def on_message_edit(

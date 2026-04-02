@@ -3,6 +3,14 @@ import json
 
 OPENAI_API_KEY_OPENROUTER = os.environ.get("OPENAI_API_KEY_OPENROUTER")
 MIMO_API_KEY = os.environ.get("MIMO_API_KEY")
+TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "google")  # "google", "mimo", or "qwen3"
+QWEN3_TTS_ENDPOINT_URL = os.environ.get("QWEN3_TTS_ENDPOINT_URL", "")
+QWEN3_TTS_API_TOKEN = os.environ.get("QWEN3_TTS_API_TOKEN", "")
+QWEN3_TTS_ENDPOINT_NAME = os.environ.get("QWEN3_TTS_ENDPOINT_NAME", "qwen3-tts")
+QWEN3_TTS_DEFAULT_SPEAKER = os.environ.get("QWEN3_TTS_DEFAULT_SPEAKER", "Ryan")
+QWEN3_TTS_DEFAULT_LANGUAGE = os.environ.get("QWEN3_TTS_DEFAULT_LANGUAGE", "English")
+QWEN3_TTS_CLONE_ENDPOINT_URL = os.environ.get("QWEN3_TTS_CLONE_ENDPOINT_URL", "")
+QWEN3_TTS_CLONE_ENDPOINT_NAME = os.environ.get("QWEN3_TTS_CLONE_ENDPOINT_NAME", "qwen3-tts-clone")
 LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY", "")
 
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
