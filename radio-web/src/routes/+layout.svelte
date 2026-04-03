@@ -11,7 +11,7 @@
 
 	let { children } = $props();
 
-	let streamUrl = $state('/stream');
+	let streamUrl = $state('http://radio-stream.aseanmotorclub.com:8000/stream');
 	let audioEl: HTMLAudioElement | undefined = $state();
 
 	// --- Auto-reconnect state ---
