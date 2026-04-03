@@ -46,6 +46,26 @@ Defined in `pyproject.toml` under `[project.scripts]`:
 | `amc_jarvis` | `amc_peripheral.devbot.devbot:main` | Dev assistant bot              |
 | `amc_mods`   | `amc_peripheral.mods.server:main`   | Tire mod build API             |
 
+## Dependency Maintenance
+
+### yt-dlp & yt-dlp-ejs
+
+These two libraries **must be checked and updated frequently**:
+
+| Package | Purpose |
+|---------|---------|
+| `yt-dlp` | YouTube media downloader — used for radio queue and transcript extraction |
+| `yt-dlp-ejs` | External JavaScript signature solver for yt-dlp |
+
+YouTube regularly changes their player code, which breaks signature decryption. Keeping these packages up-to-date is critical for continued functionality.
+
+**How to update:**
+1. Check current versions in `pyproject.toml`
+2. Fetch latest from PyPI: `curl -s https://pypi.org/pypi/yt-dlp/json` and `curl -s https://pypi.org/pypi/yt-dlp-ejs/json`
+3. Update version pins in `pyproject.toml`
+4. Update corresponding entries in `uv.lock` (version, hashes, URLs)
+5. Deploy to `amc-peripheral` to apply
+
 ## Building
 
 ```bash
