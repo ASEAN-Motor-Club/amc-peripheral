@@ -1,0 +1,29 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+---
+<GovLayout title="Justice & Law Enforcement" department="Ministry of Justice" description="Criminal activity, arrest mechanics, wanted status, and police operations in the ASEAN Motor Club.">
+
+<PhaseBanner tag="GOV" />
+<Breadcrumbs items={[{ label: "Justice & Law Enforcement", href: "/justice" }]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-column-full">
+    <h1>Justice & Law Enforcement</h1>
+    <p>The criminal underworld and the police force that keeps it in check — wanted status, arrests, confiscation, and police progression.</p>
+
+    <ul class="govuk-topic-list">
+      <li>
+        <a href="/justice/money-laundering">Money Laundering & Criminal Faction</a>
+        <p>How to join the criminal faction, deliver illicit cargo, and earn laundering levels.</p>
+      </li>
+      <li>
+        <a href="/justice/arrest-wanted">Arrest & Wanted System</a>
+        <p>Wanted status, manual and auto-arrest mechanics, confiscation rates, and police progression.</p>
+      </li>
+    </ul>
+  </div>
+</main>
+
+</GovLayout>

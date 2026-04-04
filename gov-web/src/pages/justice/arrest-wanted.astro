@@ -1,0 +1,224 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import InsetText from '../../components/InsetText.astro';
+import Sidebar from '../../components/Sidebar.astro';
+---
+<GovLayout title="Arrest & Wanted System" department="Ministry of Justice" description="How the Wanted status, arrest mechanics, confiscation, and police progression work in ASEAN Motor Club.">
+
+<PhaseBanner tag="Policy" text="Published 4 April 2026" />
+<Breadcrumbs items={[
+  { label: "Justice & Law Enforcement", href: "/justice" },
+  { label: "Arrest & Wanted System", href: "/justice/arrest-wanted" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Arrest & Wanted System</h1>
+
+      <SummaryBox title="Summary">
+        <p>After delivering illicit <strong>Money</strong> cargo, a criminal enters a <em>Wanted</em> state lasting up to 5 minutes. During this window, on-duty Police officers can arrest them — manually or via the auto-arrest patrol — confiscating a proportional share of their illegal earnings.</p>
+      </SummaryBox>
+
+      <h2 id="wanted-status">1. Wanted Status</h2>
+      <p>When a player successfully delivers Money cargo (see <a href="/justice/money-laundering" class="govuk-link">Money Laundering &amp; Criminal Faction</a>), they are immediately flagged as <strong>Wanted</strong>. This status makes them eligible for arrest by any on-duty Police officer.</p>
+
+      <h3>Duration &amp; countdown</h3>
+      <p>The Wanted status begins with <strong>300 seconds (5 minutes)</strong> of wanted time. The countdown rate depends on proximity to the nearest on-duty Police officer:</p>
+
+      <table class="govuk-table">
+        <caption>Countdown speed by distance to nearest police</caption>
+        <thead><tr><th>Distance to nearest officer</th><th>Countdown speed</th></tr></thead>
+        <tbody>
+          <tr><td>Very close (under 200 m)</td><td>5% of normal speed</td></tr>
+          <tr><td>Mid-range</td><td>Scales linearly with distance</td></tr>
+          <tr><td>200 m or farther</td><td>Full speed (1 second per tick)</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        Being near police officers slows your wanted countdown — giving them more time to arrest you. Staying far from officers or going offline lets the timer expire faster.
+      </InsetText>
+
+      <h3>No police on duty</h3>
+      <p>If there are <strong>no on-duty police officers online</strong>, all active Wanted records are immediately expired. Suspects are notified in-game and their player tags are refreshed.</p>
+
+      <h3>Star indicator</h3>
+      <p>The Wanted severity is displayed as a star rating from 1 to 5, based on remaining time:</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Star rating by remaining wanted time</caption>
+        <thead><tr><th>Stars</th><th>Remaining time</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">5 stars</td><td>241 – 300 seconds</td></tr>
+          <tr><td style="text-align:left">4 stars</td><td>181 – 240 seconds</td></tr>
+          <tr><td style="text-align:left">3 stars</td><td>121 – 180 seconds</td></tr>
+          <tr><td style="text-align:left">2 stars</td><td>61 – 120 seconds</td></tr>
+          <tr><td style="text-align:left">1 star</td><td>1 – 60 seconds</td></tr>
+          <tr><td style="text-align:left">Expired</td><td>0 seconds</td></tr>
+        </tbody>
+      </table>
+
+      <p>Suspects receive in-game system messages when their star count changes.</p>
+
+      <h2 id="arrest-zones">2. Arrest Zones</h2>
+      <p>Arrests can only be initiated when the <strong>Police officer is inside a designated Arrest Zone</strong>. These are geographic polygons defined by government administrators. If no active arrest zones exist, the zone check is bypassed and arrests can occur anywhere.</p>
+
+      <h2 id="manual-arrest">3. Manual Arrest (<code>/arrest</code>)</h2>
+      <p>On-duty Police officers can initiate a manual arrest using the <code>/arrest</code> command. The process takes approximately <strong>3 seconds</strong> to complete.</p>
+
+      <h3>Eligibility requirements</h3>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>Officer must have an <strong>active Police session</strong> (on duty)</li>
+        <li>Officer must be within an <strong>active Arrest Zone</strong> (if any zones are configured)</li>
+        <li>Officer must <strong>not have teleported recently</strong> (5-minute cooldown after teleporting)</li>
+        <li>Officer must not be on arrest cooldown</li>
+      </ul>
+
+      <h3>Arrest radius</h3>
+      <table class="govuk-table">
+        <caption>Arrest range by officer state</caption>
+        <thead><tr><th>Officer state</th><th>Arrest radius</th></tr></thead>
+        <tbody>
+          <tr><td>On foot</td><td>50 metres</td></tr>
+          <tr><td>In vehicle</td><td>33.75 metres</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Verification polling</h3>
+      <p>Once <code>/arrest</code> is initiated, the system polls suspect positions <strong>every second for 3 seconds</strong>. During this window:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>The <strong>officer must stay within arrest range</strong> of each suspect</li>
+        <li>Suspects must remain <strong>below 20 km/h</strong> (approximately 5.56 m/s). Suspects moving faster are removed from the arrest</li>
+        <li>Suspects who go offline are removed from the arrest</li>
+      </ul>
+
+      <p>After 3 successful polls, the arrest is executed on all remaining targets.</p>
+
+      <h2 id="auto-arrest">4. Auto-Arrest Patrol</h2>
+      <p>The auto-arrest system continuously monitors on-duty officers and nearby suspects. When a Wanted suspect remains stationary and within range of a police officer for a sustained period, the arrest is executed automatically.</p>
+
+      <h3>How it works</h3>
+      <table class="govuk-table">
+        <caption>Auto-arrest parameters</caption>
+        <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Poll interval</td><td>Every 0.5 seconds</td></tr>
+          <tr><td>Stillness threshold</td><td>5 seconds (10 consecutive ticks)</td></tr>
+          <tr><td>Warning tick</td><td>After 2 seconds (4th tick)</td></tr>
+          <tr><td>On-foot arrest radius</td><td>15 metres (first contact only)</td></tr>
+          <tr><td>In-vehicle arrest radius</td><td>10 metres (first contact only)</td></tr>
+          <tr><td>Suspect speed limit</td><td>20 km/h (5.56 m/s)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Process</h3>
+      <ol class="govuk-list govuk-list--number">
+        <li>The patrol loop identifies all on-duty officers and non-police players online.</li>
+        <li>For each officer, it checks whether they are on foot or in a <strong>police vehicle</strong> (vehicle name must contain "Police"). Officers in non-police vehicles cannot auto-arrest.</li>
+        <li>Officers within active Arrest Zones (if configured) scan for nearby suspects.</li>
+        <li>When a Wanted suspect is first detected within range, a <strong>stillness counter</strong> begins tracking that cop–suspect pair.</li>
+        <li>If the suspect moves faster than the speed limit, the counter resets.</li>
+        <li>At the <strong>4th tick (2 seconds)</strong>, the suspect receives a warning: "A police officer is attempting to arrest you! Flee now!"</li>
+        <li>At the <strong>10th tick (5 seconds)</strong>, the arrest is executed automatically.</li>
+      </ol>
+
+      <InsetText>
+        Auto-arrest is more forgiving than manual arrest — suspects have 5 seconds to react and receive an early warning. However, the tighter 10–15 metre radius means the officer must be very close.
+      </InsetText>
+
+      <h2 id="confiscation">5. Confiscation</h2>
+      <p>Upon arrest, the system confiscates a portion of the suspect's most recent un-confiscated Money delivery. The confiscated amount is <strong>proportional to remaining Wanted time</strong>:</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Confiscation rate by remaining wanted time</caption>
+        <thead><tr><th>Wanted remaining</th><th>Confiscation rate</th><th>Example ($100,000 delivery)</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">300 s (full)</td><td>100%</td><td>$100,000</td></tr>
+          <tr><td style="text-align:left">225 s</td><td>75%</td><td>$75,000</td></tr>
+          <tr><td style="text-align:left">150 s</td><td>50%</td><td>$50,000</td></tr>
+          <tr><td style="text-align:left">75 s</td><td>25%</td><td>$25,000</td></tr>
+          <tr><td style="text-align:left">0 s (expired)</td><td>0%</td><td>$0</td></tr>
+        </tbody>
+      </table>
+
+      <p>The formula is: <code>confiscated = delivery_payment × (wanted_remaining / 300)</code></p>
+
+      <h3>What happens to confiscated money</h3>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Deducted from the suspect's wallet</strong> via the mod server</li>
+        <li><strong>Recorded as Treasury income</strong> under "Police Confiscation"</li>
+        <li><strong>The suspect's criminal laundered total is reduced</strong> by the confiscated amount</li>
+        <li><strong>The arresting officer receives the confiscated amount</strong> as a confiscation reward (both in-game money and wallet credit)</li>
+        <li>A <strong>Confiscation record</strong> is created linking the suspect, officer, cargo, and amount</li>
+      </ul>
+
+      <h3>Confiscation records</h3>
+      <p>Every confiscation is permanently recorded with:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>Suspect character and officer character</li>
+        <li>Cargo type and amount confiscated</li>
+        <li>Linked delivery record (the Money delivery that triggered the Wanted status)</li>
+        <li>Timestamp</li>
+      </ul>
+
+      <h2 id="police-progression">6. Police Progression</h2>
+      <p>Officers advance in level based on their cumulative confiscated amount. Every <strong>$10,000 confiscated</strong> increases the officer's level by 1.</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Police level thresholds</caption>
+        <thead><tr><th>Level</th><th>Cumulative confiscated</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">1</td><td>$0 – $9,999</td></tr>
+          <tr><td style="text-align:left">2</td><td>$10,000 – $19,999</td></tr>
+          <tr><td style="text-align:left">3</td><td>$20,000 – $29,999</td></tr>
+          <tr><td style="text-align:left"><em>N</em></td><td><em>(N − 1) × $10,000</em> onwards</td></tr>
+        </tbody>
+      </table>
+
+      <p>When an officer levels up, their player tag is refreshed and a server-wide announcement is broadcast.</p>
+
+      <h2 id="smuggling-tipoff">7. Smuggling Tip-Offs</h2>
+      <p>When a player loads Money cargo, the system may broadcast a vague server-wide tip-off: <em>"Intelligence reports suggest a smuggling operation is underway"</em>. This is controlled by the <code>SMUGGLING_TIPOFF_ENABLED</code> server setting.</p>
+
+      <table class="govuk-table">
+        <caption>Tip-off parameters</caption>
+        <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Delay before broadcast</td><td>15 seconds</td></tr>
+          <tr><td>Cooldown per player</td><td>60 seconds</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        Tip-offs do not reveal the player's name or location — they only alert police that a smuggling operation is in progress.
+      </InsetText>
+
+      <h2 id="modded-vehicles">8. Modded Vehicle Rules</h2>
+      <p>Players using vehicles with custom-modified parts face additional penalties during Money cargo gameplay:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>On delivery:</strong> Criminal profits are zeroed out (transferred back as a penalty) if modded parts are detected on the player's active vehicle.</li>
+        <li><strong>On load:</strong> A warning popup is shown: "You are not allowed to use modified vehicles for criminal gameplay."</li>
+        <li><strong>Police exception:</strong> On-duty officers with police-issued whitelisted parts are exempt from modded vehicle detection.</li>
+      </ul>
+
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Wanted Status", href: "#wanted-status" },
+        { label: "Arrest Zones", href: "#arrest-zones" },
+        { label: "Manual Arrest", href: "#manual-arrest" },
+        { label: "Auto-Arrest Patrol", href: "#auto-arrest" },
+        { label: "Confiscation", href: "#confiscation" },
+        { label: "Police Progression", href: "#police-progression" },
+        { label: "Smuggling Tip-Offs", href: "#smuggling-tipoff" },
+        { label: "Modded Vehicle Rules", href: "#modded-vehicles" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>

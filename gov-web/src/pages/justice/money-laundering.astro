@@ -43,14 +43,19 @@ import GovLayout from '../../layouts/GovLayout.astro';
 
       <h2 class="govuk-heading-m">Law Enforcement & Confiscation</h2>
       <p class="govuk-body">
-        Players serving in the Police Faction are tasked with intercepting criminal activity.
+        Players serving in the Police Faction are tasked with intercepting criminal activity. After delivering Money, you will enter a <strong>Wanted</strong> state — during which Police can arrest you and confiscate your illegal earnings.
       </p>
 
       <ul class="govuk-list govuk-list--bullet">
-        <li>If an on-duty Police officer picks up your Money cargo before you can deliver it, it will be immediately <strong>confiscated</strong>.</li>
-        <li>The full value of the cargo will be deducted from your wallet and credited back to the Treasury Fund.</li>
-        <li>The Police officer responsible will gain confiscation experience, progressing their <code>[P]</code> police tier.</li>
+        <li><strong>Wanted duration:</strong> Up to 5 minutes, slowing down when police officers are nearby.</li>
+        <li><strong>Manual arrest:</strong> Officers use <code>/arrest</code> to arrest nearby suspects over a 3-second verification period.</li>
+        <li><strong>Auto-arrest:</strong> A patrol system automatically arrests suspects who remain stationary near an officer for 5 seconds.</li>
+        <li><strong>Confiscation:</strong> A percentage of your most recent Money delivery is seized, proportional to remaining Wanted time. The confiscated amount goes to the Treasury and the arresting officer.</li>
       </ul>
+
+      <p class="govuk-body">
+        For full details on Wanted status, arrest mechanics, confiscation rates, and police progression, see the <a href="/justice/arrest-wanted" class="govuk-link govuk-link--no-visited-state">Arrest &amp; Wanted System</a> documentation.
+      </p>
 
     </div>
   </div>
