@@ -8,53 +8,107 @@ import GovLayout from '../../layouts/GovLayout.astro';
       <h1 class="govuk-heading-xl">Money Laundering & Criminal Faction</h1>
 
       <p class="govuk-body-l">
-        Delivering illicit cargo allows players to launder money, entering the Criminal Faction and participating in an active cat-and-mouse game with law enforcement. 
+        Delivering illicit cargo allows players to launder money, entering the Criminal Faction and participating in an active cat-and-mouse game with law enforcement.
       </p>
 
       <div class="govuk-warning-text">
         <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
         <strong class="govuk-warning-text__text">
           <span class="govuk-warning-text__assistive">Warning</span>
-          Participating in these activities will put you at risk of being arrested by the Police and having your cargo confiscated. Both Criminals and Police require a custom mod map to participate.
+          Participating in these activities puts you at risk of arrest. Police can confiscate <strong>all</strong> of your accumulated illicit earnings if you are caught while Wanted.
         </strong>
       </div>
 
-      <h2 class="govuk-heading-m">Required Mod Installation</h2>
+      <h2 class="govuk-heading-m">Illicit Cargo</h2>
       <p class="govuk-body">
-        To properly participate as a Criminal or a Police officer, you must install the <a href="/mods/MoneyRun_P.pak" class="govuk-link govuk-link--no-visited-state">MoneyRun_P.pak</a> custom mod map.
+        The following cargo types are considered illicit and trigger criminal mechanics when delivered:
       </p>
-      <ol class="govuk-list govuk-list--number">
-        <li>Download the mod pak: <strong><a href="/mods/MoneyRun_P.pak" class="govuk-link">Download MoneyRun_P.pak</a></strong></li>
-        <li>Locate your Motor Town install directory.</li>
-        <li>Place the downloaded <code>MoneyRun_P.pak</code> file inside the <code>Motor Town/MotorTown/Content/Paks/~mods/</code> folder (create the <code>~mods</code> folder if it doesn't exist).</li>
-        <li>Restart your game client.</li>
-      </ol>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>Money / Money Pallet</li>
+        <li>Ganja / Ganja Pallet</li>
+        <li>Coca Leaves Pallet</li>
+        <li>Cocaine</li>
+      </ul>
 
       <h2 class="govuk-heading-m">Money Laundering Mechanics</h2>
       <p class="govuk-body">
-        Players can deliver "Money" cargo to designated illicit drop-off points. Completing these deliveries triggers the money laundering process:
+        Completing illicit deliveries triggers the following effects:
       </p>
 
       <ul class="govuk-list govuk-list--bullet">
-        <li><strong>Treasury Cost:</strong> Money laundering deducts 20% of the laundered payment from the overall Treasury Fund, actively draining public reserves.</li>
-        <li><strong>Criminal Record:</strong> Successfully laundering money gives you an active Criminal Record lasting for 7 days. Any subsequent money deliveries will extend this duration by another 7 days.</li>
-        <li><strong>Player Tag:</strong> While you have an active criminal record, you will be assigned a <code>[C]</code> tag in-game. As you launder more money, your criminal tier will increase (e.g., <code>[C2]</code>, <code>[C3]</code>) with every $100,000 laundered.</li>
+        <li><strong>Treasury Cost:</strong> Money deliveries deduct 20% of the laundered payment from the public Treasury Fund.</li>
+        <li><strong>Criminal Record:</strong> Delivering illicit cargo gives you an active Criminal Record lasting 7 days. Further deliveries reset the 7-day timer.</li>
+        <li>
+          <strong>Criminal Level:</strong> Your level increases with every $50,000 laundered cumulatively.
+          Your in-game tag reflects this — <code>[C]</code> at level 1, <code>[C2]</code> at level 2, and so on.
+        </li>
+        <li>
+          <strong>Wanted Status:</strong> Each illicit delivery has a probability of triggering a <strong>Wanted</strong> status.
+          The chance scales with the delivery value — from a 5% floor on small deliveries up to 100% for deliveries worth $200,000 or more.
+          If a Wanted status is already active, delivering more illicit cargo refreshes it and adds the new payment to your accumulated total.
+        </li>
       </ul>
 
-      <h2 class="govuk-heading-m">Law Enforcement & Confiscation</h2>
+      <h2 class="govuk-heading-m">Wanted Status & Proximity Decay</h2>
       <p class="govuk-body">
-        Players serving in the Police Faction are tasked with intercepting criminal activity. After delivering Money, you will enter a <strong>Wanted</strong> state — during which Police can arrest you and confiscate your illegal earnings.
+        The Wanted system is <strong>permanent</strong> — it does not expire on a timer. Your Wanted level only decreases when on-duty police officers are physically near you.
       </p>
 
       <ul class="govuk-list govuk-list--bullet">
-        <li><strong>Wanted duration:</strong> Up to 5 minutes, slowing down when police officers are nearby.</li>
-        <li><strong>Manual arrest:</strong> Officers use <code>/arrest</code> to arrest nearby suspects over a 3-second verification period.</li>
-        <li><strong>Auto-arrest:</strong> A patrol system automatically arrests suspects who remain stationary near an officer for 5 seconds.</li>
-        <li><strong>Confiscation:</strong> A percentage of your most recent Money delivery is seized, proportional to remaining Wanted time. The confiscated amount goes to the Treasury and the arresting officer.</li>
+        <li>
+          <strong>Stars (W1–W5):</strong> Your Wanted level is displayed as 1–5 stars based on your remaining heat.
+          All Wanted statuses start at W5 (maximum heat).
+        </li>
+        <li>
+          <strong>Proximity decay (1/r²):</strong> Police presence drains your heat using an inverse-square law.
+          A police officer 50m away decays your heat at a rate of 1×/tick.
+          At 10m (point-blank), the rate is capped at 10×/tick — clearing full Wanted in roughly 30 seconds.
+          Beyond ~200m, the effect is negligible.
+        </li>
+        <li>
+          <strong>Multiple officers:</strong> The nearest on-duty officer determines the decay rate.
+        </li>
+        <li>
+          <strong>Offline safety:</strong> If you log off or no police are on duty, your Wanted status does not decay — it waits until you are online with police present.
+        </li>
+        <li>
+          <strong>Teleporting near police:</strong> Teleporting while Wanted and within 2km of a police officer escalates your heat using the same 1/r² law (up to +300 heat point-blank). This is intended to discourage using teleports to escape arrests.
+        </li>
+        <li>
+          <strong>When Wanted expires:</strong> Your illicit earnings become "safe" — a server announcement confirms this. No confiscation can occur after expiry.
+        </li>
+      </ul>
+
+      <h2 class="govuk-heading-m">Arrest & Confiscation</h2>
+      <p class="govuk-body">
+        While you are Wanted, on-duty police can arrest you. On arrest, your Wanted status is immediately expired and <strong>your full accumulated illicit amount is confiscated</strong> — this is the total of all deliveries recorded on that Wanted record.
+      </p>
+
+      <ul class="govuk-list govuk-list--bullet">
+        <li>
+          <strong>Auto-arrest:</strong> The patrol system automatically arrests any Wanted suspect who remains within
+          <strong>40m of an officer on foot</strong> (or 12m if the officer is in a vehicle) for <strong>4 consecutive seconds</strong>
+          while moving slower than 30 km/h. A warning is sent after 1.5 seconds.
+        </li>
+        <li>
+          <strong>Manual arrest (<code>/arrest</code>):</strong> Officers can manually arrest suspects within
+          <strong>30m on foot</strong> (or 20m in a police vehicle) over a 3-second verification window.
+          The suspect must remain within range and below ~20 km/h throughout.
+        </li>
+        <li>
+          <strong>Arrest zones:</strong> When active arrest zones are configured by admins, arrests may only be made within designated areas.
+        </li>
+        <li>
+          <strong>On arrest:</strong> The suspect is teleported to jail, the Wanted status is expired, and the full <code>Wanted.amount</code> (all accumulated delivery payments) is confiscated.
+          The confiscated amount is split between the Treasury and the arresting officer as a reward.
+        </li>
+        <li>
+          <strong>No Wanted = no confiscation:</strong> If a player is arrested without an active Wanted record, no money is taken.
+        </li>
       </ul>
 
       <p class="govuk-body">
-        For full details on Wanted status, arrest mechanics, confiscation rates, and police progression, see the <a href="/justice/arrest-wanted" class="govuk-link govuk-link--no-visited-state">Arrest &amp; Wanted System</a> documentation.
+        For full details on police progression, confiscation levels, and officer commands, see the <a href="/justice/arrest-wanted" class="govuk-link govuk-link--no-visited-state">Arrest &amp; Wanted System</a> documentation.
       </p>
 
     </div>
