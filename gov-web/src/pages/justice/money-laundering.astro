@@ -44,7 +44,7 @@ import GovLayout from '../../layouts/GovLayout.astro';
         </li>
         <li>
           <strong>Wanted Status:</strong> Each illicit delivery has a probability of triggering a <strong>Wanted</strong> status.
-          The chance scales with the delivery value — from a 5% floor on small deliveries up to 100% for deliveries worth $200,000 or more.
+          The chance scales with the delivery value — from a <strong>10% floor</strong> on any amount up to 100% for deliveries worth <strong>$100,000 or more</strong>.
           If a Wanted status is already active, delivering more illicit cargo refreshes it and adds the new payment to your accumulated total.
         </li>
       </ul>
@@ -54,16 +54,27 @@ import GovLayout from '../../layouts/GovLayout.astro';
         The Wanted system is <strong>permanent</strong> — it does not expire on a timer. Your Wanted level only decreases when on-duty police officers are physically near you.
       </p>
 
+      <p class="govuk-body">Decay follows the inverse-square law — closer police drain heat faster:</p>
+      <table class="govuk-table">
+        <caption>Decay rate by distance to nearest officer</caption>
+        <thead><tr><th>Distance</th><th>Decay rate</th><th>Time to clear full W5</th></tr></thead>
+        <tbody>
+          <tr><td>10–32 m</td><td>10× (max)</td><td>~30 sec</td></tr>
+          <tr><td>50 m</td><td>4×</td><td>~1 min 15 sec</td></tr>
+          <tr><td>75 m</td><td>1.8×</td><td>~2 min 48 sec</td></tr>
+          <tr><td>100 m <em>(reference)</em></td><td>1×/s</td><td>~5 min</td></tr>
+          <tr><td>150 m</td><td>0.44×</td><td>~11 min</td></tr>
+          <tr><td>200 m</td><td>0.25×</td><td>~20 min</td></tr>
+          <tr><td>300 m</td><td>0.11×</td><td>~45 min</td></tr>
+          <tr><td>400 m</td><td>0.06×</td><td>~80 min</td></tr>
+          <tr><td>≥500 m</td><td>—</td><td>Escape possible</td></tr>
+          <tr><td>No police / offline</td><td>0</td><td>Indefinite</td></tr>
+        </tbody>
+      </table>
+
       <ul class="govuk-list govuk-list--bullet">
         <li>
-          <strong>Stars (W1–W5):</strong> Your Wanted level is displayed as 1–5 stars based on your remaining heat.
-          All Wanted statuses start at W5 (maximum heat).
-        </li>
-        <li>
-          <strong>Proximity decay (1/r²):</strong> Police presence drains your heat using an inverse-square law.
-          A police officer 50m away decays your heat at a rate of 1×/tick.
-          At 10m (point-blank), the rate is capped at 10×/tick — clearing full Wanted in roughly 30 seconds.
-          Beyond ~200m, the effect is negligible.
+          <strong>Stars (W1–W5):</strong> All Wanted statuses start at W5 (maximum heat). Stars drop as heat decays.
         </li>
         <li>
           <strong>Multiple officers:</strong> The nearest on-duty officer determines the decay rate.
@@ -72,7 +83,11 @@ import GovLayout from '../../layouts/GovLayout.astro';
           <strong>Offline safety:</strong> If you log off or no police are on duty, your Wanted status does not decay — it waits until you are online with police present.
         </li>
         <li>
-          <strong>Teleporting near police:</strong> Teleporting while Wanted and within 2km of a police officer escalates your heat using the same 1/r² law (up to +300 heat point-blank). This is intended to discourage using teleports to escape arrests.
+          <strong>Teleporting or logging out near police:</strong> Both actions while Wanted and within 2km of a police officer apply the same 1/r² heat escalation (up to +300 heat point-blank).
+          Logging out does <em>not</em> clear your Wanted status — it persists and resumes when you log back in. No money is confiscated on logout.
+        </li>
+        <li>
+          <strong>Escape gate:</strong> You cannot expire your Wanted status while within 500m of any officer — it is clamped at a floor. Once decayed to the floor <em>and</em> beyond 500m, it clears.
         </li>
         <li>
           <strong>When Wanted expires:</strong> Your illicit earnings become "safe" — a server announcement confirms this. No confiscation can occur after expiry.
@@ -99,8 +114,9 @@ import GovLayout from '../../layouts/GovLayout.astro';
           <strong>Arrest zones:</strong> When active arrest zones are configured by admins, arrests may only be made within designated areas.
         </li>
         <li>
-          <strong>On arrest:</strong> The suspect is teleported to jail, the Wanted status is expired, and the full <code>Wanted.amount</code> (all accumulated delivery payments) is confiscated.
-          The confiscated amount is split between the Treasury and the arresting officer as a reward.
+          <strong>On arrest:</strong> The suspect is teleported to jail, the Wanted status is expired, and the full bounty (<code>Wanted.amount</code>) is confiscated.
+          The bounty starts at delivery payment(s) and <strong>grows during active police chases</strong> via proximity — at 50m the bounty grows ~$200/s, up to $2,000/s at point-blank.
+          The confiscated amount is paid entirely to the arresting officer as a reward.
         </li>
         <li>
           <strong>No Wanted = no confiscation:</strong> If a player is arrested without an active Wanted record, no money is taken.

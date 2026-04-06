@@ -24,25 +24,30 @@ import Sidebar from '../../components/Sidebar.astro';
       </SummaryBox>
 
       <h2 id="wanted-status">1. Wanted Status</h2>
-      <p>When a player delivers <a href="/justice/money-laundering" class="govuk-link">illicit cargo</a>, they may be flagged as <strong>Wanted</strong>. The probability scales with delivery value — from a 5% floor on small amounts up to 100% for deliveries worth $200,000 or more. If a Wanted status is already active, any new delivery refreshes it and adds the payment to the cumulative total.</p>
+      <p>When a player delivers <a href="/justice/money-laundering" class="govuk-link">illicit cargo</a>, they may be flagged as <strong>Wanted</strong>. The probability scales with delivery value — from a <strong>10% floor</strong> on any amount up to 100% for deliveries worth <strong>$100,000 or more</strong>. If a Wanted status is already active, any new delivery refreshes it and adds the payment to the cumulative total.</p>
 
       <h3>Permanent status — proximity decay only</h3>
       <p>The Wanted status does <strong>not expire on a timer</strong>. Your heat only decreases when on-duty police officers are physically near you. The decay follows an <strong>inverse-square law (1/r²)</strong>:</p>
 
       <table class="govuk-table">
-        <caption>Approximate decay rate by distance to nearest officer</caption>
-        <thead><tr><th>Distance to nearest officer</th><th>Decay rate</th><th>Time to clear full W5</th></tr></thead>
+        <caption>Decay rate by distance to nearest officer</caption>
+        <thead><tr><th>Distance to nearest officer</th><th>Decay rate</th><th>Time to clear full W5 (300 heat)</th></tr></thead>
         <tbody>
-          <tr><td>10 m (point-blank)</td><td>10× (maximum)</td><td>~30 seconds</td></tr>
-          <tr><td>50 m (reference)</td><td>1× per second</td><td>~5 minutes</td></tr>
-          <tr><td>100 m</td><td>~0.25×</td><td>~20 minutes</td></tr>
-          <tr><td>200 m+</td><td>Negligible</td><td>Very long</td></tr>
+          <tr><td>10–32 m (point-blank)</td><td>10× (maximum, capped)</td><td>~30 seconds</td></tr>
+          <tr><td>50 m</td><td>4×</td><td>~1 min 15 sec</td></tr>
+          <tr><td>75 m</td><td>1.8×</td><td>~2 min 48 sec</td></tr>
+          <tr><td>100 m <em>(reference)</em></td><td>1× per second</td><td>~5 minutes</td></tr>
+          <tr><td>150 m</td><td>0.44×</td><td>~11 min 20 sec</td></tr>
+          <tr><td>200 m</td><td>0.25×</td><td>~20 minutes</td></tr>
+          <tr><td>300 m</td><td>0.11×</td><td>~45 minutes</td></tr>
+          <tr><td>400 m</td><td>0.06×</td><td>~80 minutes</td></tr>
+          <tr><td>≥500 m (escape gate)</td><td>—</td><td>Escape possible (see below)</td></tr>
           <tr><td>No police on duty / offline</td><td>0 — no decay</td><td>Indefinite</td></tr>
         </tbody>
       </table>
 
       <InsetText>
-        Being close to police officers accelerates your wanted countdown — giving them more time to arrest you. Staying far away, going offline, or waiting until no police are on duty keeps your Wanted status frozen.
+        Wanted heat only decays while police are physically within 500m. You cannot expire your wanted status while within that range — it is clamped at a floor (W1 minimum). Once you’ve been chased down to the floor <em>and</em> put 500m+ between yourself and all officers, the status clears automatically.
       </InsetText>
 
       <h3>Star indicator (W1–W5)</h3>
@@ -63,8 +68,12 @@ import Sidebar from '../../components/Sidebar.astro';
 
       <p>You receive an in-game system message each time your star level changes (e.g. "Your wanted status is decreasing. 3 stars remaining."). When fully expired, you are notified and a server-wide announcement confirms your money is now safe from police confiscation.</p>
 
-      <h3>Teleporting near police</h3>
-      <p>If you teleport while Wanted and a police officer is within <strong>2 km</strong>, your heat is <strong>increased</strong> using the same 1/r² law (up to +300 heat at point-blank range). This is intended to discourage using the teleport system to escape an imminent arrest.</p>
+      <h3>Heat escalation — teleporting and logging out near police</h3>
+      <p>Two actions while Wanted and within <strong>2 km</strong> of a police officer trigger heat <em>escalation</em> using the same 1/r² proximity law (up to +300 heat at point-blank range):</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Teleporting:</strong> Instantly escalates your heat based on proximity to the nearest officer. Intended to discourage teleporting to escape an active chase.</li>
+        <li><strong>Logging out:</strong> Applies the same heat escalation on disconnect. Your Wanted status is <em>not</em> cleared — it persists and resumes when you log back in. No money is confiscated on logout.</li>
+      </ul>
 
       <h2 id="arrest-zones">2. Arrest Zones</h2>
       <p>Arrests can only be initiated when the <strong>Police officer is inside a designated Arrest Zone</strong>. These are geographic polygons defined by government administrators. If no active arrest zones exist, the zone check is bypassed and arrests can occur anywhere.</p>
@@ -151,11 +160,24 @@ import Sidebar from '../../components/Sidebar.astro';
       </InsetText>
 
       <h2 id="confiscation">6. Confiscation</h2>
-      <p>On arrest, the suspect's Wanted status is immediately expired and <strong>the full accumulated amount on the Wanted record is confiscated</strong>. This is the total of all illicit delivery payments made since that Wanted record was created (or last refreshed).</p>
+      <p>On arrest, the suspect's Wanted status is immediately expired and <strong>the full accumulated bounty on the Wanted record is confiscated</strong>. The bounty (<code>Wanted.amount</code>) starts at the first illicit delivery payment and <strong>grows further during active police chases</strong> — see Bounty Growth below.</p>
 
       <InsetText>
-        There is no partial confiscation based on remaining heat. If you are arrested at W1 or W5, the same full amount is seized.
+        There is no partial confiscation based on remaining heat. If you are arrested at W1 or W5, the same full bounty amount is seized.
       </InsetText>
+
+      <h3>Bounty growth during police chases</h3>
+      <p>While you are Wanted and police officers are nearby, your bounty increases each tick using the same 1/r² proximity law (inverted — closer means faster growth):</p>
+      <table class="govuk-table">
+        <caption>Bounty growth rate by proximity to nearest officer</caption>
+        <thead><tr><th>Distance</th><th>Growth rate</th></tr></thead>
+        <tbody>
+          <tr><td>10 m (point-blank)</td><td>+$2,000/s</td></tr>
+          <tr><td>50 m (reference)</td><td>+$200/s</td></tr>
+          <tr><td>200 m+</td><td>$0 (escape gate)</td></tr>
+        </tbody>
+      </table>
+      <p>The bounty resets to zero when the Wanted status expires (escape). This means fleeing successfully costs you nothing extra, but getting caught after a long chase will result in a significantly higher confiscation.</p>
 
       <h3>What happens to confiscated money</h3>
       <ul class="govuk-list govuk-list--bullet">
@@ -186,16 +208,16 @@ import Sidebar from '../../components/Sidebar.astro';
       </table>
 
       <h2 id="police-progression">8. Police Progression</h2>
-      <p>Officers advance in level based on their cumulative confiscated amount. Every <strong>$10,000 confiscated</strong> increases the officer's level by 1. When an officer levels up, their player tag is refreshed and a server-wide announcement is broadcast.</p>
+      <p>Officers advance in level based on their cumulative confiscated amount. Every <strong>$50,000 confiscated</strong> increases the officer's level by 1. When an officer levels up, their player tag is refreshed and a server-wide announcement is broadcast.</p>
 
       <table class="govuk-table govuk-table--numeric">
         <caption>Police level thresholds</caption>
         <thead><tr><th>Level</th><th>Cumulative confiscated</th></tr></thead>
         <tbody>
-          <tr><td style="text-align:left">1</td><td>$0 – $9,999</td></tr>
-          <tr><td style="text-align:left">2</td><td>$10,000 – $19,999</td></tr>
-          <tr><td style="text-align:left">3</td><td>$20,000 – $29,999</td></tr>
-          <tr><td style="text-align:left"><em>N</em></td><td><em>(N − 1) × $10,000</em> onwards</td></tr>
+          <tr><td style="text-align:left">1</td><td>$0 – $49,999</td></tr>
+          <tr><td style="text-align:left">2</td><td>$50,000 – $99,999</td></tr>
+          <tr><td style="text-align:left">3</td><td>$100,000 – $149,999</td></tr>
+          <tr><td style="text-align:left"><em>N</em></td><td><em>(N − 1) × $50,000</em> onwards</td></tr>
         </tbody>
       </table>
 
