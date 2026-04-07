@@ -53,7 +53,7 @@ import Sidebar from '../../components/Sidebar.astro';
       </table>
 
       <h3>Confiscatable amount decay</h3>
-      <p>The confiscatable amount decays exponentially every minute — but <strong>only while you are online</strong>. Logging off pauses the decay entirely.</p>
+      <p>The confiscatable amount decays exponentially every minute — but <strong>only while you are online</strong>. Logging off pauses the decay entirely. Amounts below <strong>$100</strong> are rounded down to zero.</p>
       <table class="govuk-table govuk-table--numeric">
         <caption>Confiscatable amount decay</caption>
         <thead><tr><th>Time online</th><th>Fraction remaining</th></tr></thead>
@@ -102,6 +102,10 @@ import Sidebar from '../../components/Sidebar.astro';
           <tr><td style="text-align:left">Between $0 and $100,000</td><td>Linearly interpolated</td></tr>
         </tbody>
       </table>
+
+      <InsetText>
+        <strong>30-second debounce window:</strong> Multiple deliveries within 30 seconds of each other are aggregated before the probability roll. Splitting a large delivery into many small ones (e.g. one cargo at a time) is treated identically to a single large delivery.
+      </InsetText>
 
       <p>If a Wanted status is already active, any new delivery refreshes it and adds the payment to the Wanted bounty. See <a href="/justice/arrest-wanted" class="govuk-link">Arrest &amp; Wanted System</a> for full Wanted mechanics.</p>
 

@@ -50,6 +50,10 @@ import Sidebar from '../../components/Sidebar.astro';
       <h2 id="wanted-status">2. Wanted Status</h2>
       <p>Deliveries above a value threshold may trigger an additional <strong>Wanted</strong> status on top of the Criminal Record. The probability scales with delivery value — from a <strong>10% floor</strong> on any amount up to <strong>100%</strong> for deliveries worth <strong>$100,000 or more</strong>. A Wanted status can also be manually applied by on-duty police via <code>/setwanted</code>.</p>
 
+      <InsetText>
+        <strong>30-second debounce window:</strong> Multiple deliveries within 30 seconds of each other are aggregated before the probability roll. Splitting large cargo into many small deliveries is treated as a single delivery of the combined value.
+      </InsetText>
+
       <h3>Permanent status — proximity decay only</h3>
       <p>The Wanted status does <strong>not expire on a timer</strong>. Your heat only decreases when on-duty police officers are physically near you. The decay follows an <strong>inverse-square law (1/r²)</strong>:</p>
 
@@ -220,12 +224,13 @@ import Sidebar from '../../components/Sidebar.astro';
         <caption>Bounty growth rate by proximity to nearest officer</caption>
         <thead><tr><th>Distance</th><th>Growth rate</th></tr></thead>
         <tbody>
-          <tr><td>10 m (point-blank)</td><td>+$2,000/s</td></tr>
-          <tr><td>50 m (reference)</td><td>+$200/s</td></tr>
+          <tr><td>10 m (point-blank)</td><td>+$500/s (capped)</td></tr>
+          <tr><td>50 m</td><td>+$200/s</td></tr>
+          <tr><td>100 m <em>(reference)</em></td><td>+$50/s</td></tr>
           <tr><td>200 m+</td><td>$0 (escape gate)</td></tr>
         </tbody>
       </table>
-      <p>The Wanted bounty resets to zero when the Wanted status expires (escape). This means fleeing successfully costs you nothing extra in bounty — but your confiscatable Criminal Record amount is still at risk if police catch you later.</p>
+      <p>The Wanted bounty resets to zero when the Wanted status expires (escape). However, your Criminal Record and its confiscatable amount remain — a future arrest will still seize that amount.</p>
 
       <h3>What happens to confiscated money</h3>
       <ul class="govuk-list govuk-list--bullet">
