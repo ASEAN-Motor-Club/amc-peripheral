@@ -1,28 +1,30 @@
 ---
 import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import InsetText from '../../components/InsetText.astro';
+import Sidebar from '../../components/Sidebar.astro';
 ---
-<GovLayout title="Money Laundering & Criminal Faction" description="Mechanics of the Criminal Faction, Money Laundering, and Police interactions.">
+<GovLayout title="Money Laundering & Criminal Faction" department="Ministry of Justice" description="Mechanics of the Criminal Faction, illicit cargo, Criminal Records, and how Wanted status works in ASEAN Motor Club.">
+
+<PhaseBanner tag="Policy" text="Updated 7 April 2026" />
+<Breadcrumbs items={[
+  { label: "Justice & Law Enforcement", href: "/justice" },
+  { label: "Money Laundering & Criminal Faction", href: "/justice/money-laundering" },
+]} />
+
+<main class="govuk-main-wrapper">
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
-      <span class="govuk-caption-xl">Justice & Law Enforcement</span>
-      <h1 class="govuk-heading-xl">Money Laundering & Criminal Faction</h1>
+      <h1>Money Laundering &amp; Criminal Faction</h1>
 
-      <p class="govuk-body-l">
-        Delivering illicit cargo allows players to launder money, entering the Criminal Faction and participating in an active cat-and-mouse game with law enforcement.
-      </p>
+      <SummaryBox title="Summary">
+        <p>Delivering illicit cargo creates an active <strong>Criminal Record</strong> — the single source of truth for your criminal status. Your record tracks two amounts: a permanent <strong>total</strong> and a <strong>confiscatable amount</strong> that decays over time while you are online. Upon arrest, police confiscate your Wanted bounty plus your remaining confiscatable amount, and your Criminal Record is cleared.</p>
+      </SummaryBox>
 
-      <div class="govuk-warning-text">
-        <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
-        <strong class="govuk-warning-text__text">
-          <span class="govuk-warning-text__assistive">Warning</span>
-          Participating in these activities puts you at risk of arrest. Police can confiscate <strong>all</strong> of your accumulated illicit earnings if you are caught while Wanted.
-        </strong>
-      </div>
-
-      <h2 class="govuk-heading-m">Illicit Cargo</h2>
-      <p class="govuk-body">
-        The following cargo types are considered illicit and trigger criminal mechanics when delivered:
-      </p>
+      <h2 id="illicit-cargo">1. Illicit Cargo</h2>
+      <p>The following cargo types are considered illicit and trigger criminal mechanics on delivery:</p>
       <ul class="govuk-list govuk-list--bullet">
         <li>Money / Money Pallet</li>
         <li>Ganja / Ganja Pallet</li>
@@ -30,103 +32,118 @@ import GovLayout from '../../layouts/GovLayout.astro';
         <li>Cocaine</li>
       </ul>
 
-      <h2 class="govuk-heading-m">Money Laundering Mechanics</h2>
-      <p class="govuk-body">
-        Completing illicit deliveries triggers the following effects:
-      </p>
+      <h2 id="criminal-record">2. Criminal Record</h2>
+      <p>Your first illicit delivery creates an active <strong>Criminal Record</strong> and immediately adds the <code>[C]</code> tag to your in-game name. The Criminal Record persists indefinitely — it is only cleared when you are arrested.</p>
 
-      <ul class="govuk-list govuk-list--bullet">
-        <li><strong>Treasury Cost:</strong> Money deliveries deduct 20% of the laundered payment from the public Treasury Fund.</li>
-        <li><strong>Criminal Record:</strong> Delivering illicit cargo gives you an active Criminal Record lasting 7 days. Further deliveries reset the 7-day timer.</li>
-        <li>
-          <strong>Criminal Level:</strong> Your level increases with every $50,000 laundered cumulatively.
-          Your in-game tag reflects this — <code>[C]</code> at level 1, <code>[C2]</code> at level 2, and so on.
-        </li>
-        <li>
-          <strong>Wanted Status:</strong> Each illicit delivery has a probability of triggering a <strong>Wanted</strong> status.
-          The chance scales with the delivery value — from a <strong>10% floor</strong> on any amount up to 100% for deliveries worth <strong>$100,000 or more</strong>.
-          If a Wanted status is already active, delivering more illicit cargo refreshes it and adds the new payment to your accumulated total.
-        </li>
-      </ul>
-
-      <h2 class="govuk-heading-m">Wanted Status & Proximity Decay</h2>
-      <p class="govuk-body">
-        The Wanted system is <strong>permanent</strong> — it does not expire on a timer. Your Wanted level only decreases when on-duty police officers are physically near you.
-      </p>
-
-      <p class="govuk-body">Decay follows the inverse-square law — closer police drain heat faster:</p>
+      <h3>Two tracked amounts</h3>
+      <p>Each Criminal Record tracks two separate values:</p>
       <table class="govuk-table">
-        <caption>Decay rate by distance to nearest officer</caption>
-        <thead><tr><th>Distance</th><th>Decay rate</th><th>Time to clear full W5</th></tr></thead>
+        <caption>Criminal Record fields</caption>
+        <thead><tr><th>Field</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td>10–32 m</td><td>10× (max)</td><td>~30 sec</td></tr>
-          <tr><td>50 m</td><td>4×</td><td>~1 min 15 sec</td></tr>
-          <tr><td>75 m</td><td>1.8×</td><td>~2 min 48 sec</td></tr>
-          <tr><td>100 m <em>(reference)</em></td><td>1×/s</td><td>~5 min</td></tr>
-          <tr><td>150 m</td><td>0.44×</td><td>~11 min</td></tr>
-          <tr><td>200 m</td><td>0.25×</td><td>~20 min</td></tr>
-          <tr><td>300 m</td><td>0.11×</td><td>~45 min</td></tr>
-          <tr><td>400 m</td><td>0.06×</td><td>~80 min</td></tr>
-          <tr><td>≥500 m</td><td>—</td><td>Escape possible</td></tr>
-          <tr><td>No police / offline</td><td>0</td><td>Indefinite</td></tr>
+          <tr>
+            <td><strong>Total amount</strong></td>
+            <td>The permanent lifetime sum of all illicit delivery payments linked to this record. Never decreases. Used for criminal level display.</td>
+          </tr>
+          <tr>
+            <td><strong>Confiscatable amount</strong></td>
+            <td>Also accumulates with each delivery, but <strong>decays over time</strong> while you are online. This is the amount at risk of confiscation on arrest. Shown in <code>/wanted</code>.</td>
+          </tr>
         </tbody>
       </table>
 
+      <h3>Confiscatable amount decay</h3>
+      <p>The confiscatable amount decays exponentially every minute — but <strong>only while you are online</strong>. Logging off pauses the decay entirely.</p>
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Confiscatable amount decay</caption>
+        <thead><tr><th>Time online</th><th>Fraction remaining</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">0 minutes</td><td>100%</td></tr>
+          <tr><td style="text-align:left">1 hour</td><td>~87%</td></tr>
+          <tr><td style="text-align:left">4 hours</td><td>50% (half-life)</td></tr>
+          <tr><td style="text-align:left">8 hours</td><td>25%</td></tr>
+          <tr><td style="text-align:left">24 hours</td><td>~1.6%</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        The decay only ticks while you are in-game. Staying offline effectively freezes your confiscatable amount at its current value indefinitely.
+      </InsetText>
+
+      <h2 id="criminal-level">3. Criminal Level</h2>
+      <p>Your criminal level is based on your <strong>cumulative lifetime laundered total</strong> across all records — it never resets, even after arrest. Your level increases by 1 for every <strong>$50,000 laundered</strong>.</p>
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Criminal level thresholds</caption>
+        <thead><tr><th>Level</th><th>Cumulative laundered</th><th>Tag</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">1</td><td>$0 – $49,999</td><td><code>[C]</code></td></tr>
+          <tr><td style="text-align:left">2</td><td>$50,000 – $99,999</td><td><code>[C2]</code></td></tr>
+          <tr><td style="text-align:left">3</td><td>$100,000 – $149,999</td><td><code>[C3]</code></td></tr>
+          <tr><td style="text-align:left"><em>N</em></td><td><em>(N − 1) × $50,000</em> onwards</td><td><code>[C<em>N</em>]</code></td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        Arrest reduces your laundered total by the confiscatable amount confiscated — not the full lifetime total. Your criminal level may therefore decrease slightly after arrest.
+      </InsetText>
+
+      <h2 id="treasury-cost">4. Treasury Cost</h2>
+      <p>Money deliveries deduct <strong>20% of the laundered payment</strong> from the public Treasury Fund. Other illicit cargo types (drugs) do not have a treasury cost.</p>
+
+      <h2 id="wanted-trigger">5. Wanted Status Trigger</h2>
+      <p>Each illicit delivery has a chance of triggering a <strong>Wanted</strong> status on top of the Criminal Record. The probability scales with delivery value:</p>
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Wanted trigger probability by delivery value</caption>
+        <thead><tr><th>Delivery value</th><th>Wanted chance</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Any amount</td><td>10% minimum (floor)</td></tr>
+          <tr><td style="text-align:left">$100,000 or more</td><td>100% (guaranteed)</td></tr>
+          <tr><td style="text-align:left">Between $0 and $100,000</td><td>Linearly interpolated</td></tr>
+        </tbody>
+      </table>
+
+      <p>If a Wanted status is already active, any new delivery refreshes it and adds the payment to the Wanted bounty. See <a href="/justice/arrest-wanted" class="govuk-link">Arrest &amp; Wanted System</a> for full Wanted mechanics.</p>
+
+      <h2 id="arrest-confiscation">6. Arrest &amp; Confiscation</h2>
+      <p>When you are arrested, two things happen simultaneously:</p>
+      <ol class="govuk-list govuk-list--number">
+        <li>Your <strong>Wanted record is expired</strong> and the Wanted bounty (<code>Wanted.amount</code>) is confiscated.</li>
+        <li>Your <strong>Criminal Record is cleared</strong> (<code>[C]</code> tag removed) and the <strong>confiscatable amount</strong> from the Criminal Record is also confiscated.</li>
+      </ol>
+
+      <p>The <strong>total confiscation</strong> is therefore:</p>
+      <p><code>Confiscation = Wanted.amount + CriminalRecord.confiscatable_amount</code></p>
+
+      <InsetText>
+        If you have a Criminal Record but no active Wanted status (you were never flagged or already escaped), the confiscatable amount is still seized on arrest — police can arrest you any time while you have a <code>[C]</code> tag.
+      </InsetText>
+
+      <h3>After arrest</h3>
       <ul class="govuk-list govuk-list--bullet">
-        <li>
-          <strong>Stars (W1–W5):</strong> All Wanted statuses start at W5 (maximum heat). Stars drop as heat decays.
-        </li>
-        <li>
-          <strong>Multiple officers:</strong> The nearest on-duty officer determines the decay rate.
-        </li>
-        <li>
-          <strong>Offline safety:</strong> If you log off or no police are on duty, your Wanted status does not decay — it waits until you are online with police present.
-        </li>
-        <li>
-          <strong>Teleporting or logging out near police:</strong> Both actions while Wanted and within 2km of a police officer apply the same 1/r² heat escalation (up to +300 heat point-blank).
-          Logging out does <em>not</em> clear your Wanted status — it persists and resumes when you log back in. No money is confiscated on logout.
-        </li>
-        <li>
-          <strong>Escape gate:</strong> You cannot expire your Wanted status while within 500m of any officer — it is clamped at a floor. Once decayed to the floor <em>and</em> beyond 500m, it clears.
-        </li>
-        <li>
-          <strong>When Wanted expires:</strong> Your illicit earnings become "safe" — a server announcement confirms this. No confiscation can occur after expiry.
-        </li>
+        <li>Your Criminal Record is cleared — <code>[C]</code> tag is immediately removed</li>
+        <li>Your <strong>criminal laundered total is reduced</strong> by the confiscatable amount seized</li>
+        <li>The full confiscated sum is paid to the arresting officer as a reward</li>
+        <li>A Confiscation record is permanently created, linking the suspect, officer, and amount</li>
+        <li>Your next illicit delivery creates a fresh Criminal Record from zero</li>
       </ul>
 
-      <h2 class="govuk-heading-m">Arrest & Confiscation</h2>
-      <p class="govuk-body">
-        While you are Wanted, on-duty police can arrest you. On arrest, your Wanted status is immediately expired and <strong>your full accumulated illicit amount is confiscated</strong> — this is the total of all deliveries recorded on that Wanted record.
-      </p>
-
-      <ul class="govuk-list govuk-list--bullet">
-        <li>
-          <strong>Auto-arrest:</strong> The patrol system automatically arrests any Wanted suspect who remains within
-          <strong>40m of an officer on foot</strong> (or 12m if the officer is in a vehicle) for <strong>4 consecutive seconds</strong>
-          while moving slower than 30 km/h. A warning is sent after 1.5 seconds.
-        </li>
-        <li>
-          <strong>Manual arrest (<code>/arrest</code>):</strong> Officers can manually arrest suspects within
-          <strong>30m on foot</strong> (or 20m in a police vehicle) over a 3-second verification window.
-          The suspect must remain within range and below ~20 km/h throughout.
-        </li>
-        <li>
-          <strong>Arrest zones:</strong> When active arrest zones are configured by admins, arrests may only be made within designated areas.
-        </li>
-        <li>
-          <strong>On arrest:</strong> The suspect is teleported to jail, the Wanted status is expired, and the full bounty (<code>Wanted.amount</code>) is confiscated.
-          The bounty starts at delivery payment(s) and <strong>grows during active police chases</strong> via proximity — at 50m the bounty grows ~$200/s, up to $2,000/s at point-blank.
-          The confiscated amount is paid entirely to the arresting officer as a reward.
-        </li>
-        <li>
-          <strong>No Wanted = no confiscation:</strong> If a player is arrested without an active Wanted record, no money is taken.
-        </li>
-      </ul>
-
-      <p class="govuk-body">
-        For full details on police progression, confiscation levels, and officer commands, see the <a href="/justice/arrest-wanted" class="govuk-link govuk-link--no-visited-state">Arrest &amp; Wanted System</a> documentation.
-      </p>
+      <h2 id="setwanted-cooldown">7. /setwanted Cooldown</h2>
+      <p>After a Wanted status expires (via escape or arrest), police cannot immediately re-target the same player using <code>/setwanted</code>. A <strong>1-hour cooldown</strong> applies from the moment the Wanted record expires. The cooldown timer and remaining minutes are shown in the command reply.</p>
 
     </div>
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Illicit Cargo", href: "#illicit-cargo" },
+        { label: "Criminal Record", href: "#criminal-record" },
+        { label: "Criminal Level", href: "#criminal-level" },
+        { label: "Treasury Cost", href: "#treasury-cost" },
+        { label: "Wanted Trigger", href: "#wanted-trigger" },
+        { label: "Arrest & Confiscation", href: "#arrest-confiscation" },
+        { label: "/setwanted Cooldown", href: "#setwanted-cooldown" },
+      ]} />
+    </div>
   </div>
+</main>
+
 </GovLayout>
