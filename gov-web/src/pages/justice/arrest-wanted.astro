@@ -54,28 +54,27 @@ import Sidebar from '../../components/Sidebar.astro';
         <strong>30-second debounce window:</strong> Multiple deliveries within 30 seconds of each other are aggregated before the probability roll. Splitting large cargo into many small deliveries is treated as a single delivery of the combined value.
       </InsetText>
 
-      <h3>Permanent status — proximity decay only</h3>
-      <p>The Wanted status does <strong>not expire on a timer</strong>. Your heat only decreases when on-duty police officers are physically near you. The decay follows an <strong>inverse-square law (1/r²)</strong>:</p>
+      <h3>Time-limited status — proximity prolongs</h3>
+      <p>Wanted heat decays at a <strong>constant rate of 0.5 heat/second</strong> regardless of police activity. A full W5 status (300 heat) expires naturally in <strong>10 minutes</strong> if you avoid all police.</p>
+      <p>When an on-duty officer is within <strong>500 m</strong>, the server <em>adds</em> heat back proportional to their proximity (1/r² law), slowing or reversing the decay. Getting close to a cop keeps you Wanted longer; staying far away lets the timer run down.</p>
 
       <table class="govuk-table">
-        <caption>Decay rate by distance to nearest officer</caption>
-        <thead><tr><th>Distance to nearest officer</th><th>Decay rate</th><th>Time to clear full W5 (300 heat)</th></tr></thead>
+        <caption>Net heat change per second by distance to nearest officer</caption>
+        <thead><tr><th>Distance</th><th>Heat added/s</th><th>Net change/s</th><th>Effect</th></tr></thead>
         <tbody>
-          <tr><td>10–32 m (point-blank)</td><td>10× (maximum, capped)</td><td>~30 seconds</td></tr>
-          <tr><td>50 m</td><td>4×</td><td>~1 min 15 sec</td></tr>
-          <tr><td>75 m</td><td>1.8×</td><td>~2 min 48 sec</td></tr>
-          <tr><td>100 m <em>(reference)</em></td><td>1× per second</td><td>~5 minutes</td></tr>
-          <tr><td>150 m</td><td>0.44×</td><td>~11 min 20 sec</td></tr>
-          <tr><td>200 m</td><td>0.25×</td><td>~20 minutes</td></tr>
-          <tr><td>300 m</td><td>0.11×</td><td>~45 minutes</td></tr>
-          <tr><td>400 m</td><td>0.06×</td><td>~80 minutes</td></tr>
-          <tr><td>≥500 m (escape gate)</td><td>—</td><td>Escape possible (see below)</td></tr>
-          <tr><td>No police on duty / offline</td><td>0 — no decay</td><td>Indefinite</td></tr>
+          <tr><td>10 m (point-blank)</td><td>+10.0</td><td><strong>+9.5</strong></td><td>Heat grows rapidly</td></tr>
+          <tr><td>50 m</td><td>+4.0</td><td><strong>+3.5</strong></td><td>Heat grows fast</td></tr>
+          <tr><td>100 m <em>(reference)</em></td><td>+1.0</td><td><strong>+0.5</strong></td><td>Heat grows slowly</td></tr>
+          <tr><td>~141 m <em>(breakeven)</em></td><td>+0.5</td><td>0</td><td>No net change</td></tr>
+          <tr><td>200 m</td><td>+0.25</td><td><strong>−0.25</strong></td><td>Slow decay (longer than 10 min)</td></tr>
+          <tr><td>300 m</td><td>+0.11</td><td><strong>−0.39</strong></td><td>Moderate decay</td></tr>
+          <tr><td>≥500 m (escape gate)</td><td>0</td><td><strong>−0.5</strong></td><td>Full decay, can expire</td></tr>
+          <tr><td>No police / offline</td><td>0</td><td><strong>−0.5</strong></td><td>Full 10-min decay</td></tr>
         </tbody>
       </table>
 
       <InsetText>
-        Wanted heat only decays while police are physically within 500m. You cannot expire your wanted status while within that range — it is clamped at a floor (W1 minimum). Once you've been chased down to the floor <em>and</em> put 500m+ between yourself and all officers, the status clears automatically.
+        Wanted cannot expire while any officer is within 500 m — heat is clamped at a W1 floor. Once all officers are beyond 500 m, the floor lifts and natural decay brings it to zero automatically.
       </InsetText>
 
       <h3>Star indicator (W1–W5)</h3>
@@ -219,7 +218,7 @@ import Sidebar from '../../components/Sidebar.astro';
       </InsetText>
 
       <h3>Bounty growth during police chases</h3>
-      <p>While you are Wanted and police officers are nearby, your Wanted bounty increases each tick using the same 1/r² proximity law (inverted — closer means faster growth):</p>
+      <p>While you are Wanted and police officers are within 500 m, your Wanted bounty increases each tick using the same 1/r² proximity law as heat growth (closer = faster growth). Bounty is separate from heat — it accumulates permanently and is the amount seized on arrest:</p>
       <table class="govuk-table">
         <caption>Bounty growth rate by proximity to nearest officer</caption>
         <thead><tr><th>Distance</th><th>Growth rate</th></tr></thead>
@@ -227,7 +226,7 @@ import Sidebar from '../../components/Sidebar.astro';
           <tr><td>10 m (point-blank)</td><td>+$500/s (capped)</td></tr>
           <tr><td>50 m</td><td>+$200/s</td></tr>
           <tr><td>100 m <em>(reference)</em></td><td>+$50/s</td></tr>
-          <tr><td>200 m+</td><td>$0 (escape gate)</td></tr>
+          <tr><td>≥500 m (escape gate)</td><td>+$0/s</td></tr>
         </tbody>
       </table>
       <p>The Wanted bounty resets to zero when the Wanted status expires (escape). However, your Criminal Record and its confiscatable amount remain — a future arrest will still seize that amount.</p>
