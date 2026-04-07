@@ -8,7 +8,7 @@ import Sidebar from '../../components/Sidebar.astro';
 ---
 <GovLayout title="Arrest & Wanted System" department="Ministry of Justice" description="How the Wanted status, arrest mechanics, confiscation, and police progression work in ASEAN Motor Club.">
 
-<PhaseBanner tag="Policy" text="Updated 7 April 2026" />
+<PhaseBanner tag="Policy" text="Updated 8 April 2026" />
 <Breadcrumbs items={[
   { label: "Justice & Law Enforcement", href: "/justice" },
   { label: "Arrest & Wanted System", href: "/justice/arrest-wanted" },
@@ -245,7 +245,27 @@ import Sidebar from '../../components/Sidebar.astro';
       <h3>No Wanted = arrest still possible</h3>
       <p>If a player has an active Criminal Record (<code>[C]</code> tag) but no active Wanted status, they can still be arrested (teleported to jail and Criminal Record cleared). Only the <code>confiscatable_amount</code> is seized — there is no Wanted bounty to confiscate.</p>
 
-      <h2 id="security-bonus">9. Security Risk Bonus</h2>
+      <h2 id="jail-containment">9. Jail Containment</h2>
+      <p>When a player is arrested — whether by manual <code>/arrest</code>, auto-arrest patrol, or any other arrest path — they are immediately teleported to the designated <strong>Jail</strong> location. A <strong>30-second boundary enforcement</strong> period then begins automatically.</p>
+
+      <table class="govuk-table">
+        <caption>Jail containment parameters</caption>
+        <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Boundary radius</td><td>10 metres from the jail marker</td></tr>
+          <tr><td>Enforcement duration</td><td>30 seconds after arrest</td></tr>
+          <tr><td>Check frequency</td><td>Every second</td></tr>
+          <tr><td>Teleport on escape</td><td>Immediate — vehicles are despawned</td></tr>
+        </tbody>
+      </table>
+
+      <p>During the 30-second window, if the player moves more than <strong>10 metres</strong> from the jail marker, the server <strong>instantly teleports them back</strong> and shows a warning popup. This repeats on every tick until the containment period expires.</p>
+
+      <InsetText>
+        After 30 seconds the containment ends automatically and the player is free to move. There is no manual release step — the timer is enforced server-side and cannot be shortened.
+      </InsetText>
+
+      <h2 id="security-bonus">10. Security Risk Bonus</h2>
       <p>When active police officers are online, illicit delivery payments are increased to reflect the higher risk. Each on-duty officer adds <strong>50% to the base payout</strong>, capped at <strong>+250%</strong> (with 5 or more officers).</p>
 
       <table class="govuk-table govuk-table--numeric">
@@ -261,7 +281,7 @@ import Sidebar from '../../components/Sidebar.astro';
         </tbody>
       </table>
 
-      <h2 id="police-progression">10. Police Progression</h2>
+      <h2 id="police-progression">11. Police Progression</h2>
       <p>Officers advance in level based on their cumulative confiscated amount. Every <strong>$50,000 confiscated</strong> increases the officer's level by 1. When an officer levels up, their player tag is refreshed and a server-wide announcement is broadcast.</p>
 
       <table class="govuk-table govuk-table--numeric">
@@ -275,7 +295,7 @@ import Sidebar from '../../components/Sidebar.astro';
         </tbody>
       </table>
 
-      <h2 id="smuggling-tipoff">11. Smuggling Tip-Offs</h2>
+      <h2 id="smuggling-tipoff">12. Smuggling Tip-Offs</h2>
       <p>When a player loads illicit cargo, the system may broadcast a server-wide tip-off: <em>"Intelligence reports suggest a smuggling operation is underway"</em>. This is controlled by the <code>SMUGGLING_TIPOFF_ENABLED</code> server setting.</p>
 
       <table class="govuk-table">
@@ -291,7 +311,7 @@ import Sidebar from '../../components/Sidebar.astro';
         Tip-offs do not reveal the player's name or location — they only alert police that a smuggling operation is in progress.
       </InsetText>
 
-      <h2 id="modded-vehicles">12. Modded Vehicle Rules</h2>
+      <h2 id="modded-vehicles">13. Modded Vehicle Rules</h2>
       <p>Players using vehicles with custom-modified parts face additional penalties during illicit cargo gameplay:</p>
       <ul class="govuk-list govuk-list--bullet">
         <li><strong>On delivery:</strong> Criminal profits are zeroed out (transferred back as a penalty) if modded parts are detected on the player's active vehicle.</li>
@@ -310,6 +330,7 @@ import Sidebar from '../../components/Sidebar.astro';
         { label: "Manual Arrest", href: "#manual-arrest" },
         { label: "Auto-Arrest Patrol", href: "#auto-arrest" },
         { label: "Confiscation", href: "#confiscation" },
+        { label: "Jail Containment", href: "#jail-containment" },
         { label: "Security Risk Bonus", href: "#security-bonus" },
         { label: "Police Progression", href: "#police-progression" },
         { label: "Smuggling Tip-Offs", href: "#smuggling-tipoff" },
