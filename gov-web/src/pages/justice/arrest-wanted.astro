@@ -20,7 +20,7 @@ import Sidebar from '../../components/Sidebar.astro';
       <h1>Arrest &amp; Wanted System</h1>
 
       <SummaryBox title="Summary">
-        <p>Delivering illicit cargo creates a <strong>Criminal Record</strong> (the <code>[C]</code> tag). A Wanted status may additionally apply, which police can actively decay through proximity. On arrest, police confiscate your <strong>Wanted bounty plus your confiscatable amount</strong>, and your Criminal Record is cleared. Police may also manually flag suspects using <code>/setwanted</code>, subject to a 1-hour cooldown after prior Wanted expiry.</p>
+        <p>Delivering illicit cargo creates a <strong>Criminal Record</strong> (the <code>[C]</code> tag). A Wanted status may additionally apply. On arrest, police confiscate your <strong>Wanted bounty plus your confiscatable amount</strong>, and your Criminal Record is cleared. Police may also manually flag suspects using <code>/setwanted</code>, subject to a 1-hour cooldown after prior Wanted expiry. <strong>Teleporting while Wanted triggers an automatic arrest.</strong></p>
       </SummaryBox>
 
       <h2 id="criminal-record">1. Criminal Record</h2>
@@ -36,7 +36,7 @@ import Sidebar from '../../components/Sidebar.astro';
           </tr>
           <tr>
             <td><strong>confiscatable_amount</strong></td>
-            <td>Also accumulates with deliveries but <strong>decays over time while online</strong>. This is what is seized on arrest. Displayed in <code>/wanted</code>.</td>
+            <td>Also accumulates with deliveries but <strong>decays with a 2-hour half-life while online</strong>. This is what is seized on arrest. Sorted and displayed in <code>/wanted</code>.</td>
           </tr>
         </tbody>
       </table>
@@ -48,33 +48,31 @@ import Sidebar from '../../components/Sidebar.astro';
       </InsetText>
 
       <h2 id="wanted-status">2. Wanted Status</h2>
-      <p>Deliveries above a value threshold may trigger an additional <strong>Wanted</strong> status on top of the Criminal Record. The probability scales with delivery value — from a <strong>10% floor</strong> on any amount up to <strong>100%</strong> for deliveries worth <strong>$100,000 or more</strong>. A Wanted status can also be manually applied by on-duty police via <code>/setwanted</code>.</p>
+      <p>Deliveries above a value threshold may trigger an additional <strong>Wanted</strong> status on top of the Criminal Record. The probability scales with delivery value — from a <strong>10% floor</strong> on any amount up to <strong>100%</strong> for deliveries worth <strong>$100,000 or more</strong>. Any Wanted status (new or refreshed) is subject to a <strong>minimum bounty of $50,000</strong>. A Wanted status can also be manually applied by on-duty police via <code>/setwanted</code>.</p>
 
       <InsetText>
         <strong>30-second debounce window:</strong> Multiple deliveries within 30 seconds of each other are aggregated before the probability roll. Splitting large cargo into many small deliveries is treated as a single delivery of the combined value.
       </InsetText>
 
-      <h3>Time-limited status — proximity prolongs</h3>
-      <p>Wanted heat decays at a <strong>constant rate of 0.5 heat/second</strong> regardless of police activity. A full W5 status (300 heat) expires naturally in <strong>10 minutes</strong> if you avoid all police.</p>
-      <p>When an on-duty officer is within <strong>500 m</strong>, the server <em>adds</em> heat back proportional to their proximity (1/r² law), slowing or reversing the decay. Getting close to a cop keeps you Wanted longer; staying far away lets the timer run down.</p>
+      <h3>Time-limited status — proximity slows decay</h3>
+      <p>Wanted heat decays at a <strong>constant rate of 1.0 heat/second</strong> when no police are nearby. A full W5 status (300 heat) expires naturally in <strong>5 minutes</strong> if you avoid all police.</p>
+      <p>When an on-duty officer is within <strong>200 m</strong>, the server <em>reduces</em> the decay rate proportional to their proximity (1/r² law). Getting close to a cop makes the timer run slower; staying far away lets it expire at full speed. Decay never reverses — heat only ever decreases.</p>
 
       <table class="govuk-table">
-        <caption>Net heat change per second by distance to nearest officer</caption>
-        <thead><tr><th>Distance</th><th>Heat added/s</th><th>Net change/s</th><th>Effect</th></tr></thead>
+        <caption>Effective decay rate per second by distance to nearest officer</caption>
+        <thead><tr><th>Distance</th><th>Decay rate/s</th><th>Time to expire (from W5)</th><th>Effect</th></tr></thead>
         <tbody>
-          <tr><td>10 m (point-blank)</td><td>+10.0</td><td><strong>+9.5</strong></td><td>Heat grows rapidly</td></tr>
-          <tr><td>50 m</td><td>+4.0</td><td><strong>+3.5</strong></td><td>Heat grows fast</td></tr>
-          <tr><td>100 m <em>(reference)</em></td><td>+1.0</td><td><strong>+0.5</strong></td><td>Heat grows slowly</td></tr>
-          <tr><td>~141 m <em>(breakeven)</em></td><td>+0.5</td><td>0</td><td>No net change</td></tr>
-          <tr><td>200 m</td><td>+0.25</td><td><strong>−0.25</strong></td><td>Slow decay (longer than 10 min)</td></tr>
-          <tr><td>300 m</td><td>+0.11</td><td><strong>−0.39</strong></td><td>Moderate decay</td></tr>
-          <tr><td>≥500 m (escape gate)</td><td>0</td><td><strong>−0.5</strong></td><td>Full decay, can expire</td></tr>
-          <tr><td>No police / offline</td><td>0</td><td><strong>−0.5</strong></td><td>Full 10-min decay</td></tr>
+          <tr><td>10 m (point-blank)</td><td>~0.09</td><td>~55 minutes</td><td>Decay very slow</td></tr>
+          <tr><td>50 m</td><td>~0.17</td><td>~30 minutes</td><td>Decay slow</td></tr>
+          <tr><td>100 m <em>(reference)</em></td><td>0.5</td><td>10 minutes</td><td>Decay halved</td></tr>
+          <tr><td>150 m</td><td>~0.69</td><td>~7.2 minutes</td><td>Decay reduced</td></tr>
+          <tr><td>≥200 m (escape gate)</td><td>1.0</td><td>5 minutes</td><td>Full decay, can expire</td></tr>
+          <tr><td>No police / offline</td><td>1.0</td><td>5 minutes</td><td>Full decay</td></tr>
         </tbody>
       </table>
 
       <InsetText>
-        Wanted cannot expire while any officer is within 500 m — heat is clamped at a W1 floor. Once all officers are beyond 500 m, the floor lifts and natural decay brings it to zero automatically.
+        Wanted cannot expire while any officer is within 200 m — heat is clamped at a W1 floor. Once all officers are beyond 200 m, the floor lifts and natural decay brings it to zero automatically.
       </InsetText>
 
       <h3>Star indicator (W1–W5)</h3>
@@ -95,11 +93,13 @@ import Sidebar from '../../components/Sidebar.astro';
 
       <p>You receive an in-game system message each time your star level changes. When fully expired, you are notified and a server-wide announcement confirms your escape.</p>
 
-      <h3>Heat escalation — teleporting and logging out near police</h3>
-      <p>Two actions while Wanted and within <strong>2 km</strong> of a police officer trigger heat <em>escalation</em> using the same 1/r² proximity law (up to +300 heat at point-blank range):</p>
+      <h3>Auto-arrest on teleport</h3>
+      <p>Teleporting while Wanted is considered a direct attempt to evade capture. The following actions trigger an <strong>immediate automatic arrest</strong> (teleport to jail and full confiscation):</p>
       <ul class="govuk-list govuk-list--bullet">
-        <li><strong>Teleporting:</strong> Instantly escalates your heat based on proximity to the nearest officer.</li>
-        <li><strong>Logging out:</strong> Applies the same heat escalation on disconnect. Your Wanted status is <em>not</em> cleared — it persists and resumes when you log back in. No money is confiscated on logout.</li>
+        <li><strong>Teleporting:</strong> Any manual teleport (via <code>/tp</code>, menu, or portals) while Wanted results in immediate arrest.</li>
+        <li><strong>Vehicle Reset:</strong> Using roadside recovery (Rescue) while Wanted results in immediate arrest.</li>
+        <li><strong>Respawning:</strong> Respawning at a hospital or garage while Wanted results in immediate arrest.</li>
+        <li><strong>Logging out:</strong> Your Wanted status persists and resumes when you log back in. If you log back in near police, heat may escalate, but you are not arrested until you teleport or are captured.</li>
       </ul>
 
       <h2 id="setwanted">3. Manual Wanted — <code>/setwanted</code></h2>
@@ -206,8 +206,14 @@ import Sidebar from '../../components/Sidebar.astro';
         <caption>What is confiscated on arrest</caption>
         <thead><tr><th>Source</th><th>Amount</th></tr></thead>
         <tbody>
-          <tr><td>Active Wanted bounty</td><td><code>Wanted.amount</code> — starts at delivery value, grows during police chases</td></tr>
-          <tr><td>Criminal Record confiscatable amount</td><td><code>CriminalRecord.confiscatable_amount</code> — decays over time while online</td></tr>
+          <tr>
+            <td>Active Wanted bounty</td>
+            <td><code>Wanted.amount</code> — starts at delivery value (floored at $50,000), grows during police chases</td>
+          </tr>
+          <tr>
+            <td>Criminal Record confiscatable amount</td>
+            <td><code>CriminalRecord.confiscatable_amount</code> — decays over time while online</td>
+          </tr>
         </tbody>
       </table>
 
@@ -218,15 +224,15 @@ import Sidebar from '../../components/Sidebar.astro';
       </InsetText>
 
       <h3>Bounty growth during police chases</h3>
-      <p>While you are Wanted and police officers are within 500 m, your Wanted bounty increases each tick using the same 1/r² proximity law as heat growth (closer = faster growth). Bounty is separate from heat — it accumulates permanently and is the amount seized on arrest:</p>
+      <p>While you are Wanted and police officers are within 200 m, your Wanted bounty increases each tick using the same 1/r² proximity law as decay reduction (closer = faster growth). Bounty is separate from heat — it accumulates permanently and is the amount seized on arrest:</p>
       <table class="govuk-table">
         <caption>Bounty growth rate by proximity to nearest officer</caption>
         <thead><tr><th>Distance</th><th>Growth rate</th></tr></thead>
         <tbody>
-          <tr><td>10 m (point-blank)</td><td>+$500/s (capped)</td></tr>
+          <tr><td>10 m (point-blank)</td><td>+$500/s</td></tr>
           <tr><td>50 m</td><td>+$200/s</td></tr>
           <tr><td>100 m <em>(reference)</em></td><td>+$50/s</td></tr>
-          <tr><td>≥500 m (escape gate)</td><td>+$0/s</td></tr>
+          <tr><td>≥200 m (escape gate)</td><td>+$0/s</td></tr>
         </tbody>
       </table>
       <p>The Wanted bounty resets to zero when the Wanted status expires (escape). However, your Criminal Record and its confiscatable amount remain — a future arrest will still seize that amount.</p>
