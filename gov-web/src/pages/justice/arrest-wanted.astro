@@ -125,23 +125,31 @@ import Sidebar from '../../components/Sidebar.astro';
         </div>
       </div>
 
-      <h3>Star indicator (W1–W5)</h3>
-      <p>Your Wanted severity is displayed as a star level from W1 to W5. All Wanted statuses begin at <strong>W5 (maximum heat, 300 heat units)</strong>. Stars are based on remaining heat with each band covering 60 units:</p>
+      <h3>Star indicator (***** — 1 to 5 stars)</h3>
+      <p>Your Wanted severity is displayed as asterisk stars in your player tag, from <code>*</code> (1 star) to <code>*****</code> (5 stars). All Wanted statuses begin at <strong>5 stars (maximum heat, 300 heat units)</strong>. Stars are based on remaining heat with each band covering 60 units:</p>
 
       <table class="govuk-table govuk-table--numeric">
         <caption>Star level by remaining heat</caption>
-        <thead><tr><th>Stars</th><th>Remaining heat</th></tr></thead>
+        <thead><tr><th>Stars in tag</th><th>Remaining heat</th><th>Display example</th></tr></thead>
         <tbody>
-          <tr><td style="text-align:left">W5 (max)</td><td>241 – 300</td></tr>
-          <tr><td style="text-align:left">W4</td><td>181 – 240</td></tr>
-          <tr><td style="text-align:left">W3</td><td>121 – 180</td></tr>
-          <tr><td style="text-align:left">W2</td><td>61 – 120</td></tr>
-          <tr><td style="text-align:left">W1</td><td>1 – 60</td></tr>
-          <tr><td style="text-align:left">Expired</td><td>0</td></tr>
+          <tr><td style="text-align:left">***** (max)</td><td>241 – 300</td><td><code>[*****C1] John</code></td></tr>
+          <tr><td style="text-align:left">****</td><td>181 – 240</td><td><code>[****C1] John</code></td></tr>
+          <tr><td style="text-align:left">***</td><td>121 – 180</td><td><code>[***C1] John</code></td></tr>
+          <tr><td style="text-align:left">**</td><td>61 – 120</td><td><code>[**C1] John</code></td></tr>
+          <tr><td style="text-align:left">*</td><td>1 – 60</td><td><code>[*C1] John</code></td></tr>
+          <tr><td style="text-align:left">Expired</td><td>0</td><td><code>[C1] John</code> (stars removed)</td></tr>
         </tbody>
       </table>
 
       <p>You receive an in-game system message each time your star level changes. When fully expired, you are notified and a server-wide announcement confirms your escape.</p>
+
+      <div class="govuk-inset-text">
+        <strong>Tag format:</strong> Wanted stars appear in your player tag between police level and criminal level: <code>[P1*****C1] Name</code>. If you have no criminal record, the tag shows only stars: <code>[*****] Name</code>.
+      </div>
+
+      <div class="govuk-inset-text">
+        <strong>Tag format:</strong> Wanted stars appear in your player tag between police level and criminal level: <code>[P1*****C1] Name</code>. If you have no criminal record, the tag shows only stars: <code>[*****] Name</code>.
+      </div>
 
       <h3>What happens when...</h3>
       
@@ -517,7 +525,7 @@ import Sidebar from '../../components/Sidebar.astro';
       </div>
       <div class="govuk-summary-list__row">
         <dt class="govuk-summary-list__key">Wanted Status</dt>
-        <dd class="govuk-summary-list__value">Temporary police attention that expires over time (5 minutes if avoiding police). Higher star levels (W1–W5) indicate severity.</dd>
+        <dd class="govuk-summary-list__value">Temporary police attention shown as asterisk stars (*) in your player tag. Expires over time (5 minutes if avoiding police). Star level (1–5) indicates severity based on remaining heat.</dd>
       </div>
       <div class="govuk-summary-list__row">
         <dt class="govuk-summary-list__key">Confiscation</dt>
@@ -525,7 +533,11 @@ import Sidebar from '../../components/Sidebar.astro';
       </div>
       <div class="govuk-summary-list__row">
         <dt class="govuk-summary-list__key">[C] Tag</dt>
-        <dd class="govuk-summary-list__value">Visual indicator in your name showing you have an active Criminal Record. Only removed on arrest.</dd>
+        <dd class="govuk-summary-list__value">Visual indicator in your name showing you have an active Criminal Record. Format: <code>[C1]</code>, <code>[C2]</code>, etc. Only removed on arrest.</dd>
+      </div>
+      <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">[*] Tag</dt>
+        <dd class="govuk-summary-list__value">Visual indicator showing Wanted status. One to five asterisks based on remaining heat. Appears between police level and criminal level: <code>[P1*****C1] Name</code>.</dd>
       </div>
       <div class="govuk-summary-list__row">
         <dt class="govuk-summary-list__key">Arrest Zone</dt>
@@ -533,7 +545,7 @@ import Sidebar from '../../components/Sidebar.astro';
       </div>
       <div class="govuk-summary-list__row">
         <dt class="govuk-summary-list__key">Heat</dt>
-        <dd class="govuk-summary-list__value">Numerical value (0–300) representing your Wanted status severity. Decreases over time when avoiding police.</dd>
+        <dd class="govuk-summary-list__value">Numerical value (0–300) representing your Wanted status severity. Decreases over time when avoiding police. Determines star level in your tag.</dd>
       </div>
     </dl>
   </div>
