@@ -284,6 +284,78 @@ details summary {
 details summary:hover { color: var(--gds-blue-dark); }
 details > div { padding: 10px 0 20px; }
 
+/* === Notification Banner === */
+.govuk-notification-banner {
+  position: relative;
+  border: 5px solid var(--gds-black);
+  padding: 0 20px;
+  margin: 30px 0;
+}
+.govuk-notification-banner--warning {
+  border-color: var(--gds-yellow);
+  background: #fff9c4;
+}
+.govuk-notification-banner__wrapper {
+  padding: 15px 0;
+}
+.govuk-notification-banner__heading {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.govuk-notification-banner p {
+  font-size: 19px;
+  margin-bottom: 0;
+}
+
+/* === Summary List === */
+.govuk-summary-list {
+  margin: 20px 0;
+}
+.govuk-summary-list__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--gds-border);
+}
+.govuk-summary-list__row:last-child {
+  border-bottom: none;
+}
+.govuk-summary-list__key {
+  font-weight: 700;
+  width: 200px;
+  flex-shrink: 0;
+}
+.govuk-summary-list__value {
+  flex: 1;
+  min-width: 0;
+}
+.govuk-summary-list--no-border .govuk-summary-list__row {
+  border-bottom: none;
+  padding: 5px 0;
+}
+
+/* === Details component (enhanced) === */
+.govuk-details {
+  margin: 20px 0;
+  border-left: 5px solid var(--gds-mid-grey);
+  padding: 10px 0 10px 20px;
+}
+.govuk-details__summary {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--gds-blue);
+  cursor: pointer;
+  padding: 5px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.govuk-details__summary:hover { color: var(--gds-blue-dark); }
+.govuk-details__text {
+  padding: 10px 0 0;
+}
+
 /* === Metadata === */
 .govuk-metadata {
   font-size: 16px;
@@ -395,6 +467,42 @@ details > div { padding: 10px 0 20px; }
 }
 .govuk-heading-section:first-child {
   margin-top: 0;
+}
+
+/* === Lists with icons === */
+.govuk-list--tick {
+  list-style: none;
+  padding-left: 0;
+}
+.govuk-list--tick li::before {
+  content: "✓";
+  color: var(--gds-green);
+  font-weight: 700;
+  margin-right: 8px;
+}
+.govuk-list--cross {
+  list-style: none;
+  padding-left: 0;
+}
+.govuk-list--cross li::before {
+  content: "✗";
+  color: var(--gds-red);
+  font-weight: 700;
+  margin-right: 8px;
+}
+
+/* === Heading variants === */
+.govuk-heading-l {
+  font-size: 27px;
+  font-weight: 700;
+  margin-top: 30px;
+  margin-bottom: 15px;
+}
+.govuk-heading-m {
+  font-size: 24px;
+  font-weight: 700;
+  margin-top: 25px;
+  margin-bottom: 15px;
 }
 
 /* === Footer === */
