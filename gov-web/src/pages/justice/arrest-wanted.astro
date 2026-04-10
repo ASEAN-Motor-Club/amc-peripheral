@@ -2,13 +2,11 @@
 import GovLayout from '../../layouts/GovLayout.astro';
 import PhaseBanner from '../../components/PhaseBanner.astro';
 import Breadcrumbs from '../../components/Breadcrumbs.astro';
-import SummaryBox from '../../components/SummaryBox.astro';
 import InsetText from '../../components/InsetText.astro';
-import Sidebar from '../../components/Sidebar.astro';
 ---
 <GovLayout title="Arrest & Wanted System" department="Ministry of Justice" description="How the Wanted status, arrest mechanics, confiscation, and police progression work in ASEAN Motor Club.">
 
-<PhaseBanner tag="Policy" text="Updated 8 April 2026" />
+<PhaseBanner tag="Policy" text="Updated 10 April 2026" />
 <Breadcrumbs items={[
   { label: "Justice & Law Enforcement", href: "/justice" },
   { label: "Arrest & Wanted System", href: "/justice/arrest-wanted" },
@@ -41,7 +39,7 @@ import Sidebar from '../../components/Sidebar.astro';
               <span class="govuk-summary-list__value">Expires in 5 minutes (if avoiding police)</span>
             </div>
             <div class="govuk-summary-list__row">
-              <span class="govuk-summary-list__key">Police within 200m</span>
+              <span class="govuk-summary-list__key">Police within 500m</span>
               <span class="govuk-summary-list__value">Cannot expire — decay stops</span>
             </div>
             <div class="govuk-summary-list__row">
@@ -51,14 +49,6 @@ import Sidebar from '../../components/Sidebar.astro';
           </div>
         </div>
       </div>
-
-      <h2 class="govuk-heading-l">Quick Reference</h2>
-      <ul class="govuk-list govuk-list--bullet">
-        <li><strong>Criminal Record [C]:</strong> You get this from delivering illicit cargo — it stays until you're arrested</li>
-        <li><strong>Wanted status:</strong> Extra police attention that expires over time (5 minutes if you avoid police)</li>
-        <li><strong>Arrest:</strong> Police take all your criminal money and send you to jail for 30 seconds</li>
-        <li><strong>Escape:</strong> Stay more than 200m from all police for 5 minutes to clear Wanted status</li>
-      </ul>
 
       <h2 id="criminal-record">1. Criminal Record</h2>
       <p>Your first illicit delivery creates an active <strong>Criminal Record</strong>, applies the <code>[C]</code> tag to your name, and begins accumulating two amounts:</p>
@@ -89,7 +79,7 @@ import Sidebar from '../../components/Sidebar.astro';
       </div>
 
       <h2 id="wanted-status">2. Wanted Status</h2>
-      <p>Deliveries above a value threshold may trigger an additional <strong>Wanted</strong> status on top of the Criminal Record. The probability scales with delivery value — from a <strong>10% floor</strong> on any amount up to <strong>100%</strong> for deliveries worth <strong>$100,000 or more</strong>. Any Wanted status (new or refreshed) is subject to a <strong>minimum bounty of $50,000</strong>. A Wanted status can also be manually applied by on-duty police via <code>/setwanted</code>.</p>
+      <p>Deliveries above a value threshold may trigger an additional <strong>Wanted</strong> status on top of the Criminal Record. The probability scales with delivery value — from a <strong>10% floor</strong> on any amount up to <strong>100%</strong> for deliveries worth <strong>$100,000 or more</strong>. A Wanted status can also be manually applied by on-duty police via <code>/setwanted</code>.</p>
 
       <InsetText>
         <strong>30-second debounce window:</strong> Multiple deliveries within 30 seconds of each other are aggregated before the probability roll. Splitting large cargo into many small deliveries is treated as a single delivery of the combined value.
@@ -97,10 +87,10 @@ import Sidebar from '../../components/Sidebar.astro';
 
       <h3>Time-limited status — police proximity slows decay</h3>
       <p>Wanted heat decays at a <strong>constant rate of 1.0 heat/second</strong> when no police are nearby. A full W5 status (300 heat) expires naturally in <strong>5 minutes</strong> if you avoid all police.</p>
-      <p>When an on-duty officer is within <strong>200 m</strong>, the server <em>reduces</em> the decay rate. The closer the police, the slower your Wanted status expires. Decay never reverses — heat only ever decreases, never increases.</p>
+      <p>When an on-duty officer is within <strong>500 m</strong>, the server <em>reduces</em> the decay rate. The closer the police, the slower your Wanted status expires. Decay never reverses — heat only ever decreases, never increases.</p>
 
       <div class="govuk-inset-text">
-        <strong>Simple rule:</strong> Stay more than 200m away from all police officers and your Wanted status expires in 5 minutes. Get closer and it takes longer.
+        <strong>Simple rule:</strong> Stay more than 500m away from all police officers and your Wanted status expires in 5 minutes. Get closer and it takes longer.
       </div>
 
       <table class="govuk-table">
@@ -108,10 +98,12 @@ import Sidebar from '../../components/Sidebar.astro';
         <thead><tr><th>Distance to police</th><th>Time to expire</th><th>What this means</th></tr></thead>
         <tbody>
           <tr><td>No police nearby</td><td>5 minutes</td><td>Full speed escape</td></tr>
-          <tr><td>200m or more away</td><td>5 minutes</td><td>Full speed escape</td></tr>
-          <tr><td>150m away</td><td>~7 minutes</td><td>Slightly slower</td></tr>
-          <tr><td>100m away</td><td>10 minutes</td><td>Half speed</td></tr>
-          <tr><td>50m away</td><td>~30 minutes</td><td>Very slow decay</td></tr>
+          <tr><td>500m or more away</td><td>5 minutes</td><td>Full speed escape</td></tr>
+          <tr><td>400m away</td><td>~6 minutes</td><td>Slightly slower</td></tr>
+          <tr><td>300m away</td><td>~8 minutes</td><td>Moderately slower</td></tr>
+          <tr><td>200m away</td><td>~12 minutes</td><td>Half speed</td></tr>
+          <tr><td>100m away</td><td>~30 minutes</td><td>Very slow decay</td></tr>
+          <tr><td>50m away</td><td>~45 minutes</td><td>Almost frozen</td></tr>
           <tr><td>10m away (point-blank)</td><td>~55 minutes</td><td>Almost frozen</td></tr>
         </tbody>
       </table>
@@ -121,7 +113,7 @@ import Sidebar from '../../components/Sidebar.astro';
           <h3 class="govuk-notification-banner__heading" id="cannot-expire-warning">
             Cannot Escape While Police Are Close
           </h3>
-          <p>Wanted status <strong>cannot expire</strong> while any officer is within 200m — your heat is clamped at a minimum of 1 star (W1). Once all officers are beyond 200m, the restriction lifts and natural decay brings it to zero automatically.</p>
+          <p>Wanted status <strong>cannot expire</strong> while any officer is within 500m — your heat is clamped at a minimum of 1 star (W1). Once all officers are beyond 500m, the restriction lifts and natural decay brings it to zero automatically.</p>
         </div>
       </div>
 
@@ -143,14 +135,6 @@ import Sidebar from '../../components/Sidebar.astro';
 
       <p>You receive an in-game system message each time your star level changes. When fully expired, you are notified and a server-wide announcement confirms your escape.</p>
 
-      <div class="govuk-inset-text">
-        <strong>Tag format:</strong> Wanted stars appear in your player tag between police level and criminal level: <code>[P1*****C1] Name</code>. If you have no criminal record, the tag shows only stars: <code>[*****] Name</code>.
-      </div>
-
-      <div class="govuk-inset-text">
-        <strong>Tag format:</strong> Wanted stars appear in your player tag between police level and criminal level: <code>[P1*****C1] Name</code>. If you have no criminal record, the tag shows only stars: <code>[*****] Name</code>.
-      </div>
-
       <h3>What happens when...</h3>
       
       <div class="govuk-details" data-module="govuk-details">
@@ -163,7 +147,7 @@ import Sidebar from '../../components/Sidebar.astro';
           <ul class="govuk-list govuk-list--bullet">
             <li>You get a Criminal Record [C] tag on your name</li>
             <li>You may become Wanted (higher delivery value = higher chance)</li>
-            <li>Your Wanted bounty starts at the delivery value (minimum $50,000)</li>
+            <li>Your Wanted bounty starts at $0 — it only grows when police chase you</li>
             <li>Money accumulates in your criminal account</li>
           </ul>
         </div>
@@ -234,7 +218,7 @@ import Sidebar from '../../components/Sidebar.astro';
         <div class="govuk-details__text">
           <p>To clear your Wanted status:</p>
           <ol class="govuk-list govuk-list--number">
-            <li>Stay more than 200m away from ALL police officers</li>
+            <li>Stay more than 500m away from ALL police officers</li>
             <li>Wait 5 minutes (do not teleport or log out)</li>
             <li>Watch your star level decrease (W5 → W4 → W3 → W2 → W1 → Expired)</li>
             <li>When expired, you'll get a notification and a server-wide "escaped" announcement</li>
@@ -369,7 +353,7 @@ import Sidebar from '../../components/Sidebar.astro';
         <tbody>
           <tr>
             <td>Active Wanted bounty</td>
-            <td><code>Wanted.amount</code> — starts at delivery value (floored at $50,000), grows during police chases</td>
+            <td><code>Wanted.amount</code> — starts at $0, grows during police chases</td>
           </tr>
           <tr>
             <td>Criminal Record confiscatable amount</td>
@@ -385,21 +369,22 @@ import Sidebar from '../../components/Sidebar.astro';
       </InsetText>
 
       <h3>Bounty growth during police chases</h3>
-      <p>While you are Wanted and police officers are within 200 m, your Wanted bounty increases. The closer the police, the faster your bounty grows. Bounty is separate from heat — it accumulates permanently and is the amount seized on arrest:</p>
+      <p>While you are Wanted and police officers are within 500 m, your Wanted bounty increases. The closer the police, the faster your bounty grows (up to $100/s). Bounty is separate from heat — it accumulates permanently and is the amount seized on arrest:</p>
       <table class="govuk-table">
         <caption>Bounty growth rate by proximity to nearest officer</caption>
         <thead><tr><th>Distance</th><th>Growth rate</th><th>What this means</th></tr></thead>
         <tbody>
-          <tr><td>10 m (point-blank)</td><td>+$500/s</td><td>$30,000 per minute</td></tr>
-          <tr><td>50 m</td><td>+$200/s</td><td>$12,000 per minute</td></tr>
-          <tr><td>100 m <em>(reference)</em></td><td>+$50/s</td><td>$3,000 per minute</td></tr>
-          <tr><td>≥200 m (escape gate)</td><td>+$0/s</td><td>No growth — escape!</td></tr>
+          <tr><td>100 m or closer</td><td>+$100/s (capped)</td><td>$6,000 per minute</td></tr>
+          <tr><td>200 m</td><td>+$50/s</td><td>$3,000 per minute</td></tr>
+          <tr><td>300 m</td><td>+$33/s</td><td>~$2,000 per minute</td></tr>
+          <tr><td>500 m</td><td>+$20/s</td><td>$1,200 per minute</td></tr>
+          <tr><td>&gt;500 m</td><td>+$0/s</td><td>No growth — escape!</td></tr>
         </tbody>
       </table>
       <p>The Wanted bounty resets to zero when the Wanted status expires (escape). However, your Criminal Record and its confiscatable amount remain — a future arrest will still seize that amount.</p>
 
       <div class="govuk-inset-text">
-        <strong>Example chase:</strong> If you're Wanted with $50,000 bounty and a cop stays 100m away for 2 minutes, your bounty grows by $6,000 (to $56,000). If arrested, the full $56,000 is confiscated.
+        <strong>Example chase:</strong> You become Wanted with $0 bounty. A cop stays 200 m away for 3 minutes — your bounty grows by $9,000. Get closer and it grows faster. If arrested, the bounty plus your Criminal Record confiscatable amount is seized.
       </div>
 
       <h3>What happens to confiscated money</h3>
