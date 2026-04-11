@@ -174,40 +174,37 @@ class TranslationCog(commands.Cog):
         """
         for attempt in range(2):  # max 2 attempts
             try:
-                # Try native structured output first
-                try:
-                    completion = await self.openai_client_openrouter.beta.chat.completions.parse(
-                        model=TRANSLATION_AI_MODEL,
-                        messages=messages,
-                        response_format=model_cls,
-                        max_tokens=max_tokens,
-                    )
-                    result = self._parse_completion(model_cls, completion)
-                    if result:
-                        log.info(f"Translation result ({model_cls.__name__}): {result}")
-                    return result
-                except Exception as e:
-                    # beta.parse() can crash if model returns non-JSON (logprobs, etc.)
-                    log.warning(f"beta.parse() failed ({type(e).__name__}), falling back to raw completion")
-                    
-                    # Fall back to raw completion with json_object mode
-                    completion = await self.openai_client_openrouter.chat.completions.create(
-                        model=TRANSLATION_AI_MODEL,
-                        messages=messages,
-                        response_format={"type": "json_object"},
-                        max_tokens=max_tokens,
-                    )
-                    result = self._parse_completion(model_cls, completion)
-                    if result:
-                        log.info(f"Translation result via fallback ({model_cls.__name__}): {result}")
+                # We skip beta.parse() because "strict" JSON schema masking 
+                # on non-OpenAI open-source models often causes catastrophic 
+                # token repetition loops (the model hallucinates spaces/dots).
+                schema_json = model_cls.model_json_schema()
+                prompt_injection = f"\n\nYou MUST respond with perfectly formatted JSON. Use the following JSON schema:\n{schema_json}"
+                
+                # Clone messages and inject schema into system prompt
+                run_messages = messages.copy()
+                if run_messages and run_messages[0]["role"] == "system":
+                    run_messages[0] = {"role": "system", "content": run_messages[0]["content"] + prompt_injection}
+                
+                completion = await self.openai_client_openrouter.chat.completions.create(
+                    model=TRANSLATION_AI_MODEL,
+                    messages=run_messages,
+                    response_format={"type": "json_object"},
+                    max_tokens=max_tokens,
+                )
+                
+                result = self._parse_completion(model_cls, completion)
+                if result:
+                    log.info(f"Translation result via raw completion ({model_cls.__name__}): {result}")
                     return result
             except Exception as e:
+                # If we hit an exception from _parse_completion (like ValueError) or network error
                 if attempt == 0:
                     log.warning(f"Translation attempt failed, retrying in 1s: {e}")
                     await asyncio.sleep(1)
                 else:
                     log.error(f"Translation failed after retry: {e}", exc_info=True)
                     return None
+
         return None
 
     # --- Translation Methods ---
