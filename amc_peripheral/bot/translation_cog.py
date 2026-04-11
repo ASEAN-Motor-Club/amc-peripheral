@@ -189,7 +189,7 @@ class TranslationCog(commands.Cog):
                     model=TRANSLATION_AI_MODEL,
                     messages=run_messages,
                     max_tokens=max_tokens,
-                    extra_body={"provider": {"order": ["Parasail"]}}
+                    extra_body={"provider": {"order": ["parasail"]}}
                 )
                 
                 result = self._parse_completion(model_cls, completion)
