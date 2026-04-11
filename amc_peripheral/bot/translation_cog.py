@@ -147,22 +147,23 @@ class TranslationCog(commands.Cog):
         # Fallback: extract JSON from content
         content = msg.content
         if not content:
-            log.warning("Translation model returned empty content (parsed=None)")
-            return None
+            raise ValueError("Translation model returned empty content (parsed=None)")
         
         # Strip <think>...</think> blocks from thinking models
         cleaned = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
         
+        # Extract JSON from markdown blocks if present
+        match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', cleaned, re.DOTALL)
+        if match:
+            cleaned = match.group(1).strip()
+            
         try:
             result = model_cls.model_validate_json(cleaned)
             log.info(f"Recovered translation via fallback parsing ({model_cls.__name__})")
             return result
         except Exception as e:
-            log.error(
-                f"Failed to parse translation response as {model_cls.__name__}: {e}, "
-                f"content: {cleaned[:300]}"
-            )
-            return None
+            msg_prefix = cleaned[:300].replace('\n', ' ')
+            raise ValueError(f"Failed to parse as {model_cls.__name__}: {e}. Content preview: {msg_prefix}")
 
     async def _translate_structured(self, model_cls, messages, max_tokens=2048):
         """Call the translation model with structured output, with fallback and retry.
