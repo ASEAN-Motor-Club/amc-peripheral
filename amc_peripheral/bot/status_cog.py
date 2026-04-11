@@ -70,11 +70,14 @@ class StatusCog(commands.Cog):
         if channel.name == name:
             return  # Already correct, skip API call
 
-        try:
-            await channel.edit(name=name)
-            log.info(f"Status channel updated to: {name}")
-        except discord.HTTPException as e:
-            log.error(f"Failed to update status channel name: {e}")
+        # DISABLED: Channel renaming triggers Discord 429 rate limits, 
+        # which heavily sleep the main event loop and cause translation delays.
+        log.info(f"Status channel would have updated to: {name} (disabled to prevent rate limit)")
+        # try:
+        #     await channel.edit(name=name)
+        #     log.info(f"Status channel updated to: {name}")
+        # except discord.HTTPException as e:
+        #     log.error(f"Failed to update status channel name: {e}")
 
     @tasks.loop(seconds=30)
     async def check_server_status(self):
