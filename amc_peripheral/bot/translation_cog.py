@@ -237,12 +237,17 @@ class TranslationCog(commands.Cog):
         
         return None, message
     
-    def format_with_username(self, username: str | None, content: str, is_bot: bool = False) -> str:
+    def format_with_username(self, username: str | None, content: str, is_bot: bool = False, original_content: str | None = None) -> str:
         """Format message with username if provided and not from bot.
         """
+        formatted = content
         if username and not is_bot:
-            return f"**{username}**: {content}"
-        return content
+            formatted = f"**{username}**: {content}"
+            
+        if original_content and str(content).strip().lower() != str(original_content).strip().lower():
+            formatted += f"\n-# {original_content}"
+            
+        return formatted
 
     # --- Translation Methods ---
 
@@ -435,7 +440,7 @@ class TranslationCog(commands.Cog):
                         channel = self.bot.get_channel(LANGUAGE_CHANNELS.get(lang_key))
                         if channel:
                             # pyrefly: ignore [missing-attribute]
-                            formatted = self.format_with_username(player_name, str(translated_text))
+                            formatted = self.format_with_username(player_name, str(translated_text), original_content=message_content)
                             await channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     
                 except Exception as e:
@@ -498,7 +503,7 @@ class TranslationCog(commands.Cog):
                                 formatted = self.format_with_username(
                                     username or message.author.display_name,
                                     translated_text,
-                                    is_bot=(message.author == self.bot.user)
+                                    is_bot=(message.author == self.bot.user), original_content=_
                                 )
                                 await target_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                         except Exception as e:
@@ -528,7 +533,7 @@ class TranslationCog(commands.Cog):
                         formatted = self.format_with_username(
                             username or message.author.display_name,
                             translation,
-                            is_bot=(message.author == self.bot.user)
+                            is_bot=(message.author == self.bot.user), original_content=_
                         )
                         await gen_chan.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     # Track context for future translations
@@ -564,7 +569,7 @@ class TranslationCog(commands.Cog):
                                 formatted = self.format_with_username(
                                     username or message.author.display_name,
                                     translated_text,
-                                    is_bot=(message.author == self.bot.user)
+                                    is_bot=(message.author == self.bot.user), original_content=_
                                 )
                                 await target_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                         except Exception as e:
@@ -595,7 +600,7 @@ class TranslationCog(commands.Cog):
                     chinese_channel = self.bot.get_channel(ECO_GAME_CHAT_CHINESE_CHANNEL_ID)
                     if chinese_channel and result and result.translation:
                         formatted = self.format_with_username(
-                            username, result.translation, is_bot=(message.author == self.bot.user and not username)
+                            username, result.translation, is_bot=(message.author == self.bot.user and not username), original_content=_
                         )
                         await chinese_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
 
@@ -627,7 +632,7 @@ class TranslationCog(commands.Cog):
                     eco_channel = self.bot.get_channel(ECO_GAME_CHAT_CHANNEL_ID)
                     if eco_channel and result and result.translation:
                         formatted = self.format_with_username(
-                            username, result.translation, is_bot=(message.author == self.bot.user and not username)
+                            username, result.translation, is_bot=(message.author == self.bot.user and not username), original_content=_
                         )
                         await eco_channel.send(formatted, allowed_mentions=discord.AllowedMentions.none())
                     
