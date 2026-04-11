@@ -35,7 +35,7 @@ DENO_PATH = os.environ.get("DENO_PATH")
 
 # AI Config
 DEFAULT_AI_MODEL = os.environ.get("DEFAULT_AI_MODEL", "xiaomi/mimo-v2-pro")
-TRANSLATION_AI_MODEL = os.environ.get("TRANSLATION_AI_MODEL", "google/gemma-4-31b-it")
+TRANSLATION_AI_MODEL = os.environ.get("TRANSLATION_AI_MODEL", "google/gemini-2.0-flash-001")
 LOCAL_TIMEZONE = os.environ.get("LOCAL_TIMEZONE", "Asia/Bangkok")
 
 # Bot Agentic Loop Configuration
