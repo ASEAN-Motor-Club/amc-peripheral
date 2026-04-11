@@ -188,7 +188,6 @@ class TranslationCog(commands.Cog):
                 completion = await self.openai_client_openrouter.chat.completions.create(
                     model=TRANSLATION_AI_MODEL,
                     messages=run_messages,
-                    response_format={"type": "json_object"},
                     max_tokens=max_tokens,
                 )
                 
