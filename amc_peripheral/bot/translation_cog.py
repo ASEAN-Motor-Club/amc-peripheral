@@ -181,7 +181,10 @@ class TranslationCog(commands.Cog):
                         response_format=model_cls,
                         max_tokens=max_tokens,
                     )
-                    return self._parse_completion(model_cls, completion)
+                    result = self._parse_completion(model_cls, completion)
+                    if result:
+                        log.info(f"Translation result ({model_cls.__name__}): {result}")
+                    return result
                 except Exception as e:
                     # beta.parse() can crash if model returns non-JSON (logprobs, etc.)
                     log.warning(f"beta.parse() failed ({type(e).__name__}), falling back to raw completion")
@@ -193,7 +196,10 @@ class TranslationCog(commands.Cog):
                         response_format={"type": "json_object"},
                         max_tokens=max_tokens,
                     )
-                    return self._parse_completion(model_cls, completion)
+                    result = self._parse_completion(model_cls, completion)
+                    if result:
+                        log.info(f"Translation result via fallback ({model_cls.__name__}): {result}")
+                    return result
             except Exception as e:
                 if attempt == 0:
                     log.warning(f"Translation attempt failed, retrying in 1s: {e}")
@@ -274,10 +280,14 @@ class TranslationCog(commands.Cog):
                 {
                     "role": "system",
                     "content": (
-                        "Translate message into English, Chinese, Indonesian, Thai, Vietnamese and Japanese. "
-                        "Casual tone, no rude words. Handle slash commands by only translating params. "
-                        "Auto-detect source language. If message is already in a target language, return it as is for that language. "
-                        "If the message starts with a username, translate only the message content. "
+                        "You are a game chat translator. Translate the message into all 6 languages: English, Chinese, Indonesian, Thai, Vietnamese, and Japanese.\n\n"
+                        "CRITICAL RULES:\n"
+                        "- NEVER return '...' or ellipsis or empty strings. Every language field MUST contain a real translation or the original text.\n"
+                        "- If the message is in English: set the 'english' field to the EXACT original text, then translate into the other 5 languages.\n"
+                        "- If the message is in a non-English language (e.g. Chinese): translate it into English and the other languages, and set that source language field to the original text.\n"
+                        "- Even short, informal, or slang messages (e.g. 'lol', 'ok', 'nice one') MUST be translated — use equivalent casual expressions in each language.\n"
+                        "- If the message starts with a username prefix, translate only the content after it.\n"
+                        "- Casual tone, no rude words. Handle slash commands by only translating params.\n"
                         f"\n\nGLOSSARY:\n{GAME_GLOSSARY}\n\nCULTURAL ADAPTATION:\n{CULTURAL_ADAPTATION}"
                     ),
                 },
@@ -382,14 +392,29 @@ class TranslationCog(commands.Cog):
 
             async def translate_game():
                 try:
+                    log.info(
+                        f"[TRANSLATE_IN] player={clean_player_name!r} "
+                        f"content={message_content!r} "
+                        f"context_len={len(self.messages)}"
+                    )
                     # Translate to all languages
                     result = await self.translate_multi_with_english(
                         clean_player_name, message_content, self.messages[-10:]
                     )
                     
                     if not result:
-                        log.warning("Translation returned None for game message")
+                        log.warning(f"[TRANSLATE_OUT] player={clean_player_name!r} result=None")
                         return
+                    
+                    log.info(
+                        f"[TRANSLATE_OUT] player={clean_player_name!r} "
+                        f"en={result.english!r} "
+                        f"zh={result.chinese!r} "
+                        f"id={result.indonesian!r} "
+                        f"th={result.thai!r} "
+                        f"vi={result.vietnamese!r} "
+                        f"ja={result.japanese!r}"
+                    )
                     
                     # Send to each language channel, skipping garbage translations
                     lang_fields = [
@@ -403,7 +428,11 @@ class TranslationCog(commands.Cog):
                     for lang_key, translated_text in lang_fields:
                         if is_garbage_translation(translated_text):
                             if translated_text:
-                                log.warning(f"Garbage translation detected for {lang_key}: {translated_text[:100]}")
+                                log.warning(
+                                    f"[TRANSLATE_GARBAGE] lang={lang_key} "
+                                    f"text={translated_text!r} "
+                                    f"original={message_content!r}"
+                                )
                             continue
                         channel = self.bot.get_channel(LANGUAGE_CHANNELS.get(lang_key))
                         if channel:
