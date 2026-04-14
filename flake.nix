@@ -101,18 +101,6 @@
               stages = ["pre-push"];
             };
 
-            # Custom hook for pyrefly type checking
-            # Wrap in sh -c to set PATH so pyrefly's fallback interpreter finds hookVirtualenv
-            pyrefly = {
-              enable = true;
-              name = "pyrefly";
-              description = "Type check with pyrefly";
-              entry = "sh -c 'PATH=${hookVirtualenv}/bin:$PATH ${hookVirtualenv}/bin/pyrefly check .'";
-              language = "system";
-              pass_filenames = false;
-              stages = ["pre-push"];
-            };
-
             # Custom hook for pytest
             pytest = {
               enable = true;
