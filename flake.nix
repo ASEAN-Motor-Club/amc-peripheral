@@ -69,9 +69,11 @@
         # See: https://pyproject-nix.github.io/uv2nix/overriding/index.html
         pyprojectOverrides = final: prev: {
           pypika = prev.pypika.overrideAttrs (old: {
-            nativeBuildInputs = (old.nativeBuildInputs or []) ++ [
-              (final.resolveBuildSystem { setuptools = []; })
-            ];
+            nativeBuildInputs =
+              (old.nativeBuildInputs or [])
+              ++ [
+                (final.resolveBuildSystem {setuptools = [];})
+              ];
           });
         };
 
@@ -119,13 +121,15 @@
           virtualenv = editablePythonSet.mkVirtualEnv "amc-peripheral-dev-env" workspace.deps.all;
         in
           pkgs.mkShell {
-            packages = [
-              virtualenv
-              pkgs.uv
-              pkgs.ffmpeg
-              pkgs.pkg-config
-              pkgs.gh
-            ] ++ config.pre-commit.settings.enabledPackages;
+            packages =
+              [
+                virtualenv
+                pkgs.uv
+                pkgs.ffmpeg
+                pkgs.pkg-config
+                pkgs.gh
+              ]
+              ++ config.pre-commit.settings.enabledPackages;
             env = {
               UV_NO_SYNC = "1";
               UV_PYTHON = editablePythonSet.python.interpreter;
@@ -262,10 +266,9 @@
             };
           };
 
-
           config = lib.mkIf cfg.enable {
             # Apply Sharry's overlay to make pkgs.sharry available
-            nixpkgs.overlays = [ inputs.sharry.overlays.default ];
+            nixpkgs.overlays = [inputs.sharry.overlays.default];
 
             # Icecast streaming server
             services.icecast = {
@@ -493,7 +496,6 @@
                 ${self.packages.${pkgs.system}.default}/bin/amc_bot
               '';
             };
-
 
             # Tire Mod Build API
             systemd.services.amc-mods = {
