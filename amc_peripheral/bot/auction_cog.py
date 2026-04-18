@@ -62,6 +62,29 @@ class AuctionCog(commands.Cog):
 
     # --- Backend API helpers ---
 
+    async def _get_characters(self, discord_id: str) -> list[dict]:
+        """Fetch all characters with balances for a player from the backend."""
+        url = f"{BACKEND_API_URL}/api/auction/characters/?player_id={discord_id}"
+        try:
+            async with self.bot.http_session.get(url) as resp:
+                if resp.status != 200:
+                    return []
+                data = await resp.json()
+                return data.get("characters", [])
+        except Exception:
+            return []
+
+    async def _character_autocomplete(
+        self, interaction: discord.Interaction, current: str,
+    ) -> list[app_commands.Choice[str]]:
+        characters = await self._get_characters(str(interaction.user.id))
+        choices = []
+        for char in characters[:25]:
+            name = f"{char['character_name']} — ${char['balance']:,}"
+            if current.lower() in name.lower() or current.lower() in char["character_name"].lower():
+                choices.append(app_commands.Choice(name=name, value=str(char["character_id"])))
+        return choices
+
     async def _escrow(self, discord_id: str, amount: int, character_id: int | None = None) -> tuple[int | None, int | None, str | None]:
         """Escrow funds from a player's bank account.
 
@@ -278,7 +301,9 @@ class AuctionCog(commands.Cog):
         finalisation_window="Time after last bid before closing (default: 5m)",
         image_url="Optional image URL",
         seller_type="Who receives the payment: player or treasury (default: player)",
+        seller_character="Which character receives payment (player sales only)",
     )
+    @app_commands.autocomplete(seller_character=_character_autocomplete)
     async def auction_create(
         self,
         interaction: discord.Interaction,
@@ -290,6 +315,7 @@ class AuctionCog(commands.Cog):
         finalisation_window: str = "5m",
         image_url: str = "",
         seller_type: str = "player",
+        seller_character: str | None = None,
     ):
         if not _is_admin(interaction.user):
             return await interaction.response.send_message(
@@ -344,14 +370,17 @@ class AuctionCog(commands.Cog):
         # Resolve seller character for player-type auctions
         seller_character_id = 0
         if seller_type == "player":
-            balance_url = f"{BACKEND_API_URL}/api/auction/balance/?player_id={interaction.user.id}"
-            try:
-                async with self.bot.http_session.get(balance_url) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        seller_character_id = data.get("character_id", 0)
-            except Exception:
-                pass
+            if seller_character:
+                seller_character_id = int(seller_character)
+            else:
+                balance_url = f"{BACKEND_API_URL}/api/auction/balance/?player_id={interaction.user.id}"
+                try:
+                    async with self.bot.http_session.get(balance_url) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            seller_character_id = data.get("character_id", 0)
+                except Exception:
+                    pass
 
         closes_at = (datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)).isoformat()
 
@@ -381,8 +410,12 @@ class AuctionCog(commands.Cog):
         log.info("Auction #%d created by %s: %s", auction_id, interaction.user.display_name, name)
 
     @auction_group.command(name="bid", description="Place a bid on the active auction")
-    @app_commands.describe(amount="Your bid amount (must exceed current highest bid + min increment)")
-    async def auction_bid(self, interaction: discord.Interaction, amount: int):
+    @app_commands.describe(
+        amount="Your bid amount (must exceed current highest bid + min increment)",
+        character="Which character's bank account to escrow from",
+    )
+    @app_commands.autocomplete(character=_character_autocomplete)
+    async def auction_bid(self, interaction: discord.Interaction, amount: int, character: str | None = None):
         channel_id = str(interaction.channel_id)
         auction = self.db.get_active_auction(channel_id)
 
@@ -435,7 +468,8 @@ class AuctionCog(commands.Cog):
                 )
 
         # Step 2: Escrow the new bid amount
-        balance, character_id, escrow_error = await self._escrow(bidder_id, amount)
+        character_id_int = int(character) if character else None
+        balance, character_id, escrow_error = await self._escrow(bidder_id, amount, character_id=character_id_int)
         if escrow_error:
             return await interaction.response.send_message(escrow_error, ephemeral=True)
 
