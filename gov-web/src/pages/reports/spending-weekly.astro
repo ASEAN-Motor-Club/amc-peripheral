@@ -113,7 +113,7 @@ import InsetText from '../../components/InsetText.astro';
         <!-- Subsidy Rules -->
         <h3 id="subsidy-rules">Active Subsidy Rules</h3>
         <table class="govuk-table govuk-table--numeric" id="rules-table">
-          <thead><tr><th style="text-align:left">Rule</th><th>Rate</th><th>Lifetime Spent</th></tr></thead>
+          <thead><tr><th style="text-align:left">Rule</th><th>Rate</th><th>This Week</th></tr></thead>
           <tbody id="rules-tbody"></tbody>
         </table>
 
@@ -532,9 +532,9 @@ import InsetText from '../../components/InsetText.astro';
       const rulesTbody = document.getElementById('rules-tbody');
       rulesTbody.innerHTML = '';
       for (const rule of spending.active_subsidy_rules) {
-        const rate = rule.reward_type === 'PERCENTAGE' ? `${rule.reward_value.toFixed(0)}%` : `$${fmt(rule.reward_value)}`;
+        const rate = rule.reward_type === 'PERCENTAGE' ? `${(rule.reward_value * 100).toFixed(0)}%` : `$${fmt(rule.reward_value)}`;
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td style="text-align:left">${rule.name}</td><td>${rate}</td><td>${fmt(rule.spent)}</td>`;
+        tr.innerHTML = `<td style="text-align:left">${rule.name}</td><td>${rate}</td><td>${fmt(rule.weekly_spent)}</td>`;
         rulesTbody.appendChild(tr);
       }
 
