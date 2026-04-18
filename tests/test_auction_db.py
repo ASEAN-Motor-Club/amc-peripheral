@@ -22,6 +22,7 @@ def _create_auction(db, **kwargs):
         "creator_id": "999",
         "creator_name": "Admin",
         "seller_type": "player",
+        "seller_character_id": 0,
         "closes_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
     }
     defaults.update(kwargs)
@@ -56,6 +57,7 @@ class TestAuctionDB:
             auction_id=auction_id,
             bidder_id="111",
             bidder_name="Alice",
+            bidder_character_id=42,
             amount=1500,
             escrowed_amount=1500,
         )
@@ -66,9 +68,9 @@ class TestAuctionDB:
 
     def test_place_bid_increments_total(self, db):
         auction_id = _create_auction(db)
-        db.place_bid(auction_id=auction_id, bidder_id="1", bidder_name="A", amount=1500, escrowed_amount=1500)
-        db.place_bid(auction_id=auction_id, bidder_id="2", bidder_name="B", amount=2000, escrowed_amount=2000)
-        db.place_bid(auction_id=auction_id, bidder_id="1", bidder_name="A", amount=2500, escrowed_amount=2500)
+        db.place_bid(auction_id=auction_id, bidder_id="1", bidder_name="A", bidder_character_id=1, amount=1500, escrowed_amount=1500)
+        db.place_bid(auction_id=auction_id, bidder_id="2", bidder_name="B", bidder_character_id=2, amount=2000, escrowed_amount=2000)
+        db.place_bid(auction_id=auction_id, bidder_id="1", bidder_name="A", bidder_character_id=1, amount=2500, escrowed_amount=2500)
         auction = db.get_auction(auction_id)
         assert auction["total_bids"] == 3
 
@@ -78,6 +80,7 @@ class TestAuctionDB:
             auction_id=auction_id,
             bidder_id="111",
             bidder_name="Alice",
+            bidder_character_id=42,
             amount=1500,
         )
         bid = list(db.db["auction_bids"].rows_where("id = ?", [bid_id]))[0]
@@ -89,6 +92,7 @@ class TestAuctionDB:
             auction_id=auction_id,
             bidder_id="111",
             bidder_name="Alice",
+            bidder_character_id=42,
             amount=1500,
             escrowed_amount=1500,
         )
@@ -98,8 +102,8 @@ class TestAuctionDB:
 
     def test_get_bidder_active_bid(self, db):
         auction_id = _create_auction(db)
-        db.place_bid(auction_id=auction_id, bidder_id="111", bidder_name="Alice", amount=1500, escrowed_amount=1500)
-        db.place_bid(auction_id=auction_id, bidder_id="222", bidder_name="Bob", amount=2000, escrowed_amount=2000)
+        db.place_bid(auction_id=auction_id, bidder_id="111", bidder_name="Alice", bidder_character_id=1, amount=1500, escrowed_amount=1500)
+        db.place_bid(auction_id=auction_id, bidder_id="222", bidder_name="Bob", bidder_character_id=2, amount=2000, escrowed_amount=2000)
 
         bid = db.get_bidder_active_bid(auction_id, "111")
         assert bid is not None
@@ -110,8 +114,8 @@ class TestAuctionDB:
 
     def test_get_escrowed_bids(self, db):
         auction_id = _create_auction(db)
-        db.place_bid(auction_id=auction_id, bidder_id="1", bidder_name="A", amount=1500, escrowed_amount=1500)
-        db.place_bid(auction_id=auction_id, bidder_id="2", bidder_name="B", amount=2000, escrowed_amount=0)
+        db.place_bid(auction_id=auction_id, bidder_id="1", bidder_name="A", bidder_character_id=1, amount=1500, escrowed_amount=1500)
+        db.place_bid(auction_id=auction_id, bidder_id="2", bidder_name="B", bidder_character_id=2, amount=2000, escrowed_amount=0)
 
         escrowed = db.get_escrowed_bids(auction_id)
         assert len(escrowed) == 1
@@ -127,8 +131,8 @@ class TestAuctionDB:
         a1 = _create_auction(db, channel_id="111")
         a2 = _create_auction(db, channel_id="222")
 
-        db.place_bid(auction_id=a1, bidder_id="1", bidder_name="A", amount=1500, escrowed_amount=1500)
-        db.place_bid(auction_id=a2, bidder_id="2", bidder_name="B", amount=3000, escrowed_amount=3000)
+        db.place_bid(auction_id=a1, bidder_id="1", bidder_name="A", bidder_character_id=1, amount=1500, escrowed_amount=1500)
+        db.place_bid(auction_id=a2, bidder_id="2", bidder_name="B", bidder_character_id=2, amount=3000, escrowed_amount=3000)
 
         all_escrowed = db.get_all_escrowed_bids()
         assert len(all_escrowed) == 2

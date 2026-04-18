@@ -28,6 +28,7 @@ class AuctionDB:
                     "creator_id": str,
                     "creator_name": str,
                     "seller_type": str,
+                    "seller_character_id": int,
                     "status": str,
                     "highest_bid": int,
                     "highest_bidder_id": str,
@@ -53,6 +54,7 @@ class AuctionDB:
                     "auction_id": int,
                     "bidder_id": str,
                     "bidder_name": str,
+                    "bidder_character_id": int,
                     "amount": int,
                     "escrowed_amount": int,
                     "bid_at": str,
@@ -78,6 +80,7 @@ class AuctionDB:
         creator_id: str,
         creator_name: str,
         seller_type: str,
+        seller_character_id: int,
         closes_at: str,
     ) -> int:
         now = datetime.now(timezone.utc).isoformat()
@@ -93,6 +96,7 @@ class AuctionDB:
             "creator_id": creator_id,
             "creator_name": creator_name,
             "seller_type": seller_type,
+            "seller_character_id": seller_character_id,
             "status": "open",
             "highest_bid": starting_price,
             "highest_bidder_id": "",
@@ -131,6 +135,7 @@ class AuctionDB:
         auction_id: int,
         bidder_id: str,
         bidder_name: str,
+        bidder_character_id: int,
         amount: int,
         escrowed_amount: int = 0,
     ) -> int:
@@ -139,6 +144,7 @@ class AuctionDB:
             "auction_id": auction_id,
             "bidder_id": bidder_id,
             "bidder_name": bidder_name,
+            "bidder_character_id": bidder_character_id,
             "amount": amount,
             "escrowed_amount": escrowed_amount,
             "bid_at": now,

@@ -62,39 +62,41 @@ class AuctionCog(commands.Cog):
 
     # --- Backend API helpers ---
 
-    async def _escrow(self, discord_id: str, amount: int) -> tuple[int | None, str | None]:
+    async def _escrow(self, discord_id: str, amount: int, character_id: int | None = None) -> tuple[int | None, int | None, str | None]:
         """Escrow funds from a player's bank account.
 
-        Returns (balance, error_message).
-        On success: (post_escrow_balance, None).
-        On failure: (None, error_string).
+        Returns (post_escrow_balance, character_id, error_message).
+        On success: (balance, character_id, None).
+        On failure: (None, None, error_string).
         """
         url = f"{BACKEND_API_URL}/api/auction/escrow/"
+        payload: dict = {"player_discord_id": discord_id, "amount": amount}
+        if character_id is not None:
+            payload["character_id"] = character_id
         try:
-            async with self.bot.http_session.post(
-                url, json={"player_discord_id": discord_id, "amount": amount}
-            ) as resp:
+            async with self.bot.http_session.post(url, json=payload) as resp:
                 if resp.status == 409:
                     data = await resp.json()
-                    return None, data.get("error", "Insufficient funds.")
+                    return None, None, data.get("error", "Insufficient funds.")
                 if resp.status == 404:
-                    return None, "Could not find your bank account. Are you registered in-game?"
+                    return None, None, "Could not find your bank account. Are you registered in-game?"
                 if resp.status != 200:
                     log.warning("Auction escrow returned %d", resp.status)
-                    return None, "Escrow service unavailable. Try again later."
+                    return None, None, "Escrow service unavailable. Try again later."
                 data = await resp.json()
-                return data.get("balance", 0), None
+                return data.get("balance", 0), data.get("character_id"), None
         except Exception as e:
             log.error("Auction escrow failed: %s", e)
-            return None, "Escrow service unavailable. Try again later."
+            return None, None, "Escrow service unavailable. Try again later."
 
-    async def _refund(self, discord_id: str, amount: int) -> bool:
+    async def _refund(self, discord_id: str, amount: int, character_id: int | None = None) -> bool:
         """Refund escrowed funds to a player. Returns True on success."""
         url = f"{BACKEND_API_URL}/api/auction/refund/"
+        payload: dict = {"player_discord_id": discord_id, "amount": amount}
+        if character_id is not None:
+            payload["character_id"] = character_id
         try:
-            async with self.bot.http_session.post(
-                url, json={"player_discord_id": discord_id, "amount": amount}
-            ) as resp:
+            async with self.bot.http_session.post(url, json=payload) as resp:
                 if resp.status != 200:
                     log.warning("Auction refund returned %d for %s", resp.status, discord_id)
                     return False
@@ -103,19 +105,21 @@ class AuctionCog(commands.Cog):
             log.error("Auction refund failed for %s: %s", discord_id, e)
             return False
 
-    async def _settle(self, winner_discord_id: str, seller_discord_id: str, amount: int, seller_type: str = "player") -> bool:
+    async def _settle(self, winner_discord_id: str, seller_discord_id: str, amount: int, seller_type: str = "player", winner_character_id: int | None = None, seller_character_id: int | None = None) -> bool:
         """Settle auction funds from escrow to seller. Returns True on success."""
         url = f"{BACKEND_API_URL}/api/auction/settle/"
+        payload: dict = {
+            "winner_discord_id": winner_discord_id,
+            "seller_discord_id": seller_discord_id,
+            "amount": amount,
+            "seller_type": seller_type,
+        }
+        if winner_character_id is not None:
+            payload["winner_character_id"] = winner_character_id
+        if seller_character_id is not None:
+            payload["seller_character_id"] = seller_character_id
         try:
-            async with self.bot.http_session.post(
-                url,
-                json={
-                    "winner_discord_id": winner_discord_id,
-                    "seller_discord_id": seller_discord_id,
-                    "amount": amount,
-                    "seller_type": seller_type,
-                },
-            ) as resp:
+            async with self.bot.http_session.post(url, json=payload) as resp:
                 if resp.status != 200:
                     log.warning("Auction settle returned %d", resp.status)
                     return False
@@ -149,12 +153,20 @@ class AuctionCog(commands.Cog):
         auction_id = auction["id"]
         creator_id = auction.get("creator_id", "")
         has_winner = auction.get("highest_bidder_id")
+        seller_type = auction.get("seller_type", "player")
+        seller_character_id = auction.get("seller_character_id") or None
 
         if has_winner:
             winning_amount = auction["highest_bid"]
             winner_id = auction["highest_bidder_id"]
-            seller_type = auction.get("seller_type", "player")
-            settled = await self._settle(winner_id, creator_id, winning_amount, seller_type=seller_type)
+            winner_bid = self.db.get_bidder_active_bid(auction_id, winner_id)
+            winner_character_id = winner_bid.get("bidder_character_id") if winner_bid else None
+            settled = await self._settle(
+                winner_id, creator_id, winning_amount,
+                seller_type=seller_type,
+                winner_character_id=winner_character_id,
+                seller_character_id=seller_character_id,
+            )
             if not settled:
                 log.error(
                     "Auction #%d: settle FAILED for $%s — funds remain in escrow, use /auction reconcile",
@@ -170,7 +182,8 @@ class AuctionCog(commands.Cog):
 
         # Safety: refund any remaining escrowed bids (shouldn't exist)
         for bid in self.db.get_escrowed_bids(auction_id):
-            refunded = await self._refund(bid["bidder_id"], bid["escrowed_amount"])
+            bid_character_id = bid.get("bidder_character_id") or None
+            refunded = await self._refund(bid["bidder_id"], bid["escrowed_amount"], character_id=bid_character_id)
             if refunded:
                 self.db.update_bid(bid["id"], escrowed_amount=0)
             else:
@@ -328,6 +341,18 @@ class AuctionCog(commands.Cog):
                 ephemeral=True,
             )
 
+        # Resolve seller character for player-type auctions
+        seller_character_id = 0
+        if seller_type == "player":
+            balance_url = f"{BACKEND_API_URL}/api/auction/balance/?player_id={interaction.user.id}"
+            try:
+                async with self.bot.http_session.get(balance_url) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        seller_character_id = data.get("character_id", 0)
+            except Exception:
+                pass
+
         closes_at = (datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)).isoformat()
 
         auction_id = self.db.create_auction(
@@ -342,6 +367,7 @@ class AuctionCog(commands.Cog):
             creator_id=str(interaction.user.id),
             creator_name=interaction.user.display_name,
             seller_type=seller_type,
+            seller_character_id=seller_character_id,
             closes_at=closes_at,
         )
 
@@ -396,7 +422,8 @@ class AuctionCog(commands.Cog):
         # Step 1: If this bidder has a previous bid on this auction, refund it first
         previous_bid = self.db.get_bidder_active_bid(auction_id, bidder_id)
         if previous_bid and previous_bid.get("escrowed_amount", 0) > 0:
-            refunded = await self._refund(bidder_id, previous_bid["escrowed_amount"])
+            prev_char_id = previous_bid.get("bidder_character_id") or None
+            refunded = await self._refund(bidder_id, previous_bid["escrowed_amount"], character_id=prev_char_id)
             if refunded:
                 self.db.update_bid(previous_bid["id"], escrowed_amount=0)
             else:
@@ -408,14 +435,14 @@ class AuctionCog(commands.Cog):
                 )
 
         # Step 2: Escrow the new bid amount
-        balance, escrow_error = await self._escrow(bidder_id, amount)
+        balance, character_id, escrow_error = await self._escrow(bidder_id, amount)
         if escrow_error:
             return await interaction.response.send_message(escrow_error, ephemeral=True)
 
         # Re-check auction is still active (could have closed during the await above)
         auction = self.db.get_active_auction(channel_id)
         if not auction or auction["id"] != auction_id:
-            await self._refund(bidder_id, amount)
+            await self._refund(bidder_id, amount, character_id=character_id)
             return await interaction.response.send_message(
                 "This auction is no longer active.", ephemeral=True
             )
@@ -425,7 +452,8 @@ class AuctionCog(commands.Cog):
         if old_winner_id and old_winner_id != bidder_id:
             old_winner_bid = self.db.get_bidder_active_bid(auction_id, old_winner_id)
             if old_winner_bid and old_winner_bid.get("escrowed_amount", 0) > 0:
-                refunded = await self._refund(old_winner_id, old_winner_bid["escrowed_amount"])
+                old_char_id = old_winner_bid.get("bidder_character_id") or None
+                refunded = await self._refund(old_winner_id, old_winner_bid["escrowed_amount"], character_id=old_char_id)
                 if refunded:
                     self.db.update_bid(old_winner_bid["id"], escrowed_amount=0)
                 else:
@@ -441,6 +469,7 @@ class AuctionCog(commands.Cog):
             auction_id=auction_id,
             bidder_id=bidder_id,
             bidder_name=interaction.user.display_name,
+            bidder_character_id=character_id or 0,
             amount=amount,
             escrowed_amount=amount,
         )
@@ -490,7 +519,8 @@ class AuctionCog(commands.Cog):
 
         # Refund all escrowed bids
         for bid in self.db.get_escrowed_bids(auction_id):
-            refunded = await self._refund(bid["bidder_id"], bid["escrowed_amount"])
+            bid_char_id = bid.get("bidder_character_id") or None
+            refunded = await self._refund(bid["bidder_id"], bid["escrowed_amount"], character_id=bid_char_id)
             if refunded:
                 self.db.update_bid(bid["id"], escrowed_amount=0)
             else:
@@ -550,11 +580,15 @@ class AuctionCog(commands.Cog):
 
             if status == "closed" and auction.get("highest_bidder_id") == bid["bidder_id"] and bid["amount"] == auction["highest_bid"]:
                 seller_type = auction.get("seller_type", "player")
+                seller_character_id = auction.get("seller_character_id") or None
+                bid_char_id = bid.get("bidder_character_id") or None
                 settled = await self._settle(
                     bid["bidder_id"],
                     auction["creator_id"],
                     bid["escrowed_amount"],
                     seller_type=seller_type,
+                    winner_character_id=bid_char_id,
+                    seller_character_id=seller_character_id,
                 )
                 if settled:
                     self.db.update_bid(bid["id"], escrowed_amount=0)
@@ -562,7 +596,8 @@ class AuctionCog(commands.Cog):
                 else:
                     results.append(f"Bid #{bid['id']}: Settle FAILED — ${bid['escrowed_amount']:,} still escrowed")
             else:
-                refunded = await self._refund(bid["bidder_id"], bid["escrowed_amount"])
+                bid_char_id = bid.get("bidder_character_id") or None
+                refunded = await self._refund(bid["bidder_id"], bid["escrowed_amount"], character_id=bid_char_id)
                 if refunded:
                     self.db.update_bid(bid["id"], escrowed_amount=0)
                     results.append(f"Bid #{bid['id']}: Refunded ${bid['escrowed_amount']:,}")
