@@ -9,6 +9,7 @@ from .translation_cog import TranslationCog
 from .utils_cog import UtilsCog
 from .share_cog import ShareCog
 from .status_cog import StatusCog
+from .auction_cog import AuctionCog
 from .youtube_cog import YouTubeCog
 from .role_cog import RoleCog
 
@@ -33,6 +34,7 @@ class AMCBot(commands.Bot):
         await self.add_cog(YouTubeCog(self))
         await self.add_cog(StatusCog(self))
         await self.add_cog(RoleCog(self))
+        await self.add_cog(AuctionCog(self))
 
         # Sync tree
         guild = discord.Object(id=GUILD_ID)

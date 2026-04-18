@@ -201,3 +201,6 @@ BACKEND_DB_URL = os.environ.get("BACKEND_DB_URL")
 DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID", "")
 DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
 RADIO_API_PORT = int(os.environ.get("RADIO_API_PORT", "7001"))
+
+# Auction System
+AUCTION_CHANNEL_ID = int(os.environ.get("AUCTION_CHANNEL_ID", "0")) or None
