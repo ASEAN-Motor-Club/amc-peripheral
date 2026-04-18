@@ -1,0 +1,685 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import Sidebar from '../../components/Sidebar.astro';
+import WarningText from '../../components/WarningText.astro';
+import InsetText from '../../components/InsetText.astro';
+---
+
+<GovLayout title="Weekly Treasury Spending Report" department="Ministry of Finance & Treasury" description="Weekly analysis of government treasury spending, subsidy allocation, job bonuses, and cost-saving recommendations.">
+
+<PhaseBanner tag="Report" text="Weekly spending analysis with cost-saving recommendations" />
+<Breadcrumbs items={[
+  { label: "Reports", href: "/reports" },
+  { label: "Weekly Spending Report", href: "#" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Weekly Treasury Spending Report</h1>
+
+      <SummaryBox title="About this report">
+        <p>This report analyses government treasury spending over the last 7 days, breaking down subsidies, job completion bonuses, and other expenditures. It includes cost-saving recommendations based on current spending patterns.</p>
+        <p>Data sourced from the <a href="/treasury-dashboard">Treasury Dashboard</a> API and the <a href="/fiscal-policy">fiscal policy</a> accounting system.</p>
+      </SummaryBox>
+
+      <div id="loading-indicator" class="loading-indicator">
+        <p>Loading report data&hellip;</p>
+      </div>
+
+      <div id="report-content" style="display:none;">
+
+        <!-- Executive Summary -->
+        <h2 id="summary">Executive Summary</h2>
+        <div class="report-cards" id="summary-cards">
+          <div class="report-card card-income">
+            <span class="card-label">Total Income</span>
+            <span class="card-value" id="total-income">–</span>
+          </div>
+          <div class="report-card card-expense">
+            <span class="card-label">Total Expenses</span>
+            <span class="card-value" id="total-expenses">–</span>
+          </div>
+          <div class="report-card" id="card-surplus">
+            <span class="card-label">Net Deficit</span>
+            <span class="card-value" id="net-surplus">–</span>
+          </div>
+          <div class="report-card card-balance">
+            <span class="card-label">Treasury Balance</span>
+            <span class="card-value" id="treasury-balance">–</span>
+          </div>
+        </div>
+
+        <div class="govuk-inset-text" id="deficit-warning" style="display:none;">
+          <strong>Warning:</strong> <span id="deficit-warning-text"></span>
+        </div>
+
+        <!-- Expense Breakdown Chart -->
+        <h2 id="expenses">Expense Breakdown</h2>
+        <div class="chart-container">
+          <canvas id="expense-breakdown-chart"></canvas>
+        </div>
+
+        <table class="govuk-table govuk-table--numeric" id="expense-table">
+          <thead><tr><th style="text-align:left">Category</th><th>Amount</th><th>% of Total</th></tr></thead>
+          <tbody id="expense-tbody"></tbody>
+          <tfoot>
+            <tr class="govuk-table__row--total"><td style="text-align:left"><strong>Total Expenses</strong></td><td id="expense-total"><strong>–</strong></td><td>100%</td></tr>
+          </tfoot>
+        </table>
+
+        <!-- Income Breakdown Chart -->
+        <h2 id="income">Income Sources</h2>
+        <div class="chart-container">
+          <canvas id="income-breakdown-chart"></canvas>
+        </div>
+
+        <table class="govuk-table govuk-table--numeric" id="income-table">
+          <thead><tr><th style="text-align:left">Source</th><th>Amount</th><th>% of Total</th></tr></thead>
+          <tbody id="income-tbody"></tbody>
+          <tfoot>
+            <tr class="govuk-table__row--total"><td style="text-align:left"><strong>Total Income</strong></td><td id="income-total"><strong>–</strong></td><td>100%</td></tr>
+          </tfoot>
+        </table>
+
+        <!-- Daily Trend -->
+        <h2 id="trends">7-Day Trend</h2>
+        <div class="chart-container">
+          <canvas id="daily-trend-chart"></canvas>
+        </div>
+
+        <table class="govuk-table govuk-table--numeric" id="trend-table">
+          <thead><tr><th style="text-align:left">Date</th><th>Income</th><th>Expenses</th><th>Surplus</th><th>Treasury</th></tr></thead>
+          <tbody id="trend-tbody"></tbody>
+        </table>
+
+        <!-- Subsidy Analysis -->
+        <h2 id="subsidies">Subsidy Analysis by Cargo</h2>
+        <p>Breakdown of which delivery types receive the most government subsidy. The <strong>subsidy ratio</strong> shows how much subsidy is paid per dollar of base payment — a ratio above 1.0 means the government pays more in subsidies than the base delivery payment.</p>
+
+        <div class="chart-container">
+          <canvas id="subsidy-chart"></canvas>
+        </div>
+
+        <table class="govuk-table govuk-table--numeric" id="subsidy-table">
+          <thead><tr><th style="text-align:left">Cargo Type</th><th>Total Subsidy</th><th>Base Payment</th><th>Ratio</th><th>Deliveries</th></tr></thead>
+          <tbody id="subsidy-tbody"></tbody>
+        </table>
+
+        <!-- Subsidy Rules -->
+        <h3 id="subsidy-rules">Active Subsidy Rules</h3>
+        <table class="govuk-table govuk-table--numeric" id="rules-table">
+          <thead><tr><th style="text-align:left">Rule</th><th>Rate</th><th>Lifetime Spent</th></tr></thead>
+          <tbody id="rules-tbody"></tbody>
+        </table>
+
+        <!-- Job Completion Bonuses -->
+        <h2 id="bonuses">Job Completion Bonuses</h2>
+        <p>Top delivery jobs by completion bonus payout. Bonuses are funded from the Treasury and scaled by the <a href="/fiscal-policy#treasury-equilibrium">treasury equilibrium multiplier</a>.</p>
+
+        <div class="report-cards" id="bonus-summary-cards">
+          <div class="report-card">
+            <span class="card-label">Total Bonuses Paid</span>
+            <span class="card-value" id="total-bonuses">–</span>
+          </div>
+          <div class="report-card">
+            <span class="card-label">Jobs Fulfilled</span>
+            <span class="card-value" id="fulfilled-count">–</span>
+          </div>
+          <div class="report-card card-alert">
+            <span class="card-label">Jobs Expired</span>
+            <span class="card-value" id="expired-count">–</span>
+          </div>
+        </div>
+
+        <table class="govuk-table govuk-table--numeric" id="bonus-table">
+          <thead><tr><th style="text-align:left">Job Name</th><th>Bonus Paid</th><th>Multiplier</th><th>Completed</th></tr></thead>
+          <tbody id="bonus-tbody"></tbody>
+        </table>
+
+        <!-- Cost-Saving Recommendations -->
+        <h2 id="recommendations">Cost-Saving Recommendations</h2>
+        <div id="recommendations-content">
+          <p class="govuk-body">Recommendations are generated dynamically based on current spending patterns.</p>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Executive Summary", href: "#summary" },
+        { label: "Expense Breakdown", href: "#expenses" },
+        { label: "Income Sources", href: "#income" },
+        { label: "7-Day Trend", href: "#trends" },
+        { label: "Subsidy Analysis", href: "#subsidies" },
+        { label: "Active Subsidy Rules", href: "#subsidy-rules" },
+        { label: "Job Completion Bonuses", href: "#bonuses" },
+        { label: "Recommendations", href: "#recommendations" },
+      ]} />
+
+      <div class="sidebar-links">
+        <h3>Related</h3>
+        <ul class="govuk-list">
+          <li><a href="/treasury-dashboard">Treasury Dashboard</a></li>
+          <li><a href="/fiscal-policy">Fiscal Policy</a></li>
+          <li><a href="/fiscal-analysis">Fiscal Analysis</a></li>
+          <li><a href="/employment/subsidies">Subsidy Policy</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</main>
+
+</GovLayout>
+
+<style>
+  .loading-indicator {
+    text-align: center;
+    padding: 3rem;
+    color: var(--gds-dark-grey);
+    font-size: 1.1rem;
+  }
+
+  .report-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+  .report-card {
+    background: #f3f2f1;
+    border-left: 4px solid #1d70b8;
+    padding: 1rem 1.25rem;
+  }
+  .report-card .card-label {
+    display: block;
+    font-size: 0.85rem;
+    color: #505a5f;
+    margin-bottom: 0.25rem;
+  }
+  .report-card .card-value {
+    display: block;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #0b0c0c;
+  }
+  .card-income { border-left-color: #00703c; }
+  .card-expense { border-left-color: #d4351c; }
+  .card-balance { border-left-color: #1d70b8; }
+  .card-alert { border-left-color: #d4351c; }
+  #card-surplus.surplus .card-value { color: #00703c; }
+  #card-surplus.deficit .card-value { color: #d4351c; }
+  #card-surplus.surplus { border-left-color: #00703c; }
+  #card-surplus.deficit { border-left-color: #d4351c; }
+
+  .chart-container {
+    position: relative;
+    height: 320px;
+    margin: 1rem 0 2rem 0;
+  }
+
+  .govuk-table__row--total td {
+    border-top: 2px solid #0b0c0c;
+    font-weight: 700;
+  }
+
+  .sidebar-links {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #b1b4b6;
+  }
+  .sidebar-links h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .recommendation {
+    border-left: 5px solid var(--asean-gold);
+    background: #fff9c4;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+  }
+  .recommendation h4 {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+  }
+  .recommendation p {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #505a5f;
+  }
+  .recommendation.savings {
+    border-left-color: #00703c;
+    background: #e8f5e9;
+  }
+  .recommendation.warning {
+    border-left-color: #d4351c;
+    background: #fde8e8;
+  }
+
+  .highlight-number {
+    font-weight: 700;
+    color: #0b0c0c;
+  }
+  .negative { color: #d4351c; }
+  .positive { color: #00703c; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script is:inline>
+  const API_BASE = 'https://api.aseanmotorclub.com/api/v1/treasury';
+
+  function fmt(n) {
+    return '$' + Math.round(n).toLocaleString();
+  }
+
+  function pct(n, total) {
+    if (total === 0) return '0%';
+    return (n / total * 100).toFixed(1) + '%';
+  }
+
+  const EXPENSE_COLORS = {
+    subsidies: '#d4351c',
+    job_payouts: '#912b88',
+    ubi: '#f47738',
+    gov_funding: '#1d70b8',
+    penalties: '#0b0c0c',
+    other: '#b1b4b6',
+  };
+
+  const INCOME_COLORS = {
+    gov_employee: '#00703c',
+    donations: '#d53880',
+    nirc: '#1d70b8',
+    performance_grants: '#f47738',
+    other: '#b1b4b6',
+  };
+
+  const CARGO_COLORS = [
+    '#d4351c', '#1d70b8', '#00703c', '#912b88', '#f47738',
+    '#505a5f', '#d53880', '#1d70b8', '#00703c', '#b1b4b6',
+    '#ffdd00', '#003078', '#005a30', '#8b2a8b', '#c06600',
+    '#333333', '#666666', '#999999', '#3c7a3c', '#7a3c3c',
+    '#3c3c7a', '#7a7a3c', '#3c7a7a', '#7a3c7a', '#7a7a3c',
+  ];
+
+  const EXPENSE_LABELS = {
+    subsidies: 'Job Subsidies',
+    job_payouts: 'Job Completion Payouts',
+    ubi: 'UBI & Gov Salary',
+    gov_funding: 'Gov Funding (Manual)',
+    penalties: 'Job Expiration Penalties',
+    other: 'Other',
+  };
+
+  const INCOME_LABELS = {
+    gov_employee: 'Gov Employee Contributions',
+    donations: 'Player Donations',
+    nirc: 'NIRC (Sovereign Fund)',
+    performance_grants: 'Performance Grants',
+    other: 'Other',
+  };
+
+  async function loadReport() {
+    try {
+      const [summary, trend, spending] = await Promise.all([
+        fetch(API_BASE + '/summary/?days=7').then(r => r.json()),
+        fetch(API_BASE + '/trend/?days=7').then(r => r.json()),
+        fetch(API_BASE + '/spending/?days=7').then(r => r.json()),
+      ]);
+
+      document.getElementById('loading-indicator').style.display = 'none';
+      document.getElementById('report-content').style.display = 'block';
+
+      // ── Executive Summary ──
+      const totalIncome = summary.income.total;
+      const totalExpenses = summary.expenses.total;
+      const surplus = summary.surplus;
+
+      document.getElementById('total-income').textContent = fmt(totalIncome);
+      document.getElementById('total-expenses').textContent = fmt(totalExpenses);
+      document.getElementById('net-surplus').textContent = fmt(surplus);
+      document.getElementById('treasury-balance').textContent = fmt(summary.treasury_balance);
+
+      const surplusEl = document.getElementById('card-surplus');
+      surplusEl.classList.toggle('surplus', surplus >= 0);
+      surplusEl.classList.toggle('deficit', surplus < 0);
+      surplusEl.querySelector('.card-label').textContent = surplus >= 0 ? 'Net Surplus' : 'Net Deficit';
+
+      if (surplus < 0) {
+        document.getElementById('deficit-warning').style.display = 'block';
+        const ratio = (totalExpenses / totalIncome).toFixed(1);
+        document.getElementById('deficit-warning-text').textContent =
+          `The treasury is running a deficit — spending ${ratio}x its income. At this rate, the treasury fund will be depleted in approximately ${Math.ceil(Math.abs(summary.treasury_balance) / Math.abs(surplus) * 7)} days without additional revenue.`;
+      }
+
+      // ── Expense Breakdown ──
+      const expenseItems = Object.entries(summary.expenses.breakdown);
+      const expenseLabels = expenseItems.map(([k, v]) => v.emoji + ' ' + (EXPENSE_LABELS[k] || v.label));
+      const expenseValues = expenseItems.map(([k, v]) => v.amount);
+      const expenseColors = expenseItems.map(([k]) => EXPENSE_COLORS[k] || '#b1b4b6');
+
+      new Chart(document.getElementById('expense-breakdown-chart').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: expenseLabels,
+          datasets: [{
+            data: expenseValues,
+            backgroundColor: expenseColors,
+            borderWidth: 2,
+            borderColor: '#ffffff',
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'right', labels: { font: { size: 13 } } },
+            tooltip: { callbacks: { label: ctx => ctx.label + ': ' + fmt(ctx.raw) } },
+          },
+        },
+      });
+
+      const expenseTbody = document.getElementById('expense-tbody');
+      expenseTbody.innerHTML = '';
+      for (const [key, item] of expenseItems) {
+        const pctVal = pct(item.amount, totalExpenses);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="text-align:left">${item.emoji} ${EXPENSE_LABELS[key] || item.label}</td><td>${fmt(item.amount)}</td><td>${pctVal}</td>`;
+        expenseTbody.appendChild(tr);
+      }
+      document.getElementById('expense-total').innerHTML = `<strong>${fmt(totalExpenses)}</strong>`;
+
+      // ── Income Breakdown ──
+      const incomeItems = Object.entries(summary.income.breakdown);
+      const incomeLabels = incomeItems.map(([k, v]) => v.emoji + ' ' + (INCOME_LABELS[k] || v.label));
+      const incomeValues = incomeItems.map(([k, v]) => v.amount);
+      const incomeColors = incomeItems.map(([k]) => INCOME_COLORS[k] || '#b1b4b6');
+
+      new Chart(document.getElementById('income-breakdown-chart').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: incomeLabels,
+          datasets: [{
+            data: incomeValues,
+            backgroundColor: incomeColors,
+            borderWidth: 2,
+            borderColor: '#ffffff',
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'right', labels: { font: { size: 13 } } },
+            tooltip: { callbacks: { label: ctx => ctx.label + ': ' + fmt(ctx.raw) } },
+          },
+        },
+      });
+
+      const incomeTbody = document.getElementById('income-tbody');
+      incomeTbody.innerHTML = '';
+      for (const [key, item] of incomeItems) {
+        const pctVal = pct(item.amount, totalIncome);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="text-align:left">${item.emoji} ${INCOME_LABELS[key] || item.label}</td><td>${fmt(item.amount)}</td><td>${pctVal}</td>`;
+        incomeTbody.appendChild(tr);
+      }
+      document.getElementById('income-total').innerHTML = `<strong>${fmt(totalIncome)}</strong>`;
+
+      // ── Daily Trend ──
+      const labels = trend.labels.map(d => {
+        const date = new Date(d);
+        return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      });
+
+      new Chart(document.getElementById('daily-trend-chart').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Income',
+              data: trend.income.totals,
+              backgroundColor: '#00703c',
+              borderRadius: 3,
+            },
+            {
+              label: 'Expenses',
+              data: trend.expenses.totals,
+              backgroundColor: '#d4351c',
+              borderRadius: 3,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt(ctx.raw) } },
+          },
+          scales: {
+            y: { ticks: { callback: v => fmt(v) } },
+          },
+        },
+      });
+
+      const trendTbody = document.getElementById('trend-tbody');
+      trendTbody.innerHTML = '';
+      for (let i = 0; i < trend.labels.length; i++) {
+        const date = new Date(trend.labels[i]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        const s = trend.surplus[i];
+        const sClass = s >= 0 ? 'positive' : 'negative';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="text-align:left">${date}</td><td>${fmt(trend.income.totals[i])}</td><td>${fmt(trend.expenses.totals[i])}</td><td class="${sClass}">${fmt(s)}</td><td>${fmt(trend.treasury_balance[i])}</td>`;
+        trendTbody.appendChild(tr);
+      }
+
+      // ── Subsidy Analysis ──
+      const subsidyData = spending.subsidy_by_cargo;
+      const topSubsidies = subsidyData.slice(0, 12);
+      const subLabels = topSubsidies.map(s => s.cargo_key);
+      const subSubsidies = topSubsidies.map(s => s.total_subsidy);
+      const subPayments = topSubsidies.map(s => s.total_payment);
+
+      new Chart(document.getElementById('subsidy-chart').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: subLabels,
+          datasets: [
+            {
+              label: 'Base Payment',
+              data: subPayments,
+              backgroundColor: '#1d70b8',
+              borderRadius: 3,
+            },
+            {
+              label: 'Subsidy',
+              data: subSubsidies,
+              backgroundColor: '#d4351c',
+              borderRadius: 3,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: 'y',
+          plugins: {
+            tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt(ctx.raw) } },
+          },
+          scales: {
+            x: { ticks: { callback: v => fmt(v) } },
+          },
+        },
+      });
+
+      const subsidyTbody = document.getElementById('subsidy-tbody');
+      subsidyTbody.innerHTML = '';
+      for (const row of subsidyData) {
+        const tr = document.createElement('tr');
+        const ratioClass = row.subsidy_ratio >= 1.0 ? 'negative' : '';
+        tr.innerHTML = `<td style="text-align:left">${row.cargo_key}</td><td>${fmt(row.total_subsidy)}</td><td>${fmt(row.total_payment)}</td><td class="${ratioClass}">${row.subsidy_ratio.toFixed(2)}x</td><td>${row.delivery_count.toLocaleString()}</td>`;
+        subsidyTbody.appendChild(tr);
+      }
+
+      // ── Subsidy Rules ──
+      const rulesTbody = document.getElementById('rules-tbody');
+      rulesTbody.innerHTML = '';
+      for (const rule of spending.active_subsidy_rules) {
+        const rate = rule.reward_type === 'PERCENTAGE' ? `${rule.reward_value.toFixed(0)}%` : `$${fmt(rule.reward_value)}`;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="text-align:left">${rule.name}</td><td>${rate}</td><td>${fmt(rule.spent)}</td>`;
+        rulesTbody.appendChild(tr);
+      }
+
+      // ── Job Completion Bonuses ──
+      document.getElementById('total-bonuses').textContent = fmt(spending.total_bonuses.total_bonus);
+      document.getElementById('fulfilled-count').textContent = spending.total_bonuses.fulfilled_count;
+      document.getElementById('expired-count').textContent = spending.total_bonuses.expired_count;
+
+      const bonusTbody = document.getElementById('bonus-tbody');
+      bonusTbody.innerHTML = '';
+      for (const job of spending.job_bonuses) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="text-align:left">${job.name}</td><td>${fmt(job.completion_bonus)}</td><td>${job.bonus_multiplier.toFixed(2)}x</td><td>${job.quantity_fulfilled}/${job.quantity_requested}</td>`;
+        bonusTbody.appendChild(tr);
+      }
+
+      // ── Recommendations ──
+      generateRecommendations(summary, spending, trend);
+
+    } catch (e) {
+      document.getElementById('loading-indicator').innerHTML = `<p style="color: #d4351c;">Failed to load report data. Please try again later.</p><p style="font-size: 0.85rem; color: #505a5f;">Error: ${e.message}</p>`;
+      console.error('Failed to load spending report:', e);
+    }
+  }
+
+  function generateRecommendations(summary, spending, trend) {
+    const container = document.getElementById('recommendations-content');
+    const recommendations = [];
+
+    const totalIncome = summary.income.total;
+    const totalExpenses = summary.expenses.total;
+    const expenseBreakdown = summary.expenses.breakdown;
+    const surplus = summary.surplus;
+
+    // 1. Deficit warning
+    if (surplus < 0) {
+      const deficitPct = Math.abs(surplus / totalExpenses * 100).toFixed(0);
+      recommendations.push({
+        type: 'warning',
+        title: `Structural Deficit: ${deficitPct}% Overspend`,
+        text: `The treasury is spending ${fmt(totalExpenses)} against income of only ${fmt(totalIncome)}, a deficit of ${fmt(Math.abs(surplus))}. The treasury balance has declined from ${fmt(trend.treasury_balance[0])} to ${fmt(trend.treasury_balance[trend.treasury_balance.length - 1])} over 7 days. Without corrective action, the fund will be depleted in approximately ${Math.ceil(Math.abs(summary.treasury_balance) / Math.abs(surplus) * 7)} days.`,
+      });
+    }
+
+    // 2. Subsidy ratio analysis
+    const highRatioItems = spending.subsidy_by_cargo.filter(s => s.subsidy_ratio >= 1.5);
+    if (highRatioItems.length > 0) {
+      const topOffender = highRatioItems.sort((a, b) => b.subsidy_ratio - a.subsidy_ratio)[0];
+      recommendations.push({
+        type: 'savings',
+        title: `High Subsidy Ratios: ${highRatioItems.length} Cargo Types Exceed 1.5x`,
+        text: `${topOffender.cargo_key} has a subsidy-to-payment ratio of ${topOffender.subsidy_ratio.toFixed(2)}x — the government pays ${topOffender.subsidy_ratio.toFixed(1)}x the base payment as subsidy. Consider reducing subsidy rates for: ${highRatioItems.map(s => s.cargo_key + ' (' + s.subsidy_ratio.toFixed(2) + 'x)').join(', ')}.`,
+      });
+    }
+
+    // 3. Donation dependency
+    const donationPct = (summary.income.breakdown.donations?.amount || 0) / totalIncome * 100;
+    if (donationPct > 70) {
+      recommendations.push({
+        type: 'warning',
+        title: `Revenue Concentration Risk: ${donationPct.toFixed(0)}% from Donations`,
+        text: `Player donations account for ${donationPct.toFixed(0)}% of government income (${fmt(summary.income.breakdown.donations.amount)} of ${fmt(totalIncome)}). This creates vulnerability to donation fluctuations. Consider diversifying revenue through increased NIRC transfers, wealth tax adjustments, or alternative revenue mechanisms.`,
+      });
+    }
+
+    // 4. Subsidies are the biggest expense
+    if (expenseBreakdown.subsidies && expenseBreakdown.subsidies.amount > totalExpenses * 0.3) {
+      const subsidyPct = (expenseBreakdown.subsidies.amount / totalExpenses * 100).toFixed(0);
+      recommendations.push({
+        type: 'savings',
+        title: `Subsidies Dominate Spending: ${subsidyPct}% of Expenses`,
+        text: `Job subsidies account for ${subsidyPct}% (${fmt(expenseBreakdown.subsidies.amount)}) of total spending. The "Water Global Shortage" rule alone has consumed ${fmt(spending.active_subsidy_rules.find(r => r.name.includes('Water'))?.spent || 0)} lifetime. Consider tiered subsidy reductions or capping per-delivery subsidy amounts.`,
+      });
+    }
+
+    // 5. UBI cost
+    if (expenseBreakdown.ubi && expenseBreakdown.ubi.amount > 0) {
+      const ubiPct = (expenseBreakdown.ubi.amount / totalExpenses * 100).toFixed(0);
+      recommendations.push({
+        type: '',
+        title: `UBI & Gov Salary: ${ubiPct}% of Expenses`,
+        text: `Universal Basic Income and government salaries cost ${fmt(expenseBreakdown.ubi.amount)} over 7 days (${ubiPct}% of spending). This is a fixed obligation and cannot be easily reduced without policy changes.`,
+      });
+    }
+
+    // 6. Job expiration penalty
+    if (expenseBreakdown.penalties && expenseBreakdown.penalties.amount > 0) {
+      const penaltyPct = (expenseBreakdown.penalties.amount / totalExpenses * 100).toFixed(1);
+      const expiredCount = spending.total_bonuses.expired_count;
+      recommendations.push({
+        type: 'savings',
+        title: `Job Expiration Cost: ${expiredCount} Expired Jobs (${penaltyPct}% of Expenses)`,
+        text: `${expiredCount} jobs expired in the period, costing ${fmt(expenseBreakdown.penalties.amount)} in penalties (${penaltyPct}% of total spending). Reducing job expiration by posting fewer jobs or extending deadlines could save up to ${fmt(expenseBreakdown.penalties.amount)} per week.`,
+      });
+    }
+
+    // 7. Bonus multiplier analysis
+    const avgMultiplier = spending.job_bonuses.length > 0
+      ? spending.job_bonuses.reduce((s, j) => s + j.bonus_multiplier, 0) / spending.job_bonuses.length
+      : 0;
+    if (avgMultiplier < 0.8) {
+      recommendations.push({
+        type: '',
+        title: `Low Bonus Multipliers: Average ${avgMultiplier.toFixed(2)}x`,
+        text: `The average job bonus multiplier is ${avgMultiplier.toFixed(2)}x, below the 1.0x baseline. This indicates the treasury equilibrium system is pulling back spending due to low fund balance. Restoring the treasury balance will increase job attractiveness and player engagement.`,
+      });
+    }
+
+    // 8. Specific cargo subsidy recommendation
+    const topSubsidy = spending.subsidy_by_cargo[0];
+    if (topSubsidy && topSubsidy.total_subsidy > totalExpenses * 0.1) {
+      recommendations.push({
+        type: 'savings',
+        title: `${topSubsidy.cargo_key} Subsidy Concentration: ${fmt(topSubsidy.total_subsidy)}`,
+        text: `A single cargo type (${topSubsidy.cargo_key}) accounts for ${fmt(topSubsidy.total_subsidy)} in subsidies (${(topSubsidy.total_subsidy / expenseBreakdown.subsidies.amount * 100).toFixed(0)}% of all subsidies). Evaluate whether the current subsidy rate for ${topSubsidy.cargo_key} is achieving its policy objective efficiently.`,
+      });
+    }
+
+    // 9. No active ministry term
+    recommendations.push({
+      type: 'savings',
+      title: 'No Active Ministry Term — Direct Treasury Spending',
+      text: 'All spending currently flows directly through the Treasury Fund without ministry budget allocation. Appointing a Minister of Commerce with a defined budget creates accountability and can cap discretionary spending. Ministry-funded jobs also provide a 20% performance rebate on completion, returning funds to the treasury.',
+    });
+
+    // 10. Gwangjin concentration
+    const gwangjinJobs = spending.job_bonuses.filter(j => j.name && j.name.includes('Gwangjin'));
+    if (gwangjinJobs.length > 3) {
+      const gwangjinTotal = gwangjinJobs.reduce((s, j) => s + j.completion_bonus, 0);
+      recommendations.push({
+        type: '',
+        title: `Job Concentration in Gwangjin: ${gwangjinJobs.length} Top Bonus Jobs`,
+        text: `${gwangjinJobs.length} of the top bonus-paying jobs are concentrated in the Gwangjin area, totalling ${fmt(gwangjinTotal)} in completion bonuses. Consider diversifying job postings to other regions to spread economic activity and reduce infrastructure bottlenecking.`,
+      });
+    }
+
+    // Render recommendations
+    container.innerHTML = '';
+    for (const rec of recommendations) {
+      const div = document.createElement('div');
+      div.className = 'recommendation' + (rec.type ? ' ' + rec.type : '');
+      div.innerHTML = `<h4>${rec.title}</h4><p>${rec.text}</p>`;
+      container.appendChild(div);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', loadReport);
+</script>
