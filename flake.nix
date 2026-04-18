@@ -113,6 +113,11 @@
               pass_filenames = false;
               stages = ["pre-push"];
             };
+
+            # Disable pyrefly hook (too noisy, use manually instead)
+            pyrefly = {
+              enable = false;
+            };
           };
         };
 
