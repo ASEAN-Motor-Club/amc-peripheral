@@ -275,6 +275,23 @@
             # Apply Sharry's overlay to make pkgs.sharry available
             nixpkgs.overlays = [inputs.sharry.overlays.default];
 
+            # Stable symlinks for static web packages so nginx config
+            # doesn't change on every rebuild (prevents unnecessary reloads)
+            # Sharry data dirs are merged into the same rules list to avoid
+            # duplicate attribute definitions.
+            systemd.tmpfiles.rules =
+              [
+                "d /var/www/nix-static 0755 root root -"
+                "L+ /var/www/nix-static/radio-web - - - - ${cfg.radioWeb.package}"
+                "L+ /var/www/nix-static/gov-web - - - - ${cfg.govWeb.package}"
+                "L+ /var/www/nix-static/tire-web - - - - ${cfg.tireWeb.package}"
+                "L+ /var/www/nix-static/code-web - - - - ${cfg.codeWeb.package}"
+              ]
+              ++ lib.optionals cfg.sharry.enable [
+                "d /var/lib/sharry 0750 sharry sharry -"
+                "d /var/lib/sharry/files 0750 sharry sharry -"
+              ];
+
             # Icecast streaming server
             services.icecast = {
               enable = true;
@@ -351,7 +368,7 @@
               enableACME = true;
               forceSSL = true;
               locations."/" = {
-                root = "${cfg.radioWeb.package}";
+                root = "/var/www/nix-static/radio-web";
                 tryFiles = "$uri $uri/index.html /index.html";
                 extraConfig = ''
                   add_header Cache-Control "public, max-age=3600";
@@ -411,7 +428,7 @@
               enableACME = true;
               forceSSL = true;
               locations."/" = {
-                root = "${cfg.govWeb.package}";
+                root = "/var/www/nix-static/gov-web";
                 tryFiles = "$uri $uri/index.html /index.html";
                 extraConfig = ''
                   add_header Cache-Control "public, max-age=3600";
@@ -424,7 +441,7 @@
               enableACME = true;
               forceSSL = true;
               locations."/" = {
-                root = "${cfg.tireWeb.package}";
+                root = "/var/www/nix-static/tire-web";
                 tryFiles = "$uri $uri/index.html /index.html";
                 extraConfig = ''
                   add_header Cache-Control "public, max-age=3600";
@@ -554,12 +571,6 @@
                 webapp.chunk-size = "100M";
               };
             };
-
-            # Create data directory for Sharry
-            systemd.tmpfiles.rules = lib.mkIf cfg.sharry.enable [
-              "d /var/lib/sharry 0750 sharry sharry -"
-              "d /var/lib/sharry/files 0750 sharry sharry -"
-            ];
           };
         };
       };
