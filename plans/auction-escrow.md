@@ -28,32 +28,37 @@ Move from "balance check at bid time" to "funds escrowed at bid time, refunded o
 
 **Escrow (hold funds):**
 ```
-Dr. Auction Escrow (ASSET/BANK, character=None)      $5,000
-    Cr. Player Checking Account (LIABILITY/BANK)     $5,000
+Cr. Auction Escrow (LIABILITY/BANK, character=None)  $5,000
+    Dr. Player Checking Account (LIABILITY/BANK)     $5,000
 ```
-- ASSET debit → Auction Escrow balance increases
-- LIABILITY credit → Checking Account balance decreases
+- LIABILITY credit → Auction Escrow balance increases
+- LIABILITY debit → Checking Account balance decreases
 
 **Refund (return on outbid):**
 ```
-Dr. Player Checking Account (LIABILITY/BANK)         $5,000
-    Cr. Auction Escrow (ASSET/BANK, character=None)  $5,000
+Dr. Auction Escrow (LIABILITY/BANK, character=None)  $5,000
+    Cr. Player Checking Account (LIABILITY/BANK)     $5,000
 ```
-- LIABILITY debit → Checking Account balance increases (money back)
-- ASSET credit → Auction Escrow balance decreases
+- LIABILITY debit → Auction Escrow balance decreases
+- LIABILITY credit → Checking Account balance increases (money back)
 
 **Settle (winner → seller on close):**
 ```
-Dr. Auction Escrow (ASSET/BANK, character=None)      $5,000
+Dr. Auction Escrow (LIABILITY/BANK, character=None)  $5,000
     Cr. Seller Checking Account (LIABILITY/BANK)     $5,000
 ```
-- ASSET credit → Auction Escrow balance decreases
+- LIABILITY debit → Auction Escrow balance decreases
 - LIABILITY credit → Seller's Checking Account balance increases
 
 ### Single shared escrow account
 
-Following the Ministry of Commerce pattern, we use one shared system account:
-- `ASSET / BANK / character=None / name="Auction Escrow"`
+Following the bank account pattern used throughout `amc_finance`, we use one shared internal account:
+- `LIABILITY / BANK / character=None / name="Auction Escrow"`
+
+> **Note:** Despite the name "Escrow", this is modeled as a LIABILITY (not ASSET) to be consistent
+> with all other bank accounts in the system. The balance increase/decrease rules are the same as
+> other LIABILITY accounts: credit increases balance, debit decreases it. `create_journal_entry`
+> handles the balance direction automatically based on account type.
 
 This works because:
 - Each bid's escrowed amount is tracked in the auction DB (per-bid)

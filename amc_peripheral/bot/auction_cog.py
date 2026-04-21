@@ -416,7 +416,8 @@ class AuctionCog(commands.Cog):
     )
     @app_commands.autocomplete(character=_character_autocomplete)
     async def auction_bid(self, interaction: discord.Interaction, amount: int, character: str | None = None):
-        channel_id = str(interaction.channel_id)
+        # Use AUCTION_CHANNEL_ID for lookup if configured — must match the ID stored at create time.
+        channel_id = str(AUCTION_CHANNEL_ID) if AUCTION_CHANNEL_ID else str(interaction.channel_id)
         auction = self.db.get_active_auction(channel_id)
 
         if not auction:
@@ -476,7 +477,25 @@ class AuctionCog(commands.Cog):
         # Re-check auction is still active (could have closed during the await above)
         auction = self.db.get_active_auction(channel_id)
         if not auction or auction["id"] != auction_id:
-            await self._refund(bidder_id, amount, character_id=character_id)
+            # Funds were just escrowed but the auction is gone — refund immediately.
+            try:
+                refunded = await self._refund(bidder_id, amount, character_id=character_id)
+                if not refunded:
+                    log.error(
+                        "Auction #%d (stale): escrow refund FAILED for %s ($%s) — no bid record exists, "
+                        "use /auction reconcile after verifying escrow account balance",
+                        auction_id,
+                        bidder_id,
+                        f"{amount:,}",
+                    )
+            except Exception as exc:
+                log.error(
+                    "Auction #%d (stale): escrow refund raised for %s ($%s): %s — manual reconcile needed",
+                    auction_id,
+                    bidder_id,
+                    f"{amount:,}",
+                    exc,
+                )
             return await interaction.response.send_message(
                 "This auction is no longer active.", ephemeral=True
             )
