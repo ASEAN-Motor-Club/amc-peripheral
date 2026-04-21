@@ -1,4 +1,3 @@
-import pytest
 from datetime import datetime, timezone, timedelta
 from amc_peripheral.bot.auction_views import (
     _fmt_amount,
