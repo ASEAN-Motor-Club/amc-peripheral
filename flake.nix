@@ -103,17 +103,6 @@
               stages = ["pre-push"];
             };
 
-            # Custom hook for pytest
-            pytest = {
-              enable = true;
-              name = "pytest";
-              description = "Run tests with pytest";
-              entry = "${hookVirtualenv}/bin/pytest -q";
-              language = "system";
-              pass_filenames = false;
-              stages = ["pre-push"];
-            };
-
             # Disable pyrefly hook (too noisy, use manually instead)
             pyrefly = {
               enable = false;
