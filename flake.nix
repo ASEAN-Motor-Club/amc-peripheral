@@ -475,7 +475,7 @@
                 OPUS_PATH = "${pkgs.libopus}/lib/libopus.so";
                 YT_COOKIES_PATH = "${cfg.cookiesPath}";
                 RADIO_DB_PATH = "${cfg.dbPath}";
-                TTS_PROVIDER = "qwen3";
+                TTS_PROVIDER = "google";
               };
               restartIfChanged = false;
               serviceConfig = {

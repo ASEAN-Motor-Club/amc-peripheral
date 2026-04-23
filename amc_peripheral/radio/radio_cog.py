@@ -58,7 +58,7 @@ from amc_peripheral.settings import (
 )
 from amc_peripheral.db import RadioDB
 from amc_peripheral.utils.text_utils import split_markdown
-from amc_peripheral.radio.tts import tts_dispatch, tts_gemini_multi
+from amc_peripheral.radio.tts import tts_dispatch, tts_multi_dispatch
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
 from amc_peripheral.radio.radio_server import (
     get_current_song_metadata,
@@ -1024,9 +1024,9 @@ Script:
             f"**{turn.speaker}:** {turn.text}" for turn in script.turns
         )
 
-        # Generate multi-speaker audio
+        # Generate multi-speaker audio (always Google-based Gemini TTS)
         audio_bytes = await asyncio.to_thread(
-            tts_gemini_multi,
+            tts_multi_dispatch,
             turns,
             speaker_voices,
             prompt="Say this as a calm, natural conversation between radio hosts. Relaxed pacing, no exaggerated excitement or overly dramatic delivery.",

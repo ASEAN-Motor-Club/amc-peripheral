@@ -135,7 +135,7 @@ async def test_generate_segment_removes_markdown(cog, monkeypatch):
 
     # Mock TTS to return dummy bytes
     monkeypatch.setattr(
-        "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"audio"
+        "amc_peripheral.radio.radio_cog.tts_dispatch", lambda *args, **kwargs: b"audio"
     )
 
     transcript, audio = await cog.generate_segment("test topic")
@@ -1193,7 +1193,7 @@ async def test_generate_track_returns_transcript_and_audio(cog, monkeypatch):
     )
 
     monkeypatch.setattr(
-        "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"track_audio"
+        "amc_peripheral.radio.radio_cog.tts_dispatch", lambda *args, **kwargs: b"track_audio"
     )
 
     transcript, audio = await cog.generate_track("traffic safety tips")
@@ -1288,9 +1288,9 @@ async def test_generate_talkshow_returns_transcript_and_audio(cog, monkeypatch):
     cog.openai_client_openrouter.chat.completions.create = AsyncMock(side_effect=mock_create)
     cog.openai_client_openrouter.beta.chat.completions.parse = AsyncMock(return_value=parse_response)
 
-    # Mock tts_gemini_multi
+    # Mock tts_multi_dispatch
     monkeypatch.setattr(
-        "amc_peripheral.radio.radio_cog.tts_gemini_multi",
+        "amc_peripheral.radio.radio_cog.tts_multi_dispatch",
         lambda *args, **kwargs: b"talkshow_audio",
     )
 
@@ -1332,7 +1332,7 @@ async def test_generate_talkshow_formats_transcript_as_dialogue(cog, monkeypatch
     cog.openai_client_openrouter.beta.chat.completions.parse = AsyncMock(return_value=parse_response)
 
     monkeypatch.setattr(
-        "amc_peripheral.radio.radio_cog.tts_gemini_multi",
+        "amc_peripheral.radio.radio_cog.tts_multi_dispatch",
         lambda *args, **kwargs: b"audio",
     )
 
@@ -1382,7 +1382,7 @@ async def test_talkshow_host_always_uses_leda(cog, monkeypatch):
         return b"audio"
 
     monkeypatch.setattr(
-        "amc_peripheral.radio.radio_cog.tts_gemini_multi", mock_tts,
+        "amc_peripheral.radio.radio_cog.tts_multi_dispatch", mock_tts,
     )
 
     await cog.generate_talkshow("test topic")
@@ -1429,7 +1429,7 @@ async def test_talkshow_guest_voice_from_correct_pool(cog, monkeypatch):
         return b"audio"
 
     monkeypatch.setattr(
-        "amc_peripheral.radio.radio_cog.tts_gemini_multi", mock_tts,
+        "amc_peripheral.radio.radio_cog.tts_multi_dispatch", mock_tts,
     )
 
     await cog.generate_talkshow("test")
@@ -1471,7 +1471,7 @@ async def test_talkshow_voice_fallback_when_no_speakers(cog, monkeypatch):
         return b"audio"
 
     monkeypatch.setattr(
-        "amc_peripheral.radio.radio_cog.tts_gemini_multi", mock_tts,
+        "amc_peripheral.radio.radio_cog.tts_multi_dispatch", mock_tts,
     )
 
     await cog.generate_talkshow("test")
@@ -1552,7 +1552,7 @@ async def test_insert_tts_waits_for_music(cog, monkeypatch, tmp_path):
     """Test _insert_tts_on_radio generates TTS and pushes announcement."""
     monkeypatch.setattr("amc_peripheral.radio.radio_cog.RADIO_TMP_PATH", str(tmp_path))
     monkeypatch.setattr(
-        "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"audio"
+        "amc_peripheral.radio.radio_cog.tts_dispatch", lambda *args, **kwargs: b"audio"
     )
 
     cog.lq.push_announcement = AsyncMock(return_value=True)
@@ -1568,7 +1568,7 @@ async def test_insert_tts_timeout_inserts_anyway(cog, monkeypatch, tmp_path):
     """Test _insert_tts_on_radio inserts even after max retries."""
     monkeypatch.setattr("amc_peripheral.radio.radio_cog.RADIO_TMP_PATH", str(tmp_path))
     monkeypatch.setattr(
-        "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"audio"
+        "amc_peripheral.radio.radio_cog.tts_dispatch", lambda *args, **kwargs: b"audio"
     )
 
     # Always return "talking"
@@ -1591,7 +1591,7 @@ async def test_insert_tts_push_failure(cog, monkeypatch, tmp_path):
     """Test _insert_tts_on_radio returns False when push fails."""
     monkeypatch.setattr("amc_peripheral.radio.radio_cog.RADIO_TMP_PATH", str(tmp_path))
     monkeypatch.setattr(
-        "amc_peripheral.radio.radio_cog.tts_google", lambda *args, **kwargs: b"audio"
+        "amc_peripheral.radio.radio_cog.tts_dispatch", lambda *args, **kwargs: b"audio"
     )
 
     async def mock_get_current_source(session):
@@ -1611,7 +1611,7 @@ async def test_insert_tts_tts_failure(cog, monkeypatch, tmp_path):
     """Test _insert_tts_on_radio returns False when TTS generation fails."""
     monkeypatch.setattr("amc_peripheral.radio.radio_cog.RADIO_TMP_PATH", str(tmp_path))
     monkeypatch.setattr(
-        "amc_peripheral.radio.radio_cog.tts_google",
+        "amc_peripheral.radio.radio_cog.tts_dispatch",
         lambda *args, **kwargs: (_ for _ in ()).throw(Exception("TTS error")),
     )
 

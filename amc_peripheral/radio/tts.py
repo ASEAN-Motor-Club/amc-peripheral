@@ -492,6 +492,28 @@ def tts_qwen3_clone(
         os.unlink(mp3_path)
 
 
+def tts_multi_dispatch(
+    turns,
+    speaker_voices,
+    prompt="",
+    voice_language_code="en-GB",
+    volume_gain_db=6.0,
+):
+    """Route multi-speaker TTS to the configured provider.
+
+    Defaults to Google Cloud TTS (Gemini multi-speaker) regardless of the
+    single-speaker TTS_PROVIDER setting. This ensures multi-speaker audio
+    always uses the high-quality Google-based voices.
+    """
+    return tts_gemini_multi(
+        turns,
+        speaker_voices,
+        prompt=prompt,
+        voice_language_code=voice_language_code,
+        volume_gain_db=volume_gain_db,
+    )
+
+
 def tts_dispatch(
     text,
     voice_language_code="en-GB",
