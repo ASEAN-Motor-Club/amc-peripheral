@@ -67,6 +67,8 @@ from amc_peripheral.radio.radio_server import (
     parse_song_info,
 )
 from amc_peripheral.utils.game_utils import announce_in_game
+from amc_peripheral.memory.storage import MemoryStorage
+from amc_peripheral.memory.retrieval import MemoryRetrieval
 
 log = logging.getLogger(__name__)
 
@@ -435,6 +437,8 @@ class RadioCog(commands.Cog):
         self._download_queue: asyncio.Queue = asyncio.Queue()
         self._download_worker_task: asyncio.Task | None = None
         self._pending_tracks: dict[str, tuple[str, bytes]] = {}
+        self._memory_storage = None
+        self._memory_retrieval = None
 
     async def cog_load(self):
         self.post_gazette_task.start()
@@ -462,6 +466,22 @@ class RadioCog(commands.Cog):
             )
         except Exception as e:
             log.error(f"Failed to load knowledge store: {e}")
+
+        # Initialize long-term memory storage
+        try:
+            self._memory_storage = MemoryStorage()
+            log.info(f"Memory storage initialized at {self._memory_storage.db_path}")
+        except Exception as e:
+            log.error(f"Failed to initialize memory storage: {e}")
+            self._memory_storage = None
+
+        # Initialize semantic retrieval (ChromaDB)
+        try:
+            self._memory_retrieval = MemoryRetrieval()
+            log.info("ChromaDB memory retrieval initialized")
+        except Exception as e:
+            log.warning(f"ChromaDB not available, semantic search disabled: {e}")
+            self._memory_retrieval = None
 
         # Load game schema for segment generation
         try:
@@ -1994,9 +2014,92 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         except Exception as e:
             await notify_fn(f"Couldn't queue that song: {e}")
 
+    async def _get_player_memory_context(self, player_id: str, query: str = "") -> str:
+        """Retrieve recent player memory context for Annie chats.
+
+        Returns a formatted string of recent interactions, or empty string if
+        memory is unavailable or empty.
+        """
+        if not self._memory_storage:
+            return ""
+
+        try:
+            # Get recent messages from SQLite
+            recent = self._memory_storage.get_recent_messages(player_id, limit=10)
+            if not recent:
+                return ""
+
+            lines = []
+            for m in recent:
+                sender = m.get("player_name", "Unknown")
+                msg = m.get("message", "")
+                ts = m.get("timestamp", "")[:10]  # YYYY-MM-DD
+                lines.append(f"[{ts}] {sender}: {msg}")
+
+            return "Previous conversations with this player:\n" + "\n".join(lines)
+        except Exception as e:
+            log.warning(f"Failed to retrieve player memory context: {e}")
+            return ""
+
+    async def _store_annie_interaction(
+        self,
+        player_id: str,
+        player_name: str,
+        question: str,
+        response: str,
+        source: str = "discord_dm",
+    ) -> None:
+        """Store both the player's question and Annie's response in long-term memory."""
+        if not self._memory_storage:
+            return
+
+        try:
+            self._memory_storage.store_message(
+                player_id=player_id,
+                player_name=player_name,
+                message=question,
+                source=source,
+                is_bot_response=False,
+            )
+        except Exception as e:
+            log.warning(f"Failed to store player question: {e}")
+
+        try:
+            self._memory_storage.store_message(
+                player_id=player_id,
+                player_name="DJ Annie",
+                message=response,
+                source=source,
+                is_bot_response=True,
+            )
+        except Exception as e:
+            log.warning(f"Failed to store Annie response: {e}")
+
+        # Also add to ChromaDB for semantic retrieval
+        if self._memory_retrieval:
+            try:
+                self._memory_retrieval.add_memory(
+                    player_id=player_id,
+                    player_name=player_name,
+                    message=question,
+                    source=source,
+                    is_bot_response=False,
+                )
+                self._memory_retrieval.add_memory(
+                    player_id=player_id,
+                    player_name="DJ Annie",
+                    message=response,
+                    source=source,
+                    is_bot_response=True,
+                )
+            except Exception as e:
+                log.warning(f"Failed to add Annie interaction to ChromaDB: {e}")
+
     async def _handle_annie_chat_discord(self, message: discord.Message, question: str):
         """Handle an @mention of Annie on Discord."""
         now = datetime.now(self.local_tz)
+        player_id = str(message.author.id)
+        player_name = message.author.display_name
 
         # Gather channel history for context
         prev = ""
@@ -2004,6 +2107,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             if m.id == message.id:
                 continue
             prev = f"{m.author.display_name}: {m.content}\n" + prev
+
+        # Retrieve this player's long-term memory
+        memory_context = await self._get_player_memory_context(player_id, question)
 
         messages = [
             {
@@ -2019,12 +2125,16 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)",
             },
         ]
+        if memory_context:
+            messages.append(
+                {"role": "user", "content": memory_context}
+            )
         if prev:
             messages.append(
                 {"role": "user", "content": f"Recent chat history:\n{prev}"}
             )
         messages.append(
-            {"role": "user", "content": f"{message.author.display_name}: {question}"}
+            {"role": "user", "content": f"{player_name}: {question}"}
         )
 
         tools = self._get_annie_tools()
@@ -2042,7 +2152,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             response = await self._call_annie_llm(
                 messages,
                 tools,
-                message.author.display_name,
+                player_name,
                 discord_notify,
                 bypass_throttling=is_dj,
             )
@@ -2050,9 +2160,19 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         for chunk in split_markdown(response):
             await message.reply(chunk, mention_author=False)
 
+        # Persist interaction to long-term memory
+        await self._store_annie_interaction(
+            player_id=player_id,
+            player_name=player_name,
+            question=question,
+            response=response,
+            source="discord_dm",
+        )
+
     async def _handle_annie_chat_ingame(self, player_name: str, question: str):
         """Handle @annie mention from in-game chat."""
         now = datetime.now(self.local_tz)
+        player_id = player_name  # In-game we only have the player name as ID
 
         # Gather recent game chat from Discord channel
         prev = ""
@@ -2060,6 +2180,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         if game_chat:
             async for m in game_chat.history(limit=20):
                 prev = f"{m.content}\n" + prev
+
+        # Retrieve this player's long-term memory
+        memory_context = await self._get_player_memory_context(player_id, question)
 
         messages = [
             {
@@ -2076,6 +2199,10 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 "content": f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7)",
             },
         ]
+        if memory_context:
+            messages.append(
+                {"role": "user", "content": memory_context}
+            )
         if prev:
             messages.append(
                 {"role": "user", "content": f"Recent in-game chat:\n{prev}"}
@@ -2094,6 +2221,15 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             messages, tools, player_name, ingame_notify
         )
         await announce_in_game(self.bot.http_session, response[:520])
+
+        # Persist interaction to long-term memory
+        await self._store_annie_interaction(
+            player_id=player_id,
+            player_name=player_name,
+            question=question,
+            response=response,
+            source="game_chat",
+        )
 
     async def _call_annie_llm(
         self,
