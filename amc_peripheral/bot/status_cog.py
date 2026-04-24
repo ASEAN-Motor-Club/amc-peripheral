@@ -1,6 +1,5 @@
 import logging
 import aiohttp
-import discord
 from discord.ext import commands, tasks
 from amc_peripheral.settings import (
     GAME_SERVER_API_URL,
