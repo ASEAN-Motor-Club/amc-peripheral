@@ -69,6 +69,10 @@ from amc_peripheral.radio.radio_server import (
 from amc_peripheral.utils.game_utils import announce_in_game
 from amc_peripheral.memory.storage import MemoryStorage
 from amc_peripheral.memory.retrieval import MemoryRetrieval
+from amc_peripheral.wiki.storage import WikiStorage
+from amc_peripheral.wiki.retrieval import WikiRetrieval
+from amc_peripheral.wiki.index import WikiIndex
+from amc_peripheral.wiki.ingest import WikiIngest
 
 log = logging.getLogger(__name__)
 
@@ -153,6 +157,12 @@ Even if you think you know the answer, always verify with the tool.
 When players share useful tips, preferences, or facts (e.g., "the Micky is our favourite car", \
 "Steel Coils are the hardest cargo to deliver"), use `save_knowledge` to remember it. \
 Use keys like 'community:favourite-vehicles', 'tip:steel-coil-delivery', 'player:username-prefs', etc.
+
+## Your Wiki
+You maintain a personal wiki of knowledge about the community, players, and game world.
+Before answering questions about people, community dynamics, or long-running topics,
+search your wiki for relevant pages. Cite your wiki sources when appropriate.
+When you learn something new and notable from a conversation, update your wiki.
 
 ## Content Policy
 You MUST screen every song request before queuing. Reject songs that:
@@ -439,6 +449,12 @@ class RadioCog(commands.Cog):
         self._pending_tracks: dict[str, tuple[str, bytes]] = {}
         self._memory_storage = None
         self._memory_retrieval = None
+        self._wiki_storage = None
+        self._wiki_retrieval = None
+        self._wiki_index = None
+        self._wiki_ingest = None
+        self._wiki_ingest_debounce_task: asyncio.Task | None = None
+        self._wiki_pending_conversations: dict[str, dict] = {}
 
     async def cog_load(self):
         self.post_gazette_task.start()
@@ -482,6 +498,37 @@ class RadioCog(commands.Cog):
         except Exception as e:
             log.warning(f"ChromaDB not available, semantic search disabled: {e}")
             self._memory_retrieval = None
+
+        # Initialize wiki storage and retrieval
+        try:
+            self._wiki_storage = WikiStorage()
+            log.info(f"Wiki storage initialized at {self._wiki_storage.db_path}")
+        except Exception as e:
+            log.error(f"Failed to initialize wiki storage: {e}")
+            self._wiki_storage = None
+
+        try:
+            self._wiki_retrieval = WikiRetrieval()
+            log.info("Wiki ChromaDB retrieval initialized")
+        except Exception as e:
+            log.warning(f"Wiki ChromaDB not available, semantic wiki search disabled: {e}")
+            self._wiki_retrieval = None
+
+        if self._wiki_storage:
+            try:
+                self._wiki_index = WikiIndex(self._wiki_storage)
+                log.info("Wiki index initialized")
+            except Exception as e:
+                log.warning(f"Wiki index initialization failed: {e}")
+                self._wiki_index = None
+
+        if self._wiki_storage and self._wiki_retrieval:
+            try:
+                self._wiki_ingest = WikiIngest(self._wiki_storage, self._wiki_retrieval)
+                log.info("Wiki ingest initialized")
+            except Exception as e:
+                log.warning(f"Wiki ingest initialization failed: {e}")
+                self._wiki_ingest = None
 
         # Load game schema for segment generation
         try:
@@ -1533,6 +1580,135 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_wiki_page",
+                    "description": "Read a wiki page by title or slug. Use this to recall detailed information about a player, vehicle, location, concept, or event from Annie's personal wiki.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title_or_slug": {
+                                "type": "string",
+                                "description": "The page title or slug to read (e.g. 'player:freemanlatif', 'vehicle:Gosan_G7', 'concept:steel-coil-curse')",
+                            },
+                        },
+                        "required": ["title_or_slug"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_wiki",
+                    "description": "Search Annie's wiki for pages semantically related to a query. Returns the most relevant pages with summaries.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The search query",
+                            },
+                            "n_results": {
+                                "type": "integer",
+                                "description": "Number of results to return (default 3, max 5)",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "list_wiki_pages",
+                    "description": "List wiki pages by category or with a keyword filter. Use this to browse what Annie knows about.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "category": {
+                                "type": "string",
+                                "description": "Optional category filter (e.g. 'player', 'vehicle', 'concept', 'event')",
+                            },
+                            "keyword": {
+                                "type": "string",
+                                "description": "Optional keyword to filter titles/content",
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Max pages to return (default 10)",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "write_wiki_page",
+                    "description": "Create or update a wiki page. Use this when Annie learns something new and notable that should be remembered long-term. The page will be indexed for future retrieval.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string",
+                                "description": "Page title (e.g. 'player:freemanlatif', 'concept:steel-coil-curse')",
+                            },
+                            "category": {
+                                "type": "string",
+                                "description": "Page category (e.g. 'player', 'vehicle', 'location', 'concept', 'event', 'relationship', 'song')",
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "The page content",
+                            },
+                            "summary": {
+                                "type": "string",
+                                "description": "A brief summary of the page",
+                            },
+                        },
+                        "required": ["title", "category", "content"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "add_wiki_link",
+                    "description": "Create a cross-reference link between two wiki pages. This helps Annie navigate her knowledge graph.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "from_page": {
+                                "type": "string",
+                                "description": "Title or slug of the source page",
+                            },
+                            "to_page": {
+                                "type": "string",
+                                "description": "Title or slug of the target page",
+                            },
+                            "link_type": {
+                                "type": "string",
+                                "description": "Type of link (default: 'mentions')",
+                            },
+                        },
+                        "required": ["from_page", "to_page"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_wiki_summary",
+                    "description": "Get a brief summary of the wiki contents — total pages, categories, and recent updates. Useful for understanding the current state of Annie's knowledge base.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                },
+            },
         ]
 
     # --- TTS Voice-Over Insertion ---
@@ -1868,6 +2044,131 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     return f"Saved knowledge entry '{key}'."
                 return "Knowledge store not available."
 
+            elif name == "read_wiki_page":
+                title_or_slug = args.get("title_or_slug", "")
+                if not title_or_slug:
+                    return "Error: 'title_or_slug' is required."
+                if not self._wiki_storage:
+                    return "Wiki storage not available."
+                page = self._wiki_storage.get_page_by_slug(title_or_slug)
+                if not page:
+                    page = self._wiki_storage.get_page_by_title(title_or_slug)
+                if not page:
+                    return f"No wiki page found for '{title_or_slug}'."
+                return (
+                    f"--- {page['title']} ---\n"
+                    f"Category: {page['category']}\n"
+                    f"Summary: {page.get('summary', '')}\n"
+                    f"Content:\n{page['content']}"
+                )
+
+            elif name == "search_wiki":
+                query = args.get("query", "")
+                n_results = args.get("n_results", 3)
+                if not query:
+                    return "Error: 'query' is required."
+                if not self._wiki_retrieval:
+                    return "Wiki retrieval not available."
+                results = self._wiki_retrieval.search(query, n_results=n_results)
+                if not results:
+                    return f"No wiki pages found for '{query}'."
+                lines = []
+                for r in results:
+                    lines.append(
+                        f"- {r.get('title', 'Unknown')} ({r.get('category', 'unknown')}): "
+                        f"{r.get('content', '')[:200]}..."
+                    )
+                return "Wiki search results:\n" + "\n".join(lines)
+
+            elif name == "list_wiki_pages":
+                category = args.get("category") or None
+                keyword = args.get("keyword") or None
+                limit = args.get("limit", 10)
+                if not self._wiki_storage:
+                    return "Wiki storage not available."
+                pages = self._wiki_storage.list_pages(
+                    category=category, keyword=keyword, limit=limit
+                )
+                if not pages:
+                    return "No wiki pages found."
+                lines = []
+                for p in pages:
+                    lines.append(f"- {p['title']} ({p['category']}): {p.get('summary', '')[:100]}")
+                return "Wiki pages:\n" + "\n".join(lines)
+
+            elif name == "write_wiki_page":
+                title = args.get("title", "")
+                category = args.get("category", "concept")
+                content = args.get("content", "")
+                summary = args.get("summary", "")
+                if not title or not content:
+                    return "Error: 'title' and 'content' are required."
+                if not self._wiki_storage or not self._wiki_retrieval:
+                    return "Wiki storage not available."
+                slug = self._wiki_storage._make_slug(title)
+                existing = self._wiki_storage.get_page_by_slug(slug)
+                if existing:
+                    self._wiki_storage.update_page(
+                        existing["id"], content=content, summary=summary or existing.get("summary", "")
+                    )
+                    refreshed = self._wiki_storage.get_page_by_id(existing["id"])
+                    if refreshed:
+                        self._wiki_retrieval.index_page(
+                            page_id=existing["id"],
+                            title=refreshed["title"],
+                            content=refreshed["content"],
+                            category=refreshed["category"],
+                            updated_at=refreshed["updated_at"],
+                        )
+                    return f"Updated wiki page '{title}'."
+                else:
+                    page_id = self._wiki_storage.create_page(
+                        title=title, category=category, content=content, summary=summary
+                    )
+                    refreshed = self._wiki_storage.get_page_by_id(page_id)
+                    if refreshed:
+                        self._wiki_retrieval.index_page(
+                            page_id=page_id,
+                            title=refreshed["title"],
+                            content=refreshed["content"],
+                            category=refreshed["category"],
+                            updated_at=refreshed["updated_at"],
+                        )
+                    return f"Created wiki page '{title}'."
+
+            elif name == "add_wiki_link":
+                from_page = args.get("from_page", "")
+                to_page = args.get("to_page", "")
+                link_type = args.get("link_type", "mentions")
+                if not from_page or not to_page:
+                    return "Error: 'from_page' and 'to_page' are required."
+                if not self._wiki_storage:
+                    return "Wiki storage not available."
+                from_p = self._wiki_storage.get_page_by_slug(from_page) or self._wiki_storage.get_page_by_title(from_page)
+                to_p = self._wiki_storage.get_page_by_slug(to_page) or self._wiki_storage.get_page_by_title(to_page)
+                if not from_p:
+                    return f"From page '{from_page}' not found."
+                if not to_p:
+                    return f"To page '{to_page}' not found."
+                self._wiki_storage.add_link(from_p["id"], to_p["id"], link_type)
+                return f"Linked '{from_p['title']}' -> '{to_p['title']}' ({link_type})."
+
+            elif name == "get_wiki_summary":
+                if not self._wiki_storage:
+                    return "Wiki storage not available."
+                stats = self._wiki_storage.get_stats()
+                lines = [
+                    f"Wiki summary:",
+                    f"- Total pages: {stats.get('total_pages', 0)}",
+                    f"- Categories: {stats.get('total_categories', 0)}",
+                    f"- Total sources: {stats.get('total_sources', 0)}",
+                    f"- Total links: {stats.get('total_links', 0)}",
+                    f"- Log entries: {stats.get('total_log_entries', 0)}",
+                ]
+                if stats.get("latest_update"):
+                    lines.append(f"- Latest update: {stats['latest_update']}")
+                return "\n".join(lines)
+
             return f"Unknown tool: {name}"
         except Exception as e:
             return f"Tool error ({name}): {e}"
@@ -2041,6 +2342,131 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             log.warning(f"Failed to retrieve player memory context: {e}")
             return ""
 
+    async def _get_wiki_context(self, query: str = "") -> str:
+        """Retrieve relevant wiki pages for Annie chats.
+
+        Searches ChromaDB for semantically relevant pages and returns a
+        formatted context string. If no query is provided, returns the wiki index.
+        """
+        if not self._wiki_storage or not self._wiki_retrieval:
+            return ""
+
+        try:
+            # If we have a query, do semantic search
+            if query:
+                results = self._wiki_retrieval.search(query, n_results=3)
+                if results:
+                    page_ids = [r["page_id"] for r in results if r.get("page_id")]
+                    if self._wiki_index and page_ids:
+                        context = self._wiki_index.get_multi_page_context(page_ids)
+                        if context:
+                            return f"Relevant wiki pages:\n{context}"
+
+            # Fallback: return the wiki index summary
+            if self._wiki_index:
+                index = self._wiki_index.get_index()
+                if index:
+                    return f"Wiki index:\n{index}"
+
+            return ""
+        except Exception as e:
+            log.warning(f"Failed to retrieve wiki context: {e}")
+            return ""
+
+    async def _ingest_to_wiki(
+        self,
+        player_id: str,
+        player_name: str,
+        question: str,
+        response: str,
+    ) -> None:
+        """Debounced async wiki ingest after a conversation ends.
+
+        Uses a lightweight LLM call to extract facts and update wiki pages.
+        This is fire-and-forget — errors are logged but not raised.
+        """
+        if not self._wiki_ingest or not self._wiki_storage:
+            return
+
+        try:
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a fact extraction assistant. Given a conversation between a player and DJ Annie, "
+                        "extract any notable facts worth saving to a wiki. Return a JSON list of fact objects. "
+                        "Each fact should have: title, category (one of: player, vehicle, location, concept, event, relationship, song), "
+                        "content, summary. Only include genuinely new or notable information. "
+                        "If nothing notable was learned, return an empty list."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Player: {player_name}\nPlayer question: {question}\nAnnie response: {response}",
+                },
+            ]
+
+            completion = await self.openai_client_openrouter.chat.completions.create(
+                model=DEFAULT_AI_MODEL,
+                reasoning_effort="low",
+                messages=messages,
+            )
+
+            if not completion.choices:
+                return
+
+            content = completion.choices[0].message.content or ""
+            # Strip markdown code fences if present
+            content = content.strip()
+            if content.startswith("```json"):
+                content = content.split("```json")[-1].split("```")[0].strip()
+            elif content.startswith("```"):
+                content = content.split("```")[-1].split("```")[0].strip()
+
+            import json
+
+            facts = json.loads(content) if content else []
+            if not isinstance(facts, list):
+                facts = []
+
+            if facts:
+                conversation_messages = [
+                    {"message": question, "is_bot_response": False, "timestamp": datetime.now().isoformat()},
+                    {"message": response, "is_bot_response": True, "timestamp": datetime.now().isoformat()},
+                ]
+                self._wiki_ingest.ingest_conversation(
+                    player_id=player_id,
+                    player_name=player_name,
+                    messages=conversation_messages,
+                    extracted_facts=facts,
+                )
+                log.info(f"Wiki ingest completed for {player_name}: {len(facts)} fact(s)")
+        except Exception as e:
+            log.warning(f"Wiki ingest failed for {player_name}: {e}")
+
+    def _schedule_wiki_ingest(
+        self,
+        player_id: str,
+        player_name: str,
+        question: str,
+        response: str,
+    ) -> None:
+        """Schedule a debounced wiki ingest 30 seconds after the last message.
+
+        Cancels any pending ingest for this player and creates a new one.
+        """
+        if self._wiki_ingest_debounce_task and not self._wiki_ingest_debounce_task.done():
+            self._wiki_ingest_debounce_task.cancel()
+
+        async def debounced() -> None:
+            try:
+                await asyncio.sleep(30)
+                await self._ingest_to_wiki(player_id, player_name, question, response)
+            except asyncio.CancelledError:
+                pass
+
+        self._wiki_ingest_debounce_task = self.bot.loop.create_task(debounced())
+
     async def _store_annie_interaction(
         self,
         player_id: str,
@@ -2095,6 +2521,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             except Exception as e:
                 log.warning(f"Failed to add Annie interaction to ChromaDB: {e}")
 
+        # Schedule debounced wiki ingest
+        self._schedule_wiki_ingest(player_id, player_name, question, response)
+
     async def _handle_annie_chat_discord(self, message: discord.Message, question: str):
         """Handle an @mention of Annie on Discord."""
         now = datetime.now(self.local_tz)
@@ -2110,6 +2539,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 
         # Retrieve this player's long-term memory
         memory_context = await self._get_player_memory_context(player_id, question)
+
+        # Retrieve relevant wiki context
+        wiki_context = await self._get_wiki_context(question)
 
         messages = [
             {
@@ -2128,6 +2560,10 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         if memory_context:
             messages.append(
                 {"role": "user", "content": memory_context}
+            )
+        if wiki_context:
+            messages.append(
+                {"role": "user", "content": wiki_context}
             )
         if prev:
             messages.append(
@@ -2184,6 +2620,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         # Retrieve this player's long-term memory
         memory_context = await self._get_player_memory_context(player_id, question)
 
+        # Retrieve relevant wiki context
+        wiki_context = await self._get_wiki_context(question)
+
         messages = [
             {
                 "role": "system",
@@ -2202,6 +2641,10 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         if memory_context:
             messages.append(
                 {"role": "user", "content": memory_context}
+            )
+        if wiki_context:
+            messages.append(
+                {"role": "user", "content": wiki_context}
             )
         if prev:
             messages.append(
