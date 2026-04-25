@@ -118,6 +118,10 @@ MEMORY_DATA_DIR = os.environ.get("MEMORY_DATA_DIR", "./data")
 MEMORY_DB_PATH = os.path.join(MEMORY_DATA_DIR, "player_memories.db")
 CHROMADB_PATH = os.path.join(MEMORY_DATA_DIR, "chromadb")
 
+# Wiki Storage (Annie's structured knowledge base)
+WIKI_DB_PATH = os.path.join(MEMORY_DATA_DIR, "annie_wiki.db")
+WIKI_CHROMADB_PATH = os.path.join(MEMORY_DATA_DIR, "annie_wiki_chromadb")
+
 
 # Mapping Helpers
 def get_env_dict(var_name, default):
