@@ -121,6 +121,9 @@ CHROMADB_PATH = os.path.join(MEMORY_DATA_DIR, "chromadb")
 # Wiki Storage (Annie's structured knowledge base)
 WIKI_DB_PATH = os.path.join(MEMORY_DATA_DIR, "annie_wiki.db")
 WIKI_CHROMADB_PATH = os.path.join(MEMORY_DATA_DIR, "annie_wiki_chromadb")
+WIKI_EXPORT_PATH = os.environ.get(
+    "WIKI_EXPORT_PATH", os.path.join(MEMORY_DATA_DIR, "annie-wiki-export")
+)
 
 
 # Mapping Helpers

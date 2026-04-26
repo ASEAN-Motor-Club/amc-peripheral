@@ -11,7 +11,7 @@ from io import BytesIO
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, timezone, time as dt_time
 from collections import deque
-from typing import List, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from amc_peripheral.knowledge_store import KnowledgeStore
@@ -74,6 +74,8 @@ from amc_peripheral.wiki.retrieval import WikiRetrieval
 from amc_peripheral.wiki.index import WikiIndex
 from amc_peripheral.wiki.ingest import WikiIngest
 from amc_peripheral.wiki.lint import WikiLint
+from amc_peripheral.wiki.export import WikiExporter
+from amc_peripheral.wiki.synthesis import WikiSynthesizer
 
 log = logging.getLogger(__name__)
 
@@ -164,6 +166,12 @@ You maintain a personal wiki of knowledge about the community, players, and game
 Before answering questions about people, community dynamics, or long-running topics,
 search your wiki for relevant pages. Cite your wiki sources when appropriate.
 When you learn something new and notable from a conversation, update your wiki.
+
+If the current speaker asks what you know about them — e.g. "what do you know about me?",
+"show me my profile", "do you remember me?" — call `get_my_wiki_profile` (with no arguments;
+the speaker's player_id is provided automatically). If they ask about someone else, use
+`read_wiki_page` with that player's title/slug instead. If no page exists yet, say so
+warmly and invite them to keep chatting so you can get to know them.
 
 ## Content Policy
 You MUST screen every song request before queuing. Reject songs that:
@@ -455,6 +463,8 @@ class RadioCog(commands.Cog):
         self._wiki_index = None
         self._wiki_ingest = None
         self._wiki_lint = None
+        self._wiki_exporter = None
+        self._wiki_synthesizer = None
         self._wiki_pending_conversations: list[dict] = []
 
     async def cog_load(self):
@@ -538,9 +548,32 @@ class RadioCog(commands.Cog):
                 log.warning(f"Wiki lint initialization failed: {e}")
                 self._wiki_lint = None
 
+        if self._wiki_storage:
+            try:
+                self._wiki_exporter = WikiExporter(self._wiki_storage, self._wiki_index)
+                log.info("Wiki exporter initialized")
+            except Exception as e:
+                log.warning(f"Wiki exporter initialization failed: {e}")
+                self._wiki_exporter = None
+
+        if self._wiki_storage and self._wiki_retrieval:
+            try:
+                self._wiki_synthesizer = WikiSynthesizer(
+                    storage=self._wiki_storage,
+                    retrieval=self._wiki_retrieval,
+                    llm_client=self.openai_client_openrouter,
+                    model=DEFAULT_AI_MODEL,
+                )
+                log.info("Wiki synthesizer initialized")
+            except Exception as e:
+                log.warning(f"Wiki synthesizer initialization failed: {e}")
+                self._wiki_synthesizer = None
+
         # Start wiki background tasks
         self.wiki_background_ingest.start()
         self.wiki_daily_lint.start()
+        self.wiki_daily_export.start()
+        self.wiki_weekly_synthesis.start()
 
         # Load game schema for segment generation
         try:
@@ -564,6 +597,8 @@ class RadioCog(commands.Cog):
         self.auto_queue_trending.cancel()
         self.wiki_background_ingest.cancel()
         self.wiki_daily_lint.cancel()
+        self.wiki_daily_export.cancel()
+        self.wiki_weekly_synthesis.cancel()
         if self._download_worker_task:
             self._download_worker_task.cancel()
 
@@ -1723,6 +1758,18 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_my_wiki_profile",
+                    "description": "Get the wiki profile page for the current speaker (the player Annie is chatting with right now). Use this when someone asks 'what do you know about me?', 'show me my profile', or 'do you remember me?'. Takes no arguments — Annie injects the correct player_id automatically.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                },
+            },
         ]
 
     # --- TTS Voice-Over Insertion ---
@@ -1781,8 +1828,16 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         requester: str,
         notify_fn,
         bypass_throttling: bool = False,
+        player_id: Optional[str] = None,
     ) -> str:
-        """Execute a tool call from Annie's agentic loop."""
+        """Execute a tool call from Annie's agentic loop.
+
+        `player_id` is the id of the current chat's speaker; it is threaded
+        from the handler through `_call_annie_llm` so `get_my_wiki_profile`
+        always sees the correct player even when multiple chats run
+        concurrently. Do NOT stash it on `self` — that would race across
+        concurrent chat handlers.
+        """
         try:
             if name == "search_and_queue_song":
                 query = args.get("query", "")
@@ -2183,6 +2238,13 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     lines.append(f"- Latest update: {stats['latest_update']}")
                 return "\n".join(lines)
 
+            elif name == "get_my_wiki_profile":
+                # The LLM does not supply the player_id — we inject the
+                # speaker's id that the chat handler passed in so a player
+                # can't ask about someone else by impersonating an id, and
+                # so a concurrent chat can't overwrite the active speaker.
+                return self._get_player_wiki_summary(player_id or "")
+
             return f"Unknown tool: {name}"
         except Exception as e:
             return f"Tool error ({name}): {e}"
@@ -2287,7 +2349,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             collected_notifications.append(msg)
 
         response = await self._call_annie_llm(
-            messages, tools, requester_name, collect_notify, bypass_throttling=is_dj
+            messages, tools, requester_name, collect_notify,
+            bypass_throttling=is_dj, player_id=requester_id,
         )
 
         # Combine agent response with any background notifications
@@ -2355,6 +2418,68 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         except Exception as e:
             log.warning(f"Failed to retrieve player memory context: {e}")
             return ""
+
+    def _get_player_wiki_summary(self, player_id: str) -> str:
+        """Return a formatted summary of the `player:{player_id}` wiki page.
+
+        Falls back to a friendly message when the page doesn't exist yet or the
+        wiki isn't available. This is the sync helper behind the
+        `get_my_wiki_profile` tool (Phase 4A).
+        """
+        if not player_id:
+            return (
+                "I don't have a player ID to look up right now. Try chatting "
+                "with me a bit more and I'll build your page."
+            )
+        if not self._wiki_storage:
+            return "My wiki isn't available right now."
+
+        try:
+            slug = f"player:{player_id}"
+            page = self._wiki_storage.get_page_by_slug(slug)
+            if not page:
+                # Fall back to a title-based lookup in case the page was created
+                # with a non-standard title.
+                page = self._wiki_storage.get_page_by_title(slug)
+            if not page:
+                return (
+                    f"I don't have a wiki page for you yet (player_id={player_id}). "
+                    "Let's chat more and I'll get to know you!"
+                )
+
+            lines: list[str] = [
+                f"--- {page.get('title', '(untitled)')} ---",
+                f"Category: {page.get('category', 'player')}",
+            ]
+            summary = (page.get("summary") or "").strip()
+            if summary:
+                lines.append(f"Summary: {summary}")
+            content = (page.get("content") or "").strip()
+            if content:
+                excerpt = content if len(content) <= 2000 else content[:2000] + "..."
+                lines.append("Content:")
+                lines.append(excerpt)
+
+            try:
+                outbound = self._wiki_storage.get_links_from(page["id"])
+                inbound = self._wiki_storage.get_links_to(page["id"])
+            except Exception:
+                outbound = []
+                inbound = []
+            if outbound:
+                titles = ", ".join(link.get("to_title", "") for link in outbound[:10])
+                lines.append(f"Links to: {titles}")
+            if inbound:
+                titles = ", ".join(link.get("from_title", "") for link in inbound[:10])
+                lines.append(f"Linked from: {titles}")
+
+            return "\n".join(lines)
+        except Exception as e:
+            log.warning(f"_get_player_wiki_summary failed: {e}")
+            return (
+                "I had trouble reading your wiki page just now — "
+                "but you're still on my mind."
+            )
 
     async def _get_wiki_context(self, query: str = "") -> str:
         """Retrieve relevant wiki pages for Annie chats.
@@ -2601,6 +2726,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 player_name,
                 discord_notify,
                 bypass_throttling=is_dj,
+                player_id=player_id,
             )
 
         for chunk in split_markdown(response):
@@ -2671,7 +2797,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             await announce_in_game(self.bot.http_session, msg[:520])
 
         response = await self._call_annie_llm(
-            messages, tools, player_name, ingame_notify
+            messages, tools, player_name, ingame_notify, player_id=player_id
         )
         await announce_in_game(self.bot.http_session, response[:520])
 
@@ -2691,8 +2817,14 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         requester: str,
         notify_fn,
         bypass_throttling: bool = False,
+        player_id: Optional[str] = None,
     ) -> str:
-        """Agentic loop for Annie — calls LLM with tools until a final response."""
+        """Agentic loop for Annie — calls LLM with tools until a final response.
+
+        `player_id` is threaded into `_execute_annie_tool` so tools that need
+        the current speaker (e.g. `get_my_wiki_profile`) can rely on it even
+        when multiple chats are in flight concurrently.
+        """
         max_iterations = 20
 
         for _ in range(max_iterations):
@@ -2721,6 +2853,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     requester,
                     notify_fn,
                     bypass_throttling=bypass_throttling,
+                    player_id=player_id,
                 )
                 messages.append(
                     {
@@ -3506,7 +3639,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 
     @commands.command(name="wiki")
     async def wiki_dev_cmd(self, ctx: commands.Context, action: str = ""):
-        """Dev-only wiki commands: !wiki lint, !wiki stats"""
+        """Dev-only wiki commands: !wiki lint | stats | export | synth"""
         # Restrict to DJ role
         member = ctx.author
         is_dj = (
@@ -3566,8 +3699,43 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             except Exception as e:
                 await ctx.send(f"Stats failed: {e}")
 
+        elif action == "export":
+            if not self._wiki_exporter:
+                await ctx.send("Wiki exporter not initialized.")
+                return
+            await ctx.send("Exporting wiki to markdown...")
+            try:
+                summary = await asyncio.to_thread(self._wiki_exporter.export_all)
+                await ctx.send(
+                    f"Wiki exported: {summary.get('pages_exported', 0)} page(s) "
+                    f"to `{summary.get('output_dir', '')}`."
+                )
+            except Exception as e:
+                await ctx.send(f"Export failed: {e}")
+
+        elif action == "synth":
+            if not self._wiki_synthesizer:
+                await ctx.send("Wiki synthesizer not initialized.")
+                return
+            await ctx.send("Generating weekly synthesis...")
+            try:
+                page = await self._wiki_synthesizer.generate_weekly_synthesis()
+                if page is None:
+                    await ctx.send(
+                        "No synthesis written — nothing notable happened this week."
+                    )
+                else:
+                    await ctx.send(
+                        f"Synthesis page written: **{page.get('title', 'synthesis')}** "
+                        f"(id={page.get('id', '?')})."
+                    )
+            except Exception as e:
+                await ctx.send(f"Synthesis failed: {e}")
+
         else:
-            await ctx.send("Usage: `!wiki lint` or `!wiki stats`")
+            await ctx.send(
+                "Usage: `!wiki lint` | `!wiki stats` | `!wiki export` | `!wiki synth`"
+            )
 
     @app_commands.command(name="song_request", description="Submit a song request")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
@@ -4346,6 +4514,67 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
     @wiki_daily_lint.error
     async def wiki_daily_lint_error(self, error):
         log.error(f"wiki_daily_lint task error: {error}", exc_info=error)
+
+    @tasks.loop(time=dt_time(hour=4, minute=30, tzinfo=ZoneInfo("Asia/Bangkok")))
+    async def wiki_daily_export(self):
+        """Export the wiki to markdown every morning at 4:30 Bangkok time.
+
+        Runs 30 minutes after `wiki_daily_lint` so the exported snapshot
+        reflects the post-lint state of the DB.
+        """
+        if not self._wiki_exporter:
+            log.warning("Wiki exporter not available, skipping daily export")
+            return
+        try:
+            summary = await asyncio.to_thread(self._wiki_exporter.export_all)
+            log.info(
+                f"Wiki daily export complete: "
+                f"{summary.get('pages_exported', 0)} pages -> "
+                f"{summary.get('output_dir', '')}"
+            )
+        except Exception as e:
+            log.error(f"Wiki daily export failed: {e}", exc_info=e)
+
+    @wiki_daily_export.before_loop
+    async def before_wiki_daily_export(self):
+        await self.bot.wait_until_ready()
+
+    @wiki_daily_export.error
+    async def wiki_daily_export_error(self, error):
+        log.error(f"wiki_daily_export task error: {error}", exc_info=error)
+
+    @tasks.loop(time=dt_time(hour=9, minute=0, tzinfo=ZoneInfo("Asia/Bangkok")))
+    async def wiki_weekly_synthesis(self):
+        """Run weekly synthesis on Monday mornings (Bangkok time).
+
+        `tasks.loop(time=...)` fires daily — we gate execution to Monday so
+        the schedule is exactly 'Mondays at 9 AM Bangkok'.
+        """
+        now = datetime.now(self.local_tz)
+        if now.weekday() != 0:  # 0 = Monday
+            return
+        if not self._wiki_synthesizer:
+            log.warning("Wiki synthesizer not available, skipping weekly synthesis")
+            return
+        try:
+            page = await self._wiki_synthesizer.generate_weekly_synthesis(now=now)
+            if page is None:
+                log.info("Weekly synthesis produced no page (no recent activity)")
+            else:
+                log.info(
+                    f"Weekly synthesis page written: "
+                    f"{page.get('title', 'synthesis')}"
+                )
+        except Exception as e:
+            log.error(f"Weekly synthesis failed: {e}", exc_info=e)
+
+    @wiki_weekly_synthesis.before_loop
+    async def before_wiki_weekly_synthesis(self):
+        await self.bot.wait_until_ready()
+
+    @wiki_weekly_synthesis.error
+    async def wiki_weekly_synthesis_error(self, error):
+        log.error(f"wiki_weekly_synthesis task error: {error}", exc_info=error)
 
     # --- Event-driven ingest hook ---
 

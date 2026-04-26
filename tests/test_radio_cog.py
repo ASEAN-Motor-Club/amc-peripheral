@@ -76,6 +76,8 @@ async def test_radio_cog_load_starts_tasks(cog):
     cog.auto_queue_trending.start = MagicMock()
     cog.wiki_background_ingest.start = MagicMock()
     cog.wiki_daily_lint.start = MagicMock()
+    cog.wiki_daily_export.start = MagicMock()
+    cog.wiki_weekly_synthesis.start = MagicMock()
 
     # Mock fetch_knowledge to avoid error
     cog.fetch_knowledge = AsyncMock(return_value="Mock Knowledge")
@@ -91,6 +93,8 @@ async def test_radio_cog_load_starts_tasks(cog):
     cog.auto_queue_trending.start.assert_called_once()
     cog.wiki_background_ingest.start.assert_called_once()
     cog.wiki_daily_lint.start.assert_called_once()
+    cog.wiki_daily_export.start.assert_called_once()
+    cog.wiki_weekly_synthesis.start.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -104,6 +108,8 @@ async def test_radio_cog_unload_cancels_tasks(cog):
     cog.auto_queue_trending.cancel = MagicMock()
     cog.wiki_background_ingest.cancel = MagicMock()
     cog.wiki_daily_lint.cancel = MagicMock()
+    cog.wiki_daily_export.cancel = MagicMock()
+    cog.wiki_weekly_synthesis.cancel = MagicMock()
 
     await cog.cog_unload()
 
@@ -114,6 +120,8 @@ async def test_radio_cog_unload_cancels_tasks(cog):
     cog.auto_queue_trending.cancel.assert_called_once()
     cog.wiki_background_ingest.cancel.assert_called_once()
     cog.wiki_daily_lint.cancel.assert_called_once()
+    cog.wiki_daily_export.cancel.assert_called_once()
+    cog.wiki_weekly_synthesis.cancel.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -184,6 +192,10 @@ async def test_cog_load_starts_auto_queue(cog):
     cog.update_news.start = MagicMock()
     cog.update_current_song_embed.start = MagicMock()
     cog.auto_queue_trending.start = MagicMock()
+    cog.wiki_background_ingest.start = MagicMock()
+    cog.wiki_daily_lint.start = MagicMock()
+    cog.wiki_daily_export.start = MagicMock()
+    cog.wiki_weekly_synthesis.start = MagicMock()
     cog.fetch_knowledge = AsyncMock(return_value="Mock Knowledge")
     cog._cleanup_legacy_requests = MagicMock()
 
@@ -200,6 +212,10 @@ async def test_cog_unload_cancels_auto_queue(cog):
     cog.update_news.cancel = MagicMock()
     cog.update_current_song_embed.cancel = MagicMock()
     cog.auto_queue_trending.cancel = MagicMock()
+    cog.wiki_background_ingest.cancel = MagicMock()
+    cog.wiki_daily_lint.cancel = MagicMock()
+    cog.wiki_daily_export.cancel = MagicMock()
+    cog.wiki_weekly_synthesis.cancel = MagicMock()
 
     await cog.cog_unload()
 
@@ -233,6 +249,8 @@ async def test_cog_load_starts_wiki_tasks(cog):
     cog.auto_queue_trending.start = MagicMock()
     cog.wiki_background_ingest.start = MagicMock()
     cog.wiki_daily_lint.start = MagicMock()
+    cog.wiki_daily_export.start = MagicMock()
+    cog.wiki_weekly_synthesis.start = MagicMock()
     cog.fetch_knowledge = AsyncMock(return_value="Mock Knowledge")
     cog._cleanup_legacy_requests = MagicMock()
 
@@ -240,6 +258,8 @@ async def test_cog_load_starts_wiki_tasks(cog):
 
     cog.wiki_background_ingest.start.assert_called_once()
     cog.wiki_daily_lint.start.assert_called_once()
+    cog.wiki_daily_export.start.assert_called_once()
+    cog.wiki_weekly_synthesis.start.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -252,11 +272,15 @@ async def test_cog_unload_cancels_wiki_tasks(cog):
     cog.auto_queue_trending.cancel = MagicMock()
     cog.wiki_background_ingest.cancel = MagicMock()
     cog.wiki_daily_lint.cancel = MagicMock()
+    cog.wiki_daily_export.cancel = MagicMock()
+    cog.wiki_weekly_synthesis.cancel = MagicMock()
 
     await cog.cog_unload()
 
     cog.wiki_background_ingest.cancel.assert_called_once()
     cog.wiki_daily_lint.cancel.assert_called_once()
+    cog.wiki_daily_export.cancel.assert_called_once()
+    cog.wiki_weekly_synthesis.cancel.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -414,7 +438,9 @@ async def test_wiki_dev_cmd_unknown_action(cog):
     ctx.send = AsyncMock()
 
     await cog.wiki_dev_cmd.callback(cog, ctx, "foo")
-    ctx.send.assert_called_once_with("Usage: `!wiki lint` or `!wiki stats`")
+    ctx.send.assert_called_once_with(
+        "Usage: `!wiki lint` | `!wiki stats` | `!wiki export` | `!wiki synth`"
+    )
 
 
 @pytest.mark.asyncio
@@ -443,6 +469,304 @@ async def test_ingest_game_event_skips_when_not_initialized(cog):
         event_type="race", event_id="1", title="Race", description="desc"
     )
     assert result == []
+
+
+# --- Phase 4A: Player wiki profile tests ---
+
+
+@pytest.mark.asyncio
+async def test_get_player_wiki_summary_returns_friendly_fallback(cog):
+    """When wiki is unavailable, summary should be a friendly message."""
+    cog._wiki_storage = None
+    result = cog._get_player_wiki_summary("abc123")
+    assert "available" in result.lower() or "wiki" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_get_player_wiki_summary_no_page(cog):
+    """When the player page doesn't exist, return a friendly invite."""
+    storage = MagicMock()
+    storage.get_page_by_slug.return_value = None
+    storage.get_page_by_title.return_value = None
+    cog._wiki_storage = storage
+    result = cog._get_player_wiki_summary("abc123")
+    assert "abc123" in result
+    assert "page" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_get_player_wiki_summary_formats_existing_page(cog):
+    """When a player page exists, return a formatted summary with links."""
+    storage = MagicMock()
+    storage.get_page_by_slug.return_value = {
+        "id": 42,
+        "title": "player:abc123",
+        "category": "player",
+        "summary": "Known Gosan fan.",
+        "content": "Drives the Gosan a lot.",
+    }
+    storage.get_links_from.return_value = [
+        {"to_title": "vehicle:Gosan_G7", "link_type": "mentions"}
+    ]
+    storage.get_links_to.return_value = []
+    cog._wiki_storage = storage
+
+    result = cog._get_player_wiki_summary("abc123")
+
+    assert "player:abc123" in result
+    assert "Gosan" in result
+    assert "vehicle:Gosan_G7" in result
+
+
+@pytest.mark.asyncio
+async def test_get_my_wiki_profile_tool_uses_injected_player_id(cog):
+    """The `get_my_wiki_profile` tool must use the caller-injected player_id,
+    not any value the LLM might try to pass in.
+    """
+    storage = MagicMock()
+    storage.get_page_by_slug.return_value = {
+        "id": 1,
+        "title": "player:real_speaker",
+        "category": "player",
+        "summary": "",
+        "content": "",
+    }
+    storage.get_links_from.return_value = []
+    storage.get_links_to.return_value = []
+    cog._wiki_storage = storage
+
+    # Even if the LLM passed a different player_id, the tool ignores it —
+    # only the caller-supplied kwarg is trusted.
+    result = await cog._execute_annie_tool(
+        "get_my_wiki_profile",
+        {"player_id": "someone_else"},
+        "Speaker",
+        AsyncMock(),
+        player_id="real_speaker",
+    )
+    assert "player:real_speaker" in result
+    storage.get_page_by_slug.assert_called_with("player:real_speaker")
+
+
+@pytest.mark.asyncio
+async def test_get_my_wiki_profile_concurrent_chats_do_not_race(cog):
+    """Two concurrent tool calls with different player_id kwargs must each see
+    their own player — no shared mutable state on `self`.
+    """
+    storage = MagicMock()
+
+    def by_slug(slug):
+        return {
+            "id": 1 if "alice" in slug else 2,
+            "title": slug,
+            "category": "player",
+            "summary": "",
+            "content": "",
+        }
+
+    storage.get_page_by_slug.side_effect = by_slug
+    storage.get_links_from.return_value = []
+    storage.get_links_to.return_value = []
+    cog._wiki_storage = storage
+
+    results = await asyncio.gather(
+        cog._execute_annie_tool(
+            "get_my_wiki_profile", {}, "alice", AsyncMock(), player_id="alice"
+        ),
+        cog._execute_annie_tool(
+            "get_my_wiki_profile", {}, "bob", AsyncMock(), player_id="bob"
+        ),
+    )
+    assert "player:alice" in results[0]
+    assert "player:bob" in results[1]
+
+
+@pytest.mark.asyncio
+async def test_get_my_wiki_profile_tool_defined(cog):
+    """The new tool must appear in Annie's tool list."""
+    tools = cog._get_annie_tools()
+    names = [t["function"]["name"] for t in tools]
+    assert "get_my_wiki_profile" in names
+
+
+# --- Phase 4C: Wiki export dev command + task ---
+
+
+@pytest.mark.asyncio
+async def test_wiki_daily_export_task_exists(cog):
+    assert hasattr(cog, "wiki_daily_export")
+    assert isinstance(cog.wiki_daily_export, tasks.Loop)
+
+
+@pytest.mark.asyncio
+async def test_wiki_daily_export_runs_when_initialized(cog, monkeypatch):
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.log", MagicMock())
+    exporter = MagicMock()
+    exporter.export_all.return_value = {
+        "pages_exported": 5,
+        "output_dir": "/tmp/wiki",
+        "exported_at": "2026-04-26T04:30:00",
+    }
+    cog._wiki_exporter = exporter
+
+    await cog.wiki_daily_export()
+
+    exporter.export_all.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_wiki_daily_export_skips_when_not_initialized(cog, monkeypatch):
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.log", MagicMock())
+    cog._wiki_exporter = None
+    # Should not raise
+    await cog.wiki_daily_export()
+
+
+@pytest.mark.asyncio
+async def test_wiki_dev_cmd_export(cog):
+    """`!wiki export` should invoke the exporter and report results."""
+    ctx = MagicMock()
+    dj_role = MagicMock()
+    dj_role.id = 1364484047447003248
+    ctx.author.roles = [dj_role]
+    ctx.send = AsyncMock()
+
+    exporter = MagicMock()
+    exporter.export_all.return_value = {
+        "pages_exported": 7,
+        "output_dir": "/tmp/wiki-export",
+        "exported_at": "now",
+    }
+    cog._wiki_exporter = exporter
+
+    await cog.wiki_dev_cmd.callback(cog, ctx, "export")
+
+    # Two messages: "Exporting..." + result
+    assert ctx.send.call_count == 2
+    last = ctx.send.call_args_list[-1][0][0]
+    assert "7" in last
+    assert "/tmp/wiki-export" in last
+
+
+@pytest.mark.asyncio
+async def test_wiki_dev_cmd_export_unavailable(cog):
+    ctx = MagicMock()
+    dj_role = MagicMock()
+    dj_role.id = 1364484047447003248
+    ctx.author.roles = [dj_role]
+    ctx.send = AsyncMock()
+    cog._wiki_exporter = None
+
+    await cog.wiki_dev_cmd.callback(cog, ctx, "export")
+    ctx.send.assert_called_once_with("Wiki exporter not initialized.")
+
+
+# --- Phase 4E: Weekly synthesis dev command + task ---
+
+
+@pytest.mark.asyncio
+async def test_wiki_weekly_synthesis_task_exists(cog):
+    assert hasattr(cog, "wiki_weekly_synthesis")
+    assert isinstance(cog.wiki_weekly_synthesis, tasks.Loop)
+
+
+@pytest.mark.asyncio
+async def test_wiki_weekly_synthesis_runs_on_monday(cog, monkeypatch):
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.log", MagicMock())
+    synth = MagicMock()
+    synth.generate_weekly_synthesis = AsyncMock(
+        return_value={"id": 1, "title": "synthesis:community-week-2026-W18"}
+    )
+    cog._wiki_synthesizer = synth
+
+    # Freeze `datetime.now(tz)` to a Monday
+    import amc_peripheral.radio.radio_cog as module
+
+    monday = module.datetime(
+        2026, 4, 27, 9, 0, 0, tzinfo=module.ZoneInfo("Asia/Bangkok")
+    )
+    fake_dt = MagicMock()
+    fake_dt.now = MagicMock(return_value=monday)
+    monkeypatch.setattr(module, "datetime", fake_dt)
+
+    await cog.wiki_weekly_synthesis()
+
+    synth.generate_weekly_synthesis.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_wiki_weekly_synthesis_skips_on_other_days(cog, monkeypatch):
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.log", MagicMock())
+    synth = MagicMock()
+    synth.generate_weekly_synthesis = AsyncMock()
+    cog._wiki_synthesizer = synth
+
+    import amc_peripheral.radio.radio_cog as module
+
+    # Tuesday
+    tuesday = module.datetime(
+        2026, 4, 28, 9, 0, 0, tzinfo=module.ZoneInfo("Asia/Bangkok")
+    )
+    fake_dt = MagicMock()
+    fake_dt.now = MagicMock(return_value=tuesday)
+    monkeypatch.setattr(module, "datetime", fake_dt)
+
+    await cog.wiki_weekly_synthesis()
+
+    synth.generate_weekly_synthesis.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_wiki_dev_cmd_synth(cog):
+    """`!wiki synth` should call the synthesizer and report the page."""
+    ctx = MagicMock()
+    dj_role = MagicMock()
+    dj_role.id = 1364484047447003248
+    ctx.author.roles = [dj_role]
+    ctx.send = AsyncMock()
+
+    synth = MagicMock()
+    synth.generate_weekly_synthesis = AsyncMock(
+        return_value={"id": 99, "title": "synthesis:community-week-2026-W18"}
+    )
+    cog._wiki_synthesizer = synth
+
+    await cog.wiki_dev_cmd.callback(cog, ctx, "synth")
+
+    assert ctx.send.call_count == 2
+    last = ctx.send.call_args_list[-1][0][0]
+    assert "synthesis:community-week-2026-W18" in last
+
+
+@pytest.mark.asyncio
+async def test_wiki_dev_cmd_synth_no_activity(cog):
+    ctx = MagicMock()
+    dj_role = MagicMock()
+    dj_role.id = 1364484047447003248
+    ctx.author.roles = [dj_role]
+    ctx.send = AsyncMock()
+
+    synth = MagicMock()
+    synth.generate_weekly_synthesis = AsyncMock(return_value=None)
+    cog._wiki_synthesizer = synth
+
+    await cog.wiki_dev_cmd.callback(cog, ctx, "synth")
+
+    last = ctx.send.call_args_list[-1][0][0]
+    assert "nothing notable" in last.lower()
+
+
+@pytest.mark.asyncio
+async def test_wiki_dev_cmd_synth_unavailable(cog):
+    ctx = MagicMock()
+    dj_role = MagicMock()
+    dj_role.id = 1364484047447003248
+    ctx.author.roles = [dj_role]
+    ctx.send = AsyncMock()
+    cog._wiki_synthesizer = None
+
+    await cog.wiki_dev_cmd.callback(cog, ctx, "synth")
+    ctx.send.assert_called_once_with("Wiki synthesizer not initialized.")
 
 
 @pytest.mark.asyncio
