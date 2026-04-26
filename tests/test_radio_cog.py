@@ -36,6 +36,7 @@ def cog(mock_bot, tmp_path, monkeypatch):
     monkeypatch.setattr("amc_peripheral.radio.radio_cog.RADIO_DB_PATH", db_path)
     monkeypatch.setattr("amc_peripheral.radio.radio_cog.SONG_CACHE_PATH", str(tmp_path / "cache"))
     monkeypatch.setattr("amc_peripheral.radio.radio_cog.REQUESTS_PATH", str(tmp_path / "requests"))
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.OPENAI_API_KEY_OPENROUTER", "test-key")
     return RadioCog(mock_bot)
 
 
@@ -54,6 +55,15 @@ async def test_radio_tasks_exist(cog):
     assert hasattr(cog, "update_current_song_embed")
     assert isinstance(cog.update_current_song_embed, tasks.Loop)
 
+    assert hasattr(cog, "auto_queue_trending")
+    assert isinstance(cog.auto_queue_trending, tasks.Loop)
+
+    assert hasattr(cog, "wiki_background_ingest")
+    assert isinstance(cog.wiki_background_ingest, tasks.Loop)
+
+    assert hasattr(cog, "wiki_daily_lint")
+    assert isinstance(cog.wiki_daily_lint, tasks.Loop)
+
 
 @pytest.mark.asyncio
 async def test_radio_cog_load_starts_tasks(cog):
@@ -63,6 +73,9 @@ async def test_radio_cog_load_starts_tasks(cog):
     cog.update_jingles.start = MagicMock()
     cog.update_news.start = MagicMock()
     cog.update_current_song_embed.start = MagicMock()
+    cog.auto_queue_trending.start = MagicMock()
+    cog.wiki_background_ingest.start = MagicMock()
+    cog.wiki_daily_lint.start = MagicMock()
 
     # Mock fetch_knowledge to avoid error
     cog.fetch_knowledge = AsyncMock(return_value="Mock Knowledge")
@@ -75,6 +88,9 @@ async def test_radio_cog_load_starts_tasks(cog):
     cog.update_jingles.start.assert_called_once()
     cog.update_news.start.assert_called_once()
     cog.update_current_song_embed.start.assert_called_once()
+    cog.auto_queue_trending.start.assert_called_once()
+    cog.wiki_background_ingest.start.assert_called_once()
+    cog.wiki_daily_lint.start.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -85,6 +101,9 @@ async def test_radio_cog_unload_cancels_tasks(cog):
     cog.update_jingles.cancel = MagicMock()
     cog.update_news.cancel = MagicMock()
     cog.update_current_song_embed.cancel = MagicMock()
+    cog.auto_queue_trending.cancel = MagicMock()
+    cog.wiki_background_ingest.cancel = MagicMock()
+    cog.wiki_daily_lint.cancel = MagicMock()
 
     await cog.cog_unload()
 
@@ -92,6 +111,9 @@ async def test_radio_cog_unload_cancels_tasks(cog):
     cog.update_jingles.cancel.assert_called_once()
     cog.update_news.cancel.assert_called_once()
     cog.update_current_song_embed.cancel.assert_called_once()
+    cog.auto_queue_trending.cancel.assert_called_once()
+    cog.wiki_background_ingest.cancel.assert_called_once()
+    cog.wiki_daily_lint.cancel.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -182,6 +204,245 @@ async def test_cog_unload_cancels_auto_queue(cog):
     await cog.cog_unload()
 
     cog.auto_queue_trending.cancel.assert_called_once()
+
+
+# --- Wiki Background Task Tests ---
+
+
+@pytest.mark.asyncio
+async def test_wiki_background_ingest_task_exists(cog):
+    """Verify that the wiki_background_ingest task is defined as a Loop object."""
+    assert hasattr(cog, "wiki_background_ingest")
+    assert isinstance(cog.wiki_background_ingest, tasks.Loop)
+
+
+@pytest.mark.asyncio
+async def test_wiki_daily_lint_task_exists(cog):
+    """Verify that the wiki_daily_lint task is defined as a Loop object."""
+    assert hasattr(cog, "wiki_daily_lint")
+    assert isinstance(cog.wiki_daily_lint, tasks.Loop)
+
+
+@pytest.mark.asyncio
+async def test_cog_load_starts_wiki_tasks(cog):
+    """Verify cog_load starts the wiki background tasks."""
+    cog.post_gazette_task.start = MagicMock()
+    cog.update_jingles.start = MagicMock()
+    cog.update_news.start = MagicMock()
+    cog.update_current_song_embed.start = MagicMock()
+    cog.auto_queue_trending.start = MagicMock()
+    cog.wiki_background_ingest.start = MagicMock()
+    cog.wiki_daily_lint.start = MagicMock()
+    cog.fetch_knowledge = AsyncMock(return_value="Mock Knowledge")
+    cog._cleanup_legacy_requests = MagicMock()
+
+    await cog.cog_load()
+
+    cog.wiki_background_ingest.start.assert_called_once()
+    cog.wiki_daily_lint.start.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_cog_unload_cancels_wiki_tasks(cog):
+    """Verify cog_unload cancels the wiki background tasks."""
+    cog.post_gazette_task.cancel = MagicMock()
+    cog.update_jingles.cancel = MagicMock()
+    cog.update_news.cancel = MagicMock()
+    cog.update_current_song_embed.cancel = MagicMock()
+    cog.auto_queue_trending.cancel = MagicMock()
+    cog.wiki_background_ingest.cancel = MagicMock()
+    cog.wiki_daily_lint.cancel = MagicMock()
+
+    await cog.cog_unload()
+
+    cog.wiki_background_ingest.cancel.assert_called_once()
+    cog.wiki_daily_lint.cancel.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_schedule_wiki_ingest_queues_conversations(cog):
+    """Verify _schedule_wiki_ingest appends to the pending queue."""
+    assert cog._wiki_pending_conversations == []
+    cog._schedule_wiki_ingest("player1", "Alice", "Hello", "Hi there")
+    assert len(cog._wiki_pending_conversations) == 1
+    item = cog._wiki_pending_conversations[0]
+    assert item["player_id"] == "player1"
+    assert item["player_name"] == "Alice"
+    assert item["question"] == "Hello"
+    assert item["response"] == "Hi there"
+    assert "timestamp" in item
+
+    # Multiple calls append
+    cog._schedule_wiki_ingest("player2", "Bob", "How are you?", "Good!")
+    assert len(cog._wiki_pending_conversations) == 2
+
+
+@pytest.mark.asyncio
+async def test_wiki_background_ingest_drains_queue(cog, monkeypatch):
+    """Verify wiki_background_ingest drains the queue and calls _ingest_to_wiki."""
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.log", MagicMock())
+    cog._wiki_ingest = MagicMock()
+    cog._wiki_storage = MagicMock()
+    cog._ingest_to_wiki = AsyncMock()
+
+    cog._schedule_wiki_ingest("p1", "Alice", "Q1", "A1")
+    cog._schedule_wiki_ingest("p2", "Bob", "Q2", "A2")
+    assert len(cog._wiki_pending_conversations) == 2
+
+    await cog.wiki_background_ingest()
+
+    assert cog._wiki_pending_conversations == []
+    assert cog._ingest_to_wiki.call_count == 2
+    cog._ingest_to_wiki.assert_any_call("p1", "Alice", "Q1", "A1")
+    cog._ingest_to_wiki.assert_any_call("p2", "Bob", "Q2", "A2")
+
+
+@pytest.mark.asyncio
+async def test_wiki_background_ingest_skips_when_not_initialized(cog, monkeypatch):
+    """Verify wiki_background_ingest skips if wiki components are missing."""
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.log", MagicMock())
+    cog._wiki_ingest = None
+    cog._wiki_storage = None
+    cog._schedule_wiki_ingest("p1", "Alice", "Q1", "A1")
+
+    await cog.wiki_background_ingest()
+
+    assert cog._wiki_pending_conversations == []
+
+
+@pytest.mark.asyncio
+async def test_wiki_daily_lint_runs_when_initialized(cog, monkeypatch):
+    """Verify wiki_daily_lint runs lint and logs results."""
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.log", MagicMock())
+    mock_lint = MagicMock()
+    mock_lint.run_lint.return_value = {
+        "orphans": [{"title": "orphan1"}],
+        "stale": [],
+        "missing_links": [{"from_title": "a", "to_title": "b"}],
+        "inactive_players": [],
+        "fixes_applied": ["fix1"],
+    }
+    cog._wiki_lint = mock_lint
+    cog._wiki_storage = MagicMock()
+
+    await cog.wiki_daily_lint()
+
+    mock_lint.run_lint.assert_called_once_with(auto_fix=True)
+
+
+@pytest.mark.asyncio
+async def test_wiki_daily_lint_skips_when_not_initialized(cog, monkeypatch):
+    """Verify wiki_daily_lint skips if wiki lint is missing."""
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.log", MagicMock())
+    cog._wiki_lint = None
+    cog._wiki_storage = None
+
+    await cog.wiki_daily_lint()
+
+    # Should not raise
+
+
+@pytest.mark.asyncio
+async def test_wiki_dev_cmd_restricted_to_dj(cog):
+    """Verify !wiki commands are restricted to DJ role."""
+    ctx = MagicMock()
+    ctx.author.roles = [MagicMock(id=999)]  # Not DJ_ROLE_ID
+    ctx.send = AsyncMock()
+
+    await cog.wiki_dev_cmd.callback(cog, ctx, "lint")
+    ctx.send.assert_called_once_with("Only DJs can use wiki dev commands.")
+
+
+@pytest.mark.asyncio
+async def test_wiki_dev_cmd_stats(cog):
+    """Verify !wiki stats returns wiki statistics."""
+    ctx = MagicMock()
+    dj_role = MagicMock()
+    dj_role.id = 1364484047447003248  # DJ_ROLE_ID default
+    ctx.author.roles = [dj_role]
+    ctx.send = AsyncMock()
+
+    cog._wiki_storage = MagicMock()
+    cog._wiki_storage.get_stats.return_value = {
+        "total_pages": 42,
+        "total_categories": 5,
+        "total_sources": 10,
+        "total_links": 8,
+        "total_log_entries": 20,
+        "latest_update": "2026-04-26 10:00:00",
+    }
+
+    await cog.wiki_dev_cmd.callback(cog, ctx, "stats")
+    ctx.send.assert_called_once()
+    sent = ctx.send.call_args[0][0]
+    assert "42" in sent
+    assert "Wiki Stats" in sent
+
+
+@pytest.mark.asyncio
+async def test_wiki_dev_cmd_lint(cog):
+    """Verify !wiki lint runs lint and reports results."""
+    ctx = MagicMock()
+    dj_role = MagicMock()
+    dj_role.id = 1364484047447003248
+    ctx.author.roles = [dj_role]
+    ctx.send = AsyncMock()
+
+    cog._wiki_lint = MagicMock()
+    cog._wiki_lint.run_lint.return_value = {
+        "orphans": [],
+        "stale": [],
+        "missing_links": [],
+        "inactive_players": [],
+        "fixes_applied": [],
+    }
+    cog._wiki_storage = MagicMock()
+
+    await cog.wiki_dev_cmd.callback(cog, ctx, "lint")
+    assert ctx.send.call_count == 2
+    sent = ctx.send.call_args_list[-1][0][0]
+    assert "0 issues" in sent
+
+
+@pytest.mark.asyncio
+async def test_wiki_dev_cmd_unknown_action(cog):
+    """Verify !wiki with unknown action shows usage."""
+    ctx = MagicMock()
+    dj_role = MagicMock()
+    dj_role.id = 1364484047447003248
+    ctx.author.roles = [dj_role]
+    ctx.send = AsyncMock()
+
+    await cog.wiki_dev_cmd.callback(cog, ctx, "foo")
+    ctx.send.assert_called_once_with("Usage: `!wiki lint` or `!wiki stats`")
+
+
+@pytest.mark.asyncio
+async def test_ingest_game_event_wrapper(cog):
+    """Verify ingest_game_event delegates to WikiIngest.ingest_event."""
+    cog._wiki_ingest = MagicMock()
+    cog._wiki_ingest.ingest_event.return_value = [1, 2]
+
+    result = await cog.ingest_game_event(
+        event_type="race",
+        event_id="2026-04-20-great-race",
+        title="2026-04-20 Great Race",
+        description="An amazing race happened",
+        participants=["player1", "player2"],
+    )
+
+    assert result == [1, 2]
+    cog._wiki_ingest.ingest_event.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_ingest_game_event_skips_when_not_initialized(cog):
+    """Verify ingest_game_event returns empty list when wiki ingest is missing."""
+    cog._wiki_ingest = None
+    result = await cog.ingest_game_event(
+        event_type="race", event_id="1", title="Race", description="desc"
+    )
+    assert result == []
 
 
 @pytest.mark.asyncio

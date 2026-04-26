@@ -73,6 +73,7 @@ from amc_peripheral.wiki.storage import WikiStorage
 from amc_peripheral.wiki.retrieval import WikiRetrieval
 from amc_peripheral.wiki.index import WikiIndex
 from amc_peripheral.wiki.ingest import WikiIngest
+from amc_peripheral.wiki.lint import WikiLint
 
 log = logging.getLogger(__name__)
 
@@ -453,8 +454,8 @@ class RadioCog(commands.Cog):
         self._wiki_retrieval = None
         self._wiki_index = None
         self._wiki_ingest = None
-        self._wiki_ingest_debounce_task: asyncio.Task | None = None
-        self._wiki_pending_conversations: dict[str, dict] = {}
+        self._wiki_lint = None
+        self._wiki_pending_conversations: list[dict] = []
 
     async def cog_load(self):
         self.post_gazette_task.start()
@@ -530,6 +531,17 @@ class RadioCog(commands.Cog):
                 log.warning(f"Wiki ingest initialization failed: {e}")
                 self._wiki_ingest = None
 
+            try:
+                self._wiki_lint = WikiLint(self._wiki_storage, self._wiki_retrieval)
+                log.info("Wiki lint initialized")
+            except Exception as e:
+                log.warning(f"Wiki lint initialization failed: {e}")
+                self._wiki_lint = None
+
+        # Start wiki background tasks
+        self.wiki_background_ingest.start()
+        self.wiki_daily_lint.start()
+
         # Load game schema for segment generation
         try:
             from amc_peripheral.bot import game_db
@@ -550,6 +562,8 @@ class RadioCog(commands.Cog):
         self.update_news.cancel()
         self.update_current_song_embed.cancel()
         self.auto_queue_trending.cancel()
+        self.wiki_background_ingest.cancel()
+        self.wiki_daily_lint.cancel()
         if self._download_worker_task:
             self._download_worker_task.cancel()
 
@@ -2451,21 +2465,17 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         question: str,
         response: str,
     ) -> None:
-        """Schedule a debounced wiki ingest 30 seconds after the last message.
+        """Queue a conversation for background wiki ingest.
 
-        Cancels any pending ingest for this player and creates a new one.
+        The wiki_background_ingest task drains this queue every 5 minutes.
         """
-        if self._wiki_ingest_debounce_task and not self._wiki_ingest_debounce_task.done():
-            self._wiki_ingest_debounce_task.cancel()
-
-        async def debounced() -> None:
-            try:
-                await asyncio.sleep(30)
-                await self._ingest_to_wiki(player_id, player_name, question, response)
-            except asyncio.CancelledError:
-                pass
-
-        self._wiki_ingest_debounce_task = self.bot.loop.create_task(debounced())
+        self._wiki_pending_conversations.append({
+            "player_id": player_id,
+            "player_name": player_name,
+            "question": question,
+            "response": response,
+            "timestamp": datetime.now(self.local_tz).isoformat(),
+        })
 
     async def _store_annie_interaction(
         self,
@@ -3492,6 +3502,73 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         except Exception as e:
             await interaction.followup.send(f"Failed: {e}")
 
+    # --- Dev text commands (not slash commands) ---
+
+    @commands.command(name="wiki")
+    async def wiki_dev_cmd(self, ctx: commands.Context, action: str = ""):
+        """Dev-only wiki commands: !wiki lint, !wiki stats"""
+        # Restrict to DJ role
+        member = ctx.author
+        is_dj = (
+            any(r.id == DJ_ROLE_ID for r in member.roles)
+            if hasattr(member, "roles")
+            else False
+        )
+        if not is_dj:
+            await ctx.send("Only DJs can use wiki dev commands.")
+            return
+
+        if action == "lint":
+            if not self._wiki_lint or not self._wiki_storage:
+                await ctx.send("Wiki not initialized.")
+                return
+            await ctx.send("Running wiki lint...")
+            try:
+                report = self._wiki_lint.run_lint(auto_fix=True)
+                total_issues = (
+                    len(report.get("orphans", []))
+                    + len(report.get("stale", []))
+                    + len(report.get("missing_links", []))
+                    + len(report.get("inactive_players", []))
+                )
+                fixes = len(report.get("fixes_applied", []))
+                lines = [
+                    f"Wiki lint complete: {total_issues} issues found, {fixes} auto-fixed.",
+                    f"- Orphans: {len(report.get('orphans', []))}",
+                    f"- Stale pages: {len(report.get('stale', []))}",
+                    f"- Missing links: {len(report.get('missing_links', []))}",
+                    f"- Inactive players: {len(report.get('inactive_players', []))}",
+                ]
+                await ctx.send("\n".join(lines))
+            except Exception as e:
+                await ctx.send(f"Lint failed: {e}")
+
+        elif action == "stats":
+            if not self._wiki_storage:
+                await ctx.send("Wiki not initialized.")
+                return
+            try:
+                stats = self._wiki_storage.get_stats()
+                lines = [
+                    "**Wiki Stats**",
+                    f"- Total pages: {stats.get('total_pages', 0)}",
+                    f"- Categories: {stats.get('total_categories', 0)}",
+                    f"- Total sources: {stats.get('total_sources', 0)}",
+                    f"- Total links: {stats.get('total_links', 0)}",
+                    f"- Log entries: {stats.get('total_log_entries', 0)}",
+                ]
+                if stats.get("latest_update"):
+                    lines.append(f"- Latest update: {stats['latest_update']}")
+                pending = len(self._wiki_pending_conversations)
+                if pending:
+                    lines.append(f"- Pending ingest queue: {pending}")
+                await ctx.send("\n".join(lines))
+            except Exception as e:
+                await ctx.send(f"Stats failed: {e}")
+
+        else:
+            await ctx.send("Usage: `!wiki lint` or `!wiki stats`")
+
     @app_commands.command(name="song_request", description="Submit a song request")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def song_request_cmd(
@@ -4205,6 +4282,101 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             async for m in radio_channel.history(limit=1, oldest_first=True):
                 if m.author.bot:
                     self.embed_message_id = m.id
+
+    # --- Wiki Background Tasks ---
+
+    @tasks.loop(minutes=5)
+    async def wiki_background_ingest(self):
+        """Drain the pending ingest queue and process conversations."""
+        if not self._wiki_pending_conversations:
+            return
+        if not self._wiki_ingest or not self._wiki_storage:
+            log.warning("Wiki ingest not available, skipping background ingest")
+            self._wiki_pending_conversations.clear()
+            return
+
+        # Snapshot and clear the queue
+        batch = self._wiki_pending_conversations[:]
+        self._wiki_pending_conversations.clear()
+        log.info(f"Wiki background ingest: processing {len(batch)} conversation(s)")
+
+        for item in batch:
+            try:
+                await self._ingest_to_wiki(
+                    item["player_id"],
+                    item["player_name"],
+                    item["question"],
+                    item["response"],
+                )
+            except Exception as e:
+                log.warning(f"Wiki background ingest failed for {item.get('player_name')}: {e}")
+
+    @wiki_background_ingest.before_loop
+    async def before_wiki_background_ingest(self):
+        await self.bot.wait_until_ready()
+
+    @wiki_background_ingest.error
+    async def wiki_background_ingest_error(self, error):
+        log.error(f"wiki_background_ingest task error: {error}", exc_info=error)
+
+    @tasks.loop(time=dt_time(hour=4, minute=0, tzinfo=ZoneInfo("Asia/Bangkok")))
+    async def wiki_daily_lint(self):
+        """Run daily wiki lint: scan for orphans, stale pages, missing links."""
+        if not self._wiki_lint or not self._wiki_storage:
+            log.warning("Wiki lint not available, skipping daily lint")
+            return
+
+        try:
+            report = self._wiki_lint.run_lint(auto_fix=True)
+            total_issues = (
+                len(report.get("orphans", []))
+                + len(report.get("stale", []))
+                + len(report.get("missing_links", []))
+                + len(report.get("inactive_players", []))
+            )
+            fixes = len(report.get("fixes_applied", []))
+            log.info(f"Wiki daily lint: {total_issues} issues found, {fixes} auto-fixed")
+        except Exception as e:
+            log.error(f"Wiki daily lint failed: {e}", exc_info=e)
+
+    @wiki_daily_lint.before_loop
+    async def before_wiki_daily_lint(self):
+        await self.bot.wait_until_ready()
+
+    @wiki_daily_lint.error
+    async def wiki_daily_lint_error(self, error):
+        log.error(f"wiki_daily_lint task error: {error}", exc_info=error)
+
+    # --- Event-driven ingest hook ---
+
+    async def ingest_game_event(
+        self,
+        event_type: str,
+        event_id: str,
+        title: str,
+        description: str,
+        participants: list[str] | None = None,
+    ) -> list[int]:
+        """Ingest a backend/game event into the wiki.
+
+        This is the hook for event-driven ingest. Call it when the bot
+        receives notable events (player joins, economy spikes, race finishes).
+        Returns affected page IDs.
+        """
+        if not self._wiki_ingest:
+            log.warning("Wiki ingest not available, cannot ingest game event")
+            return []
+        try:
+            return self._wiki_ingest.ingest_event(
+                event_type=event_type,
+                event_id=event_id,
+                title=title,
+                description=description,
+                participants=participants,
+            )
+        except Exception as e:
+            log.warning(f"Game event ingest failed ({event_type}:{event_id}): {e}")
+            return []
 
     # --- Listeners ---
 
