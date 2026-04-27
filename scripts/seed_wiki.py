@@ -5,11 +5,16 @@ Bootstrap Annie's wiki from existing data sources.
 Idempotent — safe to run on every startup. Skips already-seeded pages.
 
 Sources:
-- KnowledgeStore entries -> concept:/vehicle:/guide: pages
+- Legacy `knowledge.json` file (if present) -> concept:/vehicle:/guide: pages
 - player_memories -> player: pages (top players by message count)
 - Radio DB -> song: pages (popular songs, frequent requesters)
+
+Note: the legacy `KnowledgeStore` Python module has been removed. This
+script reads the raw `knowledge.json` file directly if it still exists on
+disk, so one-off migrations keep working until the file is archived.
 """
 
+import json
 import os
 import sys
 import logging
@@ -27,7 +32,6 @@ from amc_peripheral.settings import (
     MEMORY_DB_PATH,
     RADIO_DB_PATH,
 )
-from amc_peripheral.knowledge_store import KnowledgeStore
 from amc_peripheral.memory.storage import MemoryStorage
 from amc_peripheral.db import RadioDB
 
@@ -35,15 +39,32 @@ log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 
-def seed_from_knowledge_store(wiki_ingest: WikiIngest, knowledge_store: KnowledgeStore) -> int:
-    """Migrate KnowledgeStore entries into wiki pages."""
+def seed_from_legacy_knowledge_json(wiki_ingest: WikiIngest, knowledge_path: str) -> int:
+    """Migrate legacy `knowledge.json` entries into wiki pages.
+
+    The file format is `{key: {content: str, ...}}` where `key` is
+    `{type}:{id}`. Idempotent — skips entries already present.
+    """
     count = 0
-    for key in knowledge_store.list_keys():
+    try:
+        with open(knowledge_path, "r") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        log.warning(f"Failed to read legacy knowledge.json at {knowledge_path}: {e}")
+        return 0
+
+    if not isinstance(data, dict):
+        log.warning(f"Legacy knowledge.json has unexpected shape: {type(data).__name__}")
+        return 0
+
+    for key, entry in data.items():
         # Skip if already seeded (use canonical slug)
         if wiki_ingest.storage.get_page_by_slug(key):
             continue
 
-        content = knowledge_store.get(key)
+        if not isinstance(entry, dict):
+            continue
+        content = entry.get("content")
         if not content:
             continue
 
@@ -56,7 +77,7 @@ def seed_from_knowledge_store(wiki_ingest: WikiIngest, knowledge_store: Knowledg
             title=title,
             category=category,
             content=content,
-            summary=f"Migrated from KnowledgeStore: {key}",
+            summary=f"Migrated from legacy knowledge.json: {key}",
         )
         wiki_ingest.storage.add_source(page_id, "knowledge_store", key)
         refreshed = wiki_ingest.storage.get_page_by_id(page_id)
@@ -232,17 +253,16 @@ def main():
 
     total_seeded = 0
 
-    # Seed from KnowledgeStore if available
+    # Seed from legacy knowledge.json if available
     knowledge_path = os.path.join(os.path.dirname(WIKI_DB_PATH), "knowledge.json")
     if os.path.exists(knowledge_path):
-        log.info(f"Seeding from KnowledgeStore: {knowledge_path}")
+        log.info(f"Seeding from legacy knowledge.json: {knowledge_path}")
         try:
-            knowledge_store = KnowledgeStore(knowledge_path)
-            total_seeded += seed_from_knowledge_store(ingest, knowledge_store)
+            total_seeded += seed_from_legacy_knowledge_json(ingest, knowledge_path)
         except Exception as e:
-            log.warning(f"Failed to seed from KnowledgeStore: {e}")
+            log.warning(f"Failed to seed from legacy knowledge.json: {e}")
     else:
-        log.info("KnowledgeStore not found, skipping.")
+        log.info("Legacy knowledge.json not found, skipping.")
 
     # Seed from player_memories if available
     if os.path.exists(MEMORY_DB_PATH):

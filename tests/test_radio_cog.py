@@ -66,7 +66,7 @@ async def test_radio_tasks_exist(cog):
 
 
 @pytest.mark.asyncio
-async def test_radio_cog_load_starts_tasks(cog):
+async def test_radio_cog_load_starts_tasks(cog, monkeypatch):
     """Verify cog_load starts the tasks."""
     # Mock the start methods
     cog.post_gazette_task.start = MagicMock()
@@ -84,6 +84,9 @@ async def test_radio_cog_load_starts_tasks(cog):
     # Mock cleanup to avoid filesystem errors
     cog._cleanup_legacy_requests = MagicMock()
 
+    # Stop the SSE listener from actually connecting
+    cog._listen_backend_events = AsyncMock()
+
     await cog.cog_load()
 
     cog.post_gazette_task.start.assert_called_once()
@@ -95,6 +98,9 @@ async def test_radio_cog_load_starts_tasks(cog):
     cog.wiki_daily_lint.start.assert_called_once()
     cog.wiki_daily_export.start.assert_called_once()
     cog.wiki_weekly_synthesis.start.assert_called_once()
+    # SSE listener task was scheduled
+    assert cog._sse_task is not None
+    cog._sse_task.cancel()
 
 
 @pytest.mark.asyncio
@@ -111,6 +117,10 @@ async def test_radio_cog_unload_cancels_tasks(cog):
     cog.wiki_daily_export.cancel = MagicMock()
     cog.wiki_weekly_synthesis.cancel = MagicMock()
 
+    sse_task = MagicMock()
+    sse_task.cancel = MagicMock()
+    cog._sse_task = sse_task
+
     await cog.cog_unload()
 
     cog.post_gazette_task.cancel.assert_called_once()
@@ -122,6 +132,7 @@ async def test_radio_cog_unload_cancels_tasks(cog):
     cog.wiki_daily_lint.cancel.assert_called_once()
     cog.wiki_daily_export.cancel.assert_called_once()
     cog.wiki_weekly_synthesis.cancel.assert_called_once()
+    sse_task.cancel.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -198,10 +209,13 @@ async def test_cog_load_starts_auto_queue(cog):
     cog.wiki_weekly_synthesis.start = MagicMock()
     cog.fetch_knowledge = AsyncMock(return_value="Mock Knowledge")
     cog._cleanup_legacy_requests = MagicMock()
+    cog._listen_backend_events = AsyncMock()
 
     await cog.cog_load()
 
     cog.auto_queue_trending.start.assert_called_once()
+    if cog._sse_task is not None:
+        cog._sse_task.cancel()
 
 
 @pytest.mark.asyncio
@@ -253,6 +267,7 @@ async def test_cog_load_starts_wiki_tasks(cog):
     cog.wiki_weekly_synthesis.start = MagicMock()
     cog.fetch_knowledge = AsyncMock(return_value="Mock Knowledge")
     cog._cleanup_legacy_requests = MagicMock()
+    cog._listen_backend_events = AsyncMock()
 
     await cog.cog_load()
 
@@ -260,6 +275,8 @@ async def test_cog_load_starts_wiki_tasks(cog):
     cog.wiki_daily_lint.start.assert_called_once()
     cog.wiki_daily_export.start.assert_called_once()
     cog.wiki_weekly_synthesis.start.assert_called_once()
+    if cog._sse_task is not None:
+        cog._sse_task.cancel()
 
 
 @pytest.mark.asyncio
@@ -469,6 +486,183 @@ async def test_ingest_game_event_skips_when_not_initialized(cog):
         event_type="race", event_id="1", title="Race", description="desc"
     )
     assert result == []
+
+
+# --- Phase 5S: SSE event dispatcher tests ---
+
+
+@pytest.mark.asyncio
+async def test_sse_chat_message_is_skipped(cog):
+    """chat_message events must NOT be re-ingested (Discord forwarding handles them)."""
+    cog.ingest_game_event = AsyncMock()
+
+    await cog._handle_backend_event(
+        {
+            "type": "chat_message",
+            "timestamp": "2026-04-27T10:00:00",
+            "player_name": "Alice",
+            "player_id": "alice",
+            "discord_id": None,
+            "character_guid": None,
+            "message": "hi",
+            "is_bot_command": False,
+        }
+    )
+
+    cog.ingest_game_event.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sse_heartbeat_is_noop(cog):
+    """Heartbeat events must be silently ignored."""
+    cog.ingest_game_event = AsyncMock()
+
+    await cog._handle_backend_event({"type": "heartbeat"})
+
+    cog.ingest_game_event.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sse_unknown_event_routes_to_ingest(cog):
+    """Unknown event types must be forwarded to ingest_game_event with mapped args."""
+    cog.ingest_game_event = AsyncMock(return_value=[])
+
+    await cog._handle_backend_event(
+        {
+            "type": "race_finished",
+            "event_id": "race-123",
+            "timestamp": "2026-04-27T10:00:00",
+            "title": "The Great Gosan Derby",
+            "description": "Alice won by 3s.",
+            "participants": ["alice", "bob"],
+        }
+    )
+
+    cog.ingest_game_event.assert_awaited_once()
+    kwargs = cog.ingest_game_event.await_args.kwargs
+    assert kwargs["event_type"] == "race_finished"
+    assert kwargs["event_id"] == "race-123"
+    assert kwargs["title"] == "The Great Gosan Derby"
+    assert kwargs["description"] == "Alice won by 3s."
+    assert kwargs["participants"] == ["alice", "bob"]
+
+
+@pytest.mark.asyncio
+async def test_sse_unknown_event_fallback_event_id(cog):
+    """Events without event_id fall back to {type}-{timestamp} for idempotency."""
+    cog.ingest_game_event = AsyncMock(return_value=[])
+
+    await cog._handle_backend_event(
+        {
+            "type": "economy_milestone",
+            "timestamp": "2026-04-27T10:00:00",
+            "title": "Million moolah!",
+        }
+    )
+
+    kwargs = cog.ingest_game_event.await_args.kwargs
+    assert kwargs["event_id"] == "economy_milestone-2026-04-27T10:00:00"
+
+
+@pytest.mark.asyncio
+async def test_sse_malformed_event_does_not_crash(cog):
+    """Events without a `type` field must not crash the dispatcher."""
+    cog.ingest_game_event = AsyncMock()
+
+    # No type field
+    await cog._handle_backend_event({"timestamp": "2026-04-27T10:00:00"})
+    # Empty dict
+    await cog._handle_backend_event({})
+
+    cog.ingest_game_event.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sse_ingest_failure_does_not_crash_dispatcher(cog, monkeypatch):
+    """If ingest_game_event raises, the dispatcher swallows the error."""
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.log", MagicMock())
+    cog.ingest_game_event = AsyncMock(side_effect=Exception("wiki down"))
+
+    # Must not raise
+    await cog._handle_backend_event(
+        {
+            "type": "race_finished",
+            "event_id": "race-123",
+            "timestamp": "2026-04-27T10:00:00",
+            "title": "A race",
+            "description": "desc",
+        }
+    )
+
+
+def test_map_event_to_wiki_unknown_type(cog):
+    """map_event_to_wiki produces sane defaults for unmapped event shapes."""
+    event_type, event_id, title, description, participants = cog.map_event_to_wiki(
+        {
+            "type": "custom_weird_event",
+            "timestamp": "2026-04-27T10:00:00",
+            "some_field": "value",
+        }
+    )
+    assert event_type == "custom_weird_event"
+    assert event_id == "custom_weird_event-2026-04-27T10:00:00"
+    assert "custom_weird_event" in title
+    # Description falls back to a JSON dump of the payload
+    assert "some_field" in description
+    assert participants is None
+
+
+def test_map_event_to_wiki_prefers_explicit_fields(cog):
+    """map_event_to_wiki uses the event's explicit title/description/participants."""
+    event_type, event_id, title, description, participants = cog.map_event_to_wiki(
+        {
+            "type": "race_finished",
+            "event_id": "race-42",
+            "timestamp": "2026-04-27T10:00:00",
+            "title": "Coastal Grand Prix",
+            "description": "A stunning race.",
+            "participants": ["alice", "bob"],
+        }
+    )
+    assert event_type == "race_finished"
+    assert event_id == "race-42"
+    assert title == "Coastal Grand Prix"
+    assert description == "A stunning race."
+    assert participants == ["alice", "bob"]
+
+
+def test_map_event_to_wiki_rejects_non_list_participants(cog):
+    """Non-list `participants` fields must be coerced to None to avoid crashes."""
+    _, _, _, _, participants = cog.map_event_to_wiki(
+        {"type": "race_finished", "participants": "alice,bob"}
+    )
+    assert participants is None
+
+
+@pytest.mark.asyncio
+async def test_listen_backend_events_cancels_cleanly(cog, monkeypatch):
+    """_listen_backend_events must exit cleanly on cancellation."""
+    monkeypatch.setattr("amc_peripheral.radio.radio_cog.log", MagicMock())
+
+    # Force every connection attempt to raise, which puts the listener into
+    # its exponential-backoff sleep — the easiest point to cancel from.
+    class _Boom:
+        def __call__(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+    import aiohttp
+
+    monkeypatch.setattr(aiohttp, "ClientSession", _Boom())
+
+    task = asyncio.create_task(cog._listen_backend_events())
+    # Give the listener a chance to hit the error branch and start sleeping.
+    await asyncio.sleep(0.05)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    assert task.done()
 
 
 # --- Phase 4A: Player wiki profile tests ---

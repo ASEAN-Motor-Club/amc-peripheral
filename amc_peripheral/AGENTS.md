@@ -30,11 +30,18 @@ amc_peripheral/
 │   ├── devbot_cog.py    # Codebase chat, search, and dev tooling
 │   └── codebase_tools.py  # File search, grep, git tools for LLM agents
 ├── db.py                # RadioDB — SQLite (sqlite-utils) for radio state
-├── knowledge_store.py   # JSON-backed in-memory knowledge store for game info
 ├── announcements.py     # AnnouncementsDB — configurable in-game announcements
 ├── memory/              # Long-term player memory
 │   ├── storage.py       # MemoryStorage — SQLite for conversation history
 │   └── retrieval.py     # ChromaDB semantic retrieval
+├── wiki/                # Annie's self-maintained wiki (replaces KnowledgeStore)
+│   ├── storage.py       # WikiStorage — SQLite pages, links, sources, log
+│   ├── retrieval.py     # WikiRetrieval — ChromaDB semantic search
+│   ├── index.py         # WikiIndex — compact prompt-context index
+│   ├── ingest.py        # WikiIngest — raw source → wiki updates
+│   ├── lint.py          # WikiLint — orphan/stale/contradiction scans
+│   ├── export.py        # WikiExporter — markdown export for humans
+│   └── synthesis.py     # WikiSynthesizer — weekly State of the Community
 └── utils/               # Shared helpers
     ├── discord_utils.py
     ├── game_utils.py
@@ -61,7 +68,7 @@ All three are independent `discord.py` bots running as separate systemd services
 ### Data Layer
 
 - **`RadioDB`** (`db.py`) — SQLite via `sqlite-utils`. Tables: `song_requests`, `song_likes`, `user_language_preferences`, `auto_queued_songs`, `generated_news`, `generated_jingles`, `user_playlists`, `playlist_songs`, `downloaded_songs`. Used by `radio_cog.py`.
-- **`KnowledgeStore`** (`knowledge_store.py`) — JSON-backed dict (`{type}:{id}` keys, e.g. `vehicle:Gosan_G7`). Atomic writes via temp-file + `os.replace()`. Used by `knowledge_cog.py`.
+- **Annie's Wiki** (`wiki/`) — SQLite (`annie_wiki.db`) + ChromaDB (`annie_wiki_chromadb/`). Replaces the legacy `KnowledgeStore` JSON. Pages use `{type}:{id}` slugs (e.g. `vehicle:Gosan_G7`). Accessed through `WikiStorage`/`WikiRetrieval`/`WikiIndex`/`WikiIngest`.
 - **`AnnouncementsDB`** (`announcements.py`) — SQLite for configurable in-game announcement rotation.
 - **`MemoryStorage`** (`memory/storage.py`) — SQLite for player conversation history with relevance scoring and time-based decay.
 - **`backend_db.py`** — Read-only PostgreSQL connector to the `amc-backend` database over Tailscale. Multi-layered safety: keyword blocking, SELECT-only enforcement, connection-level `read_only`, and DB-level RLS.

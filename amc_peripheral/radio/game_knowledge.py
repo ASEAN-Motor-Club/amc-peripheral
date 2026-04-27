@@ -2,12 +2,17 @@
 Game Knowledge Subagent for DJ Annie.
 
 A lightweight agentic module that answers game-related questions using:
-- KnowledgeStore (agent-managed JSON knowledge base)
+- Annie's wiki (WikiStorage + WikiRetrieval + WikiIndex)
 - Game database queries (SQLite)
 - Backend API calls (subsidies, server commands)
 
 This runs as an internal LLM call ("subagent") within the radio process,
 so Annie's main prompt stays lean and radio-focused.
+
+Note: the tool names (`lookup_knowledge`, `list_knowledge`, `save_knowledge`,
+`remove_knowledge`) are preserved from the legacy KnowledgeStore era so that
+the subagent's system prompt wording stays stable. Internally, every tool
+now routes through the wiki.
 """
 
 import json
@@ -18,8 +23,10 @@ from typing import Optional
 import aiohttp
 from openai import AsyncOpenAI
 
-from amc_peripheral.knowledge_store import KnowledgeStore
 from amc_peripheral.settings import BACKEND_API_URL, DEFAULT_AI_MODEL
+from amc_peripheral.wiki.storage import WikiStorage
+from amc_peripheral.wiki.retrieval import WikiRetrieval
+from amc_peripheral.wiki.index import WikiIndex
 
 log = logging.getLogger(__name__)
 
@@ -35,9 +42,9 @@ def _build_tools(game_schema: str) -> list[dict]:
             "function": {
                 "name": "lookup_knowledge",
                 "description": (
-                    "Search the knowledge base for information about a topic. "
-                    "Pass a keyword or topic name. "
-                    "You can call this multiple times for different queries."
+                    "Search Annie's wiki for information about a topic. "
+                    "Pass a keyword or topic name. Uses a hybrid of substring and "
+                    "semantic search. You can call this multiple times for different queries."
                 ),
                 "parameters": {
                     "type": "object",
@@ -56,15 +63,16 @@ def _build_tools(game_schema: str) -> list[dict]:
             "function": {
                 "name": "list_knowledge",
                 "description": (
-                    "List all knowledge entries, optionally filtered by type. "
-                    "Types include: vehicle, cargo, part, guide, location, mechanic, etc."
+                    "List wiki pages, optionally filtered by category. "
+                    "Categories include: vehicle, cargo, guide, location, concept, "
+                    "event, player, relationship, song, etc."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "type_filter": {
                             "type": "string",
-                            "description": "Optional type prefix to filter by (e.g., 'vehicle', 'guide')",
+                            "description": "Optional category filter (e.g., 'vehicle', 'guide')",
                         }
                     },
                     "required": [],
@@ -76,7 +84,7 @@ def _build_tools(game_schema: str) -> list[dict]:
             "function": {
                 "name": "save_knowledge",
                 "description": (
-                    "Save or update a knowledge entry. Use this to record useful "
+                    "Create or update a wiki page. Use this to record useful "
                     "information learned from conversations, tips from players, "
                     "or corrections to existing knowledge. "
                     "Key format: '{type}:{id}' e.g., 'vehicle:Gosan_G7', 'guide:delivery-tips'."
@@ -102,7 +110,7 @@ def _build_tools(game_schema: str) -> list[dict]:
             "function": {
                 "name": "remove_knowledge",
                 "description": (
-                    "Remove a knowledge entry by key. "
+                    "Remove a wiki page by key. "
                     "Only use this for incorrect or outdated information."
                 ),
                 "parameters": {
@@ -167,25 +175,62 @@ Results are limited to 100 rows. Database is read-only.""",
     return tools
 
 
-def _lookup_knowledge(topic: str, store: KnowledgeStore) -> str:
-    """Search knowledge store for entries matching a topic query."""
+def _lookup_knowledge(
+    topic: str,
+    wiki_storage: WikiStorage,
+    wiki_retrieval: Optional[WikiRetrieval] = None,
+) -> str:
+    """Search the wiki for entries matching a topic query.
+
+    Hybrid search: combines substring matches (fast, exact) with semantic
+    matches from ChromaDB (broader recall). Results are de-duplicated by
+    page id.
+    """
     if not topic:
         return "No knowledge available."
 
-    results = store.search(topic)
-    if not results:
-        # Show available types to guide the model
-        keys = store.list_keys()
-        if not keys:
-            return "Knowledge store is empty."
-        available = ", ".join(keys[:20])
-        if len(keys) > 20:
-            available += f", ... (+{len(keys) - 20} more)"
-        return f"No knowledge found for '{topic}'. Available keys: {available}"
+    found: dict[int, dict] = {}
+
+    # Substring results first
+    for page in wiki_storage.search_by_substring(topic, limit=10):
+        found[page["id"]] = page
+
+    # Semantic results enrich recall when available
+    if wiki_retrieval is not None:
+        try:
+            for result in wiki_retrieval.search(topic, n_results=5):
+                page_id = result.get("page_id")
+                if page_id is None or page_id in found:
+                    continue
+                # ChromaDB may not have full content in sync with storage —
+                # prefer the storage record if it exists, otherwise fall
+                # back to the retrieval snapshot.
+                page = wiki_storage.get_page_by_id(page_id)
+                if page is None:
+                    page = {
+                        "id": page_id,
+                        "title": result.get("title", "Unknown"),
+                        "category": result.get("category", "concept"),
+                        "content": result.get("content", ""),
+                        "summary": "",
+                    }
+                found[page_id] = page
+        except Exception as e:
+            log.warning(f"Semantic wiki search failed for '{topic}': {e}")
+
+    if not found:
+        titles = [p["title"] for p in wiki_storage.list_pages(limit=20)]
+        if not titles:
+            return "Wiki is empty."
+        available = ", ".join(titles)
+        extra = wiki_storage.get_page_count() - len(titles)
+        if extra > 0:
+            available += f", ... (+{extra} more)"
+        return f"No wiki pages found for '{topic}'. Available titles: {available}"
 
     parts = []
-    for key, content in results:
-        parts.append(f"### {key}\n{content}")
+    for page in found.values():
+        parts.append(f"### {page['title']}\n{page.get('content', '')}")
     return "\n\n".join(parts)
 
 
@@ -193,45 +238,95 @@ async def _execute_tool(
     name: str,
     args: dict,
     http_session: aiohttp.ClientSession,
-    store: KnowledgeStore | None = None,
+    wiki_storage: Optional[WikiStorage] = None,
+    wiki_retrieval: Optional[WikiRetrieval] = None,
 ) -> str:
     """Execute a game knowledge tool call."""
     try:
         if name == "lookup_knowledge":
-            if not store:
-                return "Knowledge store not available."
-            return _lookup_knowledge(args.get("topic", ""), store)
+            if not wiki_storage:
+                return "Wiki not available."
+            return _lookup_knowledge(args.get("topic", ""), wiki_storage, wiki_retrieval)
 
         elif name == "list_knowledge":
-            if not store:
-                return "Knowledge store not available."
+            if not wiki_storage:
+                return "Wiki not available."
             type_filter = args.get("type_filter")
-            keys = store.list_keys(type_filter)
-            if not keys:
-                return f"No entries found{f' for type {type_filter!r}' if type_filter else ''}."
-            return f"Knowledge entries ({len(keys)}):\n" + "\n".join(f"- {k}" for k in sorted(keys))
+            pages = wiki_storage.list_pages(category=type_filter, limit=500)
+            if not pages:
+                return f"No entries found{f' for category {type_filter!r}' if type_filter else ''}."
+            titles = sorted(p["title"] for p in pages)
+            return f"Wiki pages ({len(titles)}):\n" + "\n".join(f"- {t}" for t in titles)
 
         elif name == "save_knowledge":
-            if not store:
-                return "Knowledge store not available."
+            if not wiki_storage:
+                return "Wiki not available."
             key = args.get("key", "")
             content = args.get("content", "")
             if not key or not content:
                 return "Error: both 'key' and 'content' are required."
             if ":" not in key:
                 return "Error: key must be in '{type}:{id}' format, e.g., 'vehicle:Gosan_G7'."
-            store.save(key, content, source="agent")
-            log.info(f"Knowledge saved: {key} ({len(content)} chars)")
-            return f"Saved knowledge entry '{key}'."
+
+            category = key.split(":", 1)[0]
+            title = key
+
+            existing = wiki_storage.get_page_by_slug(title)
+            if existing:
+                wiki_storage.update_page(
+                    existing["id"],
+                    content=content,
+                    summary=existing.get("summary", "") or f"Wiki entry {key}",
+                )
+                page_id = existing["id"]
+                log.info(f"Wiki page updated by subagent: {key} ({len(content)} chars)")
+                action = "Updated"
+            else:
+                page_id = wiki_storage.create_page(
+                    title=title,
+                    category=category,
+                    content=content,
+                    summary=f"Wiki entry {key}",
+                )
+                log.info(f"Wiki page created by subagent: {key} ({len(content)} chars)")
+                action = "Saved"
+
+            wiki_storage.add_source(page_id, "subagent", key)
+
+            if wiki_retrieval is not None:
+                refreshed = wiki_storage.get_page_by_id(page_id)
+                if refreshed:
+                    try:
+                        wiki_retrieval.index_page(
+                            page_id=page_id,
+                            title=refreshed["title"],
+                            content=refreshed["content"],
+                            category=refreshed["category"],
+                            updated_at=refreshed["updated_at"],
+                        )
+                    except Exception as e:
+                        log.warning(f"Wiki re-index failed for {key}: {e}")
+
+            return f"{action} knowledge entry '{key}'."
 
         elif name == "remove_knowledge":
-            if not store:
-                return "Knowledge store not available."
+            if not wiki_storage:
+                return "Wiki not available."
             key = args.get("key", "")
             if not key:
                 return "Error: 'key' is required."
-            if store.remove(key):
-                log.info(f"Knowledge removed: {key}")
+            existing = wiki_storage.get_page_by_slug(key)
+            if not existing:
+                return f"No entry found for key '{key}'."
+
+            if wiki_retrieval is not None:
+                try:
+                    wiki_retrieval.remove_page(existing["id"])
+                except Exception as e:
+                    log.warning(f"Wiki retrieval remove failed for {key}: {e}")
+
+            if wiki_storage.delete_page_by_slug(key):
+                log.info(f"Wiki page removed by subagent: {key}")
                 return f"Removed knowledge entry '{key}'."
             return f"No entry found for key '{key}'."
 
@@ -316,21 +411,25 @@ def _extract_heading(content: str) -> str:
 
 async def ask_game_knowledge(
     openai_client: AsyncOpenAI,
-    knowledge_store: KnowledgeStore,
+    wiki_storage: WikiStorage,
+    wiki_retrieval: Optional[WikiRetrieval],
+    wiki_index: Optional[WikiIndex],
     game_schema: str,
     question: str,
     http_session: aiohttp.ClientSession,
     model: Optional[str] = None,
 ) -> str:
     """
-    Subagent: answer a game question using knowledge store + tools.
+    Subagent: answer a game question using the wiki + tools.
 
-    Uses a compact knowledge index in the system prompt and tools
+    Uses a compact wiki index in the system prompt and tools
     for targeted retrieval, database queries, and knowledge management.
 
     Args:
         openai_client: OpenAI-compatible async client (e.g. OpenRouter)
-        knowledge_store: Agent-managed knowledge store
+        wiki_storage: WikiStorage handle
+        wiki_retrieval: Optional WikiRetrieval handle for semantic search
+        wiki_index: Optional WikiIndex handle for compact prompt context
         game_schema: Game database schema description for SQL tool
         question: The game-related question to answer
         http_session: aiohttp session for API calls
@@ -341,7 +440,7 @@ async def ask_game_knowledge(
     """
     model = model or DEFAULT_AI_MODEL
 
-    knowledge_index = knowledge_store.build_index()
+    knowledge_index = wiki_index.get_index() if wiki_index is not None else ""
     system_message = (
         "You are a game knowledge assistant for Motor Town, an open world driving game, "
         "specifically in a dedicated server named 'ASEAN Motor Club'.\n"
@@ -383,7 +482,8 @@ async def ask_game_knowledge(
                 tool_call.function.name,
                 json.loads(tool_call.function.arguments),
                 http_session,
-                store=knowledge_store,
+                wiki_storage=wiki_storage,
+                wiki_retrieval=wiki_retrieval,
             )
             messages.append(
                 {

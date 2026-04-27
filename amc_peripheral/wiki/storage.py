@@ -234,6 +234,41 @@ class WikiStorage:
         cursor = self.conn.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
 
+    def search_by_substring(
+        self,
+        query: str,
+        limit: int = 20,
+    ) -> list[dict]:
+        """Search wiki pages by case-insensitive substring match against title/content.
+
+        Returns pages whose title OR content contains the query. Ordered by
+        most recently updated.
+        """
+        if not query:
+            return []
+        like = f"%{query}%"
+        cursor = self.conn.execute(
+            """
+            SELECT * FROM wiki_pages
+            WHERE title LIKE ? OR content LIKE ?
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (like, like, limit),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def delete_page_by_slug(self, title_or_slug: str) -> bool:
+        """Delete a wiki page by slug (accepts raw titles, auto-slugified).
+
+        Returns True if a page was deleted, False if no page existed with
+        that slug.
+        """
+        page = self.get_page_by_slug(title_or_slug)
+        if not page:
+            return False
+        return self.delete_page(page["id"])
+
     def get_page_count(self, category: Optional[str] = None) -> int:
         """Get total page count, optionally filtered by category."""
         if category:

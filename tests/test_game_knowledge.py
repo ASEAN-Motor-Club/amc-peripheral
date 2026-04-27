@@ -9,7 +9,9 @@ sys.modules["google.cloud"] = MagicMock()
 sys.modules["google"] = MagicMock()
 
 import pytest  # noqa: E402
-from amc_peripheral.knowledge_store import KnowledgeStore  # noqa: E402
+
+from amc_peripheral.wiki.storage import WikiStorage  # noqa: E402
+from amc_peripheral.wiki.index import WikiIndex  # noqa: E402
 from amc_peripheral.radio.game_knowledge import (  # noqa: E402
     ask_game_knowledge,
     _execute_tool,
@@ -20,14 +22,39 @@ from amc_peripheral.radio.game_knowledge import (  # noqa: E402
 
 
 @pytest.fixture
-def store(tmp_path):
-    """Create a KnowledgeStore with test data."""
-    s = KnowledgeStore(str(tmp_path / "knowledge.json"))
-    s.save("vehicle:Kira_Van", "## Kira Van\nThe Kira Van is a mid-size delivery van.\nMax cargo: 5000kg.", "seed")
-    s.save("vehicle:Gosan_Trucks", "## Gosan Trucks\nGosan manufactures heavy-duty trucks.\nThe G7 can carry up to 24000kg.", "seed")
-    s.save("location:Gangjung", "## Gangjung\nGangjung is the capital city.\nIt has the main port and train station.", "seed")
-    s.save("guide:subsidies", "## Subsidies\nThe government provides delivery subsidies.\nCheck /subsidies for current rates.", "seed")
-    return s
+def wiki_storage(tmp_path):
+    """A WikiStorage populated with the kind of entries that used to live in KnowledgeStore."""
+    storage = WikiStorage(db_path=str(tmp_path / "wiki.db"))
+    storage.create_page(
+        title="vehicle:Kira_Van",
+        category="vehicle",
+        content="## Kira Van\nThe Kira Van is a mid-size delivery van.\nMax cargo: 5000kg.",
+        summary="Mid-size delivery van",
+    )
+    storage.create_page(
+        title="vehicle:Gosan_Trucks",
+        category="vehicle",
+        content="## Gosan Trucks\nGosan manufactures heavy-duty trucks.\nThe G7 can carry up to 24000kg.",
+        summary="Gosan truck lineup",
+    )
+    storage.create_page(
+        title="location:Gangjung",
+        category="location",
+        content="## Gangjung\nGangjung is the capital city.\nIt has the main port and train station.",
+        summary="Capital city",
+    )
+    storage.create_page(
+        title="guide:subsidies",
+        category="guide",
+        content="## Subsidies\nThe government provides delivery subsidies.\nCheck /subsidies for current rates.",
+        summary="Subsidy guide",
+    )
+    return storage
+
+
+@pytest.fixture
+def wiki_index(wiki_storage):
+    return WikiIndex(wiki_storage)
 
 
 @pytest.fixture
@@ -64,45 +91,40 @@ def test_extract_heading_empty():
 # --- _lookup_knowledge tests ---
 
 
-def test_lookup_exact_match(store):
+def test_lookup_exact_match(wiki_storage):
     """Exact topic match returns content."""
-    result = _lookup_knowledge("Kira_Van", store)
+    result = _lookup_knowledge("Kira_Van", wiki_storage)
     assert "mid-size delivery van" in result
 
 
-def test_lookup_partial_match(store):
+def test_lookup_partial_match(wiki_storage):
     """Partial keyword match works."""
-    result = _lookup_knowledge("gosan", store)
+    result = _lookup_knowledge("gosan", wiki_storage)
     assert "heavy-duty trucks" in result
 
 
-def test_lookup_multiple_matches(store):
+def test_lookup_multiple_matches(wiki_storage):
     """Multiple matches are returned together."""
-    result = _lookup_knowledge("vehicle", store)
+    result = _lookup_knowledge("vehicle", wiki_storage)
     assert "Kira" in result
     assert "Gosan" in result
 
 
-def test_lookup_no_match_shows_available(store):
-    """No match returns available keys."""
-    result = _lookup_knowledge("nonexistent", store)
-    assert "No knowledge found" in result
+def test_lookup_no_match_shows_available(wiki_storage):
+    """No match returns available titles."""
+    result = _lookup_knowledge("nonexistent", wiki_storage)
+    assert "No wiki pages found" in result
 
 
-def test_lookup_content_fallback(store):
-    """Falls back to searching content if key doesn't match."""
-    result = _lookup_knowledge("24000kg", store)
+def test_lookup_content_fallback(wiki_storage):
+    """Falls back to searching content if title doesn't match."""
+    result = _lookup_knowledge("24000kg", wiki_storage)
     assert "Gosan" in result
 
 
-def test_lookup_empty():
-    """Empty query returns no knowledge."""
-    # Create an empty store
-    from amc_peripheral.knowledge_store import KnowledgeStore
-    import tempfile
-    import os
-    path = os.path.join(tempfile.mkdtemp(), "empty.json")
-    empty = KnowledgeStore(path)
+def test_lookup_empty(tmp_path):
+    """Empty wiki returns 'Wiki is empty' marker."""
+    empty = WikiStorage(db_path=str(tmp_path / "empty.db"))
     assert "empty" in _lookup_knowledge("test", empty).lower()
 
 
@@ -135,87 +157,144 @@ async def test_build_tools_empty_schema():
 
 
 @pytest.mark.asyncio
-async def test_execute_tool_lookup_knowledge(store):
-    """Test lookup_knowledge tool execution."""
+async def test_execute_tool_lookup_knowledge(wiki_storage):
+    """Test lookup_knowledge tool execution routes through the wiki."""
     result = await _execute_tool(
         "lookup_knowledge",
         {"topic": "Kira"},
         AsyncMock(),
-        store=store,
+        wiki_storage=wiki_storage,
     )
     assert "mid-size delivery van" in result
 
 
 @pytest.mark.asyncio
-async def test_execute_tool_list_knowledge(store):
-    """Test list_knowledge tool execution."""
+async def test_execute_tool_list_knowledge(wiki_storage):
+    """Test list_knowledge tool execution filters by category."""
     result = await _execute_tool(
         "list_knowledge",
         {"type_filter": "vehicle"},
         AsyncMock(),
-        store=store,
+        wiki_storage=wiki_storage,
     )
     assert "vehicle:Kira_Van" in result
     assert "vehicle:Gosan_Trucks" in result
 
 
 @pytest.mark.asyncio
-async def test_execute_tool_save_knowledge(store):
-    """Test save_knowledge tool execution."""
+async def test_execute_tool_save_knowledge_creates_page(wiki_storage):
+    """save_knowledge creates a new wiki page when the key is new."""
     result = await _execute_tool(
         "save_knowledge",
         {"key": "vehicle:New_Car", "content": "A shiny new car."},
         AsyncMock(),
-        store=store,
+        wiki_storage=wiki_storage,
     )
     assert "Saved" in result
-    assert store.get("vehicle:New_Car") == "A shiny new car."
+    page = wiki_storage.get_page_by_slug("vehicle:New_Car")
+    assert page is not None
+    assert page["category"] == "vehicle"
+    assert "shiny new car" in page["content"]
 
 
 @pytest.mark.asyncio
-async def test_execute_tool_save_knowledge_bad_key(store):
-    """Test save_knowledge rejects keys without type prefix."""
+async def test_execute_tool_save_knowledge_updates_page(wiki_storage):
+    """save_knowledge updates an existing wiki page instead of duplicating it."""
+    result = await _execute_tool(
+        "save_knowledge",
+        {
+            "key": "vehicle:Kira_Van",
+            "content": "## Kira Van (updated)\nUpdated description.",
+        },
+        AsyncMock(),
+        wiki_storage=wiki_storage,
+    )
+    assert "Updated" in result
+    page = wiki_storage.get_page_by_slug("vehicle:Kira_Van")
+    assert page is not None
+    assert "Updated description" in page["content"]
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_save_knowledge_bad_key(wiki_storage):
+    """save_knowledge rejects keys without a type prefix."""
     result = await _execute_tool(
         "save_knowledge",
         {"key": "no_colon", "content": "Bad key format."},
         AsyncMock(),
-        store=store,
+        wiki_storage=wiki_storage,
     )
     assert "Error" in result
+    assert wiki_storage.get_page_by_slug("no_colon") is None
 
 
 @pytest.mark.asyncio
-async def test_execute_tool_remove_knowledge(store):
-    """Test remove_knowledge tool execution."""
+async def test_execute_tool_save_knowledge_indexes_in_retrieval(wiki_storage):
+    """When wiki_retrieval is provided, save_knowledge re-indexes the page."""
+    retrieval = MagicMock()
+    result = await _execute_tool(
+        "save_knowledge",
+        {"key": "guide:new-drivers", "content": "Tips for new drivers."},
+        AsyncMock(),
+        wiki_storage=wiki_storage,
+        wiki_retrieval=retrieval,
+    )
+    assert "Saved" in result
+    retrieval.index_page.assert_called_once()
+    kwargs = retrieval.index_page.call_args.kwargs
+    assert kwargs["title"] == "guide:new-drivers"
+    assert kwargs["category"] == "guide"
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_remove_knowledge(wiki_storage):
+    """remove_knowledge deletes the wiki page."""
     result = await _execute_tool(
         "remove_knowledge",
         {"key": "guide:subsidies"},
         AsyncMock(),
-        store=store,
+        wiki_storage=wiki_storage,
     )
     assert "Removed" in result
-    assert store.get("guide:subsidies") is None
+    assert wiki_storage.get_page_by_slug("guide:subsidies") is None
 
 
 @pytest.mark.asyncio
-async def test_execute_tool_remove_knowledge_missing(store):
-    """Test remove_knowledge with nonexistent key."""
+async def test_execute_tool_remove_knowledge_missing(wiki_storage):
+    """remove_knowledge with a nonexistent key returns a friendly message."""
     result = await _execute_tool(
         "remove_knowledge",
         {"key": "vehicle:Nonexistent"},
         AsyncMock(),
-        store=store,
+        wiki_storage=wiki_storage,
     )
     assert "No entry found" in result
 
 
 @pytest.mark.asyncio
+async def test_execute_tool_remove_knowledge_removes_from_retrieval(wiki_storage):
+    """remove_knowledge also removes the page from ChromaDB."""
+    retrieval = MagicMock()
+    page_id = wiki_storage.get_page_by_slug("guide:subsidies")["id"]
+    await _execute_tool(
+        "remove_knowledge",
+        {"key": "guide:subsidies"},
+        AsyncMock(),
+        wiki_storage=wiki_storage,
+        wiki_retrieval=retrieval,
+    )
+    retrieval.remove_page.assert_called_once_with(page_id)
+
+
+@pytest.mark.asyncio
 async def test_execute_tool_game_db(monkeypatch):
     """Test game DB tool execution."""
-    mock_execute = MagicMock(return_value={
-        "results": [{"name": "Steel Coil", "weight": 24000}],
-        "count": 1,
-    })
+    mock_execute = MagicMock(
+        return_value={
+            "results": [{"name": "Steel Coil", "weight": 24000}],
+            "count": 1,
+        }
+    )
     monkeypatch.setattr("amc_peripheral.bot.game_db.execute_raw_query", mock_execute)
 
     result = await _execute_tool(
@@ -269,7 +348,9 @@ async def test_execute_tool_unknown():
 
 
 @pytest.mark.asyncio
-async def test_ask_game_knowledge_returns_answer(store, mock_openai, mock_http_session):
+async def test_ask_game_knowledge_returns_answer(
+    wiki_storage, wiki_index, mock_openai, mock_http_session
+):
     """Test subagent returns the LLM's text answer."""
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
@@ -280,7 +361,9 @@ async def test_ask_game_knowledge_returns_answer(store, mock_openai, mock_http_s
 
     answer = await ask_game_knowledge(
         openai_client=mock_openai,
-        knowledge_store=store,
+        wiki_storage=wiki_storage,
+        wiki_retrieval=None,
+        wiki_index=wiki_index,
         game_schema="TABLE: cargos\n  Columns: id, name, weight",
         question="What is the heaviest cargo?",
         http_session=mock_http_session,
@@ -289,7 +372,7 @@ async def test_ask_game_knowledge_returns_answer(store, mock_openai, mock_http_s
     assert "Steel Coil" in answer
     assert "24000" in answer
 
-    # Verify system prompt uses compact index, not full knowledge
+    # Verify system prompt uses compact wiki index, not full content
     call_args = mock_openai.chat.completions.create.call_args
     system_msg = call_args.kwargs["messages"][0]["content"]
     assert "vehicle" in system_msg  # Index categories present
@@ -297,7 +380,9 @@ async def test_ask_game_knowledge_returns_answer(store, mock_openai, mock_http_s
 
 
 @pytest.mark.asyncio
-async def test_ask_game_knowledge_handles_empty_response(store, mock_openai, mock_http_session):
+async def test_ask_game_knowledge_handles_empty_response(
+    wiki_storage, wiki_index, mock_openai, mock_http_session
+):
     """Test subagent handles empty LLM response gracefully."""
     mock_response = MagicMock()
     mock_response.choices = []
@@ -306,7 +391,9 @@ async def test_ask_game_knowledge_handles_empty_response(store, mock_openai, moc
 
     answer = await ask_game_knowledge(
         openai_client=mock_openai,
-        knowledge_store=store,
+        wiki_storage=wiki_storage,
+        wiki_retrieval=None,
+        wiki_index=wiki_index,
         game_schema="",
         question="test",
         http_session=mock_http_session,
@@ -316,7 +403,9 @@ async def test_ask_game_knowledge_handles_empty_response(store, mock_openai, moc
 
 
 @pytest.mark.asyncio
-async def test_ask_game_knowledge_with_tool_call(store, mock_openai, mock_http_session):
+async def test_ask_game_knowledge_with_tool_call(
+    wiki_storage, wiki_index, mock_openai, mock_http_session
+):
     """Test subagent handles a tool call loop: LLM calls tool, then gives final answer."""
     # First call: LLM wants to use lookup_knowledge
     tool_call = MagicMock()
@@ -332,7 +421,9 @@ async def test_ask_game_knowledge_with_tool_call(store, mock_openai, mock_http_s
     # Second call: LLM gives final answer
     second_response = MagicMock()
     second_response.choices = [MagicMock()]
-    second_response.choices[0].message.content = "The Kira Van is a mid-size delivery van that can carry up to 5000kg."
+    second_response.choices[0].message.content = (
+        "The Kira Van is a mid-size delivery van that can carry up to 5000kg."
+    )
     second_response.choices[0].message.tool_calls = None
 
     mock_openai.chat.completions.create = AsyncMock(
@@ -341,7 +432,9 @@ async def test_ask_game_knowledge_with_tool_call(store, mock_openai, mock_http_s
 
     answer = await ask_game_knowledge(
         openai_client=mock_openai,
-        knowledge_store=store,
+        wiki_storage=wiki_storage,
+        wiki_retrieval=None,
+        wiki_index=wiki_index,
         game_schema="TABLE: cargos",
         question="What is the Kira Van?",
         http_session=mock_http_session,

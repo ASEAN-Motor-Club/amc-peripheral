@@ -11,10 +11,7 @@ from io import BytesIO
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, timezone, time as dt_time
 from collections import deque
-from typing import List, Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from amc_peripheral.knowledge_store import KnowledgeStore
+from typing import List, Optional
 
 from discord.ext import tasks, commands
 from discord import app_commands
@@ -54,7 +51,7 @@ from amc_peripheral.settings import (
     DENO_PATH,
     LASTFM_API_KEY,
     KNOWLEDGE_FORUM_CHANNEL_ID,
-    MEMORY_DATA_DIR,
+    BACKEND_API_URL,
 )
 from amc_peripheral.db import RadioDB
 from amc_peripheral.utils.text_utils import split_markdown
@@ -158,8 +155,9 @@ Even if you think you know the answer, always verify with the tool.
 
 ## Remembering Knowledge
 When players share useful tips, preferences, or facts (e.g., "the Micky is our favourite car", \
-"Steel Coils are the hardest cargo to deliver"), use `save_knowledge` to remember it. \
-Use keys like 'community:favourite-vehicles', 'tip:steel-coil-delivery', 'player:username-prefs', etc.
+"Steel Coils are the hardest cargo to deliver"), use `write_wiki_page` to record it in your wiki. \
+Use titles like 'community:favourite-vehicles', 'tip:steel-coil-delivery', 'player:username-prefs', etc., \
+and pick a matching `category` (e.g. 'community', 'tip', 'player').
 
 ## Your Wiki
 You maintain a personal wiki of knowledge about the community, players, and game world.
@@ -444,7 +442,6 @@ class RadioCog(commands.Cog):
         self.lq = LiquidsoapController()
 
         # State
-        self.knowledge_store: "KnowledgeStore | None" = None
         self.embed_message_id = None
         self.user_requests = {}
         self.recent_song_queue = deque(maxlen=10)
@@ -466,6 +463,7 @@ class RadioCog(commands.Cog):
         self._wiki_exporter = None
         self._wiki_synthesizer = None
         self._wiki_pending_conversations: list[dict] = []
+        self._sse_task: asyncio.Task | None = None
 
     async def cog_load(self):
         self.post_gazette_task.start()
@@ -480,19 +478,6 @@ class RadioCog(commands.Cog):
         # Register persistent view for the radio embed like button
         self._now_playing_view = NowPlayingView(self)
         self.bot.add_view(self._now_playing_view)
-
-        # Initialize knowledge store
-        try:
-            from amc_peripheral.knowledge_store import KnowledgeStore
-
-            knowledge_path = os.path.join(MEMORY_DATA_DIR, "knowledge.json")
-            self.knowledge_store = KnowledgeStore(knowledge_path)
-            log.info(
-                f"Knowledge store loaded: {len(self.knowledge_store.list_keys())} entries, "
-                f"index: {len(self.knowledge_store.build_index())} chars"
-            )
-        except Exception as e:
-            log.error(f"Failed to load knowledge store: {e}")
 
         # Initialize long-term memory storage
         try:
@@ -575,6 +560,9 @@ class RadioCog(commands.Cog):
         self.wiki_daily_export.start()
         self.wiki_weekly_synthesis.start()
 
+        # Start backend SSE event listener (forwards events into the wiki)
+        self._sse_task = asyncio.create_task(self._listen_backend_events())
+
         # Load game schema for segment generation
         try:
             from amc_peripheral.bot import game_db
@@ -599,6 +587,8 @@ class RadioCog(commands.Cog):
         self.wiki_daily_lint.cancel()
         self.wiki_daily_export.cancel()
         self.wiki_weekly_synthesis.cancel()
+        if self._sse_task:
+            self._sse_task.cancel()
         if self._download_worker_task:
             self._download_worker_task.cancel()
 
@@ -728,7 +718,7 @@ class RadioCog(commands.Cog):
     async def fetch_news_context(self, hours=12):
         now = datetime.now(self.local_tz)
 
-        knowledge = self.knowledge_store.build_index() if self.knowledge_store else ""
+        knowledge = self._wiki_index.get_index() if self._wiki_index else ""
         system_message = """\
 You are a helpful bot in Motor Town, an open world driving game, specifically in a dedicated server named "ASEAN Motor Club".
 Use the following information about the game to answer queries. If a user asks a question outside the scope of your knowlege, refer them to the discord channel and other players in the game."""
@@ -945,7 +935,7 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
 
         system_message = f"""You are DJ Annie, a charismatic host for Radio ASEAN in Motor Town.
 
-{self.knowledge_store.build_index() if self.knowledge_store else ""}
+{self._wiki_index.get_index() if self._wiki_index else ""}
 
 If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
 
@@ -991,7 +981,7 @@ Output only the spoken words, as if transcribed from a live recording.""",
 
         system_message = f"""You are DJ Annie, a charismatic host for Radio ASEAN in Motor Town.
 
-{self.knowledge_store.build_index() if self.knowledge_store else ""}
+{self._wiki_index.get_index() if self._wiki_index else ""}
 
 If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
 
@@ -1034,7 +1024,7 @@ Make it engaging, fun, and in Annie's signature style — witty, warm, and enter
 
         system_message = f"""You are a scriptwriter for Radio ASEAN in Motor Town.
 
-{self.knowledge_store.build_index() if self.knowledge_store else ""}
+{self._wiki_index.get_index() if self._wiki_index else ""}
 
 If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
 
@@ -1244,7 +1234,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             try:
                 return await ask_game_knowledge(
                     openai_client=self.openai_client_openrouter,
-                    knowledge_store=self.knowledge_store,
+                    wiki_storage=self._wiki_storage,
+                    wiki_retrieval=self._wiki_retrieval,
+                    wiki_index=self._wiki_index,
                     game_schema=self.game_schema_description,
                     question=question,
                     http_session=self.bot.http_session,
@@ -1605,27 +1597,6 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                             },
                         },
                         "required": ["message"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "save_knowledge",
-                    "description": "Save useful information to the knowledge base. Use this when players share tips, preferences, community facts, or anything worth remembering. Key format: '{type}:{id}' e.g., 'community:favourite-vehicles', 'tip:delivery-tips', 'player:username-prefs'.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "key": {
-                                "type": "string",
-                                "description": "Knowledge key in '{type}:{id}' format",
-                            },
-                            "content": {
-                                "type": "string",
-                                "description": "The knowledge content to save",
-                            },
-                        },
-                        "required": ["key", "content"],
                     },
                 },
             },
@@ -2091,7 +2062,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 try:
                     answer = await ask_game_knowledge(
                         openai_client=self.openai_client_openrouter,
-                        knowledge_store=self.knowledge_store,
+                        wiki_storage=self._wiki_storage,
+                        wiki_retrieval=self._wiki_retrieval,
+                        wiki_index=self._wiki_index,
                         game_schema=self.game_schema_description,
                         question=question,
                         http_session=self.bot.http_session,
@@ -2099,19 +2072,6 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     return answer
                 except Exception as e:
                     return f"Failed to get game knowledge: {e}"
-
-            elif name == "save_knowledge":
-                key = args.get("key", "")
-                content = args.get("content", "")
-                if not key or not content:
-                    return "Error: both 'key' and 'content' are required."
-                if ":" not in key:
-                    return "Error: key must be in '{type}:{id}' format."
-                if self.knowledge_store:
-                    self.knowledge_store.save(key, content, source="agent")
-                    log.info(f"Knowledge saved by Annie: {key} ({len(content)} chars)")
-                    return f"Saved knowledge entry '{key}'."
-                return "Knowledge store not available."
 
             elif name == "read_wiki_page":
                 title_or_slug = args.get("title_or_slug", "")
@@ -2318,8 +2278,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             {
                 "role": "system",
                 "content": ANNIE_SYSTEM_PROMPT.format(
-                    knowledge_index=self.knowledge_store.build_index()
-                    if self.knowledge_store
+                    knowledge_index=self._wiki_index.get_index()
+                    if self._wiki_index
                     else ""
                 )
                 + "\nThe user is submitting a song request via the /song_request command. "
@@ -2682,8 +2642,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             {
                 "role": "system",
                 "content": ANNIE_SYSTEM_PROMPT.format(
-                    knowledge_index=self.knowledge_store.build_index()
-                    if self.knowledge_store
+                    knowledge_index=self._wiki_index.get_index()
+                    if self._wiki_index
                     else ""
                 ),
             },
@@ -2763,8 +2723,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             {
                 "role": "system",
                 "content": ANNIE_SYSTEM_PROMPT.format(
-                    knowledge_index=self.knowledge_store.build_index()
-                    if self.knowledge_store
+                    knowledge_index=self._wiki_index.get_index()
+                    if self._wiki_index
                     else ""
                 )
                 + "\nRespond briefly — game chat has a character limit. Keep it under 500 chars.\nDo NOT use any emojis — the game client cannot render them.",
@@ -4606,6 +4566,134 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         except Exception as e:
             log.warning(f"Game event ingest failed ({event_type}:{event_id}): {e}")
             return []
+
+    # --- Backend SSE event stream ---
+
+    @staticmethod
+    def map_event_to_wiki(event: dict) -> tuple[str, str, str, str, list[str] | None]:
+        """Shape a raw backend event dict into ingest_game_event arguments.
+
+        Returns (event_type, event_id, title, description, participants).
+
+        Future event types (e.g. `race_finished`, `economy_milestone`) can be
+        shaped here into nicer titles/descriptions. Unknown types fall back
+        to a generic `{type}-{timestamp}` event id so ingest stays idempotent.
+
+        Expected event schema (forward-compatible):
+            {
+                "type": str,                    # e.g. "race_finished"
+                "event_id": str | None,         # optional unique id
+                "timestamp": str | None,        # ISO8601
+                "title": str | None,
+                "description": str | None,
+                "participants": list[str] | None,
+                ...                             # type-specific fields
+            }
+        """
+        event_type = event.get("type", "unknown")
+        timestamp = event.get("timestamp") or "unknown"
+        event_id = event.get("event_id") or f"{event_type}-{timestamp}"
+        title = event.get("title") or f"{event_type} @ {timestamp}"
+        description = event.get("description") or ""
+        if not description:
+            # Fall back to a compact JSON dump of the remaining payload so
+            # we never lose data, even for unmapped event types.
+            try:
+                description = json.dumps(
+                    {k: v for k, v in event.items() if k != "type"},
+                    default=str,
+                )
+            except Exception:
+                description = str(event)
+        participants = event.get("participants")
+        if participants is not None and not isinstance(participants, list):
+            participants = None
+        return event_type, event_id, title, description, participants
+
+    async def _handle_backend_event(self, event: dict):
+        """Route a single SSE event.
+
+        - `heartbeat` → no-op (connection keepalive only).
+        - `chat_message` → explicitly skipped; already handled by the
+          `GAME_CHAT_CHANNEL_ID` Discord forwarder in `on_message`.
+          Subscribing here would double-process every in-game message.
+        - Anything else → routed through `ingest_game_event()` into the wiki.
+        """
+        event_type = event.get("type")
+        if event_type == "heartbeat":
+            return
+        if event_type == "chat_message":
+            log.debug("SSE chat_message skipped (handled via Discord forwarding)")
+            return
+        if not event_type:
+            log.warning(f"SSE event missing type: {event!r}")
+            return
+
+        try:
+            mapped_type, event_id, title, description, participants = (
+                self.map_event_to_wiki(event)
+            )
+        except Exception as e:
+            log.warning(f"SSE event shape invalid ({event!r}): {e}")
+            return
+
+        try:
+            await self.ingest_game_event(
+                event_type=mapped_type,
+                event_id=event_id,
+                title=title,
+                description=description,
+                participants=participants,
+            )
+        except Exception as e:
+            log.warning(f"SSE ingest failed ({event_type}): {e}")
+
+    async def _listen_backend_events(self):
+        """Subscribe to the backend SSE stream and dispatch events.
+
+        Uses exponential backoff on connection failure (matches the community
+        bot pattern). Cancellation is honored cleanly.
+        """
+        import aiohttp
+        import random
+
+        retry_delay = 5
+        max_retry_delay = 60
+
+        while True:
+            try:
+                log.info(f"Connecting to SSE at {BACKEND_API_URL}/api/bot_events/...")
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        f"{BACKEND_API_URL}/api/bot_events/",
+                        timeout=aiohttp.ClientTimeout(total=None, sock_connect=10),
+                    ) as resp:
+                        log.info(f"Radio SSE connected, status: {resp.status}")
+                        retry_delay = 5  # Reset backoff on successful connection
+                        async for line in resp.content:
+                            line_str = line.decode("utf-8").strip()
+                            if not line_str.startswith("data: "):
+                                continue
+                            try:
+                                event = json.loads(line_str[6:])
+                            except json.JSONDecodeError as e:
+                                log.warning(f"Failed to parse SSE event: {e}")
+                                continue
+                            try:
+                                await self._handle_backend_event(event)
+                            except Exception as e:
+                                log.warning(
+                                    f"SSE event handler crashed for {event!r}: {e}"
+                                )
+            except asyncio.CancelledError:
+                log.info("Radio SSE listener cancelled")
+                break
+            except Exception as e:
+                log.error(f"Radio SSE connection error: {e}")
+                jitter = random.uniform(0, retry_delay * 0.1)
+                log.info(f"Radio SSE reconnecting in {retry_delay:.0f}s...")
+                await asyncio.sleep(retry_delay + jitter)
+                retry_delay = min(retry_delay * 2, max_retry_delay)
 
     # --- Listeners ---
 
