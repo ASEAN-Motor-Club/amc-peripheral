@@ -11,6 +11,7 @@ sys.modules["google.cloud"] = MagicMock()
 sys.modules["google"] = MagicMock()
 
 import pytest  # noqa: E402
+import discord  # noqa: E402
 from discord.ext import tasks  # noqa: E402
 from amc_peripheral.radio.radio_cog import RadioCog  # noqa: E402
 
@@ -384,24 +385,32 @@ async def test_wiki_daily_lint_skips_when_not_initialized(cog, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_wiki_dev_cmd_restricted_to_dj(cog):
-    """Verify !wiki commands are restricted to DJ role."""
-    ctx = MagicMock()
-    ctx.author.roles = [MagicMock(id=999)]  # Not DJ_ROLE_ID
-    ctx.send = AsyncMock()
+async def test_wiki_slash_cmd_restricted_to_dj(cog):
+    """Verify /wiki commands are restricted to DJ role."""
+    interaction = MagicMock()
+    interaction.user = MagicMock(spec=discord.Member)
+    interaction.user.roles = [MagicMock(id=999)]  # Not DJ_ROLE_ID
+    interaction.response = MagicMock()
+    interaction.response.send_message = AsyncMock()
 
-    await cog.wiki_dev_cmd.callback(cog, ctx, "lint")
-    ctx.send.assert_called_once_with("Only DJs can use wiki dev commands.")
+    await cog.wiki_lint_cmd.callback(cog, interaction)
+    interaction.response.send_message.assert_called_once_with(
+        "Only DJs can use wiki commands.", ephemeral=True
+    )
 
 
 @pytest.mark.asyncio
-async def test_wiki_dev_cmd_stats(cog):
-    """Verify !wiki stats returns wiki statistics."""
-    ctx = MagicMock()
+async def test_wiki_slash_cmd_stats(cog):
+    """Verify /wiki stats returns wiki statistics."""
+    interaction = MagicMock()
     dj_role = MagicMock()
     dj_role.id = 1364484047447003248  # DJ_ROLE_ID default
-    ctx.author.roles = [dj_role]
-    ctx.send = AsyncMock()
+    interaction.user = MagicMock(spec=discord.Member)
+    interaction.user.roles = [dj_role]
+    interaction.response = MagicMock()
+    interaction.response.defer = AsyncMock()
+    interaction.followup = MagicMock()
+    interaction.followup.send = AsyncMock()
 
     cog._wiki_storage = MagicMock()
     cog._wiki_storage.get_stats.return_value = {
@@ -413,21 +422,25 @@ async def test_wiki_dev_cmd_stats(cog):
         "latest_update": "2026-04-26 10:00:00",
     }
 
-    await cog.wiki_dev_cmd.callback(cog, ctx, "stats")
-    ctx.send.assert_called_once()
-    sent = ctx.send.call_args[0][0]
+    await cog.wiki_stats_cmd.callback(cog, interaction)
+    interaction.followup.send.assert_called_once()
+    sent = interaction.followup.send.call_args[0][0]
     assert "42" in sent
     assert "Wiki Stats" in sent
 
 
 @pytest.mark.asyncio
-async def test_wiki_dev_cmd_lint(cog):
-    """Verify !wiki lint runs lint and reports results."""
-    ctx = MagicMock()
+async def test_wiki_slash_cmd_lint(cog):
+    """Verify /wiki lint runs lint and reports results."""
+    interaction = MagicMock()
     dj_role = MagicMock()
     dj_role.id = 1364484047447003248
-    ctx.author.roles = [dj_role]
-    ctx.send = AsyncMock()
+    interaction.user = MagicMock(spec=discord.Member)
+    interaction.user.roles = [dj_role]
+    interaction.response = MagicMock()
+    interaction.response.defer = AsyncMock()
+    interaction.followup = MagicMock()
+    interaction.followup.send = AsyncMock()
 
     cog._wiki_lint = MagicMock()
     cog._wiki_lint.run_lint.return_value = {
@@ -439,25 +452,10 @@ async def test_wiki_dev_cmd_lint(cog):
     }
     cog._wiki_storage = MagicMock()
 
-    await cog.wiki_dev_cmd.callback(cog, ctx, "lint")
-    assert ctx.send.call_count == 2
-    sent = ctx.send.call_args_list[-1][0][0]
+    await cog.wiki_lint_cmd.callback(cog, interaction)
+    interaction.followup.send.assert_called_once()
+    sent = interaction.followup.send.call_args[0][0]
     assert "0 issues" in sent
-
-
-@pytest.mark.asyncio
-async def test_wiki_dev_cmd_unknown_action(cog):
-    """Verify !wiki with unknown action shows usage."""
-    ctx = MagicMock()
-    dj_role = MagicMock()
-    dj_role.id = 1364484047447003248
-    ctx.author.roles = [dj_role]
-    ctx.send = AsyncMock()
-
-    await cog.wiki_dev_cmd.callback(cog, ctx, "foo")
-    ctx.send.assert_called_once_with(
-        "Usage: `!wiki lint` | `!wiki stats` | `!wiki export` | `!wiki synth`"
-    )
 
 
 @pytest.mark.asyncio
@@ -817,13 +815,17 @@ async def test_wiki_daily_export_skips_when_not_initialized(cog, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_wiki_dev_cmd_export(cog):
-    """`!wiki export` should invoke the exporter and report results."""
-    ctx = MagicMock()
+async def test_wiki_slash_cmd_export(cog):
+    """`/wiki export` should invoke the exporter and report results."""
+    interaction = MagicMock()
     dj_role = MagicMock()
     dj_role.id = 1364484047447003248
-    ctx.author.roles = [dj_role]
-    ctx.send = AsyncMock()
+    interaction.user = MagicMock(spec=discord.Member)
+    interaction.user.roles = [dj_role]
+    interaction.response = MagicMock()
+    interaction.response.defer = AsyncMock()
+    interaction.followup = MagicMock()
+    interaction.followup.send = AsyncMock()
 
     exporter = MagicMock()
     exporter.export_all.return_value = {
@@ -833,26 +835,29 @@ async def test_wiki_dev_cmd_export(cog):
     }
     cog._wiki_exporter = exporter
 
-    await cog.wiki_dev_cmd.callback(cog, ctx, "export")
+    await cog.wiki_export_cmd.callback(cog, interaction)
 
-    # Two messages: "Exporting..." + result
-    assert ctx.send.call_count == 2
-    last = ctx.send.call_args_list[-1][0][0]
+    interaction.followup.send.assert_called_once()
+    last = interaction.followup.send.call_args[0][0]
     assert "7" in last
     assert "/tmp/wiki-export" in last
 
 
 @pytest.mark.asyncio
-async def test_wiki_dev_cmd_export_unavailable(cog):
-    ctx = MagicMock()
+async def test_wiki_slash_cmd_export_unavailable(cog):
+    interaction = MagicMock()
     dj_role = MagicMock()
     dj_role.id = 1364484047447003248
-    ctx.author.roles = [dj_role]
-    ctx.send = AsyncMock()
+    interaction.user = MagicMock(spec=discord.Member)
+    interaction.user.roles = [dj_role]
+    interaction.response = MagicMock()
+    interaction.response.send_message = AsyncMock()
     cog._wiki_exporter = None
 
-    await cog.wiki_dev_cmd.callback(cog, ctx, "export")
-    ctx.send.assert_called_once_with("Wiki exporter not initialized.")
+    await cog.wiki_export_cmd.callback(cog, interaction)
+    interaction.response.send_message.assert_called_once_with(
+        "Wiki exporter not initialized.", ephemeral=True
+    )
 
 
 # --- Phase 4E: Weekly synthesis dev command + task ---
@@ -911,13 +916,17 @@ async def test_wiki_weekly_synthesis_skips_on_other_days(cog, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_wiki_dev_cmd_synth(cog):
-    """`!wiki synth` should call the synthesizer and report the page."""
-    ctx = MagicMock()
+async def test_wiki_slash_cmd_synth(cog):
+    """`/wiki synth` should call the synthesizer and report the page."""
+    interaction = MagicMock()
     dj_role = MagicMock()
     dj_role.id = 1364484047447003248
-    ctx.author.roles = [dj_role]
-    ctx.send = AsyncMock()
+    interaction.user = MagicMock(spec=discord.Member)
+    interaction.user.roles = [dj_role]
+    interaction.response = MagicMock()
+    interaction.response.defer = AsyncMock()
+    interaction.followup = MagicMock()
+    interaction.followup.send = AsyncMock()
 
     synth = MagicMock()
     synth.generate_weekly_synthesis = AsyncMock(
@@ -925,42 +934,50 @@ async def test_wiki_dev_cmd_synth(cog):
     )
     cog._wiki_synthesizer = synth
 
-    await cog.wiki_dev_cmd.callback(cog, ctx, "synth")
+    await cog.wiki_synth_cmd.callback(cog, interaction)
 
-    assert ctx.send.call_count == 2
-    last = ctx.send.call_args_list[-1][0][0]
+    interaction.followup.send.assert_called_once()
+    last = interaction.followup.send.call_args[0][0]
     assert "synthesis:community-week-2026-W18" in last
 
 
 @pytest.mark.asyncio
-async def test_wiki_dev_cmd_synth_no_activity(cog):
-    ctx = MagicMock()
+async def test_wiki_slash_cmd_synth_no_activity(cog):
+    interaction = MagicMock()
     dj_role = MagicMock()
     dj_role.id = 1364484047447003248
-    ctx.author.roles = [dj_role]
-    ctx.send = AsyncMock()
+    interaction.user = MagicMock(spec=discord.Member)
+    interaction.user.roles = [dj_role]
+    interaction.response = MagicMock()
+    interaction.response.defer = AsyncMock()
+    interaction.followup = MagicMock()
+    interaction.followup.send = AsyncMock()
 
     synth = MagicMock()
     synth.generate_weekly_synthesis = AsyncMock(return_value=None)
     cog._wiki_synthesizer = synth
 
-    await cog.wiki_dev_cmd.callback(cog, ctx, "synth")
+    await cog.wiki_synth_cmd.callback(cog, interaction)
 
-    last = ctx.send.call_args_list[-1][0][0]
+    last = interaction.followup.send.call_args[0][0]
     assert "nothing notable" in last.lower()
 
 
 @pytest.mark.asyncio
-async def test_wiki_dev_cmd_synth_unavailable(cog):
-    ctx = MagicMock()
+async def test_wiki_slash_cmd_synth_unavailable(cog):
+    interaction = MagicMock()
     dj_role = MagicMock()
     dj_role.id = 1364484047447003248
-    ctx.author.roles = [dj_role]
-    ctx.send = AsyncMock()
+    interaction.user = MagicMock(spec=discord.Member)
+    interaction.user.roles = [dj_role]
+    interaction.response = MagicMock()
+    interaction.response.send_message = AsyncMock()
     cog._wiki_synthesizer = None
 
-    await cog.wiki_dev_cmd.callback(cog, ctx, "synth")
-    ctx.send.assert_called_once_with("Wiki synthesizer not initialized.")
+    await cog.wiki_synth_cmd.callback(cog, interaction)
+    interaction.response.send_message.assert_called_once_with(
+        "Wiki synthesizer not initialized.", ephemeral=True
+    )
 
 
 @pytest.mark.asyncio

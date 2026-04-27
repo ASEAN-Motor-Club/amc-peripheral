@@ -432,6 +432,9 @@ class RadioCog(commands.Cog):
     playlist_group = app_commands.Group(
         name="playlist", description="Manage your playlists", guild_ids=[GUILD_ID]
     )
+    wiki_group = app_commands.Group(
+        name="wiki", description="Annie's wiki management (DJ only)", guild_ids=[GUILD_ID]
+    )
 
     def __init__(self, bot):
         self.bot = bot
@@ -3595,107 +3598,114 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         except Exception as e:
             await interaction.followup.send(f"Failed: {e}")
 
-    # --- Dev text commands (not slash commands) ---
+    # --- Wiki slash commands ---
 
-    @commands.command(name="wiki")
-    async def wiki_dev_cmd(self, ctx: commands.Context, action: str = ""):
-        """Dev-only wiki commands: !wiki lint | stats | export | synth"""
-        # Restrict to DJ role
-        member = ctx.author
-        is_dj = (
+    def _check_dj(self, interaction: discord.Interaction) -> bool:
+        """Check if the interaction user has the DJ role."""
+        member = interaction.user
+        return (
             any(r.id == DJ_ROLE_ID for r in member.roles)
-            if hasattr(member, "roles")
+            if isinstance(member, discord.Member)
             else False
         )
-        if not is_dj:
-            await ctx.send("Only DJs can use wiki dev commands.")
+
+    @wiki_group.command(name="lint", description="Run wiki lint (orphan/stale/missing link scan)")
+    async def wiki_lint_cmd(self, interaction: discord.Interaction):
+        if not self._check_dj(interaction):
+            await interaction.response.send_message("Only DJs can use wiki commands.", ephemeral=True)
             return
-
-        if action == "lint":
-            if not self._wiki_lint or not self._wiki_storage:
-                await ctx.send("Wiki not initialized.")
-                return
-            await ctx.send("Running wiki lint...")
-            try:
-                report = self._wiki_lint.run_lint(auto_fix=True)
-                total_issues = (
-                    len(report.get("orphans", []))
-                    + len(report.get("stale", []))
-                    + len(report.get("missing_links", []))
-                    + len(report.get("inactive_players", []))
-                )
-                fixes = len(report.get("fixes_applied", []))
-                lines = [
-                    f"Wiki lint complete: {total_issues} issues found, {fixes} auto-fixed.",
-                    f"- Orphans: {len(report.get('orphans', []))}",
-                    f"- Stale pages: {len(report.get('stale', []))}",
-                    f"- Missing links: {len(report.get('missing_links', []))}",
-                    f"- Inactive players: {len(report.get('inactive_players', []))}",
-                ]
-                await ctx.send("\n".join(lines))
-            except Exception as e:
-                await ctx.send(f"Lint failed: {e}")
-
-        elif action == "stats":
-            if not self._wiki_storage:
-                await ctx.send("Wiki not initialized.")
-                return
-            try:
-                stats = self._wiki_storage.get_stats()
-                lines = [
-                    "**Wiki Stats**",
-                    f"- Total pages: {stats.get('total_pages', 0)}",
-                    f"- Categories: {stats.get('total_categories', 0)}",
-                    f"- Total sources: {stats.get('total_sources', 0)}",
-                    f"- Total links: {stats.get('total_links', 0)}",
-                    f"- Log entries: {stats.get('total_log_entries', 0)}",
-                ]
-                if stats.get("latest_update"):
-                    lines.append(f"- Latest update: {stats['latest_update']}")
-                pending = len(self._wiki_pending_conversations)
-                if pending:
-                    lines.append(f"- Pending ingest queue: {pending}")
-                await ctx.send("\n".join(lines))
-            except Exception as e:
-                await ctx.send(f"Stats failed: {e}")
-
-        elif action == "export":
-            if not self._wiki_exporter:
-                await ctx.send("Wiki exporter not initialized.")
-                return
-            await ctx.send("Exporting wiki to markdown...")
-            try:
-                summary = await asyncio.to_thread(self._wiki_exporter.export_all)
-                await ctx.send(
-                    f"Wiki exported: {summary.get('pages_exported', 0)} page(s) "
-                    f"to `{summary.get('output_dir', '')}`."
-                )
-            except Exception as e:
-                await ctx.send(f"Export failed: {e}")
-
-        elif action == "synth":
-            if not self._wiki_synthesizer:
-                await ctx.send("Wiki synthesizer not initialized.")
-                return
-            await ctx.send("Generating weekly synthesis...")
-            try:
-                page = await self._wiki_synthesizer.generate_weekly_synthesis()
-                if page is None:
-                    await ctx.send(
-                        "No synthesis written — nothing notable happened this week."
-                    )
-                else:
-                    await ctx.send(
-                        f"Synthesis page written: **{page.get('title', 'synthesis')}** "
-                        f"(id={page.get('id', '?')})."
-                    )
-            except Exception as e:
-                await ctx.send(f"Synthesis failed: {e}")
-
-        else:
-            await ctx.send(
-                "Usage: `!wiki lint` | `!wiki stats` | `!wiki export` | `!wiki synth`"
+        if not self._wiki_lint or not self._wiki_storage:
+            await interaction.response.send_message("Wiki not initialized.", ephemeral=True)
+            return
+        await interaction.response.defer()
+        try:
+            report = self._wiki_lint.run_lint(auto_fix=True)
+            total_issues = (
+                len(report.get("orphans", []))
+                + len(report.get("stale", []))
+                + len(report.get("missing_links", []))
+                + len(report.get("inactive_players", []))
             )
+            fixes = len(report.get("fixes_applied", []))
+            lines = [
+                f"Wiki lint complete: {total_issues} issues found, {fixes} auto-fixed.",
+                f"- Orphans: {len(report.get('orphans', []))}",
+                f"- Stale pages: {len(report.get('stale', []))}",
+                f"- Missing links: {len(report.get('missing_links', []))}",
+                f"- Inactive players: {len(report.get('inactive_players', []))}",
+            ]
+            await interaction.followup.send("\n".join(lines))
+        except Exception as e:
+            await interaction.followup.send(f"Lint failed: {e}")
+
+    @wiki_group.command(name="stats", description="Show wiki statistics")
+    async def wiki_stats_cmd(self, interaction: discord.Interaction):
+        if not self._check_dj(interaction):
+            await interaction.response.send_message("Only DJs can use wiki commands.", ephemeral=True)
+            return
+        if not self._wiki_storage:
+            await interaction.response.send_message("Wiki not initialized.", ephemeral=True)
+            return
+        await interaction.response.defer()
+        try:
+            stats = self._wiki_storage.get_stats()
+            lines = [
+                "**Wiki Stats**",
+                f"- Total pages: {stats.get('total_pages', 0)}",
+                f"- Categories: {stats.get('total_categories', 0)}",
+                f"- Total sources: {stats.get('total_sources', 0)}",
+                f"- Total links: {stats.get('total_links', 0)}",
+                f"- Log entries: {stats.get('total_log_entries', 0)}",
+            ]
+            if stats.get("latest_update"):
+                lines.append(f"- Latest update: {stats['latest_update']}")
+            pending = len(self._wiki_pending_conversations)
+            if pending:
+                lines.append(f"- Pending ingest queue: {pending}")
+            await interaction.followup.send("\n".join(lines))
+        except Exception as e:
+            await interaction.followup.send(f"Stats failed: {e}")
+
+    @wiki_group.command(name="export", description="Export wiki to markdown files")
+    async def wiki_export_cmd(self, interaction: discord.Interaction):
+        if not self._check_dj(interaction):
+            await interaction.response.send_message("Only DJs can use wiki commands.", ephemeral=True)
+            return
+        if not self._wiki_exporter:
+            await interaction.response.send_message("Wiki exporter not initialized.", ephemeral=True)
+            return
+        await interaction.response.defer()
+        try:
+            summary = await asyncio.to_thread(self._wiki_exporter.export_all)
+            await interaction.followup.send(
+                f"Wiki exported: {summary.get('pages_exported', 0)} page(s) "
+                f"to `{summary.get('output_dir', '')}`."
+            )
+        except Exception as e:
+            await interaction.followup.send(f"Export failed: {e}")
+
+    @wiki_group.command(name="synth", description="Generate weekly wiki synthesis")
+    async def wiki_synth_cmd(self, interaction: discord.Interaction):
+        if not self._check_dj(interaction):
+            await interaction.response.send_message("Only DJs can use wiki commands.", ephemeral=True)
+            return
+        if not self._wiki_synthesizer:
+            await interaction.response.send_message("Wiki synthesizer not initialized.", ephemeral=True)
+            return
+        await interaction.response.defer()
+        try:
+            page = await self._wiki_synthesizer.generate_weekly_synthesis()
+            if page is None:
+                await interaction.followup.send(
+                    "No synthesis written — nothing notable happened this week."
+                )
+            else:
+                await interaction.followup.send(
+                    f"Synthesis page written: **{page.get('title', 'synthesis')}** "
+                    f"(id={page.get('id', '?')})."
+                )
+        except Exception as e:
+            await interaction.followup.send(f"Synthesis failed: {e}")
 
     @app_commands.command(name="song_request", description="Submit a song request")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
