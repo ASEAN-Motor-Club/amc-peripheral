@@ -297,12 +297,12 @@
                 <limits>
                   <clients>500</clients>
                   <sources>2</sources>
-                  <queue-size>4194304</queue-size>
-                  <client-timeout>300</client-timeout>
+                  <queue-size>65536</queue-size>
+                  <client-timeout>30</client-timeout>
                   <header-timeout>15</header-timeout>
                   <source-timeout>30</source-timeout>
                   <burst-on-connect>1</burst-on-connect>
-                  <burst-size>1048576</burst-size>
+                  <burst-size>65536</burst-size>
                 </limits>
 
                 <mount>
