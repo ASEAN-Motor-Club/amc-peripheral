@@ -13,6 +13,7 @@ from .auction_cog import AuctionCog
 from .economy_cog import EconomyCog
 from .youtube_cog import YouTubeCog
 from .role_cog import RoleCog
+from .court_cog import CourtCog
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class AMCBot(commands.Bot):
         await self.add_cog(YouTubeCog(self))
         await self.add_cog(StatusCog(self))
         await self.add_cog(RoleCog(self))
+        await self.add_cog(CourtCog(self))
         await self.add_cog(AuctionCog(self))
         await self.add_cog(EconomyCog(self))
 

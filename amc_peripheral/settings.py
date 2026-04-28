@@ -213,3 +213,7 @@ RADIO_API_PORT = int(os.environ.get("RADIO_API_PORT", "7001"))
 
 # Auction System
 AUCTION_CHANNEL_ID = int(os.environ.get("AUCTION_CHANNEL_ID", "0")) or None
+
+# Court (Private Channel Manager)
+COURT_CATEGORY_ID = int(os.environ.get("COURT_CATEGORY_ID", "0"))
+COURT_CHANNEL_ID = int(os.environ.get("COURT_CHANNEL_ID", "0"))

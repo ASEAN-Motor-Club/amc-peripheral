@@ -494,6 +494,8 @@
                 TRANSLATION_AI_MODEL = "openai/gpt-oss-120b";
                 FINANCIAL_MINISTER_ROLE_ID = "1453698145950109779";
                 ECONOMY_AUDIT_CHANNEL_ID = "1402660537619320872";
+                COURT_CATEGORY_ID = "1498624085217902602";
+                COURT_CHANNEL_ID = "1498624125227368468";
               };
               restartIfChanged = false;
               serviceConfig = {
