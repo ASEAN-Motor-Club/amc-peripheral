@@ -1,4 +1,5 @@
 import sys
+import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
 
 # Mock google.cloud.texttospeech before importing RadioCog
@@ -10,7 +11,6 @@ sys.modules["google"] = MagicMock()
 
 import pytest  # noqa: E402
 from amc_peripheral.radio.radio_cog import RadioCog  # noqa: E402
-from amc_peripheral.settings import REQUESTS_PATH  # noqa: E402
 
 @pytest.fixture
 def mock_bot():
@@ -37,61 +37,46 @@ def cog(mock_bot, tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_request_song_pushes_to_queue(cog):
-    """Test that request_song calls push_to_queue with the correct path."""
-    requester = "TestUser"
-    song_name = "Test Song"
-    
-    # Mock yt_dlp
-    mock_info = {
-        "title": "Test Song Title",
-        "duration": 120,
-        "webpage_url": "https://youtube.com/watch?v=123"
-    }
-    
-    with patch("yt_dlp.YoutubeDL") as mock_ydl:
-        instance = mock_ydl.return_value.__enter__.return_value
-        instance.extract_info.return_value = mock_info
-        
-        # Mock successful download
-        instance.download = MagicMock()
-        
-        # Call request_song
-        title, duration = await cog.request_song(song_name, requester)
-        
+    """Test that request_song calls push_to_queue with resolved metadata."""
+    cog._get_or_download = AsyncMock(
+        return_value=("Test Song Title", 120, "/tmp/test.webm", "https://youtube.com/watch?v=123", "Test Artist")
+    )
+    cog._screen_song_content = AsyncMock(return_value=None)
+    cog.lq.push_to_queue = AsyncMock()
+
+    worker = asyncio.create_task(cog._download_worker())
+
+    try:
+        title, duration = await cog.request_song("Test Song", "TestUser", bypass_throttling=True)
+
         assert title == "Test Song Title"
-        
-        # Verify push_to_queue was called
-        # safe_requester = "TestUser", safe_title = "Test_Song_Title"
-        expected_path = f"{REQUESTS_PATH}/TestUser-Test_Song_Title.webm"
-        cog.lq.push_to_queue.assert_called_once_with(cog.bot.http_session, "song_requests", expected_path)
+        assert duration == 120
+        cog.lq.push_to_queue.assert_called_once_with(
+            cog.bot.http_session, "song_requests", "/tmp/test.webm",
+            title="Test Song Title", requester="TestUser",
+        )
+    finally:
+        worker.cancel()
 
 @pytest.mark.asyncio
 async def test_request_song_handles_push_exception(cog):
     """Test that request_song survives a push exception."""
-    requester = "TestUser"
-    song_name = "Test Song"
-    
-    # Mock yt_dlp
-    mock_info = {
-        "title": "Test Song Title",
-        "duration": 120,
-        "webpage_url": "https://youtube.com/watch?v=123"
-    }
-    
-    with patch("yt_dlp.YoutubeDL") as mock_ydl:
-        instance = mock_ydl.return_value.__enter__.return_value
-        instance.extract_info.return_value = mock_info
-        instance.download = MagicMock()
-        
-        # Mock telnet failure
-        cog.lq.push_to_queue.side_effect = Exception("Telnet Error")
-        
-        # Should NOT raise exception
-        title, duration = await cog.request_song(song_name, requester)
-        
+    cog._get_or_download = AsyncMock(
+        return_value=("Test Song Title", 120, "/tmp/test.webm", "https://youtube.com/watch?v=123", "Test Artist")
+    )
+    cog._screen_song_content = AsyncMock(return_value=None)
+    cog.lq.push_to_queue = AsyncMock(side_effect=Exception("Telnet Error"))
+
+    worker = asyncio.create_task(cog._download_worker())
+
+    try:
+        # Should NOT raise exception — push failure is caught internally
+        title, duration = await cog.request_song("Test Song", "TestUser", bypass_throttling=True)
+
         assert title == "Test Song Title"
-        # Verify it was still attempted
         cog.lq.push_to_queue.assert_called_once()
+    finally:
+        worker.cancel()
 
 @pytest.mark.asyncio
 async def test_game_request_song_announces_success(cog):

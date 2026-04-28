@@ -1181,11 +1181,13 @@ async def test_download_serialization(cog, monkeypatch):
         )
         await asyncio.sleep(0.1)
         download_count["active"] -= 1
-        return f"Test Song {n}", 120, f"/tmp/test{n}.mp3", f"https://example.com/{n}"
+        return f"Test Song {n}", 120, f"/tmp/test{n}.mp3", f"https://example.com/{n}", "Test Artist"
 
     monkeypatch.setattr(cog, "_get_or_download", slow_get_or_download)
     # Mock lq.push_to_queue to avoid telnet calls
     cog.lq.push_to_queue = AsyncMock()
+    # Mock content screening to avoid LLM calls
+    cog._screen_song_content = AsyncMock(return_value=None)
 
     # Start the download worker
     worker = asyncio.create_task(cog._download_worker())
@@ -1236,10 +1238,12 @@ async def test_download_queue_does_not_reject(cog, monkeypatch):
         counter["n"] += 1
         n = counter["n"]
         await asyncio.sleep(0.2)  # Simulate slow download
-        return f"Test Song {n}", 120, f"/tmp/test{n}.mp3", f"https://example.com/{n}"
+        return f"Test Song {n}", 120, f"/tmp/test{n}.mp3", f"https://example.com/{n}", "Test Artist"
 
     monkeypatch.setattr(cog, "_get_or_download", slow_get_or_download)
     cog.lq.push_to_queue = AsyncMock()
+    # Mock content screening to avoid LLM calls
+    cog._screen_song_content = AsyncMock(return_value=None)
 
     # Start the download worker
     worker = asyncio.create_task(cog._download_worker())
@@ -1606,7 +1610,7 @@ async def test_fire_and_forget_playlist_add(cog, mock_bot, monkeypatch, tmp_path
     fake_mp3 = tmp_path / "Cool_Song.mp3"
     fake_mp3.write_bytes(b"fake audio data")
 
-    cog._get_or_download = AsyncMock(return_value=("Cool Song", 120, str(fake_mp3), "https://example.com"))
+    cog._get_or_download = AsyncMock(return_value=("Cool Song", 120, str(fake_mp3), "https://example.com", "Cool Artist"))
 
     mock_channel = MagicMock()
     mock_channel.send = AsyncMock()
@@ -2470,7 +2474,7 @@ async def test_screen_song_content_rejects_slur(cog):
         return_value=mock_response
     )
 
-    result = await cog._screen_song_content("Gangsta Rap - offensive title")
+    result = await cog._screen_song_content("Offensive Title", "Offensive Artist")
     assert result is not None
     assert "REJECT" in result
     assert "racial slur" in result
@@ -2487,7 +2491,7 @@ async def test_screen_song_content_allows_explicit(cog):
         return_value=mock_response
     )
 
-    result = await cog._screen_song_content("Eminem - Lose Yourself")
+    result = await cog._screen_song_content("Lose Yourself", "Eminem")
     assert result is None
 
 
@@ -2502,7 +2506,7 @@ async def test_screen_song_content_allows_normal(cog):
         return_value=mock_response
     )
 
-    result = await cog._screen_song_content("Taylor Swift - Shake It Off")
+    result = await cog._screen_song_content("Shake It Off", "Taylor Swift")
     assert result is None
 
 
@@ -2513,17 +2517,15 @@ async def test_screen_song_content_fails_open(cog):
         side_effect=Exception("API error")
     )
 
-    result = await cog._screen_song_content("Some Song")
+    result = await cog._screen_song_content("Some Song", "Some Artist")
     # Should fail open — return None (allow)
     assert result is None
 
 
 @pytest.mark.asyncio
-async def test_execute_annie_tool_screens_content(cog, mock_bot):
-    """Verify search_and_queue_song tool calls _screen_song_content before dispatching."""
-    cog._screen_song_content = AsyncMock(
-        return_value="REJECT: Contains racial slur in title"
-    )
+async def test_execute_annie_tool_no_longer_screens_content(cog, mock_bot):
+    """Verify search_and_queue_song no longer screens content inline —
+    screening is now done in request_song() after metadata resolution."""
     notify_fn = AsyncMock()
 
     result = await cog._execute_annie_tool(
@@ -2533,17 +2535,14 @@ async def test_execute_annie_tool_screens_content(cog, mock_bot):
         notify_fn,
     )
 
-    assert "Song rejected" in result
-    assert "REJECT" in result
-    cog._screen_song_content.assert_called_once_with("offensive song title")
-    # No download should be dispatched
-    mock_bot.loop.create_task.assert_not_called()
+    # Should dispatch download without inline screening
+    assert "Download started" in result
+    mock_bot.loop.create_task.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_execute_annie_tool_allows_after_screening(cog, mock_bot):
-    """Verify search_and_queue_song dispatches download when screening passes."""
-    cog._screen_song_content = AsyncMock(return_value=None)
+async def test_execute_annie_tool_dispatches_download(cog, mock_bot):
+    """Verify search_and_queue_song dispatches download to the background worker."""
     notify_fn = AsyncMock()
 
     result = await cog._execute_annie_tool(
@@ -2554,8 +2553,49 @@ async def test_execute_annie_tool_allows_after_screening(cog, mock_bot):
     )
 
     assert "Download started" in result
-    cog._screen_song_content.assert_called_once_with("bohemian rhapsody")
     mock_bot.loop.create_task.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_request_song_screens_resolved_metadata(cog, monkeypatch):
+    """Verify request_song screens resolved YouTube metadata (title + artist)."""
+    cog._screen_song_content = AsyncMock(
+        return_value="REJECT: Title contains racial slur"
+    )
+    # Mock _get_or_download to return resolved metadata
+    cog._get_or_download = AsyncMock(
+        return_value=("Offensive Title", 120, "/tmp/test.mp3", "https://example.com", "Offensive Artist")
+    )
+    # Start the download worker so the future resolves
+    worker = asyncio.create_task(cog._download_worker())
+
+    try:
+        with pytest.raises(Exception, match="Song blocked.*REJECT"):
+            await cog.request_song("some query", "TestUser", bypass_throttling=True)
+        # Verify screening was called with resolved metadata, not raw query
+        cog._screen_song_content.assert_called_once_with("Offensive Title", "Offensive Artist")
+    finally:
+        worker.cancel()
+
+
+@pytest.mark.asyncio
+async def test_request_song_allows_after_screening_passes(cog, monkeypatch):
+    """Verify request_song queues song when metadata screening passes."""
+    cog._screen_song_content = AsyncMock(return_value=None)
+    cog._get_or_download = AsyncMock(
+        return_value=("Cool Song", 120, "/tmp/test.mp3", "https://example.com", "Cool Artist")
+    )
+    cog.lq.push_to_queue = AsyncMock()
+    worker = asyncio.create_task(cog._download_worker())
+
+    try:
+        title, duration = await cog.request_song("cool song", "TestUser", bypass_throttling=True)
+        assert title == "Cool Song"
+        assert duration == 120
+        cog._screen_song_content.assert_called_once_with("Cool Song", "Cool Artist")
+        cog.lq.push_to_queue.assert_called_once()
+    finally:
+        worker.cancel()
 
 
 @pytest.mark.asyncio

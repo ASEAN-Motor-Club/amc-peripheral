@@ -83,7 +83,7 @@ RADIO_TMP_PATH = os.path.join(RADIO_PATH, "tmp")
 
 CONTENT_SCREENING_PROMPT = """\
 You are a content screening assistant for a community radio station.
-Your job is to decide whether a song request is appropriate.
+Your job is to decide whether a song is appropriate based on its resolved metadata (title and artist).
 
 REJECT songs that:
 - Contain racial slurs in their title/artist name, or are primarily built around racial slur usage
@@ -95,6 +95,7 @@ ALLOW songs that:
 - Happen to be by controversial artists but aren't hate music themselves
 - Are edgy, dark, or provocative without targeting racial/religious groups
 
+You will receive the resolved song title and artist from YouTube metadata.
 Respond with EXACTLY one line:
 - "ALLOW" if the song is acceptable
 - "REJECT: <brief reason>" if the song should be blocked
@@ -172,14 +173,15 @@ the speaker's player_id is provided automatically). If they ask about someone el
 warmly and invite them to keep chatting so you can get to know them.
 
 ## Content Policy
-You MUST screen every song request before queuing. Reject songs that:
-- Contain racial slurs or are primarily built around racial slur usage (e.g., songs titled with the N-word)
-- Mock, demean, or incite hatred against racial, ethnic, or religious groups
-- Are white supremacist anthems, neo-Nazi music, or similar hate music
+Content screening is handled automatically by the system after resolving the
+song's YouTube metadata (title + artist). You do NOT need to ask the user for
+the song title or screen it yourself — just call `search_and_queue_song` and
+the system will reject inappropriate songs automatically.
 
-Explicit lyrics (profanity, sexual content, drug references) are FINE — do not reject songs just for being explicit.
-The test is: "Would this song reasonably offend people based on their race or religion?"
-If you reject a song, explain briefly why. Be concise.
+Explicit lyrics (profanity, sexual content, drug references) are FINE — the
+system only blocks hate music (racial slurs, white supremacist anthems, etc.).
+If the system rejects a song, you'll get the rejection reason in the tool
+response — relay it to the user briefly.
 
 {knowledge_index}
 """
@@ -1852,10 +1854,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     )
                 except Exception as e:
                     return f"Song rejected: {e}"
-                # Content screening — LLM checks for racially/religiously offensive content
-                screening = await self._screen_song_content(query)
-                if screening:
-                    return f"Song rejected: {screening}"
+                # Content screening is now done in request_song() using
+                # resolved YouTube metadata (title + artist) instead of
+                # the raw user query.
                 self.bot.loop.create_task(
                     self._fire_and_forget_queue(
                         query, requester, notify_fn, bypass_throttling=bypass_throttling
@@ -2271,11 +2272,15 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 f"ℹ️ Only the first {self.PLAYLIST_PLAY_CAP} songs were queued (playlist has {len(songs)})."
             )
 
-    async def _screen_song_content(self, query: str) -> str | None:
-        """Screen a song query for racially/religiously offensive content.
+    async def _screen_song_content(self, title: str, artist: str = "") -> str | None:
+        """Screen resolved song metadata for racially/religiously offensive content.
 
+        Uses the YouTube-resolved title and artist (not the raw user query).
         Returns rejection reason string if blocked, or None if acceptable.
         """
+        metadata = f"Title: {title}"
+        if artist:
+            metadata += f"\nArtist: {artist}"
         try:
             # pyrefly: ignore [no-matching-overload]
             completion = await self.openai_client_openrouter.chat.completions.create(
@@ -2283,7 +2288,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 reasoning_effort="low",
                 messages=[
                     {"role": "system", "content": CONTENT_SCREENING_PROMPT},
-                    {"role": "user", "content": f"Song request: {query}"},
+                    {"role": "user", "content": metadata},
                 ],
             )
             response = (completion.choices[0].message.content or "").strip()
@@ -2316,7 +2321,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     else ""
                 )
                 + "\nThe user is submitting a song request via the /song_request command. "
-                "Screen the content, then use search_and_queue_song if appropriate. "
+                "Use search_and_queue_song to queue it. Content screening is handled "
+                "automatically by the system using resolved YouTube metadata. "
                 "Keep your response brief (1-2 sentences).",
             },
             {
@@ -3040,7 +3046,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         """Download a song (cache-aware) and add it to the playlist channel in the background."""
         try:
             # Use cache-aware download
-            title, duration, local_path, webpage_url = await asyncio.wait_for(
+            title, duration, local_path, webpage_url, _artist = await asyncio.wait_for(
                 self._get_or_download(query),
                 timeout=DOWNLOAD_TIMEOUT,
             )
@@ -3108,7 +3114,12 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 
         # Worker applies DOWNLOAD_TIMEOUT when it picks up the job,
         # so we just await the future here — no caller-side timeout.
-        title, duration, local_path, webpage_url = await future
+        title, duration, local_path, webpage_url, artist = await future
+
+        # --- Content screening using resolved YouTube metadata ---
+        screening = await self._screen_song_content(title, artist)
+        if screening:
+            raise Exception(f"Song blocked: {screening}")
 
         # --- Checks that need resolved metadata ---
         normalized_title = title.lower().strip()
@@ -3157,7 +3168,10 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         return title, duration
 
     async def _get_or_download(self, query: str) -> tuple:
-        """Resolve metadata and return cached file or download fresh. Returns (title, duration, local_path, webpage_url)."""
+        """Resolve metadata and return cached file or download fresh.
+
+        Returns (title, duration, local_path, webpage_url, artist).
+        """
         search_query = query
         if "youtube.com" not in search_query and "youtu.be" not in search_query:
             search_query = f"ytsearch:{search_query}"
@@ -3194,6 +3208,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         duration = info_dict.get("duration", 0)
         webpage_url = info_dict.get("webpage_url")
         video_id = info_dict.get("id", "")
+        artist = info_dict.get("artist") or info_dict.get("uploader") or ""
 
         if not video_id:
             raise Exception("Could not resolve video ID for this song.")
@@ -3204,7 +3219,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 
         if cached and os.path.exists(cached["local_path"]):
             log.info(f"Cache hit for '{title}' (video_id={video_id})")
-            return title, duration, cached["local_path"], webpage_url
+            return title, duration, cached["local_path"], webpage_url, artist
 
         # Cache miss — evict if needed, then download
         log.info(f"Cache miss for '{title}' (video_id={video_id}), downloading...")
@@ -3244,7 +3259,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             file_size=file_size,
         )
 
-        return title, duration, cache_path, webpage_url
+        return title, duration, cache_path, webpage_url, artist
 
     def _evict_cache(self):
         """Evict least-recently-used cache entries to stay under the size cap."""
