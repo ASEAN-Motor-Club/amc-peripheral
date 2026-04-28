@@ -465,6 +465,7 @@
                 YT_COOKIES_PATH = "${cfg.cookiesPath}";
                 RADIO_DB_PATH = "${cfg.dbPath}";
                 TTS_PROVIDER = "google";
+                MEMORY_DATA_DIR = "/var/lib/data/amc-memory";
               };
               restartIfChanged = false;
               serviceConfig = {
@@ -488,6 +489,7 @@
                 GAME_DB_PATH = "/var/lib/motortown/gamedata.db";
                 YT_COOKIES_PATH = "${cfg.cookiesPath}";
                 DENO_PATH = "${pkgs.deno}/bin/deno";
+                MEMORY_DATA_DIR = "/var/lib/data/amc-memory-bot";
                 # DEFAULT_AI_MODEL = "xiaomi/mimo-v2-flash:free";
                 TRANSLATION_AI_MODEL = "openai/gpt-oss-120b";
                 FINANCIAL_MINISTER_ROLE_ID = "1453698145950109779";
