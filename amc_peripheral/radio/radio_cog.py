@@ -143,10 +143,10 @@ ducking the music volume. The system will automatically wait if a talking segmen
 to avoid overlapping voices. Use this sparingly for fun interactions — not every message needs a voice reply.
 
 ## Talkshow Segments
-You can create multi-speaker talkshow segments featuring a Host (you), a Guest, and optionally a Caller. \
+You can create two-speaker talkshow segments featuring a Host (you) and a Guest. \
 Use the generate_talkshow_segment tool when a listener asks a question that would make a fun radio discussion, \
-or when someone wants a conversational segment — like simulating a caller phoning in with a question. \
-These segments use multiple AI voices for a natural talk-show feel.
+or when someone wants a conversational segment. \
+These segments use two AI voices for a natural talk-show feel.
 
 You have access to a knowledge base about the game via the `ask_game_knowledge` tool. \
 When a listener asks about game mechanics, vehicles, cargo, locations, player stats, subsidies, commands, \
@@ -211,7 +211,7 @@ class TalkshowTurn(BaseModel):
 
 
 class TalkshowSpeaker(BaseModel):
-    name: str  # e.g. "Host", "Guest", "Caller"
+    name: str  # e.g. "Host", "Guest"
     gender: str  # "male" or "female"
 
 
@@ -1045,10 +1045,10 @@ If the topic is game-related, use `ask_game_knowledge` to get accurate facts bef
 
 Topic: {topic}
 
-The script is a conversation between speakers. Use exactly these speaker names:
+The script is a conversation between exactly TWO speakers. Use exactly these speaker names:
 - "Host" — the main radio host, DJ Annie, friendly and easygoing
 - "Guest" — a guest speaker or co-host with their own personality
-- "Caller" — (optional) a listener calling in
+Do NOT add a Caller or any third speaker — the TTS system only supports two speakers.
 
 {GEMINI_TTS_MARKUP_INSTRUCTIONS}
 
@@ -1075,12 +1075,12 @@ CRITICAL:
                     {
                         "role": "user",
                         "content": f"""Parse the following radio talkshow script into structured speaker turns.
-Each turn has a "speaker" (one of: Host, Guest, Caller) and "text" (the spoken words).
+Each turn has a "speaker" (one of: Host, Guest) and "text" (the spoken words).
 Preserve the exact words but remove any speaker labels or colons from the text.
 
 Also identify each unique speaker and assign a gender ("male" or "female") that fits
-the scenario. The Host is always female. Choose a gender for Guest and Caller that
-makes sense for the topic being discussed.
+the scenario. The Host is always female. Choose a gender for Guest that makes sense
+for the topic being discussed.
 
 Script:
 {raw_script}""",
@@ -1100,40 +1100,70 @@ Script:
         # Build turns for TTS
         turns = [(turn.text, turn.speaker) for turn in script.turns]
 
+        # Enforce max 2 speakers (Gemini TTS multi-speaker only supports 2)
+        speakers_in_turns = {speaker for _, speaker in turns}
+        if len(speakers_in_turns) > 2:
+            # Keep Host + the first non-Host speaker; drop turns from others
+            keep = {"Host"}
+            for _, speaker in turns:
+                if speaker != "Host":
+                    keep.add(speaker)
+                    break
+            log.warning(
+                "Talkshow script has %d speakers; dropping extras (Gemini TTS "
+                "supports max 2). Keeping: %s",
+                len(speakers_in_turns),
+                keep,
+            )
+            turns = [(text, sp) for text, sp in turns if sp in keep]
+            speakers_in_turns = keep
+
         # Build speaker_voices dynamically based on LLM gender casting
+        # Only include speakers actually present in turns (not all of script.speakers)
         # Track used voices so no two speakers share the same voice
-        speaker_voices = {"Host": ANNIE_VOICE}
-        used_voices = {ANNIE_VOICE}
+        speaker_voices = {}
+        used_voices = set()
         if script.speakers:
-            for speaker_meta in script.speakers:
-                if speaker_meta.name == "Host":
-                    continue
+            # Build a lookup from speaker name to gender
+            speaker_gender = {s.name: s.gender for s in script.speakers}
+            # Always assign Host first
+            if "Host" in speakers_in_turns:
+                speaker_voices["Host"] = ANNIE_VOICE
+                used_voices.add(ANNIE_VOICE)
+            # Assign remaining speakers
+            for speaker_name in sorted(speakers_in_turns - {"Host"}):
+                gender = speaker_gender.get(speaker_name, "male")
                 pool = (
                     GUEST_VOICES_FEMALE
-                    if speaker_meta.gender == "female"
+                    if gender == "female"
                     else GUEST_VOICES_MALE
                 )
                 available = [v for v in pool if v not in used_voices]
                 if not available:
                     available = pool  # fallback if we exhaust the pool
                 voice = random.choice(available)
-                speaker_voices[speaker_meta.name] = voice
+                speaker_voices[speaker_name] = voice
                 used_voices.add(voice)
         else:
             # Fallback if LLM didn't return speaker metadata
-            speakers_used = {turn.speaker for turn in script.turns}
             speaker_voices = {
                 alias: voice
                 for alias, voice in DEFAULT_TALKSHOW_VOICES.items()
-                if alias in speakers_used
+                if alias in speakers_in_turns
             }
 
-        # Build readable transcript
+        # Build readable transcript (from original script turns, not filtered turns)
         transcript = "\n".join(
             f"**{turn.speaker}:** {turn.text}" for turn in script.turns
         )
 
         # Generate multi-speaker audio (always Google-based Gemini TTS)
+        log.info(
+            "Generating talkshow audio: %d turns, speakers=%s, voices=%s",
+            len(turns),
+            speakers_in_turns,
+            speaker_voices,
+        )
         audio_bytes = await asyncio.to_thread(
             tts_multi_dispatch,
             turns,
@@ -1552,7 +1582,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 "type": "function",
                 "function": {
                     "name": "generate_talkshow_segment",
-                    "description": "Generate a multi-speaker radio talkshow segment on a given topic, featuring a Host (DJ Annie), a Guest, and optionally a Caller. Uses multiple AI voices for a natural conversation feel. Great for answering listener questions as a fun talk-show discussion, simulating a caller phoning in, or creating a banter segment between hosts. The segment is automatically added to the playlist after generation.",
+                    "description": "Generate a two-speaker radio talkshow segment on a given topic, featuring a Host (DJ Annie) and a Guest. Uses two AI voices for a natural conversation feel. Great for answering listener questions as a fun talk-show discussion or creating a banter segment between hosts. The segment is automatically added to the playlist after generation.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -3530,7 +3560,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 
     @app_commands.command(
         name="create_talkshow",
-        description="Generate a multi-speaker radio talkshow segment",
+        description="Generate a two-speaker radio talkshow segment",
     )
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def create_talkshow_cmd(
