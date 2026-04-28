@@ -267,6 +267,16 @@ Results are limited to 100 rows. Database is read-only.""",
                 },
             ]
 
+        # Inject economy tools if user has Financial Minister role
+        from amc_peripheral.settings import FINANCIAL_MINISTER_ROLE_ID
+        if interaction and isinstance(interaction.user, discord.Member):
+            economy_cog = self.bot.get_cog("EconomyCog")
+            if economy_cog and (
+                interaction.user.guild_permissions.administrator
+                or any(r.id == FINANCIAL_MINISTER_ROLE_ID for r in interaction.user.roles)
+            ):
+                tools.extend(economy_cog.get_tool_definitions())
+
         messages = [
             {"role": "system", "content": system_message},
             {
@@ -641,6 +651,13 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
             "get_currently_playing_song": "Checking the radio...",
             "create_poll": "Creating your poll...",
             "create_scheduled_event": "Setting up the event...",
+            "manage_subsidy_rules_list": "Fetching subsidy rules...",
+            "manage_subsidy_rule_create": "Creating subsidy rule...",
+            "manage_subsidy_rule_update": "Updating subsidy rule...",
+            "manage_subsidy_rule_deactivate": "Deactivating subsidy rule...",
+            "manage_subsidy_rule_reorder": "Reordering subsidy rules...",
+            "manage_job_config_get": "Fetching job configuration...",
+            "manage_job_config_update": "Updating job configuration...",
         }
         return tool_messages.get(tool_name, f"Processing ({tool_name})...")
 
@@ -761,6 +778,12 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
                     return f"Backend database query failed: {result['error']}"
                 
                 return backend_db.format_results(result)
+
+            elif function_name.startswith("manage_subsidy") or function_name.startswith("manage_job_config"):
+                economy_cog = self.bot.get_cog("EconomyCog")
+                if economy_cog:
+                    return await economy_cog.execute_tool(function_name, arguments, interaction)
+                return "Error: Economy management is not available."
 
             else:
                 return json.dumps({"error": f"Unknown function: {function_name}"})

@@ -490,6 +490,8 @@
                 DENO_PATH = "${pkgs.deno}/bin/deno";
                 # DEFAULT_AI_MODEL = "xiaomi/mimo-v2-flash:free";
                 TRANSLATION_AI_MODEL = "openai/gpt-oss-120b";
+                FINANCIAL_MINISTER_ROLE_ID = "1453698145950109779";
+                ECONOMY_AUDIT_CHANNEL_ID = "1402660537619320872";
               };
               restartIfChanged = false;
               serviceConfig = {
