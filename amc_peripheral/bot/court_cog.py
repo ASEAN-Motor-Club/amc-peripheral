@@ -21,16 +21,6 @@ def _is_admin(member: discord.Member) -> bool:
     return any(r.id == ADMIN_ROLE_ID for r in member.roles)
 
 
-def _parse_member_ids(raw: str) -> list[int]:
-    cleaned = re.sub(r"[<@&>]", "", raw)
-    ids = []
-    for part in cleaned.split(","):
-        part = part.strip()
-        if part.isdigit():
-            ids.append(int(part))
-    return ids
-
-
 def _sanitize_channel_name(name: str) -> str:
     name = name.lower().replace(" ", "-")
     name = re.sub(r"[^a-z0-9\-]", "", name)
@@ -96,18 +86,34 @@ class CreateChannelModal(discord.ui.Modal, title="Create Private Channel"):
         required=True,
         max_length=100,
     )
-    members = discord.ui.TextInput(
-        label="Additional Member IDs (comma-separated)",
-        placeholder="e.g. 123456789, 987654321",
-        required=False,
-        style=discord.TextStyle.paragraph,
-    )
 
-    def __init__(self, cog: "CourtCog"):
+    def __init__(self, creator: discord.Member):
         super().__init__()
-        self.cog = cog
+        self.creator = creator
 
     async def on_submit(self, interaction: discord.Interaction):
+        name = _sanitize_channel_name(self.channel_name.value)
+        await interaction.response.send_message(
+            "Select members to add to the private channel:",
+            view=SelectMembersView(channel_name=name, creator=self.creator),
+            ephemeral=True,
+        )
+
+
+class SelectMembersView(discord.ui.View):
+    def __init__(self, channel_name: str, creator: discord.Member):
+        super().__init__(timeout=120)
+        self.channel_name = channel_name
+        self.creator = creator
+        self.user_select = discord.ui.UserSelect(
+            placeholder="Select members to add...",
+            min_values=1,
+            max_values=25,
+        )
+        self.user_select.callback = self.on_user_select
+        self.add_item(self.user_select)
+
+    async def on_user_select(self, interaction: discord.Interaction):
         guild = interaction.guild
         if guild is None:
             await interaction.response.send_message("Guild not found.", ephemeral=True)
@@ -120,11 +126,6 @@ class CreateChannelModal(discord.ui.Modal, title="Create Private Channel"):
             )
             return
 
-        name = _sanitize_channel_name(self.channel_name.value)
-        creator = interaction.user
-        if not isinstance(creator, discord.Member):
-            await interaction.response.send_message("Member not found.", ephemeral=True)
-            return
         admin_role = guild.get_role(ADMIN_ROLE_ID)
 
         overwrites: dict[discord.abc.Snowflake, discord.PermissionOverwrite] = {
@@ -133,99 +134,112 @@ class CreateChannelModal(discord.ui.Modal, title="Create Private Channel"):
         }
         if admin_role:
             overwrites[admin_role] = _allow_overwrite()
-        overwrites[creator] = _allow_overwrite()
+        overwrites[self.creator] = _allow_overwrite()
 
-        additional_ids = _parse_member_ids(self.members.value or "")
-        for mid in additional_ids:
-            member = guild.get_member(mid)
-            if member:
-                overwrites[member] = _allow_overwrite()
+        selected: list[discord.Member] = []
+        for user in self.user_select.values:
+            if isinstance(user, discord.Member) and user.id != self.creator.id:
+                overwrites[user] = _allow_overwrite()
+                selected.append(user)
 
         channel = await guild.create_text_channel(
-            name,
+            self.channel_name,
             category=category,
             overwrites=overwrites,  # pyrefly: ignore [bad-argument-type]
-            reason=f"Court channel created by {creator}",
+            reason=f"Court channel created by {self.creator}",
         )
 
         await channel.send(
-            f"🔒 Private channel created by {creator.mention}. "
+            f"🔒 Private channel created by {self.creator.mention}. "
             "Use the buttons below to manage members or close this channel.",
             view=ManageChannelView(),
         )
 
+        mentions = ", ".join(m.mention for m in selected)
+        suffix = f" with {mentions}" if selected else ""
         await interaction.response.send_message(
-            f"✅ Created private channel: {channel.mention}", ephemeral=True
+            f"✅ Created private channel: {channel.mention}{suffix}",
+            ephemeral=True,
         )
         log.info(
             "Court channel %s (%d) created by %s (%d)",
             channel.name,
             channel.id,
-            creator,
-            creator.id,
+            self.creator,
+            self.creator.id,
         )
 
 
-class AddMemberModal(discord.ui.Modal, title="Add Members"):
-    members = discord.ui.TextInput(
-        label="Member IDs to add (comma-separated)",
-        placeholder="e.g. 123456789, 987654321",
-        required=True,
-        style=discord.TextStyle.paragraph,
-    )
+class AddMembersView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=120)
+        self.user_select = discord.ui.UserSelect(
+            placeholder="Select members to add...",
+            min_values=1,
+            max_values=25,
+        )
+        self.user_select.callback = self.on_user_select
+        self.add_item(self.user_select)
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_user_select(self, interaction: discord.Interaction):
         guild = interaction.guild
         if guild is None:
             await interaction.response.send_message("Guild not found.", ephemeral=True)
             return
         channel = interaction.channel
         if not isinstance(channel, discord.TextChannel):
-            await interaction.response.send_message("Channel not found.", ephemeral=True)
+            await interaction.response.send_message(
+                "Channel not found.", ephemeral=True
+            )
             return
 
         added = []
-        for mid in _parse_member_ids(self.members.value):
-            member = guild.get_member(mid)
-            if member:
-                await channel.set_permissions(member, overwrite=_allow_overwrite())
-                added.append(member.mention)
+        for user in self.user_select.values:
+            if isinstance(user, discord.Member):
+                await channel.set_permissions(user, overwrite=_allow_overwrite())
+                added.append(user.mention)
 
         if added:
             await interaction.response.send_message(
                 f"✅ Added: {', '.join(added)}", ephemeral=True
             )
-            await channel.send(f"👥 {interaction.user.mention} added: {', '.join(added)}")
+            await channel.send(
+                f"👥 {interaction.user.mention} added: {', '.join(added)}"
+            )
         else:
             await interaction.response.send_message(
-                "No valid member IDs provided.", ephemeral=True
+                "No members selected.", ephemeral=True
             )
 
 
-class RemoveMemberModal(discord.ui.Modal, title="Remove Members"):
-    members = discord.ui.TextInput(
-        label="Member IDs to remove (comma-separated)",
-        placeholder="e.g. 123456789, 987654321",
-        required=True,
-        style=discord.TextStyle.paragraph,
-    )
+class RemoveMembersView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=120)
+        self.user_select = discord.ui.UserSelect(
+            placeholder="Select members to remove...",
+            min_values=1,
+            max_values=25,
+        )
+        self.user_select.callback = self.on_user_select
+        self.add_item(self.user_select)
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_user_select(self, interaction: discord.Interaction):
         guild = interaction.guild
         if guild is None:
             await interaction.response.send_message("Guild not found.", ephemeral=True)
             return
         channel = interaction.channel
         if not isinstance(channel, discord.TextChannel):
-            await interaction.response.send_message("Channel not found.", ephemeral=True)
+            await interaction.response.send_message(
+                "Channel not found.", ephemeral=True
+            )
             return
 
         removed = []
-        for mid in _parse_member_ids(self.members.value):
-            member = guild.get_member(mid)
-            if member:
-                await channel.set_permissions(member, overwrite=None)
-                removed.append(member.mention)
+        for user in self.user_select.values:
+            if isinstance(user, discord.Member):
+                await channel.set_permissions(user, overwrite=None)
+                removed.append(user.mention)
 
         if removed:
             await interaction.response.send_message(
@@ -236,7 +250,7 @@ class RemoveMemberModal(discord.ui.Modal, title="Remove Members"):
             )
         else:
             await interaction.response.send_message(
-                "No valid member IDs provided.", ephemeral=True
+                "No members selected.", ephemeral=True
             )
 
 
@@ -250,17 +264,26 @@ class CloseConfirmView(discord.ui.View):
     ):
         channel = interaction.channel
         if not isinstance(channel, discord.TextChannel):
-            await interaction.response.send_message("Channel not found.", ephemeral=True)
+            await interaction.response.send_message(
+                "Channel not found.", ephemeral=True
+            )
             return
         await interaction.response.send_message("🔒 Closing channel...")
-        log.info("Court channel %s (%d) closed by %s", channel.name, channel.id, interaction.user)
+        log.info(
+            "Court channel %s (%d) closed by %s",
+            channel.name,
+            channel.id,
+            interaction.user,
+        )
         await channel.delete(reason=f"Court channel closed by {interaction.user}")
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
     async def cancel_close(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
-        await interaction.response.edit_message(content="Channel close cancelled.", view=None)
+        await interaction.response.edit_message(
+            content="Channel close cancelled.", view=None
+        )
 
 
 # --- Cog ---
@@ -288,7 +311,9 @@ class CourtCog(commands.Cog):
         async for message in channel.history(limit=10):
             if message.author == self.bot.user:
                 for row in message.components:
-                    for component in row.children:  # pyrefly: ignore [missing-attribute]
+                    for (
+                        component
+                    ) in row.children:  # pyrefly: ignore [missing-attribute]
                         if (
                             hasattr(component, "custom_id")
                             and component.custom_id == "court_create_channel"
@@ -317,7 +342,7 @@ class CourtCog(commands.Cog):
                     "Only admins can create court channels.", ephemeral=True
                 )
                 return
-            await interaction.response.send_modal(CreateChannelModal(self))
+            await interaction.response.send_modal(CreateChannelModal(interaction.user))
 
         elif custom_id == "court_add_member":
             if not isinstance(interaction.user, discord.Member) or not _is_admin(
@@ -327,7 +352,11 @@ class CourtCog(commands.Cog):
                     "Only admins can manage court channels.", ephemeral=True
                 )
                 return
-            await interaction.response.send_modal(AddMemberModal())
+            await interaction.response.send_message(
+                "Select members to add to this channel:",
+                view=AddMembersView(),
+                ephemeral=True,
+            )
 
         elif custom_id == "court_remove_member":
             if not isinstance(interaction.user, discord.Member) or not _is_admin(
@@ -337,7 +366,11 @@ class CourtCog(commands.Cog):
                     "Only admins can manage court channels.", ephemeral=True
                 )
                 return
-            await interaction.response.send_modal(RemoveMemberModal())
+            await interaction.response.send_message(
+                "Select members to remove from this channel:",
+                view=RemoveMembersView(),
+                ephemeral=True,
+            )
 
         elif custom_id == "court_close_channel":
             if not isinstance(interaction.user, discord.Member) or not _is_admin(
