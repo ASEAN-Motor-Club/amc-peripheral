@@ -129,6 +129,7 @@ class CreateChannelModal(discord.ui.Modal, title="Create Private Channel"):
 
         overwrites: dict[discord.abc.Snowflake, discord.PermissionOverwrite] = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            guild.me: _allow_overwrite(),
         }
         if admin_role:
             overwrites[admin_role] = _allow_overwrite()
