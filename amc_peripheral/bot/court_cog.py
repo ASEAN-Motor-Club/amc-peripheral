@@ -273,8 +273,10 @@ class CourtCog(commands.Cog):
         self.bot.add_view(CreateChannelView())
         self.bot.add_view(ManageChannelView())
 
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Post the court button after the guild cache is populated."""
         if COURT_CHANNEL_ID == 0:
-            log.warning("COURT_CHANNEL_ID not configured, skipping court button setup")
             return
 
         channel = self.bot.get_channel(COURT_CHANNEL_ID)
