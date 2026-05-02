@@ -1,0 +1,89 @@
+---
+import GovLayout from '../layouts/GovLayout.astro';
+import PhaseBanner from '../components/PhaseBanner.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import SummaryBox from '../components/SummaryBox.astro';
+
+const BASE_URL = 'https://www.aseanmotorclub.com/releases/mods';
+
+const mods = [
+  {
+    name: 'Schedule I',
+    description: 'Adds illicit cargo types and delivery recipes to the criminal faction, expanding the smuggling economy with new contraband goods and production chains.',
+    versions: [
+      { version: '0.3.2', gameVersion: '0.7.18+1', filename: 'Schedule_I_v0.3.2_0.7.18+1_P.pak', size: '100 KB' },
+      { version: '0.3.1', gameVersion: '0.7.18+1', filename: 'Schedule_I_v0.3.1_0.7.18+1_P.pak', size: '100 KB' },
+    ],
+  },
+];
+---
+<GovLayout title="Mod Downloads — ASEAN Motor Club" description="Official mod downloads for the ASEAN Motor Club community — Schedule I cargo mod, custom decals, and more.">
+
+<PhaseBanner tag="Downloads" text="Official community mods" />
+<Breadcrumbs items={[{ label: "Mods", href: "/mods" }]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Mod Downloads</h1>
+
+      <div class="govuk-metadata">
+        <dl>
+          <dt>From:</dt><dd>ASEAN Motor Club</dd>
+        </dl>
+      </div>
+
+      <SummaryBox title="Installation">
+        <p>Download the <code>.pak</code> file and place it in your Motor Town <code>Paks/</code> directory:</p>
+        <p><code>Steam\steamapps\common\Motor Town\MotorTown\Content\Paks\</code></p>
+        <p>Restart the game after installing. Only the latest version of each mod is needed.</p>
+      </SummaryBox>
+
+      {
+        mods.map((mod) => (
+          <section>
+            <h2 id={mod.name.toLowerCase().replace(/\s+/g, '-')}>{mod.name}</h2>
+            <p>{mod.description}</p>
+
+            <table class="govuk-table">
+              <caption>Available Versions</caption>
+              <thead>
+                <tr>
+                  <th>Version</th>
+                  <th>Game Version</th>
+                  <th>Size</th>
+                  <th>Download</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mod.versions.map((v) => (
+                  <tr>
+                    <td><strong>v{v.version}</strong></td>
+                    <td>{v.gameVersion}</td>
+                    <td>{v.size}</td>
+                    <td>
+                      <a href={`${BASE_URL}/${v.filename}`} class="govuk-link" download>
+                        {v.filename}
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ))
+      }
+
+      <h2 id="other-mods">Other Mods</h2>
+      <p>See all available mods at:</p>
+      <p>
+        <a href="https://www.aseanmotorclub.com/releases/mods/" class="govuk-link">
+          aseanmotorclub.com/releases/mods/
+        </a>
+      </p>
+
+    </div>
+  </div>
+</main>
+
+</GovLayout>
