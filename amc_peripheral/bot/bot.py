@@ -14,6 +14,7 @@ from .economy_cog import EconomyCog
 from .youtube_cog import YouTubeCog
 from .role_cog import RoleCog
 from .court_cog import CourtCog
+from .ballot_cog import BallotCog
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class AMCBot(commands.Bot):
         await self.add_cog(CourtCog(self))
         await self.add_cog(AuctionCog(self))
         await self.add_cog(EconomyCog(self))
+        await self.add_cog(BallotCog(self))
 
         # Sync tree
         guild = discord.Object(id=GUILD_ID)
