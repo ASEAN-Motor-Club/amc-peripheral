@@ -15,6 +15,7 @@ the subagent's system prompt wording stays stable. Internally, every tool
 now routes through the wiki.
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -31,12 +32,64 @@ from amc_peripheral.wiki.index import WikiIndex
 log = logging.getLogger(__name__)
 
 # Max iterations for the agentic tool loop
-MAX_ITERATIONS = 5
+MAX_ITERATIONS = 3
 
 
 def _build_tools(game_schema: str) -> list[dict]:
     """Build tool definitions for the game knowledge subagent."""
     tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "lookup_vehicle",
+                "description": "Look up detailed specs for a vehicle by name. Returns type, cost, weight, engine, cargo space, drivetrain, and capabilities.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Vehicle name or partial name (e.g. 'Tronko', 'Gosan')",
+                        }
+                    },
+                    "required": ["name"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "lookup_cargo",
+                "description": "Look up detailed specs for a cargo type by name. Returns weight, payment, compatible vehicle types, and production chains.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Cargo name or partial name (e.g. 'Steel Coil', 'SmallBox')",
+                        }
+                    },
+                    "required": ["name"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "compare_vehicles",
+                "description": "Compare multiple vehicles side-by-side. Returns a table of key specs for each vehicle.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "names": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of vehicle names to compare (e.g. ['Tronko', 'Maity'])",
+                        }
+                    },
+                    "required": ["names"],
+                },
+            },
+        },
         {
             "type": "function",
             "function": {
@@ -246,13 +299,13 @@ async def _execute_tool(
         if name == "lookup_knowledge":
             if not wiki_storage:
                 return "Wiki not available."
-            return _lookup_knowledge(args.get("topic", ""), wiki_storage, wiki_retrieval)
+            return await asyncio.to_thread(_lookup_knowledge, args.get("topic", ""), wiki_storage, wiki_retrieval)
 
         elif name == "list_knowledge":
             if not wiki_storage:
                 return "Wiki not available."
             type_filter = args.get("type_filter")
-            pages = wiki_storage.list_pages(category=type_filter, limit=500)
+            pages = await asyncio.to_thread(wiki_storage.list_pages, category=type_filter, limit=500)
             if not pages:
                 return f"No entries found{f' for category {type_filter!r}' if type_filter else ''}."
             titles = sorted(p["title"] for p in pages)
@@ -351,6 +404,39 @@ async def _execute_tool(
             if truncated:
                 output += f"\n\nNote: Results were limited to {count} rows."
             return output
+
+        elif name == "lookup_vehicle":
+            from amc_peripheral.bot import game_db
+
+            vehicle_name = args.get("name", "")
+            if not vehicle_name:
+                return "Error: 'name' is required."
+            result = await asyncio.to_thread(game_db.lookup_vehicle, vehicle_name)
+            if "error" in result:
+                return result["error"]
+            return json.dumps(result, indent=2)
+
+        elif name == "lookup_cargo":
+            from amc_peripheral.bot import game_db
+
+            cargo_name = args.get("name", "")
+            if not cargo_name:
+                return "Error: 'name' is required."
+            result = await asyncio.to_thread(game_db.lookup_cargo, cargo_name)
+            if "error" in result:
+                return result["error"]
+            return json.dumps(result, indent=2)
+
+        elif name == "compare_vehicles":
+            from amc_peripheral.bot import game_db
+
+            names = args.get("names", [])
+            if not names:
+                return "Error: 'names' list is required."
+            result = await asyncio.to_thread(game_db.compare_vehicles, names)
+            if not result:
+                return "No matching vehicles found."
+            return json.dumps(result, indent=2)
 
         elif name == "get_current_subsidies":
             async with http_session.get(
@@ -462,10 +548,10 @@ async def ask_game_knowledge(
         # pyrefly: ignore [no-matching-overload]
         completion = await openai_client.chat.completions.create(
             model=model,
-            reasoning_effort="medium",
             messages=messages,
             tools=tools if tools else None,
             tool_choice="auto" if tools else None,
+            extra_body={"provider": {"order": ["parasail", "novita"]}},
         )
 
         response = completion.choices[0].message if completion.choices else None

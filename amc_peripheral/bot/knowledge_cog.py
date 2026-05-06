@@ -1,6 +1,7 @@
 import json
 import logging
 import asyncio
+import time
 import discord
 from datetime import datetime, timedelta, time as dt_time
 from zoneinfo import ZoneInfo
@@ -18,7 +19,6 @@ from amc_peripheral.settings import (
     NEWS_CHANNEL_ID,
     BACKEND_API_URL,
     BOT_MAX_ITERATIONS,
-    BOT_FEEDBACK_DELAY_SECONDS,
     BOT_TOOL_STATUS_DELAY_SECONDS,
     ASK_BOT_CHANNEL_ID,
 )
@@ -64,7 +64,6 @@ class KnowledgeCog(commands.Cog):
         # state
         self.knowledge_system_message = ""
         self.game_schema_description = ""
-        self.backend_schema_description = ""
         self._ingame_bot_limiter = RateLimiter(max_calls=100, period_minutes=10)
 
         # Debounced knowledge reload
@@ -99,6 +98,10 @@ class KnowledgeCog(commands.Cog):
         self._wiki_pending_conversations: list[dict] = []
 
         self._active_tasks = set()
+
+        # API response cache for tool calls
+        self._api_cache: dict[str, tuple[float, str]] = {}
+        self._api_cache_ttl = 300  # 5 minutes
 
     async def cog_load(self):
         # Initialize long-term memory storage
@@ -229,15 +232,9 @@ class KnowledgeCog(commands.Cog):
         else:
             log.info("Game database schema validated successfully")
 
-        # Load game schema description for LLM tool
+        # Load game schema description for subagent (game_knowledge.py)
         self.game_schema_description = game_db.get_schema_description()
         log.info(f"Game schema loaded: {len(self.game_schema_description)} characters")
-
-        # Load backend schema description for LLM tool
-        self.backend_schema_description = backend_db.get_schema_description()
-        log.info(
-            f"Backend schema loaded: {len(self.backend_schema_description)} characters"
-        )
 
         forum_channel = self.bot.get_channel(KNOWLEDGE_FORUM_CHANNEL_ID)
         if forum_channel is None:
@@ -270,12 +267,16 @@ class KnowledgeCog(commands.Cog):
     ):
         now = datetime.now(self.local_tz)
 
-        wiki_index_str = ""
-        if self._wiki_index:
-            try:
-                wiki_index_str = self._wiki_index.get_index() or ""
-            except Exception:
-                pass
+        KNOWLEDGE_MAX_CHARS = 20000
+
+        # Parallelize wiki index fetching
+        wiki_index_str = await asyncio.to_thread(
+            lambda: self._wiki_index.get_index() if self._wiki_index else ""
+        )
+
+        knowledge = self.knowledge_system_message
+        if len(knowledge) > KNOWLEDGE_MAX_CHARS:
+            knowledge = knowledge[:KNOWLEDGE_MAX_CHARS] + "\n\n[...continued — use wiki tools for full detail]"
 
         if generic:
             system_message = "You are a helpful assistant for the ASEAN MotorTown Club discord server. Do not use markdown tables or emojis in your responses."
@@ -287,17 +288,15 @@ class KnowledgeCog(commands.Cog):
                 "## Your Wiki\n"
                 "You maintain a personal wiki of knowledge about the community, players, and game world. "
                 "Before answering questions about people, community dynamics, or long-running topics, search your wiki for relevant pages. "
-                "When you learn something new and notable from a conversation, update your wiki using write_wiki_page. "
+                "When you learn something new and notable from a conversation, update your wiki using update_wiki. "
                 "If the current speaker asks what you know about them, call get_my_wiki_profile (no arguments). "
                 "For game-related questions, use the ask_game_knowledge tool instead of guessing.\n\n"
-                f"{self.knowledge_system_message}"
+                f"{knowledge}"
             )
 
         if wiki_index_str:
             system_message += f"\n\n## Wiki Knowledge Index\n{wiki_index_str}"
 
-        model = DEFAULT_AI_MODEL
-        tools = []
         model = DEFAULT_AI_MODEL
         tools = [
             {
@@ -341,22 +340,52 @@ class KnowledgeCog(commands.Cog):
             {
                 "type": "function",
                 "function": {
-                    "name": "query_game_database",
-                    "description": f"""Query MotorTown game database with SQL.
-
-{self.game_schema_description}
-
-Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates (COUNT, AVG, SUM, MIN, MAX).
-Results are limited to 100 rows. Database is read-only.""",
+                    "name": "lookup_vehicle",
+                    "description": "Look up detailed specs for a vehicle by name. Returns type, cost, weight, engine, cargo space, drivetrain, and capabilities.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "sql": {
+                            "name": {
                                 "type": "string",
-                                "description": "SQL SELECT query to execute",
+                                "description": "Vehicle name or partial name (e.g. 'Tronko', 'Gosan')",
                             }
                         },
-                        "required": ["sql"],
+                        "required": ["name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "lookup_cargo",
+                    "description": "Look up detailed specs for a cargo type by name. Returns weight, payment, compatible vehicle types, and production chains.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Cargo name or partial name (e.g. 'Steel Coil', 'SmallBox')",
+                            }
+                        },
+                        "required": ["name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "compare_vehicles",
+                    "description": "Compare multiple vehicles side-by-side. Returns a table of key specs for each vehicle.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "names": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of vehicle names to compare (e.g. ['Tronko', 'Maity'])",
+                            }
+                        },
+                        "required": ["names"],
                     },
                 },
             },
@@ -402,9 +431,6 @@ Results are limited to 100 rows. Database is read-only.""",
         # Inject wiki tools
         tools.extend(self._get_wiki_tool_definitions())
 
-        # Retrieve relevant wiki context
-        wiki_context = await self._get_wiki_context(question)
-
         messages = [
             {"role": "system", "content": system_message},
             {
@@ -412,8 +438,6 @@ Results are limited to 100 rows. Database is read-only.""",
                 "content": f"## Context\nThe current date and time (in Bangkok GMT+7 timezone) is: {now.strftime('%A, %Y-%m-%d %H:%M')}",
             },
         ]
-        if wiki_context:
-            messages.append({"role": "user", "content": wiki_context})
         if prev_messages_str:
             messages.append(
                 {
@@ -440,39 +464,48 @@ Results are limited to 100 rows. Database is read-only.""",
     ):
         now = datetime.now(self.local_tz)
 
-        # Fetch active players
-        async with self.bot.http_session.get(
-            "https://server.aseanmotorclub.com/api/active_players/"
-        ) as resp:
-            player_data = await resp.text()
+        KNOWLEDGE_MAX_CHARS = 20000
 
-        events_str = "\n\n".join(
-            [
-                f"## {event.name}\nDate/Time:{event.start_time.replace(tzinfo=ZoneInfo('UTC')).astimezone(self.local_tz).strftime('%A, %Y-%m-%d %H:%M')}\nLocation: {event.location}\n{event.description}"
-                for event in self.bot.guilds[0].scheduled_events
-                if event.start_time > now
-            ]
+        # Parallelize: active players, wiki index
+        async def _fetch_active_players():
+            async with self.bot.http_session.get(
+                "https://server.aseanmotorclub.com/api/active_players/"
+            ) as resp:
+                return await resp.text()
+
+        def _build_events_str():
+            return "\n\n".join(
+                [
+                    f"## {event.name}\nDate/Time:{event.start_time.replace(tzinfo=ZoneInfo('UTC')).astimezone(self.local_tz).strftime('%A, %Y-%m-%d %H:%M')}\nLocation: {event.location}\n{event.description}"
+                    for event in self.bot.guilds[0].scheduled_events
+                    if event.start_time > now
+                ]
+            )
+
+        players_task = asyncio.create_task(_fetch_active_players())
+        wiki_index_task = asyncio.create_task(
+            asyncio.to_thread(lambda: self._wiki_index.get_index() if self._wiki_index else "")
         )
+
+        player_data, wiki_index_str = await asyncio.gather(
+            players_task, wiki_index_task
+        )
+        events_str = _build_events_str()
+
+        knowledge = self.knowledge_system_message
+        if len(knowledge) > KNOWLEDGE_MAX_CHARS:
+            knowledge = knowledge[:KNOWLEDGE_MAX_CHARS] + "\n\n[...continued — use wiki tools for full detail]"
 
         system_message = (
             "You are a helpful bot in Motor Town, an open world driving game, specifically in 'ASEAN Motor Club'.\n"
             "Answer in a short sentence or paragraph since the game only allows short messages, and avoid using newlines.\n"
             "Only use the following knowledge. Do not use markdown, tables, or emojis.\n"
             "For game-related questions, use the ask_game_knowledge tool instead of guessing.\n\n"
-            + self.knowledge_system_message
+            + knowledge
         )
 
-        wiki_index_str = ""
-        if self._wiki_index:
-            try:
-                wiki_index_str = self._wiki_index.get_index() or ""
-            except Exception:
-                pass
         if wiki_index_str:
             system_message += f"\n\n## Wiki Knowledge Index\n{wiki_index_str}"
-
-        # Retrieve relevant wiki context for the question
-        wiki_context = await self._get_wiki_context(question)
 
         messages = [
             {"role": "system", "content": system_message},
@@ -481,8 +514,6 @@ Results are limited to 100 rows. Database is read-only.""",
             messages.append(
                 {"role": "user", "content": "# Upcoming events:\n\n" + events_str}
             )
-        if wiki_context:
-            messages.append({"role": "user", "content": wiki_context})
 
         messages.extend(
             [
@@ -513,22 +544,52 @@ Results are limited to 100 rows. Database is read-only.""",
             {
                 "type": "function",
                 "function": {
-                    "name": "query_game_database",
-                    "description": f"""Query MotorTown game database with SQL.
-
-{self.game_schema_description}
-
-Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates (COUNT, AVG, SUM, MIN, MAX).
-Results are limited to 100 rows. Database is read-only.""",
+                    "name": "lookup_vehicle",
+                    "description": "Look up detailed specs for a vehicle by name. Returns type, cost, weight, engine, cargo space, drivetrain, and capabilities.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "sql": {
+                            "name": {
                                 "type": "string",
-                                "description": "SQL SELECT query to execute",
+                                "description": "Vehicle name or partial name (e.g. 'Tronko', 'Gosan')",
                             }
                         },
-                        "required": ["sql"],
+                        "required": ["name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "lookup_cargo",
+                    "description": "Look up detailed specs for a cargo type by name. Returns weight, payment, compatible vehicle types, and production chains.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Cargo name or partial name (e.g. 'Steel Coil', 'SmallBox')",
+                            }
+                        },
+                        "required": ["name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "compare_vehicles",
+                    "description": "Compare multiple vehicles side-by-side. Returns a table of key specs for each vehicle.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "names": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of vehicle names to compare (e.g. ['Tronko', 'Maity'])",
+                            }
+                        },
+                        "required": ["names"],
                     },
                 },
             },
@@ -560,13 +621,7 @@ Results are limited to 100 rows. Database is read-only.""",
                 "type": "function",
                 "function": {
                     "name": "query_backend_database",
-                    "description": f"""Query the AMC backend PostgreSQL database with SQL.
-
-{self.backend_schema_description}
-
-Use standard PostgreSQL SQL with SELECT. Supports JOINs, GROUP BY, aggregates, CTEs, window functions.
-Results limited to 100 rows. Read-only access. Finance tables (balances, transactions) are restricted.
-Use this for player stats, deliveries, race results, teams, jobs, ministry data, and game analytics.""",
+                    "description": "Query the AMC backend PostgreSQL database with SELECT. Player stats, deliveries, race results, teams, jobs, ministry data. Read-only, max 100 rows.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -690,35 +745,23 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
             {
                 "type": "function",
                 "function": {
-                    "name": "read_wiki_page",
-                    "description": "Read a wiki page by title or slug. Use this to recall detailed information about a player, vehicle, location, concept, or event from the wiki.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "title_or_slug": {
-                                "type": "string",
-                                "description": "The page title or slug to read (e.g. 'player:freemanlatif', 'vehicle:Gosan_G7', 'concept:steel-coil-curse')",
-                            },
-                        },
-                        "required": ["title_or_slug"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "search_wiki",
-                    "description": "Search the wiki for pages semantically related to a query. Returns the most relevant pages with summaries.",
+                    "name": "lookup_wiki",
+                    "description": "Look up wiki information. Use mode='page' to read a specific page by title/slug, or mode='search' to find pages semantically related to a query.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "The search query",
+                                "description": "Page title/slug (for page mode) or search query (for search mode)",
+                            },
+                            "mode": {
+                                "type": "string",
+                                "enum": ["page", "search"],
+                                "description": "'page' to read a specific page, 'search' to find relevant pages (default: 'search')",
                             },
                             "n_results": {
                                 "type": "integer",
-                                "description": "Number of results to return (default 3, max 5)",
+                                "description": "Number of search results (search mode only, default 3, max 5)",
                             },
                         },
                         "required": ["query"],
@@ -753,54 +796,46 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
             {
                 "type": "function",
                 "function": {
-                    "name": "write_wiki_page",
-                    "description": "Create or update a wiki page. Use this when the bot learns something new and notable that should be remembered long-term. The page will be indexed for future retrieval.",
+                    "name": "update_wiki",
+                    "description": "Create/update a wiki page or add a cross-reference link between pages. Use action='write' to create/update pages, or action='link' to link pages together.",
                     "parameters": {
                         "type": "object",
                         "properties": {
+                            "action": {
+                                "type": "string",
+                                "enum": ["write", "link"],
+                                "description": "'write' to create/update a page, 'link' to add a cross-reference",
+                            },
                             "title": {
                                 "type": "string",
-                                "description": "Page title (e.g. 'player:freemanlatif', 'concept:steel-coil-curse')",
+                                "description": "Page title (write action, e.g. 'player:freemanlatif', 'concept:steel-coil-curse')",
                             },
                             "category": {
                                 "type": "string",
-                                "description": "Page category (e.g. 'player', 'vehicle', 'location', 'concept', 'event', 'relationship', 'song')",
+                                "description": "Page category (write action, e.g. 'player', 'vehicle', 'location', 'concept')",
                             },
                             "content": {
                                 "type": "string",
-                                "description": "The page content",
+                                "description": "The page content (write action)",
                             },
                             "summary": {
                                 "type": "string",
-                                "description": "A brief summary of the page",
+                                "description": "A brief summary (write action)",
                             },
-                        },
-                        "required": ["title", "category", "content"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "add_wiki_link",
-                    "description": "Create a cross-reference link between two wiki pages. This helps navigate the knowledge graph.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
                             "from_page": {
                                 "type": "string",
-                                "description": "Title or slug of the source page",
+                                "description": "Source page title/slug (link action)",
                             },
                             "to_page": {
                                 "type": "string",
-                                "description": "Title or slug of the target page",
+                                "description": "Target page title/slug (link action)",
                             },
                             "link_type": {
                                 "type": "string",
-                                "description": "Type of link (default: 'mentions')",
+                                "description": "Link type (link action, default: 'mentions')",
                             },
                         },
-                        "required": ["from_page", "to_page"],
+                        "required": ["action"],
                     },
                 },
             },
@@ -860,23 +895,21 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
         start_time = asyncio.get_event_loop().time()
 
         # Feedback state
-        initial_feedback_sent = False
         tool_feedback_sent = False
         last_tool_name: Optional[str] = None
+
+        # IMMEDIATE feedback — before first LLM call
+        await self._send_progress_feedback(
+            message="Working on it...",
+            interaction=interaction,
+            ingame_feedback_fn=ingame_feedback_fn,
+        )
 
         while iteration < max_iterations:
             iteration += 1
             elapsed = asyncio.get_event_loop().time() - start_time
 
             # --- Progress Feedback Logic ---
-            if not initial_feedback_sent and elapsed >= BOT_FEEDBACK_DELAY_SECONDS:
-                await self._send_progress_feedback(
-                    message="Working on it...",
-                    interaction=interaction,
-                    ingame_feedback_fn=ingame_feedback_fn,
-                )
-                initial_feedback_sent = True
-
             if (
                 not tool_feedback_sent
                 and elapsed >= BOT_TOOL_STATUS_DELAY_SECONDS
@@ -890,15 +923,21 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
                 )
                 tool_feedback_sent = True
 
-            # Call LLM
-            # pyrefly: ignore [no-matching-overload]
-            completion = await self.openai_client_openrouter.chat.completions.create(
-                model=model,
-                reasoning_effort="medium",
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
-            )
+            # Call LLM with timeout and provider pinning
+            try:
+                # pyrefly: ignore [no-matching-overload]
+                completion = await asyncio.wait_for(
+                    self.openai_client_openrouter.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        tools=tools,
+                        tool_choice="auto",
+                        extra_body={"provider": {"order": ["parasail", "novita"]}},
+                    ),
+                    timeout=90.0,
+                )
+            except asyncio.TimeoutError:
+                return "I'm taking too long to think. Please try a simpler question."
 
             response_message = (
                 completion.choices[0].message if completion.choices else None
@@ -922,9 +961,7 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
 
-                log.info(
-                    f"Knowledge bot calling tool: {function_name} with args: {function_args}"
-                )
+                log.info(f"Tool call: {function_name}")
 
                 # Call the appropriate tool
                 tool_result = await self._execute_tool(
@@ -980,44 +1017,29 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
             "manage_job_config_get": "Fetching job configuration...",
             "manage_job_config_update": "Updating job configuration...",
             "ask_game_knowledge": "Researching game knowledge...",
-            "read_wiki_page": "Reading wiki page...",
-            "search_wiki": "Searching the wiki...",
+            "lookup_wiki": "Looking up wiki...",
             "list_wiki_pages": "Browsing wiki pages...",
-            "write_wiki_page": "Updating wiki...",
-            "add_wiki_link": "Linking wiki pages...",
+            "update_wiki": "Updating wiki...",
             "get_wiki_summary": "Checking wiki stats...",
             "get_my_wiki_profile": "Looking up your profile...",
+            "lookup_vehicle": "Looking up vehicle specs...",
+            "lookup_cargo": "Looking up cargo details...",
+            "compare_vehicles": "Comparing vehicles...",
         }
         return tool_messages.get(tool_name, f"Processing ({tool_name})...")
 
-    async def _get_wiki_context(self, query: str = "") -> str:
-        """Retrieve relevant wiki pages for bot chats.
-
-        Searches ChromaDB for semantically relevant pages and returns a
-        formatted context string. If no query is provided, returns the wiki index.
-        """
-        if not self._wiki_storage or not self._wiki_retrieval:
-            return ""
-
-        try:
-            if query:
-                results = self._wiki_retrieval.search(query, n_results=3)
-                if results:
-                    page_ids = [r["page_id"] for r in results if r.get("page_id")]
-                    if self._wiki_index and page_ids:
-                        context = self._wiki_index.get_multi_page_context(page_ids)
-                        if context:
-                            return f"Relevant wiki pages:\n{context}"
-
-            if self._wiki_index:
-                index = self._wiki_index.get_index()
-                if index:
-                    return f"Wiki index:\n{index}"
-
-            return ""
-        except Exception as e:
-            log.warning(f"Failed to retrieve wiki context: {e}")
-            return ""
+    async def _cached_api_get(self, url: str) -> str:
+        now = time.monotonic()
+        if url in self._api_cache:
+            ts, data = self._api_cache[url]
+            if now - ts < self._api_cache_ttl:
+                return data
+        async with self.bot.http_session.get(url) as resp:
+            data = await resp.text()
+            if resp.status != 200:
+                return data
+        self._api_cache[url] = (now, data)
+        return data
 
     def _get_player_wiki_summary(self, player_id: str) -> str:
         """Return a formatted summary of the player's wiki page."""
@@ -1156,54 +1178,89 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
 
                 return formatted_output
 
+            elif function_name == "lookup_vehicle":
+                name = arguments.get("name", "")
+                if not name:
+                    return "Error: 'name' is required."
+                result = await asyncio.to_thread(game_db.lookup_vehicle, name)
+                if "error" in result:
+                    return result["error"]
+                return json.dumps(result, indent=2)
+
+            elif function_name == "lookup_cargo":
+                name = arguments.get("name", "")
+                if not name:
+                    return "Error: 'name' is required."
+                result = await asyncio.to_thread(game_db.lookup_cargo, name)
+                if "error" in result:
+                    return result["error"]
+                return json.dumps(result, indent=2)
+
+            elif function_name == "compare_vehicles":
+                names = arguments.get("names", [])
+                if not names:
+                    return "Error: 'names' list is required."
+                result = await asyncio.to_thread(game_db.compare_vehicles, names)
+                if not result:
+                    return "No matching vehicles found."
+                return json.dumps(result, indent=2)
+
             elif function_name == "get_currently_playing_song":
+                cache_key = "currently_playing_song"
+                now = time.monotonic()
+                if cache_key in self._api_cache:
+                    ts, data = self._api_cache[cache_key]
+                    if now - ts < 30:
+                        return data
                 from amc_peripheral.radio.radio_server import get_current_song
 
                 current_song = await get_current_song(self.bot.http_session)
-                return (
+                result = (
                     current_song
                     or "No song is currently playing or unable to fetch song info."
                 )
+                self._api_cache[cache_key] = (now, result)
+                return result
 
             elif function_name == "get_current_subsidies":
-                async with self.bot.http_session.get(
-                    f"{BACKEND_API_URL}/api/subsidies/"
-                ) as resp:
-                    data = await resp.json()
+                raw = await self._cached_api_get(f"{BACKEND_API_URL}/api/subsidies/")
+                try:
+                    data = json.loads(raw)
                     return data.get(
                         "subsidies_text", "No subsidy information available."
                     )
+                except json.JSONDecodeError:
+                    return raw
 
             elif function_name == "get_server_commands":
-                async with self.bot.http_session.get(
-                    f"{BACKEND_API_URL}/api/commands/"
-                ) as resp:
-                    if resp.status != 200:
-                        return "Failed to fetch server commands."
-                    commands_data = await resp.json()
+                raw = await self._cached_api_get(f"{BACKEND_API_URL}/api/commands/")
+                try:
+                    commands_data = json.loads(raw)
+                except json.JSONDecodeError:
+                    return "Failed to parse server commands."
 
-                    # Format commands by category for better readability
-                    formatted = "Available server commands:\n\n"
+                # Format commands by category for better readability
+                formatted = "Available server commands:\n\n"
 
-                    # Group by category
-                    from itertools import groupby
+                # Group by category
+                from itertools import groupby
 
-                    for category, cmds in groupby(
-                        commands_data, key=lambda x: x.get("category", "General")
-                    ):
-                        formatted += f"## {category}\n"
-                        for cmd in cmds:
-                            cmd_name = cmd["command"]
-                            shorthand = cmd.get("shorthand")
-                            description = cmd.get("description", "")
+                for category, cmds in groupby(
+                    commands_data, key=lambda x: x.get("category", "General")
+                ):
+                    formatted += f"## {category}\n"
+                    for cmd in cmds:
+                        cmd_name = cmd["command"]
+                        shorthand = cmd.get("shorthand")
+                        description = cmd.get("description", "")
 
-                            if shorthand:
-                                formatted += f"- **{cmd_name}** (or **{shorthand}**): {description}\n"
-                            else:
-                                formatted += f"- **{cmd_name}**: {description}\n"
-                        formatted += "\n"
+                        if shorthand:
+                            formatted += f"- **{cmd_name}** (or **{shorthand}**): {description}\n"
+                        else:
+                            formatted += f"- **{cmd_name}**: {description}\n"
+                    formatted += "\n"
 
-                    return formatted
+                return formatted
 
             elif function_name == "query_backend_database":
                 sql = arguments.get("sql")
@@ -1248,41 +1305,40 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
                 except Exception as e:
                     return f"Failed to get game knowledge: {e}"
 
-            elif function_name == "read_wiki_page":
-                title_or_slug = arguments.get("title_or_slug", "")
-                if not title_or_slug:
-                    return "Error: 'title_or_slug' is required."
-                if not self._wiki_storage:
-                    return "Wiki storage not available."
-                page = self._wiki_storage.get_page_by_slug(title_or_slug)
-                if not page:
-                    page = self._wiki_storage.get_page_by_title(title_or_slug)
-                if not page:
-                    return f"No wiki page found for '{title_or_slug}'."
-                return (
-                    f"--- {page['title']} ---\n"
-                    f"Category: {page['category']}\n"
-                    f"Summary: {page.get('summary', '')}\n"
-                    f"Content:\n{page['content']}"
-                )
-
-            elif function_name == "search_wiki":
+            elif function_name == "lookup_wiki":
+                mode = arguments.get("mode", "search")
                 query = arguments.get("query", "")
-                n_results = arguments.get("n_results", 3)
                 if not query:
                     return "Error: 'query' is required."
-                if not self._wiki_retrieval:
-                    return "Wiki retrieval not available."
-                results = self._wiki_retrieval.search(query, n_results=n_results)
-                if not results:
-                    return f"No wiki pages found for '{query}'."
-                lines = []
-                for r in results:
-                    lines.append(  # pyrefly: ignore [bad-argument-type]
-                        f"- {r.get('title', 'Unknown')} ({r.get('category', 'unknown')}): "
-                        f"{r.get('content', '')[:200]}..."
+
+                if mode == "page":
+                    if not self._wiki_storage:
+                        return "Wiki storage not available."
+                    page = self._wiki_storage.get_page_by_slug(query)
+                    if not page:
+                        page = self._wiki_storage.get_page_by_title(query)
+                    if not page:
+                        return f"No wiki page found for '{query}'."
+                    return (
+                        f"--- {page['title']} ---\n"
+                        f"Category: {page['category']}\n"
+                        f"Summary: {page.get('summary', '')}\n"
+                        f"Content:\n{page['content']}"
                     )
-                return "Wiki search results:\n" + "\n".join(lines)
+                else:
+                    n_results = arguments.get("n_results", 3)
+                    if not self._wiki_retrieval:
+                        return "Wiki retrieval not available."
+                    results = await asyncio.to_thread(self._wiki_retrieval.search, query, n_results=n_results)
+                    if not results:
+                        return f"No wiki pages found for '{query}'."
+                    lines = []
+                    for r in results:
+                        lines.append(  # pyrefly: ignore [bad-argument-type]
+                            f"- {r.get('title', 'Unknown')} ({r.get('category', 'unknown')}): "
+                            f"{r.get('content', '')[:200]}..."
+                        )
+                    return "Wiki search results:\n" + "\n".join(lines)
 
             elif function_name == "list_wiki_pages":
                 category = arguments.get("category") or None
@@ -1302,68 +1358,73 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
                     )
                 return "Wiki pages:\n" + "\n".join(lines)
 
-            elif function_name == "write_wiki_page":
-                title = arguments.get("title", "")
-                category = arguments.get("category", "concept")
-                content = arguments.get("content", "")
-                summary = arguments.get("summary", "")
-                if not title or not content:
-                    return "Error: 'title' and 'content' are required."
-                if not self._wiki_storage or not self._wiki_retrieval:
-                    return "Wiki storage not available."
-                slug = self._wiki_storage._make_slug(title)
-                existing = self._wiki_storage.get_page_by_slug(slug)
-                if existing:
-                    self._wiki_storage.update_page(
-                        existing["id"],
-                        content=content,
-                        summary=summary or existing.get("summary", ""),
-                    )
-                    refreshed = self._wiki_storage.get_page_by_id(existing["id"])
-                    if refreshed:
-                        self._wiki_retrieval.index_page(
-                            page_id=existing["id"],
-                            title=refreshed["title"],
-                            content=refreshed["content"],
-                            category=refreshed["category"],
-                            updated_at=refreshed["updated_at"],
+            elif function_name == "update_wiki":
+                action = arguments.get("action", "write")
+                if action == "write":
+                    title = arguments.get("title", "")
+                    category = arguments.get("category", "concept")
+                    content = arguments.get("content", "")
+                    summary = arguments.get("summary", "")
+                    if not title or not content:
+                        return "Error: 'title' and 'content' are required for write action."
+                    if not self._wiki_storage or not self._wiki_retrieval:
+                        return "Wiki storage not available."
+                    slug = self._wiki_storage._make_slug(title)
+                    existing = self._wiki_storage.get_page_by_slug(slug)
+                    if existing:
+                        self._wiki_storage.update_page(
+                            existing["id"],
+                            content=content,
+                            summary=summary or existing.get("summary", ""),
                         )
-                    return f"Updated wiki page '{title}'."
+                        refreshed = self._wiki_storage.get_page_by_id(existing["id"])
+                        if refreshed:
+                            await asyncio.to_thread(
+                                self._wiki_retrieval.index_page,
+                                page_id=existing["id"],
+                                title=refreshed["title"],
+                                content=refreshed["content"],
+                                category=refreshed["category"],
+                                updated_at=refreshed["updated_at"],
+                            )
+                        return f"Updated wiki page '{title}'."
+                    else:
+                        page_id = self._wiki_storage.create_page(
+                            title=title, category=category, content=content, summary=summary
+                        )
+                        refreshed = self._wiki_storage.get_page_by_id(page_id)
+                        if refreshed:
+                            await asyncio.to_thread(
+                                self._wiki_retrieval.index_page,
+                                page_id=page_id,
+                                title=refreshed["title"],
+                                content=refreshed["content"],
+                                category=refreshed["category"],
+                                updated_at=refreshed["updated_at"],
+                            )
+                        return f"Created wiki page '{title}'."
+                elif action == "link":
+                    from_page = arguments.get("from_page", "")
+                    to_page = arguments.get("to_page", "")
+                    link_type = arguments.get("link_type", "mentions")
+                    if not from_page or not to_page:
+                        return "Error: 'from_page' and 'to_page' are required for link action."
+                    if not self._wiki_storage:
+                        return "Wiki storage not available."
+                    from_p = self._wiki_storage.get_page_by_slug(
+                        from_page
+                    ) or self._wiki_storage.get_page_by_title(from_page)
+                    to_p = self._wiki_storage.get_page_by_slug(
+                        to_page
+                    ) or self._wiki_storage.get_page_by_title(to_page)
+                    if not from_p:
+                        return f"From page '{from_page}' not found."
+                    if not to_p:
+                        return f"To page '{to_page}' not found."
+                    self._wiki_storage.add_link(from_p["id"], to_p["id"], link_type)
+                    return f"Linked '{from_p['title']}' -> '{to_p['title']}' ({link_type})."
                 else:
-                    page_id = self._wiki_storage.create_page(
-                        title=title, category=category, content=content, summary=summary
-                    )
-                    refreshed = self._wiki_storage.get_page_by_id(page_id)
-                    if refreshed:
-                        self._wiki_retrieval.index_page(
-                            page_id=page_id,
-                            title=refreshed["title"],
-                            content=refreshed["content"],
-                            category=refreshed["category"],
-                            updated_at=refreshed["updated_at"],
-                        )
-                    return f"Created wiki page '{title}'."
-
-            elif function_name == "add_wiki_link":
-                from_page = arguments.get("from_page", "")
-                to_page = arguments.get("to_page", "")
-                link_type = arguments.get("link_type", "mentions")
-                if not from_page or not to_page:
-                    return "Error: 'from_page' and 'to_page' are required."
-                if not self._wiki_storage:
-                    return "Wiki storage not available."
-                from_p = self._wiki_storage.get_page_by_slug(
-                    from_page
-                ) or self._wiki_storage.get_page_by_title(from_page)
-                to_p = self._wiki_storage.get_page_by_slug(
-                    to_page
-                ) or self._wiki_storage.get_page_by_title(to_page)
-                if not from_p:
-                    return f"From page '{from_page}' not found."
-                if not to_p:
-                    return f"To page '{to_page}' not found."
-                self._wiki_storage.add_link(from_p["id"], to_p["id"], link_type)
-                return f"Linked '{from_p['title']}' -> '{to_p['title']}' ({link_type})."
+                    return f"Error: Unknown update_wiki action '{action}'. Use 'write' or 'link'."
 
             elif function_name == "get_wiki_summary":
                 if not self._wiki_storage:
@@ -1402,10 +1463,7 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
             ms = f"### {m.author.display_name}:\n{m.content}\n"
             if m.reactions:
                 ms += "**Reactions**\n" + "\n".join(
-                    [
-                        f"{r.emoji}: {', '.join([u.display_name async for u in r.users()])}"
-                        for r in m.reactions
-                    ]
+                    [f"{r.emoji}: {r.count}" for r in m.reactions]
                 )
             prev = ms + "\n" + prev
         ans = await self.ai_helper_discord(
@@ -1419,12 +1477,15 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
         for line in split_markdown(ans):
             await interaction.followup.send(line)
 
-        await self._store_bot_interaction(
+        task = asyncio.create_task(self._store_bot_interaction(
             player_id=str(interaction.user.id),
             player_name=interaction.user.display_name,
             question=question,
             response=ans,
             source="discord_slash",
+        ))
+        task.add_done_callback(
+            lambda t: t.exception() and log.warning(f"_store_bot_interaction failed: {t.exception()}")
         )
 
     async def process_image_context(
@@ -1794,7 +1855,8 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
             # Add to semantic search (ChromaDB)
             if self._memory_retrieval:
                 try:
-                    self._memory_retrieval.add_memory(
+                    await asyncio.to_thread(
+                        self._memory_retrieval.add_memory,
                         player_id=player_id,
                         player_name=player_name,
                         message=message,
@@ -1839,7 +1901,8 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
                 semantic_context = ""
                 if self._memory_retrieval:
                     try:
-                        memories = self._memory_retrieval.retrieve_relevant(
+                        memories = await asyncio.to_thread(
+                            self._memory_retrieval.retrieve_relevant,
                             player_id=player_id,
                             query=message,
                             n_results=3,
@@ -1926,14 +1989,16 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
 
         if self._memory_retrieval:
             try:
-                self._memory_retrieval.add_memory(
+                await asyncio.to_thread(
+                    self._memory_retrieval.add_memory,
                     player_id=player_id,
                     player_name=player_name,
                     message=question,
                     source=source,
                     is_bot_response=False,
                 )
-                self._memory_retrieval.add_memory(
+                await asyncio.to_thread(
+                    self._memory_retrieval.add_memory,
                     player_id=player_id,
                     player_name="Bot",
                     message=response,
@@ -2080,13 +2145,16 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
             )
             await announce_in_game(self.bot.http_session, answer[:520])
 
-            # Store interaction in long-term memory + schedule wiki ingest
-            await self._store_bot_interaction(
+            # Store interaction in long-term memory + schedule wiki ingest (fire-and-forget)
+            task = asyncio.create_task(self._store_bot_interaction(
                 player_id=player_id,
                 player_name=player_name,
                 question=message,
                 response=answer,
                 source="game_chat",
+            ))
+            task.add_done_callback(
+                lambda t: t.exception() and log.warning(f"_store_bot_interaction failed: {t.exception()}")
             )
         except Exception as e:
             log.error(f"Bot command error for {player_name}: {e}")
@@ -2123,10 +2191,7 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
                 ms = f"### {m.author.display_name}:\n{m.content}\n"
                 if m.reactions:
                     ms += "**Reactions**\n" + "\n".join(
-                        [
-                            f"{r.emoji}: {', '.join([u.display_name async for u in r.users()])}"
-                            for r in m.reactions
-                        ]
+                        [f"{r.emoji}: {r.count}" for r in m.reactions]
                     )
                 prev = ms + "\n" + prev
 
@@ -2141,12 +2206,15 @@ Use this for player stats, deliveries, race results, teams, jobs, ministry data,
             for line in split_markdown(ans):
                 await message.reply(line, mention_author=False)
 
-            await self._store_bot_interaction(
+            task = asyncio.create_task(self._store_bot_interaction(
                 player_id=str(message.author.id),
                 player_name=message.author.display_name,
                 question=question,
                 response=ans,
                 source="discord_mention",
+            ))
+            task.add_done_callback(
+                lambda t: t.exception() and log.warning(f"_store_bot_interaction failed: {t.exception()}")
             )
             return
 

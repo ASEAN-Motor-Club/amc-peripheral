@@ -336,6 +336,160 @@ def query_cargo_by_space_type(space_type: str) -> List[Dict]:
         return []
 
 
+def lookup_vehicle(name: str) -> dict:
+    """Full vehicle spec: type, cost, weight, engine, cargo space, drivetrain, capabilities."""
+    try:
+        with get_connection() as conn:
+            row = conn.execute("""
+                SELECT v.id, v.name, v.vehicle_type, v.truck_class, v.cost,
+                       v.is_taxiable, v.is_limoable, v.is_busable, v.is_race_car,
+                       v.can_haul_trailer, v.has_fuel_pump,
+                       v.delivery_payment_multiplier, v.delivery_base_payment,
+                       COALESCE(vw.chassis_mass_kg, 0) as chassis_mass_kg,
+                       COALESCE(vw.parts_weight_kg, 0) as parts_weight_kg,
+                       COALESCE(vw.total_weight_kg, 0) as total_weight_kg
+                FROM vehicles v
+                LEFT JOIN vehicle_weights vw ON v.id = vw.vehicle_id
+                WHERE (v.id LIKE ? OR v.name LIKE ?)
+                  AND (v.is_hidden = 0 OR v.is_hidden IS NULL)
+                  AND (v.is_disabled = 0 OR v.is_disabled IS NULL)
+                ORDER BY v.cost
+                LIMIT 1
+            """, (f"%{name}%", f"%{name}%")).fetchone()
+
+            if not row:
+                return {"error": f"No vehicle found matching '{name}'"}
+
+            vehicle = dict(row)
+
+            # Engine info from default parts
+            engine_row = conn.execute("""
+                SELECT dp.part_id
+                FROM vehicle_default_parts dp
+                WHERE dp.vehicle_id = ? AND dp.slot = 'Engine'
+                LIMIT 1
+            """, (vehicle["id"],)).fetchone()
+            if engine_row:
+                import re
+                engine_id = engine_row[0]
+                m = re.search(r"(\d+)HP", engine_id)
+                vehicle["engine"] = engine_id
+                vehicle["engine_hp"] = int(m.group(1)) if m else None
+
+            # Drivetrain from LSD parts
+            lsd_rows = conn.execute("""
+                SELECT dp.slot FROM vehicle_default_parts dp
+                WHERE dp.vehicle_id = ? AND dp.slot LIKE 'LSD%'
+            """, (vehicle["id"],)).fetchall()
+            lsd_slots = {r[0] for r in lsd_rows}
+            has_front = any(s in lsd_slots for s in ("LSD1", "LSD_Front"))
+            has_rear = any(s in lsd_slots for s in ("LSD0", "LSD_Rear", "LSD"))
+            if has_front and has_rear:
+                vehicle["drivetrain"] = "AWD"
+            elif has_front:
+                vehicle["drivetrain"] = "FWD"
+            elif has_rear:
+                vehicle["drivetrain"] = "RWD"
+            else:
+                vehicle["drivetrain"] = ""
+
+            # Cargo space from view
+            cargo_row = conn.execute("""
+                SELECT cargo_space_type, length_m, width_m, height_m,
+                       volume_m3, dump_volume_kl
+                FROM vehicles_with_cargo_space WHERE id = ?
+            """, (vehicle["id"],)).fetchone()
+            if cargo_row:
+                vehicle["cargo_space"] = {
+                    "type": cargo_row[0] or "",
+                    "length_m": cargo_row[1] or 0,
+                    "width_m": cargo_row[2] or 0,
+                    "height_m": cargo_row[3] or 0,
+                    "volume_m3": cargo_row[4] or 0,
+                    "dump_volume_kl": cargo_row[5] or 0,
+                }
+
+            # Tags
+            tag_rows = conn.execute(
+                "SELECT DISTINCT tag FROM vehicle_tags WHERE vehicle_id = ?",
+                (vehicle["id"],),
+            ).fetchall()
+            vehicle["tags"] = [r[0] for r in tag_rows]
+
+            return vehicle
+    except Exception as e:
+        log.error(f"lookup_vehicle failed: {e}")
+        return {"error": str(e)}
+
+
+def lookup_cargo(name: str) -> dict:
+    """Full cargo spec: type, weight, payment, compatible space types, production chains."""
+    try:
+        with get_connection() as conn:
+            row = conn.execute("""
+                SELECT c.id, c.name, c.cargo_type, c.volume_size,
+                       COALESCE(cw.total_weight_kg, c.weight_max, 0) as weight_kg,
+                       c.payment_per_km, c.payment_multiplier, c.base_payment,
+                       c.min_delivery_distance, c.max_delivery_distance,
+                       c.allow_stacking, c.fragile
+                FROM cargos c
+                LEFT JOIN cargo_weights cw ON c.id = cw.cargo_id
+                WHERE (c.id LIKE ? OR c.name LIKE ?)
+                  AND (c.is_deprecated = 0 OR c.is_deprecated IS NULL)
+                LIMIT 1
+            """, (f"%{name}%", f"%{name}%")).fetchone()
+
+            if not row:
+                return {"error": f"No cargo found matching '{name}'"}
+
+            cargo = dict(row)
+
+            # Compatible space types
+            st_rows = conn.execute(
+                "SELECT space_type FROM cargo_space_types WHERE cargo_id = ?",
+                (cargo["id"],),
+            ).fetchall()
+            cargo["space_types"] = [r[0] for r in st_rows]
+
+            # Production sources
+            prod_rows = conn.execute("""
+                SELECT dp.id as location, pc.production_time_seconds
+                FROM production_outputs po
+                JOIN production_configs pc ON po.production_config_id = pc.id
+                JOIN delivery_points dp ON pc.delivery_point_id = dp.id
+                WHERE po.cargo_id = ?
+            """, (cargo["id"],)).fetchall()
+            produced_at = []
+            for pr in prod_rows:
+                inputs = conn.execute("""
+                    SELECT pi.cargo_id, pi.quantity
+                    FROM production_inputs pi
+                    JOIN production_configs pc ON pi.production_config_id = pc.id
+                    WHERE pc.delivery_point_id = ? AND pc.production_time_seconds = ?
+                """, (pr[0], pr[1])).fetchall()
+                produced_at.append({
+                    "location": pr[0],
+                    "inputs": [{"cargo_id": r[0], "quantity": r[1]} for r in inputs],
+                    "time_seconds": pr[1],
+                })
+            cargo["produced_at"] = produced_at
+
+            return cargo
+    except Exception as e:
+        log.error(f"lookup_cargo failed: {e}")
+        return {"error": str(e)}
+
+
+def compare_vehicles(names: list[str]) -> list[dict]:
+    """Side-by-side comparison of multiple vehicles (all key specs)."""
+    results = []
+    for vehicle_name in names:
+        result = lookup_vehicle(vehicle_name)
+        if "error" not in result:
+            results.append(result)
+    return results
+
+
 def handle_game_query(query_type: str, search_term: Optional[str] = None, 
                      filters: Optional[Dict[str, Any]] = None) -> str:
     """
