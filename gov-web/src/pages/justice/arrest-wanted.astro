@@ -2,11 +2,14 @@
 import GovLayout from '../../layouts/GovLayout.astro';
 import PhaseBanner from '../../components/PhaseBanner.astro';
 import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
 import InsetText from '../../components/InsetText.astro';
+import WarningText from '../../components/WarningText.astro';
+import Sidebar from '../../components/Sidebar.astro';
 ---
 <GovLayout title="Arrest & Wanted System" department="Ministry of Justice" description="How the Wanted status, arrest mechanics, confiscation, and police progression work in ASEAN Motor Club.">
 
-<PhaseBanner tag="Policy" text="Updated 27 April 2026" />
+<PhaseBanner tag="Policy" text="Updated 8 May 2026" />
 <Breadcrumbs items={[
   { label: "Justice & Law Enforcement", href: "/justice" },
   { label: "Arrest & Wanted System", href: "/justice/arrest-wanted" },
@@ -15,7 +18,11 @@ import InsetText from '../../components/InsetText.astro';
 <main class="govuk-main-wrapper">
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
-      <h1>Arrest & Wanted System</h1>
+      <h1>Crime, Wanted status, and arrest</h1>
+
+      <SummaryBox title="Summary">
+        <p>Illicit cargo creates a Criminal Record on your name and may trigger Wanted status. If police catch you, your bounty is confiscated and you spend 60 seconds in jail. Teleporting, respawning, or going underwater while Wanted triggers immediate automatic arrest.</p>
+      </SummaryBox>
 
       <div class="govuk-notification-banner govuk-notification-banner--warning" role="region" aria-labelledby="critical-warning">
         <div class="govuk-notification-banner__wrapper">
@@ -26,105 +33,47 @@ import InsetText from '../../components/InsetText.astro';
         </div>
       </div>
 
-      <h2 class="govuk-heading-l">What You Need to Know</h2>
-      <div class="govuk-grid-row">
-        <div class="govuk-grid-column-one-half">
-          <div class="govuk-summary-list">
-            <div class="govuk-summary-list__row">
-              <span class="govuk-summary-list__key">Criminal Record</span>
-              <span class="govuk-summary-list__value">Created on illicit cargo load — permanent until arrested</span>
-            </div>
-            <div class="govuk-summary-list__row">
-              <span class="govuk-summary-list__key">Bounty</span>
-              <span class="govuk-summary-list__value">Confiscatable amount — accumulates per delivery, decays with 2h half-life online</span>
-            </div>
-            <div class="govuk-summary-list__row">
-              <span class="govuk-summary-list__key">Wanted status</span>
-              <span class="govuk-summary-list__value">Starts at 600 heat — expires in 10 minutes if avoiding police</span>
-            </div>
-            <div class="govuk-summary-list__row">
-              <span class="govuk-summary-list__key">Police within 500m</span>
-              <span class="govuk-summary-list__value">Slows decay via 1/r² law; cannot fully expire</span>
-            </div>
-            <div class="govuk-summary-list__row">
-              <span class="govuk-summary-list__key">On arrest</span>
-              <span class="govuk-summary-list__value">All confiscatable money seized + 60 seconds in jail</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <h2 id="criminal-record">1. Criminal Record</h2>
-      <p>Loading illicit cargo creates an active <strong>Criminal Record</strong>, applies the <code>[C]</code> tag to your name, and begins accumulating two amounts:</p>
-
-      <table class="govuk-table">
-        <caption>Criminal Record fields</caption>
-        <thead><tr><th>Field</th><th>Description</th></tr></thead>
-        <tbody>
-          <tr>
-            <td><strong>amount</strong></td>
-            <td>Permanent lifetime total of all illicit delivery payments on this record. Used for criminal level display. Never decays.</td>
-          </tr>
-          <tr>
-            <td><strong>confiscatable_amount</strong></td>
-            <td>Also accumulates with deliveries but <strong>decays over time while you're online</strong>. This is what is seized on arrest. Sorted and displayed in <code>/wanted</code>.</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <p>The Criminal Record is <strong>never cleared by time</strong>. It is only cleared on arrest, which immediately removes the <code>[C]</code> tag.</p>
+      <h2 id="criminal-record">1. Criminal Records</h2>
+      <p>Delivering illicit cargo or wearing a suspect costume creates a <strong>Criminal Record</strong> and applies the <code>[C]</code> tag to your name. This record tracks two things: your total lifetime earnings from illicit cargo (which determines your criminal level) and your current bounty (which is what gets confiscated if you're arrested).</p>
+      <p>Your bounty accumulates from each delivery and <strong>decays over time while you're online and active</strong>. It halves every 2 hours of active play — for example, a $50,000 bounty drops to $25,000 after 2 hours, then $12,500 after 4 hours. Decay pauses while you're AFK or in a modded vehicle. When your bounty decays below $5,000, it is zeroed out and your Criminal Record is cleared automatically.</p>
+      <p>Your Criminal Record is <strong>never cleared by time</strong>. It is only cleared on arrest, which immediately removes the <code>[C]</code> tag.</p>
 
       <InsetText>
         Only one active Criminal Record can exist per character at a time. A new record is created fresh after each arrest.
       </InsetText>
 
       <div class="govuk-inset-text">
-        <strong>Example:</strong> If you deliver $50,000 of illicit cargo, your Criminal Record shows $50,000. After 2 hours of playing (staying online and active), this drops to $25,000. After 4 hours, it drops to $12,500. Decay pauses while AFK or in a modded vehicle.
+        <strong>Example:</strong> If you deliver $50,000 of illicit cargo, your bounty is $50,000. After 2 hours of playing (staying online and active), this drops to $25,000. After 4 hours, it drops to $12,500.
       </div>
 
-      <h2 id="bounty-confiscatable">2. Bounty / Confiscatable Amount</h2>
-      <p>The term <strong>bounty</strong> refers to <code>CriminalRecord.confiscatable_amount</code>. This is the amount that accumulates from illicit deliveries and is seized on arrest.</p>
+      <p>When you deliver illicit cargo, a server-wide tip-off may be broadcast: <em>"Intelligence reports suggest a smuggling operation is underway"</em>. This alert does not reveal your name or location — it only tells police that smuggling is in progress.</p>
 
-      <h3>Accumulation</h3>
-      <ul class="govuk-list govuk-list--bullet">
-        <li>Every illicit delivery adds its payment value to <code>confiscatable_amount</code></li>
-        <li>This is the same field that accumulates in the Criminal Record</li>
-      </ul>
-
-      <h3>Decay</h3>
-      <p>Your <code>confiscatable_amount</code> decays via exponential decay with a <strong>2-hour half-life of online time</strong>:</p>
-      <ul class="govuk-list govuk-list--bullet">
-        <li>Formula: <code>confiscatable_amount *= 0.5 ^ (1/120)</code> per minute</li>
-        <li>Only decays while the player is <strong>online</strong> (last_online within 60 seconds)</li>
-        <li>Decay is <strong>paused</strong> if:
-          <ul class="govuk-list govuk-list--bullet">
-            <li>Player is AFK (<code>bAFK=true</code>)</li>
-            <li>Player is in a modded vehicle (custom parts detected)</li>
-          </ul>
-        </li>
-        <li>Amounts below $100 are zeroed out</li>
-      </ul>
-
-      <h3>On arrest</h3>
-      <ul class="govuk-list govuk-list--bullet">
-        <li>The current <code>confiscatable_amount</code> is seized</li>
-        <li>The Criminal Record is then cleared</li>
-      </ul>
+      <h2 id="wanted-status">2. Wanted Status</h2>
+      <p>Wanted is a temporary status that shows as asterisk stars (<code>*</code> to <code>*****</code>) in your player tag. It can be initiated in two ways: by an on-duty officer using <code>/setwanted</code>, or automatically upon illicit cargo delivery.</p>
+      <p>Delivery-based Wanted uses a 30-second window — multiple deliveries within that window are treated as a single delivery for the probability roll. Higher-value deliveries have a higher chance of triggering Wanted.</p>
 
       <InsetText>
-        <strong>Proximity-based bounty growth was removed on 26 April 2026.</strong> The monetary <code>Wanted.amount</code> field is no longer used and remains $0. Only <code>confiscatable_amount</code> is seized on arrest.
+        <strong>30-second debounce window:</strong> Splitting large cargo into many small deliveries is treated as a single delivery of the combined value.
       </InsetText>
 
-      <h2 id="wanted-status">3. Wanted Status</h2>
-      <p>Wanted is a temporary status that can be initiated in exactly <a href="#pursuit-initiation">two ways</a>: by an on-duty officer via <code>/setwanted</code>, or automatically upon <a href="#pursuit-initiation">illicit cargo delivery</a>.</p>
+      <h3>How stars work</h3>
+      <p>All Wanted statuses begin at <strong>5 stars (600 heat)</strong>. Stars are based on remaining heat, with each band covering 120 units:</p>
 
-      <InsetText>
-        <strong>30-second debounce window:</strong> Multiple deliveries within 30 seconds of each other are aggregated before the probability roll. Splitting large cargo into many small deliveries is treated as a single delivery of the combined value.
-      </InsetText>
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Star level by remaining heat</caption>
+        <thead><tr><th>Stars in tag</th><th>Remaining heat</th><th>Display example</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">***** (max)</td><td>481 – 600</td><td><code>[*****C1] John</code></td></tr>
+          <tr><td style="text-align:left">****</td><td>361 – 480</td><td><code>[****C1] John</code></td></tr>
+          <tr><td style="text-align:left">***</td><td>241 – 360</td><td><code>[***C1] John</code></td></tr>
+          <tr><td style="text-align:left">**</td><td>121 – 240</td><td><code>[**C1] John</code></td></tr>
+          <tr><td style="text-align:left">*</td><td>1 – 120</td><td><code>[*C1] John</code></td></tr>
+          <tr><td style="text-align:left">Expired</td><td>0</td><td><code>[C1] John</code> (stars removed)</td></tr>
+        </tbody>
+      </table>
 
-      <h3>Time-limited status — police proximity slows decay</h3>
-      <p>All Wanted statuses begin at <strong>5 stars (600 heat)</strong>. Wanted heat decays at a <strong>constant rate of 1.0 heat/second</strong> when no police are nearby. A full W5 status (600 heat) expires naturally in <strong>10 minutes</strong> if you avoid all police.</p>
-      <p>When an on-duty officer is within <strong>500 m</strong>, the server <em>reduces</em> the decay rate based on a <strong>1/r² law</strong> with a reference distance of 200 m. The closer the police, the slower your Wanted status expires. Decay never reverses — heat only ever decreases, never increases.</p>
+      <h3>How Wanted fades</h3>
+      <p>Your Wanted status fades over time. Stay more than 500m away from all police officers and it expires in about <strong>10 minutes</strong>. The closer police are, the slower it fades. Decay never reverses — heat only ever decreases, never increases.</p>
 
       <div class="govuk-inset-text">
         <strong>Simple rule:</strong> Stay more than 500m away from all police officers and your Wanted status expires in 10 minutes. Get closer and it takes longer.
@@ -140,55 +89,27 @@ import InsetText from '../../components/InsetText.astro';
           <tr><td>300m away</td><td>~14.5 minutes</td><td>Moderately slower</td></tr>
           <tr><td>200m away</td><td>~20 minutes</td><td>Half speed</td></tr>
           <tr><td>100m away</td><td>~50 minutes</td><td>Very slow decay</td></tr>
-          <tr><td>50m away (MIN_DISTANCE)</td><td>~110 minutes</td><td>Almost frozen</td></tr>
-          <tr><td>10m away (point-blank)</td><td>~110 minutes</td><td>Almost frozen (capped at MAX_DECAY=10)</td></tr>
+          <tr><td>50m away</td><td>~110 minutes</td><td>Almost frozen</td></tr>
+          <tr><td>10m away (point-blank)</td><td>~110 minutes</td><td>Almost frozen</td></tr>
         </tbody>
       </table>
 
-      <div class="govuk-notification-banner govuk-notification-banner--warning" role="region" aria-labelledby="cannot-expire-warning">
-        <div class="govuk-notification-banner__wrapper">
-          <h3 class="govuk-notification-banner__heading" id="cannot-expire-warning">
-            Cannot Escape While Police Are Close
-          </h3>
-          <p>Wanted status <strong>cannot fully expire</strong> while any officer is within 500m — your heat is clamped at a minimum of <strong>0.1 heat</strong>, preventing the last sliver from reaching zero. Once all officers are beyond 500m, the restriction lifts and natural decay brings it to zero automatically.</p>
-        </div>
-      </div>
+      <WarningText>
+        Wanted status <strong>cannot fully expire</strong> while any officer is within 500m — your heat is held at a minimum until all officers are beyond 500m. Once they move away, natural decay brings it to zero automatically.
+      </WarningText>
 
-      <h3>Star indicator (***** — 1 to 5 stars)</h3>
-      <p>Your Wanted severity is displayed as asterisk stars in your player tag, from <code>*</code> (1 star) to <code>*****</code> (5 stars). All Wanted statuses begin at <strong>5 stars (maximum heat, 600 heat units)</strong>. Stars are based on remaining heat with each band covering 120 units:</p>
-
-      <table class="govuk-table govuk-table--numeric">
-        <caption>Star level by remaining heat</caption>
-        <thead><tr><th>Stars in tag</th><th>Remaining heat</th><th>Display example</th></tr></thead>
-        <tbody>
-          <tr><td style="text-align:left">***** (max)</td><td>481 – 600</td><td><code>[*****C1] John</code></td></tr>
-          <tr><td style="text-align:left">****</td><td>361 – 480</td><td><code>[****C1] John</code></td></tr>
-          <tr><td style="text-align:left">***</td><td>241 – 360</td><td><code>[***C1] John</code></td></tr>
-          <tr><td style="text-align:left">**</td><td>121 – 240</td><td><code>[**C1] John</code></td></tr>
-          <tr><td style="text-align:left">*</td><td>1 – 120</td><td><code>[*C1] John</code></td></tr>
-          <tr><td style="text-align:left">Expired</td><td>0</td><td><code>[C1] John</code> (stars removed)</td></tr>
-        </tbody>
-      </table>
-
-      <p>You receive an in-game system message each time your star level changes. When fully expired, you are notified and a server-wide announcement confirms your escape.</p>
+      <h3>How to escape Wanted</h3>
+      <ol class="govuk-list govuk-list--number">
+        <li>Stay more than 500m away from ALL police officers</li>
+        <li>Wait 10 minutes (do not teleport, respawn, reset your vehicle, or enter portals)</li>
+        <li>Do NOT log out near police (within 2km)</li>
+        <li>Do NOT use modded vehicles (your vehicle will be despawned)</li>
+        <li>Do NOT go underwater</li>
+        <li>Watch your star level decrease (***** → **** → *** → ** → * → Expired)</li>
+      </ol>
+      <p>Your Criminal Record <code>[C]</code> remains — only Wanted status expires. A future arrest will still clear it. Your bounty continues to decay while you're online and not AFK or in a modded vehicle.</p>
 
       <h3>What happens when...</h3>
-      
-      <div class="govuk-details" data-module="govuk-details">
-        <summary class="govuk-details__summary">
-          <span class="govuk-details__summary-text">
-            What happens when I load illicit cargo?
-          </span>
-        </summary>
-        <div class="govuk-details__text">
-          <ul class="govuk-list govuk-list--bullet">
-            <li>You immediately get a Criminal Record [C] tag on your name (unless you are on police duty)</li>
-            <li>If you are on police duty, the criminal record is <strong>not</strong> created</li>
-            <li>A modded vehicle check is performed — if custom parts are detected, a warning popup is shown</li>
-            <li>A smuggling tip-off may be broadcast to the server (see <a href="#smuggling-tipoff">Section 13</a>)</li>
-          </ul>
-        </div>
-      </div>
 
       <div class="govuk-details" data-module="govuk-details">
         <summary class="govuk-details__summary">
@@ -198,201 +119,118 @@ import InsetText from '../../components/InsetText.astro';
         </summary>
         <div class="govuk-details__text">
           <ul class="govuk-list govuk-list--bullet">
-            <li>You may become Wanted (higher delivery value = higher chance within 30s window)</li>
-            <li>Money accumulates in your <code>CriminalRecord.confiscatable_amount</code> (the "bounty")</li>
+            <li>You get a Criminal Record <code>[C]</code> tag on your name (unless you are on police duty)</li>
+            <li>You may become Wanted (higher delivery value = higher chance within the 30-second window)</li>
+            <li>Money accumulates in your bounty</li>
             <li>Your criminal level increases based on cumulative laundered total</li>
-            <li>On-duty police receive a risk premium bonus on Money deliveries</li>
+            <li>A modded vehicle check is performed — if custom parts are detected, a warning popup is shown</li>
+            <li>A smuggling tip-off may be broadcast to the server (see <a href="#criminal-record">Section 1</a>)</li>
           </ul>
         </div>
       </div>
 
-      <div class="govuk-details" data-module="govuk-details">
-        <summary class="govuk-details__summary">
-          <span class="govuk-details__summary-text">
-            What happens when police catch me?
-          </span>
-        </summary>
-        <div class="govuk-details__text">
-          <ul class="govuk-list govuk-list--bullet">
-            <li>You're teleported to jail immediately</li>
-            <li>Your <code>CriminalRecord.confiscatable_amount</code> is seized</li>
-            <li>Your Criminal Record is cleared and [C] tag removed</li>
-            <li>You're confined to jail for 60 seconds (cannot leave the area)</li>
-            <li><strong>All online active (non-AFK) police officers receive an equal share</strong> of the confiscated amount. Each officer gets <code>confiscated_amount // active_officer_count</code> (minimum $1). Each officer also gets the full amount counted toward their police level progression.</li>
-          </ul>
-        </div>
-      </div>
+      <h2 id="what-happens-when-caught">3. What Happens When You're Caught</h2>
+      <p>When you are arrested — by any method — you are teleported to jail, your bounty is confiscated, and your Criminal Record is cleared.</p>
 
-      <div class="govuk-details" data-module="govuk-details">
-        <summary class="govuk-details__summary">
-          <span class="govuk-details__summary-text">
-            What happens if I teleport while Wanted?
-          </span>
-        </summary>
-        <div class="govuk-details__text">
-          <div class="govuk-notification-banner govuk-notification-banner--warning">
-            <div class="govuk-notification-banner__wrapper">
-              <p class="govuk-notification-banner__heading">Immediate Automatic Arrest</p>
-              <p>Teleporting while Wanted is treated as an attempt to evade capture. You are instantly arrested with full confiscation — same consequences as being caught by police.</p>
-            </div>
-          </div>
-          <p>This includes:</p>
-          <ul class="govuk-list govuk-list--bullet">
-            <li>Manual teleport (via <code>/tp</code> command or menu)</li>
-            <li>Using portals</li>
-            <li>Vehicle reset (roadside recovery/Rescue)</li>
-            <li>Respawning at hospital or garage</li>
-          </ul>
-        </div>
-      </div>
+      <h3>Automatic arrest triggers</h3>
+      <ol class="govuk-list govuk-list--number">
+        <li><strong>Teleport / Respawn / Vehicle Reset while Wanted</strong> — Immediate auto-arrest</li>
+        <li><strong>Portal Entry while Wanted</strong> — Auto-arrest when entering a portal</li>
+        <li><strong>Logout near Police</strong> — If within 2km of any on-duty officer, logout is treated as arrest</li>
+        <li><strong>Underwater</strong> — Wanted suspects who go underwater are auto-arrested</li>
+      </ol>
 
-      <div class="govuk-details" data-module="govuk-details">
-        <summary class="govuk-details__summary">
-          <span class="govuk-details__summary-text">
-            What happens when I log out while Wanted?
-          </span>
-        </summary>
-        <div class="govuk-details__text">
-          <ul class="govuk-list govuk-list--bullet">
-            <li>Your Wanted status persists — it does NOT clear</li>
-            <li>When you log back in, your Wanted status resumes</li>
-            <li><strong>If you log out within 2km of any on-duty officer, you are treated as arrested</strong> — full confiscation and jail time apply</li>
-          </ul>
-        </div>
-      </div>
+      <h3>Pull-over arrest</h3>
+      <p>On-duty police can issue a penalty during a traffic stop. If you have an active Criminal Record and the officer issues a penalty (not a warning), you are arrested immediately. Warnings do not trigger arrest.</p>
 
-      <div class="govuk-details" data-module="govuk-details">
-        <summary class="govuk-details__summary">
-          <span class="govuk-details__summary-text">
-            How do I escape Wanted status?
-          </span>
-        </summary>
-        <div class="govuk-details__text">
-          <p>To clear your Wanted status:</p>
-          <ol class="govuk-list govuk-list--number">
-            <li>Stay more than 500m away from ALL police officers</li>
-            <li>Wait 10 minutes (do not teleport, respawn, reset vehicle, or enter portals)</li>
-            <li>Do NOT log out near police (within 2km)</li>
-            <li>Do NOT use modded vehicles (2-minute grace period, then auto-arrest)</li>
-            <li>Do NOT go underwater (below z = -22455)</li>
-            <li>Watch your star level decrease (W5 → W4 → W3 → W2 → W1 → Expired)</li>
-          </ol>
-          <p>Your Criminal Record [C] remains — only Wanted status expires. A future arrest will still clear it.</p>
-          <p>Your <code>confiscatable_amount</code> (bounty) continues to decay while you're online and not AFK or in a modded vehicle.</p>
-        </div>
-      </div>
+      <h3>Modded vehicles while Wanted</h3>
+      <p>If you are Wanted and using a vehicle with custom-modified parts, your vehicle is forcibly despawned. You remain Wanted — this is not an arrest.</p>
 
-      <h2 id="costumes-suspect">4. Criminal Costumes & Suspect System</h2>
-      <p>Criminals wearing certain <strong>suspect costumes</strong> are flagged as suspects in-game, making them visible to police with a blue overlay on the police HUD. This system ensures criminals cannot hide by simply equipping a costume.</p>
-
-      <h3>How it works</h3>
+      <h3>On arrest</h3>
       <ul class="govuk-list govuk-list--bullet">
-        <li>When a player with an active Criminal Record equips a <strong>suspect costume</strong>, they are immediately flagged as a suspect in-game</li>
-        <li>When the costume is removed, the suspect flag is cleared immediately (unless the player is also Wanted)</li>
-        <li>Wanted players are always flagged as suspects regardless of costume</li>
-        <li>The suspect flag is refreshed every 10 seconds by the server to maintain consistency</li>
+        <li>You are teleported to jail immediately</li>
+        <li>Your bounty is confiscated</li>
+        <li>Your Criminal Record is cleared and <code>[C]</code> tag is removed</li>
+        <li>You are confined to jail for 60 seconds (cannot leave the area)</li>
       </ul>
 
-      <InsetText>
-        Not all costumes trigger suspect status — only specific costumes configured by the server (e.g. <code>Costume_Butcher_01</code>) are classified as suspect costumes. Standard costumes do not trigger this system.
-      </InsetText>
+      <h3>Confiscation</h3>
+      <p>The total confiscated amount includes your bounty from deliveries plus any Wanted bounty. This amount is <strong>split equally among all online active (non-AFK) police officers</strong>. Each officer receives an equal share (minimum $1). Star level does not affect confiscation — 1 star and 5 stars result in the same penalty.</p>
+
+      <WarningText>
+        There is no partial confiscation based on star level. If you are arrested at 1 star or 5 stars, the same full amount is seized.
+      </WarningText>
+
+      <h3>Jail</h3>
+      <p>You are confined for <strong>60 seconds</strong> from the jail marker. If you move more than 10 metres away during this time, you are instantly teleported back. After 60 seconds the containment ends automatically and you are free to move — there is no manual release step.</p>
+      <p>If you try to escape the jail area by driving away, your vehicle is despawned.</p>
+
+      <h3>No Wanted = arrest still possible</h3>
+      <p>If you have an active Criminal Record <code>[C]</code> tag but no active Wanted status, you can still be arrested. Only your bounty is seized (your Wanted bounty would be $0 since no Wanted record exists).</p>
+
+      <h2 id="modded-vehicles">4. Modded Vehicles</h2>
+      <p>Players using vehicles with custom-modified parts face additional penalties during illicit cargo gameplay:</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>On delivery:</strong> Criminal profits are zeroed out if modded parts are detected on your active vehicle.</li>
+        <li><strong>While Wanted:</strong> Your vehicle is forcibly despawned and you receive a warning popup. You remain Wanted — the Wanted countdown continues.</li>
+        <li><strong>On load:</strong> A warning popup is shown to alert you that modified vehicles are not allowed for criminal gameplay.</li>
+        <li><strong>Police exception:</strong> On-duty officers with police-issued whitelisted parts are exempt from modded vehicle detection.</li>
+      </ul>
+
+      <h2 id="costumes-suspect">5. Criminal Costumes & Suspect System</h2>
+      <p>The game has a native "Suspect" status that makes a player <strong>invisible to police</strong> — anyone on a police vehicle or wearing a police uniform cannot see suspects on their position map. This system exploits that mechanic to let criminals go underground.</p>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>When a player with an active Criminal Record equips a suspect costume, the native Suspect status is toggled on</li>
+        <li>The native Suspect status only lasts 60 seconds, so the server reapplies it continuously while the costume is worn</li>
+        <li>Wanted players also have Suspect status reapplied continuously, regardless of costume</li>
+        <li>When the costume is removed, Suspect status stops being reapplied (unless the player is Wanted)</li>
+      </ul>
 
       <h3>Position hiding</h3>
-      <p>Wanted players and on-duty police officers are <strong>hidden from player position streams</strong> to prevent metagaming:</p>
+      <p>Wanted players and on-duty police officers are hidden from player position streams to prevent metagaming:</p>
       <ul class="govuk-list govuk-list--bullet">
         <li>Wanted criminals do not appear on other players' position maps</li>
         <li>On-duty police are hidden when any Wanted suspect is active</li>
-        <li>Police can still see suspect locations via the <code>/suspects</code> command</li>
+        <li>Police receive Compass updates (distance + bearing) for distant suspects, but Compass turns off for any suspect within 500m of an officer</li>
       </ul>
 
-      <h2 id="pursuit-initiation">5. How Police Pursuit Is Initiated</h2>
-      <p>Police pursuit (creating a Wanted status) is initiated in exactly <strong>two</strong> ways:</p>
-
-      <ol class="govuk-list govuk-list--number">
-        <li><strong><code>/setwanted</code> by an on-duty officer</strong> — see <a href="#setwanted">Section 6</a> for full details.</li>
-        <li><strong>Illicit cargo delivery</strong> (Money, Ganja, Cocaine, etc.) — a probability roll based on accumulated value within a 30-second debounce window:
-          <ul class="govuk-list govuk-list--bullet">
-            <li><strong>10% floor chance</strong> on any delivery</li>
-            <li><strong>100% at $100,000 or more</strong></li>
-            <li>Scales linearly between the floor and cap</li>
-          </ul>
-        </li>
-      </ol>
-
-      <InsetText>
-        <strong>Pull-over penalties do NOT create Wanted status.</strong> The police pull-over system performs an immediate arrest if the suspect already has an active Criminal Record and the officer issues a penalty (not a warning). It never applies a new Wanted status.
-      </InsetText>
-
-      <h2 id="setwanted">6. <code>/setwanted</code> Command</h2>
-      <p>On-duty police officers can manually flag a player as Wanted using <code>/setwanted &lt;name&gt;</code>:</p>
-      <ul class="govuk-list govuk-list--bullet">
-        <li><strong>Requires on-duty police</strong> (<code>/police</code> active)</li>
-        <li><strong>Target must be online</strong> and not AFK</li>
-        <li><strong>Cannot use on yourself</strong></li>
-        <li><strong>Cannot use on already-Wanted players</strong></li>
-        <li><strong>30-minute cooldown</strong> from the target's last Wanted expiry — shows exact minutes and seconds remaining</li>
-        <li><strong>1km minimum distance</strong>: If any officer is within 1km of the target when <code>/setwanted</code> is issued, those officers are <strong>despawned and teleported</strong> to the nearest police station outside the 1km radius</li>
-        <li><strong>Innocence warning</strong>: If the target has no active Criminal Record, the officer gets a "WARNING: No recent illicit activity detected" note but can still proceed</li>
-        <li>Sets Wanted to <strong>600 heat (5 stars)</strong></li>
-      </ul>
-
-      <h2 id="police-duty">7. Police Duty & Commands</h2>
-
+      <h2 id="police-duty">6. Police Duty</h2>
       <h3><code>/police</code> — Toggle police duty</h3>
       <p>Going on duty has several requirements and effects:</p>
       <ul class="govuk-list govuk-list--bullet">
         <li><strong>Cannot go on duty while Wanted</strong></li>
         <li><strong>24-hour crime cooldown</strong>: Cannot go on duty within 24 hours of committing a crime (any illicit delivery linked to a Criminal Record)</li>
         <li><strong>Must be on foot</strong> — cannot activate while in a vehicle</li>
+        <li><strong>Must be wearing a police uniform</strong> — the server checks your equipped costume; you cannot go on duty in civilian clothing</li>
         <li><strong>Teleported to nearest police station</strong> on activation (away from any Wanted suspects)</li>
         <li>A server-wide announcement is broadcast when you go on or off duty</li>
       </ul>
 
-      <h3><code>/suspects</code> (or <code>/s</code>) — List wanted suspects</h3>
-      <p>On-duty officers can view all online Wanted suspects with distance and compass bearing:</p>
-      <ul class="govuk-list govuk-list--bullet">
-        <li>Shows each suspect's name, distance, and direction</li>
-        <li>Sorted by distance (closest first)</li>
-        <li>Requires on-duty police status</li>
-      </ul>
-
-      <h3><code>/wanted</code> — List all wanted criminals</h3>
-      <p>Anyone can view the full wanted list, which shows three sections:</p>
+      <h3>Required procedure</h3>
+      <p>Police officers must follow the correct procedure when stopping players <strong>without a Criminal Record</strong>. Skipping steps or targeting ineligible players is considered misconduct.</p>
       <ol class="govuk-list govuk-list--number">
-        <li><strong>Active Bounties</strong> — Wanted suspects with star levels and confiscatable amounts, sorted online first then by bounty</li>
-        <li><strong>Recently Wanted</strong> — Suspects on cooldown from recent Wanted expiry</li>
-        <li><strong>Criminal Record</strong> — Players with active records but no Wanted status, showing criminal level, bounty, and decay rate</li>
+        <li><strong>Signal the suspect to stop and pull over.</strong> Use lights, sirens, or in-game voice/chat to make the request clear.</li>
+        <li><strong>Allow a reasonable opportunity to comply.</strong> Give the suspect time to react before beginning a pursuit.</li>
+        <li><strong>Only pursue and arrest uncooperative suspects.</strong> If the suspect pulls over and complies, engage through roleplay — not immediate arrest. Arrests are reserved for suspects who flee or refuse to stop.</li>
       </ol>
 
-      <h2 id="police-teleport">8. Police Teleport Restrictions</h2>
-      <p>Several teleport restrictions apply to both wanted suspects and on-duty officers:</p>
+      <InsetText>
+        <strong>Criminals with a <code>[C]</code> tag can be pursued immediately.</strong> If a player is a suspect (wearing a suspect costume, breaking the speed limit) or is Wanted, police do not need to signal them to stop — they can be pursued and arrested on sight.
+      </InsetText>
 
-      <h3>Wanted criminals</h3>
-      <ul class="govuk-list govuk-list--bullet">
-        <li><strong>Cannot teleport</strong> via <code>/tp</code>, <code>/tp vehicle</code>, <code>/tp coords</code>, or game teleport/respawn/vehicle-reset</li>
-        <li>Attempting any of these triggers <strong>immediate auto-arrest</strong></li>
-      </ul>
-
-      <h3>On-duty police</h3>
-      <ul class="govuk-list govuk-list--bullet">
-        <li><strong>Cannot teleport within 1km of wanted suspects</strong> — any teleport destination is checked; blocked with a popup if too close</li>
-        <li><strong>Teleport/respawn redirect</strong>: If an on-duty officer teleports or respawns and lands within 1km of a wanted suspect, they are <strong>automatically teleported to the nearest police station</strong> with a system message</li>
-        <li><strong>Restricted locations</strong>: Dasa and Harbor teleport points are blocked while on duty</li>
-        <li><strong>Custom destination teleport blocked</strong> for police on duty</li>
-      </ul>
-
-      <h2 id="police-conduct">9. Police Conduct & Arrest Procedure</h2>
-      <p>Police officers must follow the correct procedure before initiating pursuit. Skipping steps or targeting ineligible players is considered misconduct.</p>
+      <div class="govuk-inset-text">
+        <strong>Reporting misconduct:</strong> If an officer fails to follow this procedure — such as instantly arresting a compliant suspect — this may be a roleplay violation. Report incidents through the official channels.
+      </div>
 
       <div class="govuk-grid-row">
         <div class="govuk-grid-column-one-half">
           <h3 class="govuk-heading-m">What police CAN do</h3>
           <ul class="govuk-list govuk-list--tick">
-            <li>Stop and question players with [C] tag</li>
+            <li>Stop and question players with <code>[C]</code> tag</li>
             <li>Use <code>/setwanted</code> on suspects (30-minute cooldown after expiry)</li>
             <li>Pursue uncooperative suspects</li>
             <li>Receive equal share of confiscated money on any arrest</li>
-            <li>Use <code>/suspects</code> to track wanted players</li>
+            <li>Use the Compass to track distant wanted suspects (speed-based updates, turns off within 500m)</li>
           </ul>
         </div>
         <div class="govuk-grid-column-one-half">
@@ -402,93 +240,52 @@ import InsetText from '../../components/InsetText.astro';
             <li>Teleport within 1km of wanted suspects</li>
             <li>Teleport to Dasa or Harbor while on duty</li>
             <li>Use custom destination teleport while on duty</li>
-            <li>Use the deprecated <code>/arrest</code> command</li>
+            <li>Use the <code>/tp vehicle</code> command (police-only)</li>
           </ul>
         </div>
       </div>
 
-      <h3>Required procedure</h3>
-      <ol class="govuk-list govuk-list--number">
-        <li><strong>Signal the suspect to stop and pull over.</strong> Use lights, sirens, or in-game voice/chat to make the request clear.</li>
-        <li><strong>Allow a reasonable opportunity to comply.</strong> Give the suspect time to react before beginning a pursuit.</li>
-        <li><strong>Only pursue and arrest uncooperative suspects.</strong> If the suspect pulls over and complies, engage through roleplay — not immediate arrest. Arrests are reserved for suspects who flee or refuse to stop.</li>
-      </ol>
-
-      <div class="govuk-inset-text">
-        <strong>Reporting misconduct:</strong> If an officer fails to follow this procedure — such as instantly arresting a compliant suspect — this may be a roleplay violation. Report incidents through the official channels.
-      </div>
-
-      <h2 id="arrest-mechanisms">10. Arrest Mechanisms</h2>
-      <p>The <code>/arrest</code> command is <strong>deprecated</strong> and returns:</p>
-      <blockquote>
-        "/arrest is no longer available. Suspects are now arrested automatically when they log out near police, enter restricted zones, or use modded vehicles."
-      </blockquote>
-      <p>All arrests are now handled automatically through the following triggers:</p>
-
-      <ol class="govuk-list govuk-list--number">
-        <li><strong>Teleport / Respawn / Vehicle Reset while Wanted</strong> — Immediate auto-arrest</li>
-        <li><strong>Portal Entry while Wanted</strong> — Auto-arrest when entering a portal</li>
-        <li><strong>Logout near Police</strong> — If within 2km of any on-duty officer, logout is treated as arrest</li>
-        <li><strong>Underwater</strong> — Wanted suspects below z = -22455 are auto-arrested</li>
-        <li><strong>Modded Vehicle</strong> — Wanted suspects in modded vehicles are auto-arrested after a 2-minute grace period</li>
-        <li><strong>Police Pull-Over Penalty</strong> — Suspects with an active Criminal Record are arrested immediately when an on-duty officer issues a penalty (not a warning). Warnings do not trigger arrest.</li>
-      </ol>
-
-      <h2 id="confiscation">11. Confiscation</h2>
-      <p>On arrest, the current <code>CriminalRecord.confiscatable_amount</code> is confiscated.</p>
-
-      <table class="govuk-table">
-        <caption>What is confiscated on arrest</caption>
-        <thead><tr><th>Source</th><th>Amount</th></tr></thead>
-        <tbody>
-          <tr>
-            <td>Criminal Record confiscatable amount</td>
-            <td><code>CriminalRecord.confiscatable_amount</code> — accumulates from deliveries, decays over time while online</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <p><strong>Total confiscation = CriminalRecord.confiscatable_amount</strong></p>
-
-      <InsetText>
-        There is no partial confiscation based on star level. If you are arrested at W1 or W5, the same full <code>confiscatable_amount</code> is seized.
-      </InsetText>
-
-      <h3>What happens to confiscated money</h3>
+      <h2 id="police-commands">7. Police Commands</h2>
+      <h3><code>/setwanted</code></h3>
+      <p>On-duty police officers can manually flag a player as Wanted:</p>
       <ul class="govuk-list govuk-list--bullet">
-        <li><strong>Deducted from the suspect's wallet</strong> via the mod server</li>
-        <li><strong>Recorded as Treasury income</strong> under "Police Confiscation"</li>
-        <li><strong>The suspect's criminal laundered total is reduced</strong> by the confiscated amount</li>
-        <li><strong>All online active (non-AFK) police officers receive an equal share</strong> of the confiscated amount. Each officer gets <code>confiscated_amount // active_officer_count</code> (minimum $1). Each officer also gets the full amount counted toward their police level progression.</li>
-        <li>A <strong>Confiscation record</strong> is permanently created, linking the suspect, officers, and amount</li>
-        <li>The <strong>Criminal Record is cleared</strong> and the <code>[C]</code> tag is immediately removed</li>
+        <li><strong>Requires on-duty police</strong> (<code>/police</code> active)</li>
+        <li><strong>Target must be online</strong> and not AFK</li>
+        <li><strong>Cannot use on yourself</strong></li>
+        <li><strong>Cannot use on already-Wanted players</strong></li>
+        <li><strong>30-minute cooldown</strong> from the target's last Wanted expiry — shows exact minutes and seconds remaining</li>
+        <li><strong>1km minimum distance</strong>: If any officer is within 1km of the target when <code>/setwanted</code> is issued, those officers are despawned and teleported to the nearest police station outside the 1km radius</li>
+        <li><strong>Innocence warning</strong>: If the target has no active Criminal Record, the officer gets a warning note but can still proceed</li>
+        <li>Sets Wanted to <strong>5 stars (600 heat)</strong></li>
       </ul>
 
-      <h3>No Wanted = arrest still possible</h3>
-      <p>If a player has an active Criminal Record (<code>[C]</code> tag) but no active Wanted status, they can still be arrested (teleported to jail and Criminal Record cleared). Only the <code>confiscatable_amount</code> is seized.</p>
+      <h3><code>/wanted</code> — List all wanted criminals</h3>
+      <p>Anyone can view the full wanted list, which shows three sections:</p>
+      <ol class="govuk-list govuk-list--number">
+        <li><strong>Active Bounties</strong> — Wanted suspects with star levels and bounty amounts, sorted online first then by bounty</li>
+        <li><strong>Recently Wanted</strong> — Suspects on cooldown from recent Wanted expiry</li>
+        <li><strong>Criminal Record</strong> — Players with active records but no Wanted status, showing criminal level, bounty, and decay rate</li>
+      </ol>
 
-      <h2 id="jail-containment">12. Jail Containment</h2>
-      <p>When a player is arrested — by any auto-arrest trigger — they are immediately teleported to the designated <strong>Jail</strong> location. A <strong>60-second boundary enforcement</strong> period then begins automatically.</p>
-
-      <table class="govuk-table">
-        <caption>Jail containment parameters</caption>
-        <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
-        <tbody>
-          <tr><td>Boundary radius</td><td>10 metres from the jail marker</td></tr>
-          <tr><td>Enforcement duration</td><td>60 seconds after arrest</td></tr>
-          <tr><td>Check frequency</td><td>Every second</td></tr>
-          <tr><td>Teleport on escape</td><td>Immediate — vehicles are despawned</td></tr>
-        </tbody>
-      </table>
-
-      <p>During the 60-second window, if the player moves more than <strong>10 metres</strong> from the jail marker, the server <strong>instantly teleports them back</strong> and shows a warning popup. This repeats on every tick until the containment period expires.</p>
+      <h3>Compass — Live suspect tracking</h3>
+      <p>On-duty police officers automatically receive a <strong>Compass</strong> system message showing the distance and compass bearing (N, NE, E, etc.) to every online Wanted suspect. Entries are sorted by distance, closest first. This is not a command — it is a passive HUD update that appears as a system message while you are on duty.</p>
+      <p><strong>Updates are speed-based:</strong> faster suspects get more frequent compass updates — up to every 5 seconds for high-speed driving. Suspects on foot (walking or running) receive no compass updates at all — you must spot them visually.</p>
+      <p><strong>The Compass turns off when any officer is within 500m of a suspect.</strong> Once any police officer closes to within 500 metres of a Wanted suspect, that suspect's location is hidden from <em>all</em> officers' Compass feeds. This encourages visual pursuit over map-reading — once you're close, you're on your own.</p>
 
       <InsetText>
-        After 60 seconds the containment ends automatically and the player is free to move. There is no manual release step — the timer is enforced server-side and cannot be shortened.
+        <strong>Example:</strong> If Officer A is 200m from a suspect, no officer on the server sees that suspect on their Compass. The suspect reappears on everyone's Compass once all officers move beyond 500m.
       </InsetText>
 
-      <h2 id="security-bonus">13. Security Risk Bonus</h2>
-      <p>When active police officers are online, illicit delivery payments are increased to reflect the higher risk. Each on-duty officer adds <strong>50% to the base payout</strong>, capped at <strong>+250%</strong> (with 5 or more officers).</p>
+      <h3>Teleport restrictions for police</h3>
+      <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Cannot teleport within 1km of wanted suspects</strong> — any teleport destination is checked; blocked with a popup if too close</li>
+        <li><strong>Teleport/respawn redirect</strong>: If an on-duty officer teleports or respawns and lands within 1km of a wanted suspect, they are automatically teleported to the nearest police station</li>
+        <li><strong>Restricted locations</strong>: Dasa and Harbor teleport points are blocked while on duty</li>
+        <li><strong>Custom destination teleport blocked</strong> for police on duty</li>
+      </ul>
+
+      <h2 id="security-bonus">8. Risk Bonus</h2>
+      <p>When active police officers are online, <strong>Money delivery</strong> payments are increased to reflect the higher risk. Each on-duty officer adds <strong>50% to the base payout</strong>, capped at <strong>+250%</strong> (with 5 or more officers). This bonus applies <strong>only to Money deliveries</strong> — other illicit cargo (Ganja, Cocaine, etc.) does not receive the risk premium.</p>
 
       <table class="govuk-table govuk-table--numeric">
         <caption>Risk bonus by number of active officers</caption>
@@ -503,8 +300,8 @@ import InsetText from '../../components/InsetText.astro';
         </tbody>
       </table>
 
-      <h2 id="police-progression">14. Police Progression</h2>
-      <p>Officers advance in level based on their cumulative confiscated amount. Every <strong>$50,000 confiscated</strong> increases the officer's level by 1. When an officer levels up, their player tag is refreshed and a server-wide announcement is broadcast.</p>
+      <h2 id="police-progression">9. Police Progression</h2>
+      <p>Officers advance in level based on their cumulative confiscated amount. Every <strong>$50,000 confiscated</strong> increases the officer's level by 1. Your level is shown as a <code>[P]</code> tag in your name (e.g. <code>[P1]</code>, <code>[P2]</code>). When on duty, the <code>[C]</code> tag is hidden and only the <code>[P]</code> tag is displayed. When an officer levels up, their player tag is refreshed and a server-wide announcement is broadcast.</p>
 
       <table class="govuk-table govuk-table--numeric">
         <caption>Police level thresholds</caption>
@@ -517,97 +314,79 @@ import InsetText from '../../components/InsetText.astro';
         </tbody>
       </table>
 
-      <h2 id="smuggling-tipoff">15. Smuggling Tip-Offs</h2>
-      <p>When a player loads illicit cargo, the system may broadcast a server-wide tip-off: <em>"Intelligence reports suggest a smuggling operation is underway"</em>. This is controlled by the <code>SMUGGLING_TIPOFF_ENABLED</code> server setting.</p>
+      <h2 id="glossary">10. Glossary</h2>
+      <dl class="govuk-summary-list govuk-summary-list--no-border">
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Criminal Record</dt>
+          <dd class="govuk-summary-list__value">Permanent record of illegal activity created when loading illicit cargo. Cleared only on arrest. Shows as <code>[C]</code> tag on your name.</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Bounty</dt>
+          <dd class="govuk-summary-list__value">Accumulates per illicit delivery, decays with a 2-hour half-life while online and active, seized on arrest.</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Wanted Status</dt>
+          <dd class="govuk-summary-list__value">Temporary police attention shown as asterisk stars (<code>*</code>) in your player tag. Expires over time (10 minutes if avoiding police). Star level (1–5) indicates severity based on remaining heat.</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Confiscation</dt>
+          <dd class="govuk-summary-list__value">Money taken from you on arrest. Comes from your bounty plus any Wanted bounty. Split equally among all online active officers.</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">[C] Tag</dt>
+          <dd class="govuk-summary-list__value">Visual indicator in your name showing you have an active Criminal Record. Format: <code>[C1]</code>, <code>[C2]</code>, etc. Only removed on arrest.</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">[P] Tag</dt>
+          <dd class="govuk-summary-list__value">Visual indicator showing police level. Appears when on duty (e.g. <code>[P1]</code>, <code>[P2]</code>). The <code>[C]</code> tag is hidden while the <code>[P]</code> tag is active.</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">[*] Tag</dt>
+          <dd class="govuk-summary-list__value">Visual indicator showing Wanted status. One to five asterisks based on remaining heat (e.g. <code>[*****C1]</code> for a wanted criminal).</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Suspect</dt>
+          <dd class="govuk-summary-list__value">A player with the native Suspect status, which makes them invisible to anyone on a police vehicle or wearing a police uniform. Triggered by suspect costumes or Wanted status.</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">Heat</dt>
+          <dd class="govuk-summary-list__value">Numerical value representing your Wanted status severity. Starts at 600 for a new Wanted; decreases over time when avoiding police. Determines star level in your tag.</dd>
+        </div>
+      </dl>
 
-      <table class="govuk-table">
-        <caption>Tip-off parameters</caption>
-        <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
-        <tbody>
-          <tr><td>Delay before broadcast</td><td>15 seconds</td></tr>
-          <tr><td>Cooldown per player</td><td>60 seconds</td></tr>
-        </tbody>
-      </table>
-
-      <InsetText>
-        Tip-offs do not reveal the player's name or location — they only alert police that a smuggling operation is in progress.
-      </InsetText>
-
-      <h2 id="modded-vehicles">16. Modded Vehicle Rules</h2>
-      <p>Players using vehicles with custom-modified parts face additional penalties during illicit cargo gameplay:</p>
-      <ul class="govuk-list govuk-list--bullet">
-        <li><strong>On delivery:</strong> Criminal profits are zeroed out (transferred back as a penalty) if modded parts are detected on the player's active vehicle.</li>
-        <li><strong>On load:</strong> A warning popup is shown: "You are not allowed to use modified vehicles for criminal gameplay."</li>
-        <li><strong>Police exception:</strong> On-duty officers with police-issued whitelisted parts are exempt from modded vehicle detection.</li>
-      </ul>
+      <h2 id="changelog">11. Changelog</h2>
+      <dl class="govuk-summary-list govuk-summary-list--no-border">
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">7 May 2026, 23:48 +07</dt>
+          <dd class="govuk-summary-list__value">Removed <code>/suspects</code> command. Police can no longer track wanted suspect locations via a command — they must rely on the Compass and visual pursuit.</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">7 May 2026, 23:48 +07</dt>
+          <dd class="govuk-summary-list__value">Documented the Compass — an automatic suspect tracking HUD that shows distance and bearing to wanted suspects every 10 seconds. Turns off for any suspect within 500m of an officer.</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">8 May 2026</dt>
+          <dd class="govuk-summary-list__value">Compass now uses speed-based update frequency — faster suspects get updates down to every 5 seconds, stationary suspects receive no updates. Replaces the previous fixed 10-second interval.</dd>
+        </div>
+      </dl>
 
     </div>
     <div class="govuk-grid-column-one-third">
-      <aside class="govuk-grid-column-one-third">
-        <h2 class="govuk-heading-m">Contents</h2>
-        <nav role="navigation" aria-label="Contents">
-          <ul class="govuk-list">
-            <li><a href="#criminal-record">1. Criminal Record</a></li>
-            <li><a href="#bounty-confiscatable">2. Bounty / Confiscatable Amount</a></li>
-            <li><a href="#wanted-status">3. Wanted Status</a></li>
-            <li><a href="#costumes-suspect">4. Criminal Costumes & Suspect System</a></li>
-            <li><a href="#pursuit-initiation">5. How Police Pursuit Is Initiated</a></li>
-            <li><a href="#setwanted">6. /setwanted Command</a></li>
-            <li><a href="#police-duty">7. Police Duty & Commands</a></li>
-            <li><a href="#police-teleport">8. Police Teleport Restrictions</a></li>
-            <li><a href="#police-conduct">9. Police Conduct</a></li>
-            <li><a href="#arrest-mechanisms">10. Arrest Mechanisms</a></li>
-            <li><a href="#confiscation">11. Confiscation</a></li>
-            <li><a href="#jail-containment">12. Jail Containment</a></li>
-            <li><a href="#security-bonus">13. Security Risk Bonus</a></li>
-            <li><a href="#police-progression">14. Police Progression</a></li>
-            <li><a href="#smuggling-tipoff">15. Smuggling Tip-Offs</a></li>
-            <li><a href="#modded-vehicles">16. Modded Vehicle Rules</a></li>
-          </ul>
-        </nav>
-      </aside>
+      <Sidebar items={[
+        { label: "1. Criminal Records", href: "#criminal-record" },
+        { label: "2. Wanted Status", href: "#wanted-status" },
+        { label: "3. What Happens When Caught", href: "#what-happens-when-caught" },
+        { label: "4. Modded Vehicles", href: "#modded-vehicles" },
+        { label: "5. Costumes & Suspects", href: "#costumes-suspect" },
+        { label: "6. Police Duty", href: "#police-duty" },
+        { label: "7. Police Commands", href: "#police-commands" },
+        { label: "8. Risk Bonus", href: "#security-bonus" },
+        { label: "9. Police Progression", href: "#police-progression" },
+        { label: "10. Glossary", href: "#glossary" },
+        { label: "11. Changelog", href: "#changelog" },
+      ]} />
     </div>
   </div>
 </main>
-
-<section class="govuk-grid-row" aria-labelledby="glossary-heading">
-  <div class="govuk-grid-column-two-thirds">
-    <h2 id="glossary-heading" class="govuk-heading-l">Glossary</h2>
-    <dl class="govuk-summary-list govuk-summary-list--no-border">
-      <div class="govuk-summary-list__row">
-        <dt class="govuk-summary-list__key">Criminal Record</dt>
-        <dd class="govuk-summary-list__value">Permanent record of illegal activity created when loading illicit cargo. Cleared only on arrest. Shows as [C] tag on your name.</dd>
-      </div>
-      <div class="govuk-summary-list__row">
-        <dt class="govuk-summary-list__key">Bounty</dt>
-        <dd class="govuk-summary-list__value">Equals <code>CriminalRecord.confiscatable_amount</code>: accumulates per illicit delivery, decays with a 2-hour half-life while online, seized on arrest.</dd>
-      </div>
-      <div class="govuk-summary-list__row">
-        <dt class="govuk-summary-list__key">Wanted Status</dt>
-        <dd class="govuk-summary-list__value">Temporary police attention shown as asterisk stars (*) in your player tag. Expires over time (10 minutes if avoiding police). Star level (1–5) indicates severity based on remaining heat.</dd>
-      </div>
-      <div class="govuk-summary-list__row">
-        <dt class="govuk-summary-list__key">Confiscation</dt>
-        <dd class="govuk-summary-list__value">Money taken from you on arrest. Comes from <code>CriminalRecord.confiscatable_amount</code> (the bounty). Split equally among all online active officers.</dd>
-      </div>
-      <div class="govuk-summary-list__row">
-        <dt class="govuk-summary-list__key">[C] Tag</dt>
-        <dd class="govuk-summary-list__value">Visual indicator in your name showing you have an active Criminal Record. Format: <code>[C1]</code>, <code>[C2]</code>, etc. Only removed on arrest.</dd>
-      </div>
-      <div class="govuk-summary-list__row">
-        <dt class="govuk-summary-list__key">[*] Tag</dt>
-        <dd class="govuk-summary-list__value">Visual indicator showing Wanted status. One to five asterisks based on remaining heat. Appears between police level and criminal level: <code>[P1*****C1] Name</code>.</dd>
-      </div>
-      <div class="govuk-summary-list__row">
-        <dt class="govuk-summary-list__key">Suspect</dt>
-        <dd class="govuk-summary-list__value">A player flagged with a blue overlay on the police HUD. Wanted players are always suspects; criminals wearing suspect costumes are also flagged.</dd>
-      </div>
-      <div class="govuk-summary-list__row">
-        <dt class="govuk-summary-list__key">Heat</dt>
-        <dd class="govuk-summary-list__value">Numerical value (0–600) representing your Wanted status severity. Decreases over time when avoiding police. Determines star level in your tag.</dd>
-      </div>
-    </dl>
-  </div>
-</section>
 
 </GovLayout>
