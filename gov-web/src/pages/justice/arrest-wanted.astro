@@ -35,7 +35,7 @@ import Sidebar from '../../components/Sidebar.astro';
 
       <h2 id="criminal-record">1. Criminal Records</h2>
       <p>Delivering illicit cargo or wearing a suspect costume creates a <strong>Criminal Record</strong> and applies the <code>[C]</code> tag to your name. This record tracks two things: your total lifetime earnings from illicit cargo (which determines your criminal level) and your current bounty (which is what gets confiscated if you're arrested).</p>
-      <p>Your bounty accumulates from each delivery and <strong>decays over time while you're online and active</strong>. It halves every 2 hours of active play — for example, a $50,000 bounty drops to $25,000 after 2 hours, then $12,500 after 4 hours. Decay pauses while you're AFK or in a modded vehicle. When your bounty decays below $5,000, it is zeroed out and your Criminal Record is cleared automatically.</p>
+      <p>Your bounty accumulates from each delivery — only <strong>80%</strong> of each delivery payment is added to your bounty; the remaining 20% is yours to keep and cannot be confiscated. Your bounty <strong>decays over time while you're online and active</strong>. It halves every 2 hours of active play — for example, a $50,000 bounty drops to $25,000 after 2 hours, then $12,500 after 4 hours. Decay pauses while you're AFK or in a modded vehicle. When your bounty decays below $5,000, it is zeroed out and your Criminal Record is cleared automatically.</p>
       <p>Your Criminal Record is <strong>never cleared by time</strong>. It is only cleared on arrest, which immediately removes the <code>[C]</code> tag.</p>
 
       <InsetText>
@@ -43,7 +43,7 @@ import Sidebar from '../../components/Sidebar.astro';
       </InsetText>
 
       <div class="govuk-inset-text">
-        <strong>Example:</strong> If you deliver $50,000 of illicit cargo, your bounty is $50,000. After 2 hours of playing (staying online and active), this drops to $25,000. After 4 hours, it drops to $12,500.
+        <strong>Example:</strong> If you deliver $50,000 of illicit cargo, $40,000 (80%) is added to your bounty. After 2 hours of playing (staying online and active), this drops to $20,000. After 4 hours, it drops to $10,000. The remaining $10,000 from the original delivery is safe from confiscation.
       </div>
 
       <p>When you deliver illicit cargo, a server-wide tip-off may be broadcast: <em>"Intelligence reports suggest a smuggling operation is underway"</em>. This alert does not reveal your name or location — it only tells police that smuggling is in progress.</p>
@@ -121,7 +121,7 @@ import Sidebar from '../../components/Sidebar.astro';
           <ul class="govuk-list govuk-list--bullet">
             <li>You get a Criminal Record <code>[C]</code> tag on your name (unless you are on police duty)</li>
             <li>You may become Wanted (higher delivery value = higher chance within the 30-second window)</li>
-            <li>Money accumulates in your bounty</li>
+            <li>80% of the delivery payment accumulates in your bounty</li>
             <li>Your criminal level increases based on cumulative laundered total</li>
             <li>A modded vehicle check is performed — if custom parts are detected, a warning popup is shown</li>
             <li>A smuggling tip-off may be broadcast to the server (see <a href="#criminal-record">Section 1</a>)</li>
@@ -155,7 +155,7 @@ import Sidebar from '../../components/Sidebar.astro';
       </ul>
 
       <h3>Confiscation</h3>
-      <p>The total confiscated amount includes your bounty from deliveries plus any Wanted bounty. This amount is <strong>split equally among all online active (non-AFK) police officers</strong>. Each officer receives an equal share (minimum $1). Star level does not affect confiscation — 1 star and 5 stars result in the same penalty.</p>
+      <p>The total confiscated amount is your bounty — which is 80% of your cumulative delivery payments (minus any decay). This amount is <strong>split equally among all online active (non-AFK) police officers</strong>. Each officer receives an equal share (minimum $1). Star level does not affect confiscation — 1 star and 5 stars result in the same penalty. The remaining 20% of each delivery is always safe from confiscation.</p>
 
       <WarningText>
         There is no partial confiscation based on star level. If you are arrested at 1 star or 5 stars, the same full amount is seized.
@@ -322,7 +322,7 @@ import Sidebar from '../../components/Sidebar.astro';
         </div>
         <div class="govuk-summary-list__row">
           <dt class="govuk-summary-list__key">Bounty</dt>
-          <dd class="govuk-summary-list__value">Accumulates per illicit delivery, decays with a 2-hour half-life while online and active, seized on arrest.</dd>
+          <dd class="govuk-summary-list__value">Accumulates at 80% of each illicit delivery (20% is safe), decays with a 2-hour half-life while online and active, seized on arrest.</dd>
         </div>
         <div class="govuk-summary-list__row">
           <dt class="govuk-summary-list__key">Wanted Status</dt>
@@ -363,6 +363,10 @@ import Sidebar from '../../components/Sidebar.astro';
         <div class="govuk-summary-list__row">
           <dt class="govuk-summary-list__key">7 May 2026, 23:48 +07</dt>
           <dd class="govuk-summary-list__value">Documented the Compass — an automatic suspect tracking HUD that shows distance and bearing to wanted suspects every 10 seconds. Turns off for any suspect within 500m of an officer.</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">8 May 2026</dt>
+          <dd class="govuk-summary-list__value">Only 80% of each delivery payment is added to bounty (confiscatable amount). The remaining 20% is always safe from police confiscation.</dd>
         </div>
         <div class="govuk-summary-list__row">
           <dt class="govuk-summary-list__key">8 May 2026</dt>
