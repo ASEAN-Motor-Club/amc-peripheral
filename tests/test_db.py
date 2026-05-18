@@ -154,3 +154,23 @@ def test_add_news_no_audio(db):
     news = db.get_recent_news(limit=1)
     assert news[0]["audio_filename"] is None
     assert "Text-only" in news[0]["content"]
+
+
+def test_get_latest_requester_by_title(db):
+    """Test looking up the most recent requester for a song title."""
+    # No requests yet — should return None
+    assert db.get_latest_requester_by_title("Some Song") is None
+
+    # Add requests from different users for the same song
+    db.add_request("1", "Song A", "url_a", "Alice")
+    db.add_request("2", "Song A", "url_a", "Bob")
+
+    # Should return the most recent requester (Bob)
+    assert db.get_latest_requester_by_title("Song A") == "Bob"
+
+    # Different song — should return its own requester
+    db.add_request("3", "Song B", "url_b", "Charlie")
+    assert db.get_latest_requester_by_title("Song B") == "Charlie"
+
+    # Non-existent song — should return None
+    assert db.get_latest_requester_by_title("Unknown Song") is None

@@ -135,12 +135,13 @@ async def handle_now_playing(request: web.Request) -> web.Response:
     if not song_info:
         return web.json_response({"playing": False})
 
+    requester = cog._resolve_requester(metadata, song_info)
     like_count = cog.db.get_song_like_count(song_info["song_title"])
     return web.json_response({
         "playing": True,
         "song_title": song_info["song_title"],
         "folder": song_info["folder"],
-        "requester": song_info["requester"],
+        "requester": requester,
         "like_count": like_count,
     })
 

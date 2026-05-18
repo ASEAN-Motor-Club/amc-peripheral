@@ -59,7 +59,6 @@ from amc_peripheral.radio.tts import tts_dispatch, tts_multi_dispatch
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
 from amc_peripheral.radio.radio_server import (
     get_current_song_metadata,
-    get_current_song,
     get_listener_count,
     parse_song_info,
 )
@@ -450,6 +449,7 @@ class RadioCog(commands.Cog):
         self.embed_message_id = None
         self.user_requests = {}
         self.recent_song_queue = deque(maxlen=10)
+        self._active_requesters: dict[str, str] = {}  # video_id -> requester name
         self.banned_requesters = [
             "LemurStreet",
         ]
@@ -1865,11 +1865,14 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 return f"Download started for '{query}'. I'll notify the listener when it's ready."
 
             elif name == "get_currently_playing":
-                current = await get_current_song(self.bot.http_session)
-                return (
-                    current
-                    or "Nothing is playing right now, or I can't reach the radio server."
-                )
+                metadata = await get_current_song_metadata(self.bot.http_session)
+                if not metadata:
+                    return "Nothing is playing right now, or I can't reach the radio server."
+                song_info = parse_song_info(metadata)
+                if not song_info:
+                    return "Nothing is playing right now, or I can't reach the radio server."
+                requester = self._resolve_requester(metadata, song_info)
+                return f"{song_info['song_title']} (requested by {requester})"
 
             elif name == "get_recent_requests":
                 limit = args.get("limit", 10)
@@ -3095,6 +3098,28 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     "You have queued too many songs. Please wait a moment. (Limit: 5 songs per 10 minutes)"
                 )
 
+    def _resolve_requester(self, metadata: dict, song_info: dict) -> str:
+        """Resolve the requester name for a song, with fallback chain.
+
+        Liquidsoap's metadata.json.stringify() drops custom annotation keys
+        like "requester", so cache files always come back as "Radio".
+        This method recovers the real requester from:
+        1. The in-memory ``_active_requesters`` mapping (accurate, current session)
+        2. The ``song_requests`` DB table (survives restarts, less precise)
+        """
+        requester = song_info["requester"]
+        if song_info["folder"] == "cache" and requester == "Radio":
+            video_id = Path(metadata.get("filename", "")).stem
+            if video_id:
+                requester = self._active_requesters.get(video_id, requester)
+            if requester == "Radio":
+                db_requester = self.db.get_latest_requester_by_title(
+                    song_info["song_title"]
+                )
+                if db_requester:
+                    requester = db_requester
+        return requester
+
     async def request_song(
         self,
         youtube_link: str,
@@ -3115,6 +3140,12 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         # Worker applies DOWNLOAD_TIMEOUT when it picks up the job,
         # so we just await the future here — no caller-side timeout.
         title, duration, local_path, webpage_url, artist = await future
+
+        # Remember who requested this video so the now-playing embed can show it.
+        # Liquidsoap's metadata.json.stringify() drops custom annotation keys
+        # like "requester", so we track it on the Python side instead.
+        video_id = Path(local_path).stem
+        self._active_requesters[video_id] = requester
 
         # --- Content screening using resolved YouTube metadata ---
         screening = await self._screen_song_content(title, artist)
@@ -3388,7 +3419,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             return
 
         song_title = song_info["song_title"]
-        original_requester = song_info.get("requester", "Unknown")
+        original_requester = self._resolve_requester(metadata, song_info)
         self.db.add_like(discord_id=requester, song_title=song_title)
 
         await announce_in_game(
@@ -3407,7 +3438,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             return
 
         song_title = song_info["song_title"]
-        original_requester = song_info.get("requester", "Unknown")
+        original_requester = self._resolve_requester(metadata, song_info)
         self.db.add_dislike(discord_id=requester, song_title=song_title)
 
         await announce_in_game(
@@ -3436,7 +3467,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             return
 
         song_title = song_info["song_title"]
-        original_requester = song_info.get("requester", "Unknown")
+        original_requester = self._resolve_requester(metadata, song_info)
         await announce_in_game(
             self.bot.http_session,
             f'Now playing: "{song_title}" (requested by {original_requester})',
@@ -4380,8 +4411,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             return
 
         folder = song_info["folder"]
-        requester = song_info["requester"]
         song_title = song_info["song_title"]
+        requester = self._resolve_requester(metadata, song_info)
 
         embed = discord.Embed(
             title="📻 AMC Radio",

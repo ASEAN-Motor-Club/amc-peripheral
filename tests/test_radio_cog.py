@@ -2661,3 +2661,49 @@ class AsyncContextManagerMock:
 
     async def __aexit__(self, *args):
         pass
+
+
+class TestResolveRequester:
+    """Tests for RadioCog._resolve_requester() — the requester fallback chain."""
+
+    def test_non_cache_folder_returns_original(self, cog):
+        """Songs from prev_requests or requests keep their parsed requester."""
+        metadata = {"filename": "/var/lib/radio/prev_requests/Alice-Song.mp3"}
+        song_info = {"folder": "prev_requests", "requester": "Alice", "song_title": "Song"}
+        assert cog._resolve_requester(metadata, song_info) == "Alice"
+
+    def test_cache_with_in_memory_mapping(self, cog):
+        """Cache files resolve requester from the in-memory mapping."""
+        cog._active_requesters["abc123"] = "CoolPlayer"
+        metadata = {"filename": "/var/lib/radio/cache/abc123.webm"}
+        song_info = {"folder": "cache", "requester": "Radio", "song_title": "Some Song"}
+        assert cog._resolve_requester(metadata, song_info) == "CoolPlayer"
+
+    def test_cache_falls_back_to_db(self, cog, tmp_path):
+        """When not in memory, falls back to the DB lookup."""
+        # No in-memory mapping
+        metadata = {"filename": "/var/lib/radio/cache/xyz789.webm"}
+        song_info = {"folder": "cache", "requester": "Radio", "song_title": "DB Song"}
+        # Seed the DB
+        cog.db.add_request("1", "DB Song", "https://youtube.com/watch?v=xyz789", "DBUser")
+        assert cog._resolve_requester(metadata, song_info) == "DBUser"
+
+    def test_cache_still_radio_when_nothing_found(self, cog):
+        """Returns 'Radio' when neither mapping nor DB has a match."""
+        metadata = {"filename": "/var/lib/radio/cache/unknown.webm"}
+        song_info = {"folder": "cache", "requester": "Radio", "song_title": "Unknown Song"}
+        assert cog._resolve_requester(metadata, song_info) == "Radio"
+
+    def test_cache_already_has_requester(self, cog):
+        """If parse_song_info already found a requester (future Liquidsoap fix), keep it."""
+        metadata = {"filename": "/var/lib/radio/cache/def456.webm", "requester": "AnnotatedUser"}
+        song_info = {"folder": "cache", "requester": "AnnotatedUser", "song_title": "Song"}
+        assert cog._resolve_requester(metadata, song_info) == "AnnotatedUser"
+
+    def test_in_memory_takes_priority_over_db(self, cog):
+        """In-memory mapping wins when both exist."""
+        cog._active_requesters["vid001"] = "MemoryUser"
+        cog.db.add_request("1", "Priority Song", "url", "DbUser")
+        metadata = {"filename": "/var/lib/radio/cache/vid001.webm"}
+        song_info = {"folder": "cache", "requester": "Radio", "song_title": "Priority Song"}
+        assert cog._resolve_requester(metadata, song_info) == "MemoryUser"

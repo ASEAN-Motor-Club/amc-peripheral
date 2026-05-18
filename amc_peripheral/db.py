@@ -165,6 +165,18 @@ class RadioDB:
             order_by="requested_at desc", limit=limit
         ))
 
+    def get_latest_requester_by_title(self, song_title: str) -> str | None:
+        """Get the requester name for the most recent request of a given song title.
+
+        Used as a fallback when Liquidsoap metadata doesn't include the
+        requester annotation (e.g. for cached songs).
+        """
+        rows = list(self.db["song_requests"].rows_where(
+            "song_title = ?", [song_title],
+            order_by="requested_at desc", limit=1,
+        ))
+        return rows[0]["requester_name"] if rows else None
+
     def add_like(self, discord_id: str, song_title: str, song_url: str | None = None) -> int | None:
         """Add or restore a like for a song."""
         row = {

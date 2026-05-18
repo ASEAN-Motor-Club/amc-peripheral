@@ -36,7 +36,7 @@ import Sidebar from '../../components/Sidebar.astro';
       <h2 id="criminal-record">1. Criminal Records</h2>
       <p>Delivering illicit cargo or wearing a suspect costume creates a <strong>Criminal Record</strong> and applies the <code>[C]</code> tag to your name. This record tracks two things: your total lifetime earnings from illicit cargo (which determines your criminal level) and your current bounty (which is what gets confiscated if you're arrested).</p>
       <p>Your bounty accumulates from each delivery — only <strong>80%</strong> of each delivery payment is added to your bounty; the remaining 20% is yours to keep and cannot be confiscated. Your bounty <strong>decays over time while you're online and active</strong>. It halves every 2 hours of active play — for example, a $50,000 bounty drops to $25,000 after 2 hours, then $12,500 after 4 hours. Decay pauses while you're AFK or in a modded vehicle. When your bounty decays below $5,000, it is zeroed out and your Criminal Record is cleared automatically.</p>
-      <p>Your Criminal Record is <strong>never cleared by time</strong>. It is only cleared on arrest, which immediately removes the <code>[C]</code> tag.</p>
+      <p>Your Criminal Record is cleared either by <strong>arrest</strong> (which immediately removes the <code>[C]</code> tag) or by <strong>natural decay</strong> — when your bounty drops below $5,000 through the 2-hour half-life decay, the record is automatically closed and the <code>[C]</code> tag is removed.</p>
 
       <InsetText>
         Only one active Criminal Record can exist per character at a time. A new record is created fresh after each arrest.
