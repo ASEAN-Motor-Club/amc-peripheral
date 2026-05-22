@@ -193,14 +193,20 @@ class UtilsCog(commands.Cog):
             rent_left_seconds = housing.get("rentLeftTimeSeconds")
             if rent_left_seconds is not None and rent_left_seconds < 259200:
                 nickname = housing.get("ownerName", "")
-                member = discord.utils.get(guild.members, display_name=nickname)
+                discord_user_id = housing.get("discord_user_id")
 
                 td = timedelta(seconds=rent_left_seconds)
                 days = td.days
                 hours = td.seconds // 3600
                 rent_left = f"{days} days, {hours} hours"
 
-                display_name = member.mention if member else nickname
+                if discord_user_id:
+                    display_name = f"<@{discord_user_id}>"
+                    member = guild.get_member(discord_user_id)
+                else:
+                    member = discord.utils.get(guild.members, display_name=nickname)
+                    display_name = member.mention if member else nickname
+
                 if general_channel:
                     await general_channel.send(
                         f"Rent reminder: {display_name}, your plot is expiring in {rent_left}"
