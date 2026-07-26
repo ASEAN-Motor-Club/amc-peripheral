@@ -2224,7 +2224,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     return "Wiki storage not available."
                 stats = self._wiki_storage.get_stats()
                 lines = [
-                    f"Wiki summary:",
+                    "Wiki summary:",
                     f"- Total pages: {stats.get('total_pages', 0)}",
                     f"- Categories: {stats.get('total_categories', 0)}",
                     f"- Total sources: {stats.get('total_sources', 0)}",
