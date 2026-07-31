@@ -15,7 +15,6 @@ from .youtube_cog import YouTubeCog
 from .role_cog import RoleCog
 from .court_cog import CourtCog
 from .ballot_cog import BallotCog
-from .ban_trap_cog import BanTrapCog
 
 log = logging.getLogger(__name__)
 
@@ -42,7 +41,6 @@ class AMCBot(commands.Bot):
         await self.add_cog(AuctionCog(self))
         await self.add_cog(EconomyCog(self))
         await self.add_cog(BallotCog(self))
-        await self.add_cog(BanTrapCog(self))
 
         # Sync tree
         guild = discord.Object(id=GUILD_ID)

@@ -15,6 +15,7 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY", "")
 
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 DISCORD_TOKEN_RADIO = os.environ.get("DISCORD_TOKEN_RADIO")
+DISCORD_TOKEN_MALKUTH = os.environ.get("DISCORD_TOKEN_MALKUTH")
 DISCORD_GATEWAY = os.environ.get(
     "DISCORD_GATEWAY", "wss://gateway.discord.gg/?v=10&encoding=json"
 )

@@ -4,7 +4,7 @@ import discord
 from discord.ext import commands
 
 from .ban_trap_cog import BanTrapCog
-from ..settings import DISCORD_TOKEN, GUILD_ID
+from ..settings import DISCORD_TOKEN_MALKUTH
 
 log = logging.getLogger(__name__)
 
@@ -26,12 +26,12 @@ class BanTrapBot(commands.Bot):
 async def _async_main():
     bot = BanTrapBot()
     async with bot:
-        await bot.start(DISCORD_TOKEN)
+        await bot.start(DISCORD_TOKEN_MALKUTH)
 
 
 def main():
-    if not DISCORD_TOKEN:
-        raise RuntimeError("DISCORD_TOKEN not set")
+    if not DISCORD_TOKEN_MALKUTH:
+        raise RuntimeError("DISCORD_TOKEN_MALKUTH not set")
     discord.utils.setup_logging()
     try:
         import asyncio
