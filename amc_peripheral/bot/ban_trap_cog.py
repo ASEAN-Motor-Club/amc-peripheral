@@ -1,5 +1,5 @@
 import logging
-from asyncio import Lock
+from asyncio import Lock, sleep
 from discord.ext import commands
 from ..settings import (
     BAN_TRAP_ALLOWED_ROLE_IDS,
@@ -21,12 +21,9 @@ class BanTrapCog(commands.Cog):
         self.bot = bot
         self._processing: dict[int, Lock] = {}
 
-    async def _get_lock(self, author_id: int) -> Lock:
-        if author_id not in self._processing:
-            self._processing[author_id] = Lock()
-        return self._processing[author_id]
-
     async def cog_load(self) -> None:
+        if not BAN_TRAP_ALLOWED_ROLE_IDS:
+            raise RuntimeError("BAN_TRAP_ALLOWED_ROLE_IDS must not be empty")
         log.info(
             "BanTrapCog loaded: channel=%s, auto_delete=%s",
             BAN_TRAP_CHANNEL_ID,
@@ -48,38 +45,33 @@ class BanTrapCog(commands.Cog):
         if message.channel.id != BAN_TRAP_CHANNEL_ID:
             return
 
+        guild = message.guild
         author_id = message.author.id
-        lock = await self._get_lock(author_id)
-        if lock.locked():
+
+        member = guild.get_member(author_id)
+        if member is None:
+            try:
+                member = await guild.fetch_member(author_id)
+            except Exception:
+                member = None
+        if member and self._is_exempt(member):
             return
 
-        guild = message.guild
+        target = member or message.author
+        if author_id not in self._processing:
+            self._processing[author_id] = Lock()
+        lock = self._processing[author_id]
+        if lock.locked():
+            return
         async with lock:
-            member = guild.get_member(author_id)
-            if member is None:
-                try:
-                    member = await guild.fetch_member(author_id)
-                except Exception:
-                    member = None
-            if member and self._is_exempt(member):
-                return
-
-            target = member or message.author
-            try:
-                await guild.ban(
-                    target,
-                    reason="ban trap",
-                    delete_message_seconds=BAN_TRAP_CLEANUP_WINDOW_SECONDS,
-                )
-                if BAN_TRAP_ANNOUNCEMENT:
-                    sent = await message.channel.send(BAN_TRAP_ANNOUNCEMENT)
-                    if BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT and sent:
-                        try:
-                            await sent.delete(delay=BAN_TRAP_DELETE_DELAY_SECONDS)
-                        except Exception as e:
-                            log.debug("Failed to delete announcement: %s", e)
-            except Exception as e:
-                log.exception("ban trap failed: %s", e)
+            await guild.ban(target, reason="ban trap", delete_message_seconds=BAN_TRAP_CLEANUP_WINDOW_SECONDS)
+            if BAN_TRAP_ANNOUNCEMENT:
+                sent = await message.channel.send(BAN_TRAP_ANNOUNCEMENT)
+                if BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT and sent:
+                    try:
+                        await sent.delete(delay=BAN_TRAP_DELETE_DELAY_SECONDS)
+                    except Exception as e:
+                        log.debug("Failed to delete announcement: %s", e)
 
 
 async def setup(bot: commands.Bot) -> None:
