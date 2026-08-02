@@ -1,11 +1,13 @@
 import logging
-from asyncio import Lock, sleep
+from asyncio import Lock
+
 from discord.ext import commands
-from ..settings import (
+
+from .settings import (
     BAN_TRAP_ALLOWED_ROLE_IDS,
     BAN_TRAP_ANNOUNCEMENT,
-    BAN_TRAP_CHANNEL_ID,
     BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT,
+    BAN_TRAP_CHANNEL_ID,
     BAN_TRAP_CLEANUP_WINDOW_SECONDS,
     BAN_TRAP_DELETE_DELAY_SECONDS,
     GUILD_ID,
@@ -64,7 +66,11 @@ class BanTrapCog(commands.Cog):
         if lock.locked():
             return
         async with lock:
-            await guild.ban(target, reason="ban trap", delete_message_seconds=BAN_TRAP_CLEANUP_WINDOW_SECONDS)
+            await guild.ban(
+                target,
+                reason="ban trap",
+                delete_message_seconds=BAN_TRAP_CLEANUP_WINDOW_SECONDS,
+            )
             if BAN_TRAP_ANNOUNCEMENT:
                 sent = await message.channel.send(BAN_TRAP_ANNOUNCEMENT)
                 if BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT and sent:

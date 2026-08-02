@@ -15,7 +15,7 @@ LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY", "")
 
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 DISCORD_TOKEN_RADIO = os.environ.get("DISCORD_TOKEN_RADIO")
-DISCORD_TOKEN_MALKUTH = os.environ.get("DISCORD_TOKEN_MALKUTH")
+
 DISCORD_GATEWAY = os.environ.get(
     "DISCORD_GATEWAY", "wss://gateway.discord.gg/?v=10&encoding=json"
 )
@@ -75,16 +75,6 @@ ECO_GAME_CHAT_CHINESE_CHANNEL_ID = int(
 TIMEZONES_CHANNEL_ID = int(
     os.environ.get("TIMEZONES_CHANNEL_ID", "1355738561865056346")
 )
-
-# Ban Trap
-BAN_TRAP_CHANNEL_ID = int(os.environ.get("BAN_TRAP_CHANNEL_ID", "1529987241278177352"))
-BAN_TRAP_ALLOWED_ROLE_IDS = {int(x) for x in os.environ.get("BAN_TRAP_ALLOWED_ROLE_IDS", "").split(",") if x.strip()}
-BAN_TRAP_ANNOUNCEMENT = os.environ.get("BAN_TRAP_ANNOUNCEMENT", "My apologies, but they had to go.")
-BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT = os.environ.get("BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT", "0") == "1"
-BAN_TRAP_CLEANUP_WINDOW_SECONDS = int(os.environ.get("BAN_TRAP_CLEANUP_WINDOW_SECONDS", "60"))
-BAN_TRAP_DELETE_DELAY_SECONDS = int(os.environ.get("BAN_TRAP_DELETE_DELAY_SECONDS", "5"))
-if not BAN_TRAP_ALLOWED_ROLE_IDS:
-    raise RuntimeError("BAN_TRAP_ALLOWED_ROLE_IDS must not be empty")
 
 # Radio Channels
 RADIO_CHANNEL_ID = int(os.environ.get("RADIO_CHANNEL_ID", "1422525934103171125"))

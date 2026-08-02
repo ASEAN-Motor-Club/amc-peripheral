@@ -3,8 +3,8 @@ import logging
 import discord
 from discord.ext import commands
 
-from .ban_trap_cog import BanTrapCog
-from ..settings import DISCORD_TOKEN_MALKUTH
+from .cog import BanTrapCog
+from .settings import DISCORD_TOKEN_MALKUTH
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +35,7 @@ def main():
     discord.utils.setup_logging()
     try:
         import asyncio
+
         asyncio.run(_async_main())
     except KeyboardInterrupt:
         pass

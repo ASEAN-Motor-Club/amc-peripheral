@@ -543,6 +543,23 @@
               '';
             };
 
+            # Malkuth Ban Trap Bot
+            systemd.services.amc-ban-trap = {
+              wantedBy = ["multi-user.target"];
+              after = ["network.target"];
+              description = "Malkuth Ban Trap Bot";
+              restartIfChanged = false;
+              serviceConfig = {
+                Type = "simple";
+                Restart = "on-failure";
+                RestartSec = "10";
+                EnvironmentFile = "${cfg.environmentFile}";
+              };
+              script = ''
+                ${self.packages.${pkgs.system}.default}/bin/amc_ban_trap
+              '';
+            };
+
             # Sharry file sharing service
             services.sharry = lib.mkIf cfg.sharry.enable {
               enable = true;

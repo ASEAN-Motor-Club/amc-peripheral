@@ -14,7 +14,7 @@ os.environ.setdefault("BAN_TRAP_CLEANUP_WINDOW_SECONDS", "60")
 os.environ.setdefault("BAN_TRAP_DELETE_DELAY_SECONDS", "5")
 os.environ.setdefault("GUILD_ID", "1341775494026231859")
 
-from amc_peripheral.bot.ban_trap_cog import BanTrapCog
+from amc_peripheral.malkuth.cog import BanTrapCog
 
 
 class MockBot(commands.Bot):
@@ -109,7 +109,7 @@ async def test_wrong_channel_is_ignored(cog):
 @pytest.mark.asyncio
 async def test_cog_load_requires_allowed_roles():
     cog = BanTrapCog(MockBot())
-    with patch("amc_peripheral.bot.ban_trap_cog.BAN_TRAP_ALLOWED_ROLE_IDS", set()):
+    with patch("amc_peripheral.malkuth.cog.BAN_TRAP_ALLOWED_ROLE_IDS", set()):
         with pytest.raises(RuntimeError, match="must not be empty"):
             await cog.cog_load()
 
@@ -190,8 +190,8 @@ async def test_concurrent_messages_deduped(cog):
 
 @pytest.mark.asyncio
 async def test_auto_delete_announcement(cog):
-    with patch("amc_peripheral.bot.ban_trap_cog.BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT", True), \
-         patch("amc_peripheral.bot.ban_trap_cog.BAN_TRAP_DELETE_DELAY_SECONDS", 5):
+    with patch("amc_peripheral.malkuth.cog.BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT", True), \
+         patch("amc_peripheral.malkuth.cog.BAN_TRAP_DELETE_DELAY_SECONDS", 5):
         message = MagicMock()
         message.author = MagicMock()
         message.author.id = 3
