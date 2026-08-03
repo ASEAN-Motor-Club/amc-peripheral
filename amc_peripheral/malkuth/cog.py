@@ -1,6 +1,7 @@
 import logging
 from asyncio import Lock
 
+import discord
 from discord.ext import commands
 
 from .settings import (
@@ -76,7 +77,7 @@ class BanTrapCog(commands.Cog):
                         reason="ban trap",
                         delete_message_seconds=BAN_TRAP_CLEANUP_WINDOW_SECONDS,
                     )
-                except Exception as e:
+                except discord.HTTPException as e:
                     # Don't announce a ban that didn't happen. The bot may lack
                     # Ban Members, or the target may outrank it (owner/admin).
                     log.warning("Failed to ban %s (id=%s): %s", target, author_id, e)
@@ -86,7 +87,7 @@ class BanTrapCog(commands.Cog):
                         sent = await message.channel.send(BAN_TRAP_ANNOUNCEMENT)
                         if BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT and sent:
                             await sent.delete(delay=BAN_TRAP_DELETE_DELAY_SECONDS)
-                    except Exception as e:
+                    except discord.HTTPException as e:
                         log.debug("Failed to post announcement: %s", e)
         finally:
             # Drop the per-author lock entry once we're done with it.

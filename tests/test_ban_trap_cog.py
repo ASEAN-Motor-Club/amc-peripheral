@@ -6,7 +6,9 @@ import discord
 from discord.ext import commands
 from unittest.mock import AsyncMock, MagicMock, patch
 
-os.environ.setdefault("BAN_TRAP_ALLOWED_ROLE_IDS", "1395460420189421713,1496482029892669500")
+os.environ.setdefault(
+    "BAN_TRAP_ALLOWED_ROLE_IDS", "1395460420189421713,1496482029892669500"
+)
 os.environ.setdefault("BAN_TRAP_CHANNEL_ID", "1529987241278177352")
 os.environ.setdefault("BAN_TRAP_ANNOUNCEMENT", "My apologies, but they had to go.")
 os.environ.setdefault("BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT", "0")
@@ -204,8 +206,10 @@ async def test_concurrent_messages_deduped(cog):
 
 @pytest.mark.asyncio
 async def test_auto_delete_announcement(cog):
-    with patch("amc_peripheral.malkuth.cog.BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT", True), \
-         patch("amc_peripheral.malkuth.cog.BAN_TRAP_DELETE_DELAY_SECONDS", 5):
+    with (
+        patch("amc_peripheral.malkuth.cog.BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT", True),
+        patch("amc_peripheral.malkuth.cog.BAN_TRAP_DELETE_DELAY_SECONDS", 5),
+    ):
         message = MagicMock()
         message.author = MagicMock()
         message.author.id = 3
@@ -263,7 +267,9 @@ async def test_ban_failure_is_handled_without_crash(cog):
     message.guild.get_member.return_value = None
     message.guild.fetch_member.side_effect = Exception("not cached")
     # e.g. the bot lacks Ban Members, or the target outranks it
-    message.guild.ban = AsyncMock(side_effect=Exception("Missing Permissions"))
+    message.guild.ban = AsyncMock(
+        side_effect=discord.HTTPException(MagicMock(), "Missing Permissions")
+    )
     message.channel.send.return_value = MagicMock()
 
     # Must not raise, and must not announce a ban that didn't happen.
