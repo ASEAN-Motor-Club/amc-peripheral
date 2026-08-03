@@ -119,6 +119,7 @@ async def test_exempt_role_skips_ban(cog):
     message = MagicMock()
     message.author = MagicMock()
     message.author.id = 1
+    message.webhook_id = None
     message.guild = MagicMock()
     message.guild.id = 1341775494026231859
     message.channel = MagicMock()
@@ -138,6 +139,7 @@ async def test_non_exempt_bans_and_announces(cog):
     message = MagicMock()
     message.author = MagicMock()
     message.author.id = 2
+    message.webhook_id = None
     message.guild = MagicMock()
     message.guild.id = 1341775494026231859
     message.channel = AsyncMock()
@@ -165,6 +167,7 @@ async def test_concurrent_messages_deduped(cog):
     message = MagicMock()
     message.author = MagicMock()
     message.author.id = 7
+    message.webhook_id = None
     message.guild = MagicMock()
     message.guild.id = 1341775494026231859
     message.channel = AsyncMock()
@@ -172,20 +175,31 @@ async def test_concurrent_messages_deduped(cog):
 
     message.guild.get_member.return_value = None
     message.guild.fetch_member.side_effect = Exception("not cached")
-    message.guild.ban = AsyncMock()
 
-    sent = MagicMock()
-    sent.delete = AsyncMock()
-    message.channel.send.return_value = sent
+    # Replace the ban with one that genuinely suspends (like the real network
+    # call), so the second message arrives while the first holds the lock.
+    started = asyncio.Event()
+    release = asyncio.Event()
 
-    # concurrency smoke: overlapping messages should not crash or double-execute critically
-    await asyncio.gather(
-        cog.on_message(message),
-        cog.on_message(message),
-    )
+    async def slow_ban(*args, **kwargs):
+        started.set()
+        await release.wait()
 
-    assert message.guild.ban.call_count >= 1
-    assert message.channel.send.call_count >= 1
+    message.guild.ban = AsyncMock(side_effect=slow_ban)
+
+    first = asyncio.create_task(cog.on_message(message))
+    await started.wait()  # first coroutine has the lock and is mid-ban
+
+    # Second message from the same author while the first is still processing.
+    await cog.on_message(message)
+    assert message.guild.ban.call_count == 1
+    assert message.channel.send.call_count == 0
+
+    release.set()
+    await first
+    assert message.guild.ban.call_count == 1
+    assert message.channel.send.call_count == 1
+    assert 7 not in cog._processing
 
 
 @pytest.mark.asyncio
@@ -195,6 +209,7 @@ async def test_auto_delete_announcement(cog):
         message = MagicMock()
         message.author = MagicMock()
         message.author.id = 3
+        message.webhook_id = None
         message.guild = MagicMock()
         message.guild.id = 1341775494026231859
         message.channel = AsyncMock()
@@ -210,3 +225,49 @@ async def test_auto_delete_announcement(cog):
 
         await cog.on_message(message)
         sent.delete.assert_called_once_with(delay=5)
+
+
+@pytest.mark.asyncio
+async def test_webhook_message_is_ignored(cog):
+    message = MagicMock()
+    message.author = MagicMock()
+    message.author.id = 8
+    message.webhook_id = 12345  # webhook messages have no banable author
+    message.guild = MagicMock()
+    message.guild.id = 1341775494026231859
+    message.channel = AsyncMock()
+    message.channel.id = 1529987241278177352
+
+    message.guild.ban = AsyncMock()
+    message.guild.get_member.return_value = None
+    message.guild.fetch_member.side_effect = Exception("not cached")
+    message.channel.send.return_value = MagicMock()
+
+    await cog.on_message(message)
+    message.guild.get_member.assert_not_called()
+    message.guild.ban.assert_not_called()
+    message.channel.send.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ban_failure_is_handled_without_crash(cog):
+    message = MagicMock()
+    message.author = MagicMock()
+    message.author.id = 9
+    message.webhook_id = None
+    message.guild = MagicMock()
+    message.guild.id = 1341775494026231859
+    message.channel = AsyncMock()
+    message.channel.id = 1529987241278177352
+
+    message.guild.get_member.return_value = None
+    message.guild.fetch_member.side_effect = Exception("not cached")
+    # e.g. the bot lacks Ban Members, or the target outranks it
+    message.guild.ban = AsyncMock(side_effect=Exception("Missing Permissions"))
+    message.channel.send.return_value = MagicMock()
+
+    # Must not raise, and must not announce a ban that didn't happen.
+    await cog.on_message(message)
+    message.guild.ban.assert_called_once()
+    message.channel.send.assert_not_called()
+    assert 9 not in cog._processing

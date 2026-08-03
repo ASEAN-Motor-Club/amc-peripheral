@@ -46,6 +46,9 @@ class BanTrapCog(commands.Cog):
             return
         if message.channel.id != BAN_TRAP_CHANNEL_ID:
             return
+        # Webhook messages have no banable author — ignore them.
+        if message.webhook_id:
+            return
 
         guild = message.guild
         author_id = message.author.id
@@ -65,20 +68,26 @@ class BanTrapCog(commands.Cog):
         lock = self._processing[author_id]
         if lock.locked():
             return
-        async with lock:
-            await guild.ban(
-                target,
-                reason="ban trap",
-                delete_message_seconds=BAN_TRAP_CLEANUP_WINDOW_SECONDS,
-            )
-            if BAN_TRAP_ANNOUNCEMENT:
-                sent = await message.channel.send(BAN_TRAP_ANNOUNCEMENT)
-                if BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT and sent:
+        try:
+            async with lock:
+                try:
+                    await guild.ban(
+                        target,
+                        reason="ban trap",
+                        delete_message_seconds=BAN_TRAP_CLEANUP_WINDOW_SECONDS,
+                    )
+                except Exception as e:
+                    # Don't announce a ban that didn't happen. The bot may lack
+                    # Ban Members, or the target may outrank it (owner/admin).
+                    log.warning("Failed to ban %s (id=%s): %s", target, author_id, e)
+                    return
+                if BAN_TRAP_ANNOUNCEMENT:
                     try:
-                        await sent.delete(delay=BAN_TRAP_DELETE_DELAY_SECONDS)
+                        sent = await message.channel.send(BAN_TRAP_ANNOUNCEMENT)
+                        if BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT and sent:
+                            await sent.delete(delay=BAN_TRAP_DELETE_DELAY_SECONDS)
                     except Exception as e:
-                        log.debug("Failed to delete announcement: %s", e)
-
-
-async def setup(bot: commands.Bot) -> None:
-    await bot.add_cog(BanTrapCog(bot))
+                        log.debug("Failed to post announcement: %s", e)
+        finally:
+            # Drop the per-author lock entry once we're done with it.
+            self._processing.pop(author_id, None)
