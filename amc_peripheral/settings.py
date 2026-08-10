@@ -34,7 +34,7 @@ YT_COOKIES_PATH = os.environ.get("YT_COOKIES_PATH")
 DENO_PATH = os.environ.get("DENO_PATH")
 
 # AI Config
-DEFAULT_AI_MODEL = os.environ.get("DEFAULT_AI_MODEL", "qwen/qwen3.6-flash")
+DEFAULT_AI_MODEL = os.environ.get("DEFAULT_AI_MODEL", "qwen/qwen3.7-flash")
 TRANSLATION_AI_MODEL = os.environ.get("TRANSLATION_AI_MODEL", "google/gemma-4-31b-it")
 LOCAL_TIMEZONE = os.environ.get("LOCAL_TIMEZONE", "Asia/Bangkok")
 
