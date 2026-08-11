@@ -190,6 +190,23 @@
                 default = "0.0.0.0";
                 description = "Address Icecast binds to.";
               };
+              tls = {
+                enable = lib.mkOption {
+                  type = lib.types.bool;
+                  default = true;
+                  description = "Enable a native TLS (HTTPS) listen socket on Icecast.";
+                };
+                port = lib.mkOption {
+                  type = lib.types.port;
+                  default = 8443;
+                  description = "Port Icecast serves the TLS (HTTPS) stream on.";
+                };
+                certFile = lib.mkOption {
+                  type = lib.types.str;
+                  default = "/var/lib/icecast/radio.combined.pem";
+                  description = "Combined PEM (public+private key) Icecast reads for TLS.";
+                };
+              };
             };
 
             # Nginx vhost domains
@@ -279,6 +296,9 @@
               ++ lib.optionals cfg.sharry.enable [
                 "d /var/lib/sharry 0750 sharry sharry -"
                 "d /var/lib/sharry/files 0750 sharry sharry -"
+              ]
+              ++ lib.optionals cfg.icecast.tls.enable [
+                "d ${builtins.dirOf cfg.icecast.tls.certFile} 0755 root root -"
               ];
 
             # Icecast streaming server
@@ -326,6 +346,63 @@
                   <password>${cfg.icecast.source.password}</password>
                   <hidden>1</hidden>
                 </mount>
+
+                ${lib.optionalString cfg.icecast.tls.enable ''
+                  <paths>
+                    <ssl-certificate>${cfg.icecast.tls.certFile}</ssl-certificate>
+                  </paths>
+
+                  <listen-socket>
+                    <port>${toString cfg.icecast.tls.port}</port>
+                    <bind-address>${cfg.icecast.listen.address}</bind-address>
+                    <ssl>1</ssl>
+                  </listen-socket>
+
+                  <http-headers>
+                    <header name="Access-Control-Allow-Origin" value="*" />
+                  </http-headers>
+                ''}
+              '';
+            };
+
+            # Icecast native TLS: combine ACME's separate cert+key into a single
+            # PEM (Icecast's <ssl-certificate> wants both in one file) and make it
+            # readable by the user Icecast drops to (nobody). Runs as root via
+            # preStart (the icecast unit has no User= override), so it can read
+            # /var/lib/acme and write the combined file before Icecast starts.
+            systemd.services.icecast.preStart = lib.mkIf cfg.icecast.tls.enable (lib.mkAfter ''
+              ${pkgs.coreutils}/bin/mkdir -p "$(dirname ${cfg.icecast.tls.certFile})"
+              if [ -r /var/lib/acme/${cfg.nginx.domains.radio}/fullchain.pem ] \
+                 && [ -r /var/lib/acme/${cfg.nginx.domains.radio}/key.pem ]; then
+                ${pkgs.coreutils}/bin/cat \
+                  /var/lib/acme/${cfg.nginx.domains.radio}/fullchain.pem \
+                  /var/lib/acme/${cfg.nginx.domains.radio}/key.pem \
+                  > ${cfg.icecast.tls.certFile}
+                ${pkgs.coreutils}/bin/chown nobody:nogroup ${cfg.icecast.tls.certFile}
+                ${pkgs.coreutils}/bin/chmod 600 ${cfg.icecast.tls.certFile}
+              fi
+            '');
+
+            # Rebuild the combined PEM + restart Icecast whenever ACME renews
+            # the radio cert (cert + key rotate together on renewal).
+            systemd.paths.icecast-cert-refresh = lib.mkIf cfg.icecast.tls.enable {
+              description = "Rebuild Icecast TLS bundle on ACME renewal";
+              wantedBy = ["multi-user.target"];
+              pathConfig.PathChanged = "/var/lib/acme/${cfg.nginx.domains.radio}/";
+            };
+            systemd.services.icecast-cert-refresh = lib.mkIf cfg.icecast.tls.enable {
+              description = "Client for icecast-cert-refresh.path";
+              wants = ["icecast.service"];
+              after = ["icecast.service"];
+              serviceConfig.Type = "oneshot";
+              script = ''
+                ${pkgs.coreutils}/bin/cat \
+                  /var/lib/acme/${cfg.nginx.domains.radio}/fullchain.pem \
+                  /var/lib/acme/${cfg.nginx.domains.radio}/key.pem \
+                  > ${cfg.icecast.tls.certFile}
+                ${pkgs.coreutils}/bin/chown nobody:nogroup ${cfg.icecast.tls.certFile}
+                ${pkgs.coreutils}/bin/chmod 600 ${cfg.icecast.tls.certFile}
+                ${pkgs.systemd}/bin/systemctl restart icecast.service
               '';
             };
 
