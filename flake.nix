@@ -567,6 +567,7 @@
                 Type = "simple";
                 Restart = "on-failure";
                 RestartSec = "10";
+                SyslogIdentifier = "amc-ban-trap";
                 EnvironmentFile = "${cfg.environmentFile}";
               };
               script = ''
