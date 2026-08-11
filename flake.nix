@@ -321,6 +321,18 @@
 
 
                 <mount>
+                  <mount-name>/stream.opus</mount-name>
+                  <username>source</username>
+                  <password>${cfg.icecast.source.password}</password>
+                  <max-listeners>500</max-listeners>
+                  <public>1</public>
+                  <stream-name>ASEAN Motor Club Radio (Opus)</stream-name>
+                  <stream-description>Your home for automotive enthusiasm in Southeast Asia</stream-description>
+                  <stream-url>https://aseanmotorclub.com/radio</stream-url>
+                  <genre>Automotive</genre>
+                </mount>
+
+                <mount>
                   <mount-name>/fallback</mount-name>
                   <username>source</username>
                   <password>${cfg.icecast.source.password}</password>
