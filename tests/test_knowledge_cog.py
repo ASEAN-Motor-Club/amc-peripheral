@@ -638,3 +638,72 @@ async def test_on_message_ignores_own_messages(knowledge_cog_with_ai):
 
     cog.ai_helper_discord.assert_not_called()
 
+
+# --- Long-term memory parity: Discord /bot recalls the same memory as in-game /bot ---
+
+
+@pytest.mark.asyncio
+async def test_retrieve_semantic_context_formats_memories():
+    """_retrieve_semantic_context returns formatted past conversations from ChromaDB."""
+    cog = KnowledgeCog(MagicMock())
+    mock_retrieval = MagicMock()
+    mock_retrieval.retrieve_relevant.return_value = [
+        {"timestamp": "2026-08-01T10:00:00", "player_name": "Alice", "message": "I love buses"},
+        {"timestamp": "2026-08-02T09:00:00", "player_name": "Alice", "message": "Steel Coils are heavy"},
+    ]
+    cog._memory_retrieval = mock_retrieval
+
+    result = await cog._retrieve_semantic_context("123", "what should I drive?")
+
+    assert mock_retrieval.retrieve_relevant.call_args.kwargs["player_id"] == "123"
+    assert mock_retrieval.retrieve_relevant.call_args.kwargs["query"] == "what should I drive?"
+    assert "[2026-08-01] Alice: I love buses" in result
+    assert "[2026-08-02] Alice: Steel Coils are heavy" in result
+
+
+@pytest.mark.asyncio
+async def test_retrieve_semantic_context_empty_without_retrieval():
+    """_retrieve_semantic_context returns '' when ChromaDB is unavailable or no matches."""
+    cog = KnowledgeCog(MagicMock())
+
+    # No retrieval configured
+    cog._memory_retrieval = None
+    assert await cog._retrieve_semantic_context("123", "hi") == ""
+
+    # Retrieval returns nothing
+    mock_retrieval = MagicMock()
+    mock_retrieval.retrieve_relevant.return_value = []
+    cog._memory_retrieval = mock_retrieval
+    assert await cog._retrieve_semantic_context("123", "hi") == ""
+
+
+@pytest.mark.asyncio
+async def test_ai_helper_discord_injects_semantic_memory():
+    """Discord /bot injects the player's long-term memory as context, same as in-game /bot."""
+    bot = MagicMock()
+    cog = KnowledgeCog(bot)
+    cog.knowledge_system_message = ""
+    cog._wiki_index = MagicMock()
+    cog._wiki_index.get_index = MagicMock(return_value="")
+    cog._retrieve_semantic_context = AsyncMock(
+        return_value="[2026-08-01] Alice: I love buses"
+    )
+    cog._call_llm_with_tools = AsyncMock(return_value="Bot response")
+
+    await cog.ai_helper_discord(
+        "Alice",
+        "do you remember my favourite vehicle?",
+        "",
+        generic=False,
+        player_id="123",
+    )
+
+    cog._retrieve_semantic_context.assert_awaited_once_with("123", "do you remember my favourite vehicle?")
+    args, _ = cog._call_llm_with_tools.call_args
+    messages = args[0]
+    combined = "\n".join(
+        m.get("content", "") for m in messages if m.get("role") == "user"
+    )
+    assert "Relevant past conversations:" in combined
+    assert "I love buses" in combined
+

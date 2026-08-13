@@ -267,6 +267,13 @@ class KnowledgeCog(commands.Cog):
     ):
         now = datetime.now(self.local_tz)
 
+        # Retrieve the speaker's long-term memory so the Discord /bot command,
+        # #ask-bot, and @mention paths answer from the SAME ChromaDB memory that
+        # the in-game /bot path uses (parity: write + recall across all entry points).
+        semantic_context = ""
+        if player_id:
+            semantic_context = await self._retrieve_semantic_context(player_id, question)
+
         KNOWLEDGE_MAX_CHARS = 20000
 
         # Parallelize wiki index fetching
@@ -438,6 +445,8 @@ class KnowledgeCog(commands.Cog):
                 "content": f"## Context\nThe current date and time (in Bangkok GMT+7 timezone) is: {now.strftime('%A, %Y-%m-%d %H:%M')}",
             },
         ]
+        if semantic_context:
+            prev_messages_str = f"Relevant past conversations:\n{semantic_context}\n\nRecent messages:\n{prev_messages_str}" if prev_messages_str else f"Relevant past conversations:\n{semantic_context}"
         if prev_messages_str:
             messages.append(
                 {
@@ -1898,24 +1907,9 @@ class KnowledgeCog(commands.Cog):
                     else ""
                 )
 
-                semantic_context = ""
-                if self._memory_retrieval:
-                    try:
-                        memories = await asyncio.to_thread(
-                            self._memory_retrieval.retrieve_relevant,
-                            player_id=player_id,
-                            query=message,
-                            n_results=3,
-                        )
-                        if memories:
-                            semantic_context = "\n".join(
-                                [
-                                    f"[{m['timestamp'][:10]}] {m['player_name']}: {m['message']}"
-                                    for m in memories
-                                ]
-                            )
-                    except Exception as e:
-                        log.warning(f"Failed to retrieve semantic memories: {e}")
+                semantic_context = await self._retrieve_semantic_context(
+                    player_id, message
+                )
 
                 await self._handle_ingame_bot_command(
                     player_name=player_name,
@@ -2105,6 +2099,34 @@ class KnowledgeCog(commands.Cog):
                 )
         except Exception as e:
             log.warning(f"Wiki ingest failed for {player_name}: {e}")
+
+    async def _retrieve_semantic_context(
+        self, player_id: str, query: str, n_results: int = 3
+    ) -> str:
+        """Retrieve a player's relevant past conversations from ChromaDB long-term memory.
+
+        Shared by the in-game `/bot` path and the Discord `/bot`/`#ask-bot`/mention
+        paths so every entry point answers from the *same* memory the bot writes to.
+        Returns an empty string when retrieval is unavailable or nothing matches.
+        """
+        if not self._memory_retrieval or not player_id:
+            return ""
+        try:
+            memories = await asyncio.to_thread(
+                self._memory_retrieval.retrieve_relevant,
+                player_id=player_id,
+                query=query,
+                n_results=n_results,
+            )
+            if not memories:
+                return ""
+            return "\n".join(
+                f"[{m['timestamp'][:10]}] {m['player_name']}: {m['message']}"
+                for m in memories
+            )
+        except Exception as e:
+            log.warning(f"Failed to retrieve semantic memories: {e}")
+            return ""
 
     async def _handle_ingame_bot_command(
         self,
