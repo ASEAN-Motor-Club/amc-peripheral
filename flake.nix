@@ -214,6 +214,11 @@
                 default = "mods.aseanmotorclub.com";
                 description = "Domain for the tire mod creator web app.";
               };
+              vehicles = lib.mkOption {
+                type = lib.types.str;
+                default = "vehicles.aseanmotorclub.com";
+                description = "Domain for the Motor Town vehicle 3D viewer.";
+              };
             };
 
             # Radio web UI package
@@ -242,6 +247,13 @@
               type = lib.types.package;
               default = (import ./tire-web {inherit pkgs;}).package;
               description = "Tire mod creator static build package.";
+            };
+
+            # Motor Town vehicle 3D viewer
+            mtViewer.package = lib.mkOption {
+              type = lib.types.package;
+              default = (import ./mt-viewer {inherit pkgs;}).package;
+              description = "Motor Town vehicle 3D viewer static build package.";
             };
 
             # Sharry file sharing service
@@ -275,6 +287,7 @@
                 "L+ /var/www/nix-static/gov-web - - - - ${cfg.govWeb.package}"
                 "L+ /var/www/nix-static/tire-web - - - - ${cfg.tireWeb.package}"
                 "L+ /var/www/nix-static/code-web - - - - ${cfg.codeWeb.package}"
+                "L+ /var/www/nix-static/mt-viewer - - - - ${cfg.mtViewer.package}"
               ]
               ++ lib.optionals cfg.sharry.enable [
                 "d /var/lib/sharry 0750 sharry sharry -"
@@ -418,6 +431,19 @@
               forceSSL = true;
               locations."/" = {
                 root = "/var/www/nix-static/gov-web";
+                tryFiles = "$uri $uri/index.html /index.html";
+                extraConfig = ''
+                  add_header Cache-Control "public, max-age=3600";
+                '';
+              };
+            };
+
+            # Motor Town Vehicle 3D Viewer (static site)
+            services.nginx.virtualHosts.${cfg.nginx.domains.vehicles} = {
+              enableACME = true;
+              forceSSL = true;
+              locations."/" = {
+                root = "/var/www/nix-static/mt-viewer";
                 tryFiles = "$uri $uri/index.html /index.html";
                 extraConfig = ''
                   add_header Cache-Control "public, max-age=3600";
