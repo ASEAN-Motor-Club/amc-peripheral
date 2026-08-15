@@ -305,122 +305,7 @@ class KnowledgeCog(commands.Cog):
             system_message += f"\n\n## Wiki Knowledge Index\n{wiki_index_str}"
 
         model = DEFAULT_AI_MODEL
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "create_poll",
-                    "description": "Creates a poll in the Discord channel.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "question": {"type": "string"},
-                            "options": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
-                            "channel_id": {"type": "string"},
-                        },
-                        "required": ["question", "options"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "create_scheduled_event",
-                    "description": "Creates a scheduled event in the Discord server.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "description": {"type": "string"},
-                            "location": {"type": "string"},
-                            "start_time": {"type": "string", "format": "date-time"},
-                            "end_time": {"type": "string", "format": "date-time"},
-                            "timezone": {"type": "string"},
-                        },
-                        "required": ["name", "start_time", "timezone"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "lookup_vehicle",
-                    "description": "Look up detailed specs for a vehicle by name. Returns type, cost, weight, engine, cargo space, drivetrain, and capabilities.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "name": {
-                                "type": "string",
-                                "description": "Vehicle name or partial name (e.g. 'Tronko', 'Gosan')",
-                            }
-                        },
-                        "required": ["name"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "lookup_cargo",
-                    "description": "Look up detailed specs for a cargo type by name. Returns weight, payment, compatible vehicle types, and production chains.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "name": {
-                                "type": "string",
-                                "description": "Cargo name or partial name (e.g. 'Steel Coil', 'SmallBox')",
-                            }
-                        },
-                        "required": ["name"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "compare_vehicles",
-                    "description": "Compare multiple vehicles side-by-side. Returns a table of key specs for each vehicle.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "names": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "List of vehicle names to compare (e.g. ['Tronko', 'Maity'])",
-                            }
-                        },
-                        "required": ["names"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_current_subsidies",
-                    "description": "Get the current active government subsidies for cargo deliveries. Returns subsidy rules including cargo types, reward percentages, and source/destination requirements.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": [],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_server_commands",
-                    "description": "Get a list of all available server-side commands that players can use in-game. Returns command names, shortcuts/aliases, descriptions, and categories.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": [],
-                    },
-                },
-            },
-        ]
+        tools = self._get_shared_tool_definitions()
 
         # Inject economy tools if user has Financial Minister role
         from amc_peripheral.settings import FINANCIAL_MINISTER_ROLE_ID
@@ -434,9 +319,6 @@ class KnowledgeCog(commands.Cog):
                 )
             ):
                 tools.extend(economy_cog.get_tool_definitions())
-
-        # Inject wiki tools
-        tools.extend(self._get_wiki_tool_definitions())
 
         messages = [
             {"role": "system", "content": system_message},
@@ -537,116 +419,7 @@ class KnowledgeCog(commands.Cog):
             ]
         )
 
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_currently_playing_song",
-                    "description": "Get the currently playing song on the radio station. Returns the song title and who requested it.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": [],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "lookup_vehicle",
-                    "description": "Look up detailed specs for a vehicle by name. Returns type, cost, weight, engine, cargo space, drivetrain, and capabilities.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "name": {
-                                "type": "string",
-                                "description": "Vehicle name or partial name (e.g. 'Tronko', 'Gosan')",
-                            }
-                        },
-                        "required": ["name"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "lookup_cargo",
-                    "description": "Look up detailed specs for a cargo type by name. Returns weight, payment, compatible vehicle types, and production chains.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "name": {
-                                "type": "string",
-                                "description": "Cargo name or partial name (e.g. 'Steel Coil', 'SmallBox')",
-                            }
-                        },
-                        "required": ["name"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "compare_vehicles",
-                    "description": "Compare multiple vehicles side-by-side. Returns a table of key specs for each vehicle.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "names": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "List of vehicle names to compare (e.g. ['Tronko', 'Maity'])",
-                            }
-                        },
-                        "required": ["names"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_current_subsidies",
-                    "description": "Get the current active government subsidies for cargo deliveries. Returns subsidy rules including cargo types, reward percentages, and source/destination requirements.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": [],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_server_commands",
-                    "description": "Get a list of all available server-side commands that players can use in-game. Returns command names, shortcuts/aliases, descriptions, and categories.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": [],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "query_backend_database",
-                    "description": "Query the AMC backend PostgreSQL database with SELECT. Player stats, deliveries, race results, teams, jobs, ministry data. Read-only, max 100 rows.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "sql": {
-                                "type": "string",
-                                "description": "PostgreSQL SELECT query to execute",
-                            }
-                        },
-                        "required": ["sql"],
-                    },
-                },
-            },
-        ]
-
-        # Inject wiki tools
-        tools.extend(self._get_wiki_tool_definitions())
+        tools = self._get_shared_tool_definitions()
 
         return await self._call_llm_with_tools(
             messages,
@@ -731,117 +504,84 @@ class KnowledgeCog(commands.Cog):
 
     # --- Agentic Loop Infrastructure ---
 
-    def _get_wiki_tool_definitions(self) -> list[dict]:
-        """Return wiki + ask_game_knowledge tool definitions for the LLM."""
-        tools = [
+    def _get_shared_tool_definitions(self) -> list[dict]:
+        """Return consolidated tool definitions for the LLM.
+
+        3 tools instead of ~12: run (data queries), wiki (knowledge), discord (admin actions).
+        """
+        return [
             {
                 "type": "function",
                 "function": {
-                    "name": "ask_game_knowledge",
-                    "description": "Ask the game knowledge subagent a question about Motor Town gameplay, vehicles, cargo, player stats, subsidies, server commands, or any other game-related topic. Always use this instead of guessing game facts.",
+                    "name": "run",
+                    "description": "Execute a data query. Verbs: vehicle <name>, cargo <name>, "
+                                   "compare <v1,v2,...>, subsidies, commands, server (status/players), "
+                                   "song (currently playing), db <SQL> (SELECT only). "
+                                   "Example: 'vehicle Tronko' returns specs.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "question": {
+                            "command": {
                                 "type": "string",
-                                "description": "The game-related question to research",
-                            },
+                                "description": "The command string. First word = verb, rest = args. "
+                                               "e.g. 'vehicle Tronko', 'cargo Steel Coil', 'compare Tronko, Maity', "
+                                               "'subsidies', 'commands', 'server', 'song', 'db SELECT ...'",
+                            }
                         },
-                        "required": ["question"],
+                        "required": ["command"],
                     },
                 },
             },
             {
                 "type": "function",
                 "function": {
-                    "name": "lookup_wiki",
-                    "description": "Look up wiki information. Use mode='page' to read a specific page by title/slug, or mode='search' to find pages semantically related to a query.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Page title/slug (for page mode) or search query (for search mode)",
-                            },
-                            "mode": {
-                                "type": "string",
-                                "enum": ["page", "search"],
-                                "description": "'page' to read a specific page, 'search' to find relevant pages (default: 'search')",
-                            },
-                            "n_results": {
-                                "type": "integer",
-                                "description": "Number of search results (search mode only, default 3, max 5)",
-                            },
-                        },
-                        "required": ["query"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "list_wiki_pages",
-                    "description": "List wiki pages by category or with a keyword filter. Use this to browse what the wiki knows about.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "category": {
-                                "type": "string",
-                                "description": "Optional category filter (e.g. 'player', 'vehicle', 'concept', 'event')",
-                            },
-                            "keyword": {
-                                "type": "string",
-                                "description": "Optional keyword to filter titles/content",
-                            },
-                            "limit": {
-                                "type": "integer",
-                                "description": "Max pages to return (default 10)",
-                            },
-                        },
-                        "required": [],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "update_wiki",
-                    "description": "Create/update a wiki page or add a cross-reference link between pages. Use action='write' to create/update pages, or action='link' to link pages together.",
+                    "name": "wiki",
+                    "description": "Annie's personal wiki. Actions: search (semantic), read (by title), "
+                                   "list (browse), write (create/update page), link (cross-reference), "
+                                   "ask (game knowledge research), summary (stats), profile (your page).",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "action": {
                                 "type": "string",
-                                "enum": ["write", "link"],
-                                "description": "'write' to create/update a page, 'link' to add a cross-reference",
+                                "enum": ["search", "read", "list", "write", "link", "ask", "summary", "profile"],
+                                "description": "What to do with the wiki",
+                            },
+                            "query": {
+                                "type": "string",
+                                "description": "Search query or page title (for search/read/ask actions)",
                             },
                             "title": {
                                 "type": "string",
-                                "description": "Page title (write action, e.g. 'player:freemanlatif', 'concept:steel-coil-curse')",
+                                "description": "Page title slug e.g. 'player:freeman' (for write action)",
                             },
                             "category": {
                                 "type": "string",
-                                "description": "Page category (write action, e.g. 'player', 'vehicle', 'location', 'concept')",
+                                "description": "Page category e.g. 'player', 'vehicle', 'concept' (for list/write)",
                             },
                             "content": {
                                 "type": "string",
-                                "description": "The page content (write action)",
+                                "description": "Page body content (for write action)",
                             },
                             "summary": {
                                 "type": "string",
-                                "description": "A brief summary (write action)",
+                                "description": "Brief summary (for write action)",
                             },
                             "from_page": {
                                 "type": "string",
-                                "description": "Source page title/slug (link action)",
+                                "description": "Source page slug (for link action)",
                             },
                             "to_page": {
                                 "type": "string",
-                                "description": "Target page title/slug (link action)",
+                                "description": "Target page slug (for link action)",
                             },
                             "link_type": {
                                 "type": "string",
-                                "description": "Link type (link action, default: 'mentions')",
+                                "description": "Link type (for link, default 'mentions')",
+                            },
+                            "n_results": {
+                                "type": "integer",
+                                "description": "Number of search results (search mode, default 3)",
                             },
                         },
                         "required": ["action"],
@@ -851,29 +591,56 @@ class KnowledgeCog(commands.Cog):
             {
                 "type": "function",
                 "function": {
-                    "name": "get_wiki_summary",
-                    "description": "Get a brief summary of the wiki contents — total pages, categories, and recent updates.",
+                    "name": "discord",
+                    "description": "Discord server actions (only in Discord, not in-game). "
+                                   "Actions: poll (create a poll), event (create a scheduled event).",
                     "parameters": {
                         "type": "object",
-                        "properties": {},
-                        "required": [],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_my_wiki_profile",
-                    "description": "Get the wiki profile page for the current speaker. Use this when someone asks 'what do you know about me?', 'show me my profile', or 'do you remember me?'. Takes no arguments — the correct player_id is injected automatically.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": [],
+                        "properties": {
+                            "action": {
+                                "type": "string",
+                                "enum": ["poll", "event"],
+                                "description": "What Discord action to perform",
+                            },
+                            "question": {
+                                "type": "string",
+                                "description": "Poll question (for poll action)",
+                            },
+                            "options": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Poll options list (for poll action)",
+                            },
+                            "name": {
+                                "type": "string",
+                                "description": "Event name (for event action)",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Event description (for event action)",
+                            },
+                            "location": {
+                                "type": "string",
+                                "description": "Event location (for event action)",
+                            },
+                            "start_time": {
+                                "type": "string",
+                                "description": "Start time ISO format (for event action)",
+                            },
+                            "end_time": {
+                                "type": "string",
+                                "description": "End time ISO format (for event action)",
+                            },
+                            "timezone": {
+                                "type": "string",
+                                "description": "Timezone (for event action)",
+                            },
+                        },
+                        "required": ["action"],
                     },
                 },
             },
         ]
-        return tools
 
     async def _call_llm_with_tools(
         self,
@@ -1011,13 +778,9 @@ class KnowledgeCog(commands.Cog):
     def _get_tool_status_message(self, tool_name: str) -> str:
         """Return user-friendly status message for a tool."""
         tool_messages = {
-            "query_game_database": "Crunching the numbers...",
-            "query_backend_database": "Querying the backend database...",
-            "get_current_subsidies": "Checking subsidy rates...",
-            "get_server_commands": "Looking up commands...",
-            "get_currently_playing_song": "Checking the radio...",
-            "create_poll": "Creating your poll...",
-            "create_scheduled_event": "Setting up the event...",
+            "run": "Running your query...",
+            "wiki": "Looking into that...",
+            "discord": "Working on it...",
             "manage_subsidy_rules_list": "Fetching subsidy rules...",
             "manage_subsidy_rule_create": "Creating subsidy rule...",
             "manage_subsidy_rule_update": "Updating subsidy rule...",
@@ -1025,15 +788,7 @@ class KnowledgeCog(commands.Cog):
             "manage_subsidy_rule_reorder": "Reordering subsidy rules...",
             "manage_job_config_get": "Fetching job configuration...",
             "manage_job_config_update": "Updating job configuration...",
-            "ask_game_knowledge": "Researching game knowledge...",
-            "lookup_wiki": "Looking up wiki...",
-            "list_wiki_pages": "Browsing wiki pages...",
-            "update_wiki": "Updating wiki...",
-            "get_wiki_summary": "Checking wiki stats...",
-            "get_my_wiki_profile": "Looking up your profile...",
-            "lookup_vehicle": "Looking up vehicle specs...",
-            "lookup_cargo": "Looking up cargo details...",
-            "compare_vehicles": "Comparing vehicles...",
+            "query_game_database": "Crunching the numbers...",
         }
         return tool_messages.get(tool_name, f"Processing ({tool_name})...")
 
@@ -1112,177 +867,44 @@ class KnowledgeCog(commands.Cog):
         interaction: Optional[discord.Interaction] = None,
         player_id: Optional[str] = None,
     ) -> str:
-        """
-        Execute a knowledge bot tool.
-
-        Args:
-            function_name: Name of the tool
-            arguments: Tool arguments
-
-        Returns:
-            Tool result as string
-        """
+        """Execute a knowledge bot tool — dispatches to run/wiki/discord/economy handlers."""
         try:
-            if function_name == "create_poll":
-                question = arguments.get("question") or ""
-                options = arguments.get("options") or []
-                res = await actual_discord_poll_creator(
-                    self.bot,
-                    question,
-                    options,
-                    arguments.get("channel_id"),
+            if function_name == "run":
+                return await self._execute_run(
+                    arguments.get("command", ""), interaction=interaction
                 )
-                return res
 
-            elif function_name == "create_scheduled_event":
-                # Only allow admins to create events
-                # pyrefly: ignore [missing-attribute]
-                if (
-                    not interaction
-                    or not isinstance(interaction.user, discord.Member)
-                    or not interaction.user.guild_permissions.administrator
-                ):
-                    return (
-                        "Error: You do not have permission to create scheduled events."
+            elif function_name == "wiki":
+                return await self._execute_wiki(arguments, player_id=player_id)
+
+            elif function_name == "discord":
+                action = arguments.get("action", "")
+                if action == "poll":
+                    question = arguments.get("question") or ""
+                    options = arguments.get("options") or []
+                    return await actual_discord_poll_creator(
+                        self.bot, question, options, None
                     )
-
-                res = await actual_discord_event_creator(
-                    interaction.guild,
-                    arguments.get("name"),
-                    arguments.get("description"),
-                    arguments.get("location"),
-                    arguments.get("start_time"),
-                    arguments.get("end_time"),
-                    arguments.get("timezone"),
-                )
-                return res
-
-            elif function_name == "query_game_database":
-                sql = arguments.get("sql")
-                if not sql:
-                    return "Database query failed: sql parameter required"
-
-                result = game_db.execute_raw_query(sql)
-
-                # Handle errors
-                if "error" in result:
-                    return f"Database query failed: {result['error']}"
-
-                # Format results for better LLM comprehension
-                results = result.get("results", [])
-                count = result.get("count", 0)
-                truncated = result.get("truncated", False)
-
-                if count == 0:
-                    return "Query executed successfully but returned no results."
-
-                # Format as readable output
-                formatted_output = f"Query returned {count} result(s):\n\n"
-                formatted_output += json.dumps(results, indent=2)
-
-                if truncated:
-                    formatted_output += (
-                        f"\n\nNote: Results were limited to {count} rows."
+                elif action == "event":
+                    if (
+                        not interaction
+                        or not isinstance(interaction.user, discord.Member)
+                        or not interaction.user.guild_permissions.administrator
+                    ):
+                        return "Error: You do not have permission to create scheduled events."
+                    return await actual_discord_event_creator(
+                        interaction.guild,
+                        arguments.get("name"),
+                        arguments.get("description"),
+                        arguments.get("location"),
+                        arguments.get("start_time"),
+                        arguments.get("end_time"),
+                        arguments.get("timezone"),
                     )
+                else:
+                    return f"Error: Unknown discord action '{action}'."
 
-                return formatted_output
-
-            elif function_name == "lookup_vehicle":
-                name = arguments.get("name", "")
-                if not name:
-                    return "Error: 'name' is required."
-                result = await asyncio.to_thread(game_db.lookup_vehicle, name)
-                if "error" in result:
-                    return result["error"]
-                return json.dumps(result, indent=2)
-
-            elif function_name == "lookup_cargo":
-                name = arguments.get("name", "")
-                if not name:
-                    return "Error: 'name' is required."
-                result = await asyncio.to_thread(game_db.lookup_cargo, name)
-                if "error" in result:
-                    return result["error"]
-                return json.dumps(result, indent=2)
-
-            elif function_name == "compare_vehicles":
-                names = arguments.get("names", [])
-                if not names:
-                    return "Error: 'names' list is required."
-                result = await asyncio.to_thread(game_db.compare_vehicles, names)
-                if not result:
-                    return "No matching vehicles found."
-                return json.dumps(result, indent=2)
-
-            elif function_name == "get_currently_playing_song":
-                cache_key = "currently_playing_song"
-                now = time.monotonic()
-                if cache_key in self._api_cache:
-                    ts, data = self._api_cache[cache_key]
-                    if now - ts < 30:
-                        return data
-                from amc_peripheral.radio.radio_server import get_current_song
-
-                current_song = await get_current_song(self.bot.http_session)
-                result = (
-                    current_song
-                    or "No song is currently playing or unable to fetch song info."
-                )
-                self._api_cache[cache_key] = (now, result)
-                return result
-
-            elif function_name == "get_current_subsidies":
-                raw = await self._cached_api_get(f"{BACKEND_API_URL}/api/subsidies/")
-                try:
-                    data = json.loads(raw)
-                    return data.get(
-                        "subsidies_text", "No subsidy information available."
-                    )
-                except json.JSONDecodeError:
-                    return raw
-
-            elif function_name == "get_server_commands":
-                raw = await self._cached_api_get(f"{BACKEND_API_URL}/api/commands/")
-                try:
-                    commands_data = json.loads(raw)
-                except json.JSONDecodeError:
-                    return "Failed to parse server commands."
-
-                # Format commands by category for better readability
-                formatted = "Available server commands:\n\n"
-
-                # Group by category
-                from itertools import groupby
-
-                for category, cmds in groupby(
-                    commands_data, key=lambda x: x.get("category", "General")
-                ):
-                    formatted += f"## {category}\n"
-                    for cmd in cmds:
-                        cmd_name = cmd["command"]
-                        shorthand = cmd.get("shorthand")
-                        description = cmd.get("description", "")
-
-                        if shorthand:
-                            formatted += f"- **{cmd_name}** (or **{shorthand}**): {description}\n"
-                        else:
-                            formatted += f"- **{cmd_name}**: {description}\n"
-                    formatted += "\n"
-
-                return formatted
-
-            elif function_name == "query_backend_database":
-                sql = arguments.get("sql")
-                if not sql:
-                    return "Backend database query failed: sql parameter required"
-
-                result = await asyncio.to_thread(backend_db.execute_query, sql)
-
-                if "error" in result:
-                    return f"Backend database query failed: {result['error']}"
-
-                return backend_db.format_results(result)
-
+            # Economy tools still dispatched by EconomyCog
             elif function_name.startswith("manage_subsidy") or function_name.startswith(
                 "manage_job_config"
             ):
@@ -1293,166 +915,26 @@ class KnowledgeCog(commands.Cog):
                     )
                 return "Error: Economy management is not available."
 
-            # --- Wiki tools ---
-            elif function_name == "ask_game_knowledge":
-                from amc_peripheral.radio.game_knowledge import ask_game_knowledge
-
-                question = arguments.get("question", "")
-                if not self._wiki_storage:
-                    return "Wiki storage not available."
-                try:
-                    answer = await ask_game_knowledge(
-                        openai_client=self.openai_client_openrouter,
-                        wiki_storage=self._wiki_storage,
-                        wiki_retrieval=self._wiki_retrieval,
-                        wiki_index=self._wiki_index,
-                        game_schema=self.game_schema_description,
-                        question=question,
-                        http_session=self.bot.http_session,
+            # Legacy query_game_database (kept for backward compat)
+            elif function_name == "query_game_database":
+                sql = arguments.get("sql")
+                if not sql:
+                    return "Database query failed: sql parameter required"
+                result = game_db.execute_raw_query(sql)
+                if "error" in result:
+                    return f"Database query failed: {result['error']}"
+                results = result.get("results", [])
+                count = result.get("count", 0)
+                truncated = result.get("truncated", False)
+                if count == 0:
+                    return "Query executed successfully but returned no results."
+                formatted_output = f"Query returned {count} result(s):\n\n"
+                formatted_output += json.dumps(results, indent=2)
+                if truncated:
+                    formatted_output += (
+                        f"\n\nNote: Results were limited to {count} rows."
                     )
-                    return answer
-                except Exception as e:
-                    return f"Failed to get game knowledge: {e}"
-
-            elif function_name == "lookup_wiki":
-                mode = arguments.get("mode", "search")
-                query = arguments.get("query", "")
-                if not query:
-                    return "Error: 'query' is required."
-
-                if mode == "page":
-                    if not self._wiki_storage:
-                        return "Wiki storage not available."
-                    page = self._wiki_storage.get_page_by_slug(query)
-                    if not page:
-                        page = self._wiki_storage.get_page_by_title(query)
-                    if not page:
-                        return f"No wiki page found for '{query}'."
-                    return (
-                        f"--- {page['title']} ---\n"
-                        f"Category: {page['category']}\n"
-                        f"Summary: {page.get('summary', '')}\n"
-                        f"Content:\n{page['content']}"
-                    )
-                else:
-                    n_results = arguments.get("n_results", 3)
-                    if not self._wiki_retrieval:
-                        return "Wiki retrieval not available."
-                    results = await asyncio.to_thread(self._wiki_retrieval.search, query, n_results=n_results)
-                    if not results:
-                        return f"No wiki pages found for '{query}'."
-                    lines = []
-                    for r in results:
-                        lines.append(  # pyrefly: ignore [bad-argument-type]
-                            f"- {r.get('title', 'Unknown')} ({r.get('category', 'unknown')}): "
-                            f"{r.get('content', '')[:200]}..."
-                        )
-                    return "Wiki search results:\n" + "\n".join(lines)
-
-            elif function_name == "list_wiki_pages":
-                category = arguments.get("category") or None
-                keyword = arguments.get("keyword") or None
-                limit = arguments.get("limit", 10)
-                if not self._wiki_storage:
-                    return "Wiki storage not available."
-                pages = self._wiki_storage.list_pages(
-                    category=category, keyword=keyword, limit=limit
-                )
-                if not pages:
-                    return "No wiki pages found."
-                lines = []
-                for p in pages:
-                    lines.append(  # pyrefly: ignore [bad-argument-type]
-                        f"- {p['title']} ({p['category']}): {p.get('summary', '')[:100]}"
-                    )
-                return "Wiki pages:\n" + "\n".join(lines)
-
-            elif function_name == "update_wiki":
-                action = arguments.get("action", "write")
-                if action == "write":
-                    title = arguments.get("title", "")
-                    category = arguments.get("category", "concept")
-                    content = arguments.get("content", "")
-                    summary = arguments.get("summary", "")
-                    if not title or not content:
-                        return "Error: 'title' and 'content' are required for write action."
-                    if not self._wiki_storage or not self._wiki_retrieval:
-                        return "Wiki storage not available."
-                    slug = self._wiki_storage._make_slug(title)
-                    existing = self._wiki_storage.get_page_by_slug(slug)
-                    if existing:
-                        self._wiki_storage.update_page(
-                            existing["id"],
-                            content=content,
-                            summary=summary or existing.get("summary", ""),
-                        )
-                        refreshed = self._wiki_storage.get_page_by_id(existing["id"])
-                        if refreshed:
-                            await asyncio.to_thread(
-                                self._wiki_retrieval.index_page,
-                                page_id=existing["id"],
-                                title=refreshed["title"],
-                                content=refreshed["content"],
-                                category=refreshed["category"],
-                                updated_at=refreshed["updated_at"],
-                            )
-                        return f"Updated wiki page '{title}'."
-                    else:
-                        page_id = self._wiki_storage.create_page(
-                            title=title, category=category, content=content, summary=summary
-                        )
-                        refreshed = self._wiki_storage.get_page_by_id(page_id)
-                        if refreshed:
-                            await asyncio.to_thread(
-                                self._wiki_retrieval.index_page,
-                                page_id=page_id,
-                                title=refreshed["title"],
-                                content=refreshed["content"],
-                                category=refreshed["category"],
-                                updated_at=refreshed["updated_at"],
-                            )
-                        return f"Created wiki page '{title}'."
-                elif action == "link":
-                    from_page = arguments.get("from_page", "")
-                    to_page = arguments.get("to_page", "")
-                    link_type = arguments.get("link_type", "mentions")
-                    if not from_page or not to_page:
-                        return "Error: 'from_page' and 'to_page' are required for link action."
-                    if not self._wiki_storage:
-                        return "Wiki storage not available."
-                    from_p = self._wiki_storage.get_page_by_slug(
-                        from_page
-                    ) or self._wiki_storage.get_page_by_title(from_page)
-                    to_p = self._wiki_storage.get_page_by_slug(
-                        to_page
-                    ) or self._wiki_storage.get_page_by_title(to_page)
-                    if not from_p:
-                        return f"From page '{from_page}' not found."
-                    if not to_p:
-                        return f"To page '{to_page}' not found."
-                    self._wiki_storage.add_link(from_p["id"], to_p["id"], link_type)
-                    return f"Linked '{from_p['title']}' -> '{to_p['title']}' ({link_type})."
-                else:
-                    return f"Error: Unknown update_wiki action '{action}'. Use 'write' or 'link'."
-
-            elif function_name == "get_wiki_summary":
-                if not self._wiki_storage:
-                    return "Wiki storage not available."
-                stats = self._wiki_storage.get_stats()
-                lines = [
-                    "Wiki summary:",
-                    f"- Total pages: {stats.get('total_pages', 0)}",
-                    f"- Categories: {stats.get('total_categories', 0)}",
-                    f"- Total sources: {stats.get('total_sources', 0)}",
-                    f"- Total links: {stats.get('total_links', 0)}",
-                    f"- Log entries: {stats.get('total_log_entries', 0)}",
-                ]
-                if stats.get("latest_update"):
-                    lines.append(f"- Latest update: {stats['latest_update']}")
-                return "\n".join(lines)
-
-            elif function_name == "get_my_wiki_profile":
-                return self._get_player_wiki_summary(player_id or "")
+                return formatted_output
 
             else:
                 return json.dumps({"error": f"Unknown function: {function_name}"})
@@ -1460,6 +942,273 @@ class KnowledgeCog(commands.Cog):
         except Exception as e:
             log.error(f"Tool execution error ({function_name}): {e}", exc_info=True)
             return json.dumps({"error": f"Tool execution failed: {str(e)}"})
+
+    async def _execute_run(self, command: str, interaction=None) -> str:
+        """Execute a 'run' command by parsing the first word as verb."""
+        if not command or not command.strip():
+            return "Error: No command provided."
+
+        parts = command.strip().split(maxsplit=1)
+        verb = parts[0].lower()
+        args = parts[1] if len(parts) > 1 else ""
+
+        if verb == "vehicle":
+            if not args:
+                return "Error: Vehicle name required. Usage: vehicle <name>"
+            result = await asyncio.to_thread(game_db.lookup_vehicle, args)
+            if "error" in result:
+                return result["error"]
+            return json.dumps(result, indent=2)
+
+        elif verb == "cargo":
+            if not args:
+                return "Error: Cargo name required. Usage: cargo <name>"
+            result = await asyncio.to_thread(game_db.lookup_cargo, args)
+            if "error" in result:
+                return result["error"]
+            return json.dumps(result, indent=2)
+
+        elif verb == "compare":
+            if not args:
+                return "Error: Vehicle names required. Usage: compare <v1>, <v2>, ..."
+            names = [n.strip() for n in args.split(",")]
+            result = await asyncio.to_thread(game_db.compare_vehicles, names)
+            if not result:
+                return "No matching vehicles found."
+            return json.dumps(result, indent=2)
+
+        elif verb == "subsidies":
+            raw = await self._cached_api_get(f"{BACKEND_API_URL}/api/subsidies/")
+            try:
+                data = json.loads(raw)
+                return data.get(
+                    "subsidies_text", "No subsidy information available."
+                )
+            except json.JSONDecodeError:
+                return raw
+
+        elif verb == "commands":
+            raw = await self._cached_api_get(f"{BACKEND_API_URL}/api/commands/")
+            try:
+                commands_data = json.loads(raw)
+            except json.JSONDecodeError:
+                return "Failed to parse server commands."
+            formatted = "Available server commands:\n\n"
+            from itertools import groupby
+            for category, cmds in groupby(
+                commands_data, key=lambda x: x.get("category", "General")
+            ):
+                formatted += f"## {category}\n"
+                for cmd in cmds:
+                    cmd_name = cmd["command"]
+                    shorthand = cmd.get("shorthand")
+                    description = cmd.get("description", "")
+                    if shorthand:
+                        formatted += f"- **{cmd_name}** (or **{shorthand}**): {description}\n"
+                    else:
+                        formatted += f"- **{cmd_name}**: {description}\n"
+                formatted += "\n"
+            return formatted
+
+        elif verb == "song":
+            cache_key = "currently_playing_song"
+            now = time.monotonic()
+            if cache_key in self._api_cache:
+                ts, data = self._api_cache[cache_key]
+                if now - ts < 30:
+                    return data
+            from amc_peripheral.radio.radio_server import get_current_song
+            current_song = await get_current_song(self.bot.http_session)
+            result = (
+                current_song
+                or "No song is currently playing or unable to fetch song info."
+            )
+            self._api_cache[cache_key] = (now, result)
+            return result
+
+        elif verb == "db":
+            if not args:
+                return "Error: SQL query required. Usage: db <SELECT query>"
+            result = await asyncio.to_thread(backend_db.execute_query, args)
+            if "error" in result:
+                return f"Backend database query failed: {result['error']}"
+            return backend_db.format_results(result)
+
+        elif verb == "server":
+            return await self._cached_api_get(
+                "https://server.aseanmotorclub.com/api/active_players/"
+            )
+
+        else:
+            return (
+                f"Error: Unknown command '{verb}'. "
+                f"Available: vehicle, cargo, compare, subsidies, commands, song, db, server"
+            )
+
+    async def _execute_wiki(self, arguments: dict, player_id: Optional[str] = None) -> str:
+        """Execute a wiki action (search, read, list, write, link, ask, summary, profile)."""
+        action = arguments.get("action", "search")
+
+        if action == "search":
+            query = arguments.get("query", "")
+            if not query:
+                return "Error: 'query' is required for search."
+            n_results = arguments.get("n_results", 3)
+            if not self._wiki_retrieval:
+                return "Wiki retrieval not available."
+            results = await asyncio.to_thread(
+                self._wiki_retrieval.search, query, n_results=n_results
+            )
+            if not results:
+                return f"No wiki pages found for '{query}'."
+            lines = []
+            for r in results:  # pyrefly: ignore [bad-argument-type]
+                lines.append(
+                    f"- {r.get('title', 'Unknown')} ({r.get('category', 'unknown')}): "
+                    f"{r.get('content', '')[:200]}..."
+                )
+            return "Wiki search results:\n" + "\n".join(lines)
+
+        elif action == "read":
+            query = arguments.get("query", "")
+            if not query:
+                return "Error: 'query' is required for read."
+            if not self._wiki_storage:
+                return "Wiki storage not available."
+            page = self._wiki_storage.get_page_by_slug(query)
+            if not page:
+                page = self._wiki_storage.get_page_by_title(query)
+            if not page:
+                return f"No wiki page found for '{query}'."
+            return (
+                f"--- {page['title']} ---\n"
+                f"Category: {page['category']}\n"
+                f"Summary: {page.get('summary', '')}\n"
+                f"Content:\n{page['content']}"
+            )
+
+        elif action == "list":
+            category = arguments.get("category") or None
+            keyword = arguments.get("query") or None
+            limit = arguments.get("n_results", 10)
+            if not self._wiki_storage:
+                return "Wiki storage not available."
+            pages = self._wiki_storage.list_pages(
+                category=category, keyword=keyword, limit=limit
+            )
+            if not pages:
+                return "No wiki pages found."
+            lines = []
+            for p in pages:  # pyrefly: ignore [bad-argument-type]
+                lines.append(
+                    f"- {p['title']} ({p['category']}): {p.get('summary', '')[:100]}"
+                )
+            return "Wiki pages:\n" + "\n".join(lines)
+
+        elif action == "write":
+            title = arguments.get("title", "")
+            category = arguments.get("category", "concept")
+            content = arguments.get("content", "")
+            summary = arguments.get("summary", "")
+            if not title or not content:
+                return "Error: 'title' and 'content' are required for write action."
+            if not self._wiki_storage or not self._wiki_retrieval:
+                return "Wiki storage not available."
+            slug = self._wiki_storage._make_slug(title)
+            existing = self._wiki_storage.get_page_by_slug(slug)
+            if existing:
+                self._wiki_storage.update_page(
+                    existing["id"],
+                    content=content,
+                    summary=summary or existing.get("summary", ""),
+                )
+                refreshed = self._wiki_storage.get_page_by_id(existing["id"])
+                if refreshed:
+                    await asyncio.to_thread(
+                        self._wiki_retrieval.index_page,
+                        page_id=existing["id"],
+                        title=refreshed["title"],
+                        content=refreshed["content"],
+                        category=refreshed["category"],
+                        updated_at=refreshed["updated_at"],
+                    )
+                return f"Updated wiki page '{title}'."
+            else:
+                page_id = self._wiki_storage.create_page(
+                    title=title, category=category, content=content, summary=summary
+                )
+                refreshed = self._wiki_storage.get_page_by_id(page_id)
+                if refreshed:
+                    await asyncio.to_thread(
+                        self._wiki_retrieval.index_page,
+                        page_id=page_id,
+                        title=refreshed["title"],
+                        content=refreshed["content"],
+                        category=refreshed["category"],
+                        updated_at=refreshed["updated_at"],
+                    )
+                return f"Created wiki page '{title}'."
+
+        elif action == "link":
+            from_page = arguments.get("from_page", "")
+            to_page = arguments.get("to_page", "")
+            link_type = arguments.get("link_type", "mentions")
+            if not from_page or not to_page:
+                return "Error: 'from_page' and 'to_page' are required for link action."
+            if not self._wiki_storage:
+                return "Wiki storage not available."
+            from_p = self._wiki_storage.get_page_by_slug(from_page) or self._wiki_storage.get_page_by_title(from_page)
+            to_p = self._wiki_storage.get_page_by_slug(to_page) or self._wiki_storage.get_page_by_title(to_page)
+            if not from_p:
+                return f"From page '{from_page}' not found."
+            if not to_p:
+                return f"To page '{to_page}' not found."
+            self._wiki_storage.add_link(from_p["id"], to_p["id"], link_type)
+            return f"Linked '{from_p['title']}' -> '{to_p['title']}' ({link_type})."
+
+        elif action == "ask":
+            from amc_peripheral.radio.game_knowledge import ask_game_knowledge
+
+            question = arguments.get("query", "")
+            if not question:
+                return "Error: 'query' is required for ask action."
+            if not self._wiki_storage:
+                return "Wiki storage not available."
+            try:
+                answer = await ask_game_knowledge(
+                    openai_client=self.openai_client_openrouter,
+                    wiki_storage=self._wiki_storage,
+                    wiki_retrieval=self._wiki_retrieval,
+                    wiki_index=self._wiki_index,
+                    game_schema=self.game_schema_description,
+                    question=question,
+                    http_session=self.bot.http_session,
+                )
+                return answer
+            except Exception as e:
+                return f"Failed to get game knowledge: {e}"
+
+        elif action == "summary":
+            if not self._wiki_storage:
+                return "Wiki storage not available."
+            stats = self._wiki_storage.get_stats()
+            lines = [
+                "Wiki summary:",
+                f"- Total pages: {stats.get('total_pages', 0)}",
+                f"- Categories: {stats.get('total_categories', 0)}",
+                f"- Total sources: {stats.get('total_sources', 0)}",
+                f"- Total links: {stats.get('total_links', 0)}",
+                f"- Log entries: {stats.get('total_log_entries', 0)}",
+            ]
+            if stats.get("latest_update"):
+                lines.append(f"- Latest update: {stats['latest_update']}")
+            return "\n".join(lines)
+
+        elif action == "profile":
+            return self._get_player_wiki_summary(player_id or "")
+
+        else:
+            return f"Error: Unknown wiki action '{action}'. Available: search, read, list, write, link, ask, summary, profile"
 
     # --- Commands ---
 
