@@ -554,6 +554,16 @@
                 };
                 backend = {
                   signup.mode = "open";
+                  jdbc = {
+                    # Persist the DB under /var/lib/sharry instead of sharry's
+                    # volatile default (/tmp/sharry-demo.db). The default path is
+                    # wiped on reboot/cleanup — a deleted/in-memory H2 causes the
+                    # schema to vanish and registration to hang with
+                    # "Table not found" errors.
+                    url = "jdbc:h2:///var/lib/sharry/sharry.db;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE";
+                    user = "sa";
+                    password = "";
+                  };
                   files = {
                     default-store = "filesystem";
                     stores.filesystem = {
