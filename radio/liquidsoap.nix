@@ -185,6 +185,17 @@ in {
           mount = "/stream"
         )
 
+        # Alternate Ogg Opus output (better audio quality per bitrate for modern
+        # HTML5 players that support Opus natively).
+        output.icecast(
+          %ogg(%opus(bitrate=128, vbr="constrained", application="audio")),
+          radio,
+          host = "localhost",
+          port = 8000,
+          password = "hackme",
+          mount = "/stream.opus"
+        )
+
       '';
       fallback = pkgs.writeText "fallback.liq" ''
         output.icecast(
