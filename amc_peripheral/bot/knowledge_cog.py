@@ -37,6 +37,7 @@ from amc_peripheral.bot import backend_db
 from amc_peripheral.memory.storage import MemoryStorage
 from amc_peripheral.memory.retrieval import MemoryRetrieval
 from amc_peripheral.memory.player_index import PlayerIndex
+from amc_peripheral.wiki.memory import MemoryStore
 from amc_peripheral.wiki import (
     WikiStorage,
     WikiRetrieval,
@@ -153,6 +154,16 @@ class KnowledgeCog(commands.Cog):
         except Exception as e:
             log.warning(f"Player index unavailable: {e}")
             self._player_index = None
+
+        # Durable agent memory (self + fact categories over the wiki)
+        if self._wiki_storage and self._wiki_retrieval:
+            self._memory_store = MemoryStore(
+                self._wiki_storage, self._wiki_retrieval
+            )
+            log.info("Memory store initialized")
+        else:
+            self._memory_store = None
+            log.warning("Memory store unavailable (no wiki storage/retrieval)")
 
         if self._wiki_storage and self._wiki_retrieval:
             try:
@@ -307,11 +318,19 @@ class KnowledgeCog(commands.Cog):
                 "When you learn something new and notable from a conversation, update your wiki using update_wiki. "
                 "If the current speaker asks what you know about them, call get_my_wiki_profile (no arguments). "
                 "For game-related questions, use the ask_game_knowledge tool instead of guessing.\n\n"
+                "## Your Memory\n"
+                "Your Standing Memory above is durable facts you chose to remember about yourself and the community — they are always in your context. "
+                "Use the memory tool to persist a lasting fact (write), retrieve remembered facts (recall), browse (list), or remove one (delete). "
+                "Remember facts that will still matter later; don't clutter memory with trivia.\n\n"
                 f"{knowledge}"
             )
 
         if wiki_index_str:
             system_message += f"\n\n## Wiki Knowledge Index\n{wiki_index_str}"
+
+        memory_self = await asyncio.to_thread(self._get_memory_self_block)
+        if memory_self:
+            system_message += f"\n\n## Standing Memory\n{memory_self}"
 
         model = DEFAULT_AI_MODEL
         tools = self._get_shared_tool_definitions()
@@ -406,6 +425,10 @@ class KnowledgeCog(commands.Cog):
 
         if wiki_index_str:
             system_message += f"\n\n## Wiki Knowledge Index\n{wiki_index_str}"
+
+        memory_self = await asyncio.to_thread(self._get_memory_self_block)
+        if memory_self:
+            system_message += f"\n\n## Standing Memory\n{memory_self}"
 
         messages = [
             {"role": "system", "content": system_message},
@@ -650,6 +673,55 @@ class KnowledgeCog(commands.Cog):
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "memory",
+                    "description": "Annie's durable memory. Actions: write (persist a fact: title, "
+                                   "content, category 'self' or 'fact', optional summary), recall "
+                                   "(semantic search of remembered facts by query), list (browse "
+                                   "memory, optional category), delete (forget a fact by title). "
+                                   "'self' facts are always in your context; use them for standing "
+                                   "facts about yourself and the community.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "action": {
+                                "type": "string",
+                                "enum": ["write", "recall", "list", "delete"],
+                                "description": "Memory operation to perform",
+                            },
+                            "title": {
+                                "type": "string",
+                                "description": "Fact title (for write/delete)",
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "Fact content (for write)",
+                            },
+                            "category": {
+                                "type": "string",
+                                "enum": ["self", "fact"],
+                                "description": "Memory category (write): 'self' (standing, always "
+                                               "present) or 'fact' (recalled on demand). Default fact.",
+                            },
+                            "summary": {
+                                "type": "string",
+                                "description": "Optional short summary (for write)",
+                            },
+                            "query": {
+                                "type": "string",
+                                "description": "Search query (for recall)",
+                            },
+                            "n_results": {
+                                "type": "integer",
+                                "description": "Number of recall results (default 5)",
+                            },
+                        },
+                        "required": ["action"],
+                    },
+                },
+            },
         ]
 
     async def _call_llm_with_tools(
@@ -795,6 +867,7 @@ class KnowledgeCog(commands.Cog):
             "run": "Running your query...",
             "wiki": "Looking into that...",
             "discord": "Working on it...",
+            "memory": "Checking my memory...",
             "manage_subsidy_rules_list": "Fetching subsidy rules...",
             "manage_subsidy_rule_create": "Creating subsidy rule...",
             "manage_subsidy_rule_update": "Updating subsidy rule...",
@@ -886,6 +959,21 @@ class KnowledgeCog(commands.Cog):
             return None
         return self._wiki_ingest.ingest_player_profile(profile)
 
+    def _get_memory_self_block(self) -> str:
+        """Annie's standing self-facts — always injected into her context.
+
+        Mirrors Hermes' always-present memory: these are the durable 'who I am /
+        how the community runs' facts that should be top-of-mind every turn (the
+        ``self`` category in MemoryStore). Never raises.
+        """
+        if not self._memory_store:
+            return ""
+        try:
+            return self._memory_store.self_block()
+        except Exception as e:  # noqa: BLE001 - memory must never break a reply
+            log.warning(f"Failed to build memory self block: {e}")
+            return ""
+
     async def _execute_tool(
         self,
         function_name: str,
@@ -929,6 +1017,9 @@ class KnowledgeCog(commands.Cog):
                     )
                 else:
                     return f"Error: Unknown discord action '{action}'."
+
+            elif function_name == "memory":
+                return await self._execute_memory(arguments)
 
             # Economy tools still dispatched by EconomyCog
             elif function_name.startswith("manage_subsidy") or function_name.startswith(
@@ -1250,6 +1341,75 @@ class KnowledgeCog(commands.Cog):
 
         else:
             return f"Error: Unknown wiki action '{action}'. Available: search, read, list, write, link, ask, summary, profile"
+
+    async def _execute_memory(self, arguments: dict) -> str:
+        """Execute a memory action (write, recall, list, delete).
+
+        Memory is Annie's durable, agent-writable fact layer over the wiki.
+        'self' category facts are always injected into her context; 'fact'
+        category facts are recalled on demand via semantic search.
+        """
+        if not self._memory_store:
+            return "Memory is not available right now."
+
+        action = arguments.get("action", "")
+        try:
+            if action == "write":
+                title = (arguments.get("title") or "").strip()
+                content = (arguments.get("content") or "").strip()
+                category = arguments.get("category") or "fact"
+                summary = (arguments.get("summary") or "").strip()
+                if not title or not content:
+                    return "Error: 'title' and 'content' are required for write."
+                page_id = await asyncio.to_thread(
+                    self._memory_store.write_fact, title, content, category, summary
+                )
+                return f"Remembered '{title}' ({category}) → page #{page_id}."
+
+            elif action == "recall":
+                query = arguments.get("query") or ""
+                n = arguments.get("n_results", 5)
+                if not query:
+                    return "Error: 'query' is required for recall."
+                results = await asyncio.to_thread(self._memory_store.recall, query, n)
+                if not results:
+                    return f"No memories found for '{query}'."
+                lines = []
+                for r in results:  # pyrefly: ignore [bad-argument-type]
+                    lines.append(
+                        f"- {r.get('title', 'Unknown')} ({r.get('category', 'unknown')}): "
+                        f"{r.get('content', '')[:200]}..."
+                    )
+                return "Memory recall results:\n" + "\n".join(lines)
+
+            elif action == "list":
+                category = arguments.get("category") or None
+                limit = arguments.get("n_results", 50)
+                pages = await asyncio.to_thread(self._memory_store.list_facts, category, limit)
+                if not pages:
+                    return "No memories stored."
+                lines = []
+                for p in pages:  # pyrefly: ignore [bad-argument-type]
+                    lines.append(
+                        f"- {p['title']} ({p['category']}): {p.get('summary', '')[:100]}"
+                    )
+                return "Annie's memories:\n" + "\n".join(lines)
+
+            elif action == "delete":
+                title = arguments.get("title") or ""
+                if not title:
+                    return "Error: 'title' is required for delete."
+                deleted = await asyncio.to_thread(self._memory_store.delete, title)
+                if not deleted:
+                    return f"No memory found for '{title}'."
+                return f"Forgot '{title}'."
+
+            else:
+                return f"Error: Unknown memory action '{action}'. Available: write, recall, list, delete"
+
+        except Exception as e:  # noqa: BLE001 - surface memory errors to the model
+            log.warning(f"_execute_memory failed: {e}")
+            return f"Memory operation failed: {e}"
 
     # --- Commands ---
 
