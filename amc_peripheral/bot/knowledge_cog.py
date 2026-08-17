@@ -870,6 +870,18 @@ class KnowledgeCog(commands.Cog):
                 "but you're still on my mind."
             )
 
+    def _sync_player_wiki(self, profile: dict) -> int | None:
+        """Ensure a canonical player profile page exists for the resolved player.
+
+        Syncs the PlayerIndex alias/nickname facts into Annie's wiki (and indexes
+        the page into ChromaDB) so later generic ``wiki`` recall agrees with the
+        explicit ``player <name>`` lookup. Never raises; returns the wiki page id
+        when a sync happened, else None.
+        """
+        if not self._wiki_storage or not self._wiki_ingest:
+            return None
+        return self._wiki_ingest.ingest_player_profile(profile)
+
     async def _execute_tool(
         self,
         function_name: str,
@@ -1057,6 +1069,11 @@ class KnowledgeCog(commands.Cog):
             results = await asyncio.to_thread(self._player_index.lookup, args)
             if not results:
                 return f"No player found matching '{args}' in my memory."
+            top = results[0]
+            try:
+                await asyncio.to_thread(self._sync_player_wiki, top)
+            except Exception as e:  # noqa: BLE001 - best-effort sync, never block lookup
+                log.warning(f"player wiki sync failed: {e}")
             return json.dumps(results, indent=2)
 
         else:
