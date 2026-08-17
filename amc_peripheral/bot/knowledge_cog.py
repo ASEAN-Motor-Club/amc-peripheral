@@ -36,6 +36,7 @@ from amc_peripheral.bot import game_db
 from amc_peripheral.bot import backend_db
 from amc_peripheral.memory.storage import MemoryStorage
 from amc_peripheral.memory.retrieval import MemoryRetrieval
+from amc_peripheral.memory.player_index import PlayerIndex
 from amc_peripheral.wiki import (
     WikiStorage,
     WikiRetrieval,
@@ -144,6 +145,14 @@ class KnowledgeCog(commands.Cog):
             except Exception as e:
                 log.warning(f"Wiki index initialization failed: {e}")
                 self._wiki_index = None
+
+        # Player identity / alias index (name  -> canonical player resolution)
+        try:
+            self._player_index = PlayerIndex()
+            log.info("Player index initialized")
+        except Exception as e:
+            log.warning(f"Player index unavailable: {e}")
+            self._player_index = None
 
         if self._wiki_storage and self._wiki_retrieval:
             try:
@@ -516,6 +525,7 @@ class KnowledgeCog(commands.Cog):
                     "name": "run",
                     "description": "Execute a data query. Verbs: vehicle <name>, cargo <name>, "
                                    "compare <v1,v2,...>, subsidies, commands, server (status/players), "
+                                   "player <name or id> (who a player is, their aliases & nicknames), "
                                    "song (currently playing), db <SQL> (SELECT only). "
                                    "Example: 'vehicle Tronko' returns specs.",
                     "parameters": {
@@ -1039,10 +1049,20 @@ class KnowledgeCog(commands.Cog):
                 "https://server.aseanmotorclub.com/api/active_players/"
             )
 
+        elif verb == "player":
+            if not args:
+                return "Error: Player name or ID required. Usage: player <name>"
+            if not self._player_index:
+                return "Player index is not available right now."
+            results = await asyncio.to_thread(self._player_index.lookup, args)
+            if not results:
+                return f"No player found matching '{args}' in my memory."
+            return json.dumps(results, indent=2)
+
         else:
             return (
                 f"Error: Unknown command '{verb}'. "
-                f"Available: vehicle, cargo, compare, subsidies, commands, song, db, server"
+                f"Available: vehicle, cargo, compare, subsidies, commands, song, db, server, player"
             )
 
     async def _execute_wiki(self, arguments: dict, player_id: Optional[str] = None) -> str:
