@@ -684,12 +684,16 @@ class KnowledgeCog(commands.Cog):
         tool_feedback_sent = False
         last_tool_name: Optional[str] = None
 
-        # IMMEDIATE feedback — before first LLM call
-        await self._send_progress_feedback(
-            message="Working on it...",
-            interaction=interaction,
-            ingame_feedback_fn=ingame_feedback_fn,
-        )
+        # IMMEDIATE feedback — before first LLM call.
+        # Discord (interaction) already shows the "thinking" defer flag, so an
+        # explicit "Working on it..." edit is redundant there. Only the in-game
+        # path (no defer) gets the immediate status.
+        if not interaction:
+            await self._send_progress_feedback(
+                message="Working on it...",
+                interaction=interaction,
+                ingame_feedback_fn=ingame_feedback_fn,
+            )
 
         while iteration < max_iterations:
             iteration += 1
