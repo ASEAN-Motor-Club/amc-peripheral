@@ -238,6 +238,116 @@ class WikiIngest:
 
         return page_id
 
+    def ingest_player_profile(self, profile: dict) -> int | None:
+        """Create/update a canonical player profile page from a PlayerIndex record.
+
+        Keeps Annie's wiki consistent with the identity/alias index so generic
+        wiki recall and the explicit ``player <name>`` lookup agree on who a
+        player is and what nickname they asked for.
+
+        Args:
+            profile: A PlayerRecord summary dict with keys: name, aliases,
+                game_ids, discord_ids, message_count, first_seen, last_seen,
+                and optionally requested_nickname.
+
+        Returns:
+            The affected page ID, or None if no page could be created/updated.
+        """
+        canonical = self._player_canonical_id(profile)
+        if not canonical:
+            return None
+
+        title = f"player:{canonical}"
+        content = self._player_profile_content(profile)
+        summary = self._player_profile_summary(profile)
+
+        page = self.storage.get_page_by_slug(title)
+        if page:
+            if page["content"] == content and page["summary"] == summary:
+                # Already current -- nothing to write. Ensure a source ref exists.
+                self.storage.add_source(page["id"], "player_index", canonical)
+                return page["id"]
+            self.storage.update_page(page["id"], content=content, summary=summary)
+            page_id = page["id"]
+            category = page["category"] or "player"
+            title_used = page["title"]
+        else:
+            page_id = self.storage.create_page(
+                title=title, category="player", content=content, summary=summary
+            )
+            category = "player"
+            title_used = title
+
+        self.storage.add_source(page_id, "player_index", canonical)
+        self._index_profile_page(
+            page_id=page_id, title=title_used, content=content, category=category
+        )
+        self.storage.log_operation(
+            operation="player_profile",
+            description=f"Synced canonical profile for player {canonical}",
+            pages_affected=[page_id],
+        )
+        return page_id
+
+    @staticmethod
+    def _player_canonical_id(profile: dict) -> str | None:
+        """Pick a stable id for the profile page (game id, else discord id)."""
+        game = profile.get("game_ids") or []
+        if game and game[0]:
+            return game[0]
+        discord = profile.get("discord_ids") or []
+        if discord and discord[0]:
+            return discord[0]
+        name = (profile.get("name") or "").strip()
+        return name or None
+
+    @staticmethod
+    def _player_profile_summary(profile: dict) -> str:
+        name = (profile.get("name") or "unknown").strip()
+        nick = (profile.get("requested_nickname") or "").strip()
+        if nick:
+            return f"Profile for {name} (call me '{nick}')"
+        return f"Profile for {name}"
+
+    @staticmethod
+    def _player_profile_content(profile: dict) -> str:
+        lines = [f"# {profile.get('name') or 'Unknown'}"]
+        aliases = profile.get("aliases") or []
+        if aliases:
+            lines.append(f"**Also known as:** {', '.join(str(a) for a in aliases)}")
+        game = profile.get("game_ids") or []
+        if game:
+            lines.append(f"**Game ID(s):** {', '.join(str(i) for i in game)}")
+        discord = profile.get("discord_ids") or []
+        if discord:
+            lines.append(f"**Discord ID(s):** {', '.join(str(i) for i in discord)}")
+        nick = profile.get("requested_nickname")
+        if nick:
+            lines.append(f"**Requested nickname:** {nick}")
+        if profile.get("first_seen") or profile.get("last_seen"):
+            span = f"{profile.get('first_seen') or '?'} -> {profile.get('last_seen') or '?'}"
+            lines.append(f"**Active window:** {span}")
+        if profile.get("message_count") is not None:
+            lines.append(f"**Messages in memory:** {profile['message_count']}")
+        return "\n".join(lines)
+
+    def _index_profile_page(self, page_id: int, title: str, content: str, category: str):
+        """Index the profile page into ChromaDB, tolerating retrieval being absent."""
+        try:
+            if not self.retrieval:
+                return
+            pg = self.storage.get_page_by_id(page_id)
+            updated_at = pg["updated_at"] if pg else ""
+            self.retrieval.index_page(
+                page_id=page_id,
+                title=title,
+                content=content,
+                category=category,
+                updated_at=updated_at,
+            )
+        except Exception as e:  # noqa: BLE001 - never block lookup on indexing
+            log.warning(f"Failed to index player profile page {page_id}: {e}")
+
     def batch_ingest_sources(self, sources: list[dict]) -> list[int]:
         """Ingest a batch of raw sources.
 
