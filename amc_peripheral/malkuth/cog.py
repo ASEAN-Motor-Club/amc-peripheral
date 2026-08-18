@@ -50,6 +50,12 @@ class BanTrapCog(commands.Cog):
         # Webhook messages have no banable author — ignore them.
         if message.webhook_id:
             return
+        # Bots / applications are never ban targets — they post via webhooks,
+        # slash commands, or automated events and shouldn't be punished for
+        # appearing in the trap. Exempt all bot users structurally so no app
+        # in the guild needs to be manually whitelisted.
+        if message.author.bot:
+            return
 
         guild = message.guild
         author_id = message.author.id

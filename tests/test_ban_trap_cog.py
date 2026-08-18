@@ -140,6 +140,7 @@ async def test_exempt_role_skips_ban(cog):
 async def test_non_exempt_bans_and_announces(cog):
     message = MagicMock()
     message.author = MagicMock()
+    message.author.bot = False
     message.author.id = 2
     message.webhook_id = None
     message.guild = MagicMock()
@@ -168,6 +169,7 @@ async def test_non_exempt_bans_and_announces(cog):
 async def test_concurrent_messages_deduped(cog):
     message = MagicMock()
     message.author = MagicMock()
+    message.author.bot = False
     message.author.id = 7
     message.webhook_id = None
     message.guild = MagicMock()
@@ -212,6 +214,7 @@ async def test_auto_delete_announcement(cog):
     ):
         message = MagicMock()
         message.author = MagicMock()
+        message.author.bot = False
         message.author.id = 3
         message.webhook_id = None
         message.guild = MagicMock()
@@ -254,9 +257,33 @@ async def test_webhook_message_is_ignored(cog):
 
 
 @pytest.mark.asyncio
+async def test_bot_user_message_is_ignored(cog):
+    message = MagicMock()
+    message.author = MagicMock()
+    message.author.id = 7
+    message.author.bot = True  # bots/applications are never ban targets
+    message.webhook_id = None
+    message.guild = MagicMock()
+    message.guild.id = 1341775494026231859
+    message.channel = AsyncMock()
+    message.channel.id = 1529987241278177352
+
+    message.guild.ban = AsyncMock()
+    message.guild.get_member.return_value = None
+    message.guild.fetch_member.side_effect = Exception("not cached")
+    message.channel.send.return_value = MagicMock()
+
+    await cog.on_message(message)
+    message.guild.get_member.assert_not_called()
+    message.guild.ban.assert_not_called()
+    message.channel.send.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_ban_failure_is_handled_without_crash(cog):
     message = MagicMock()
     message.author = MagicMock()
+    message.author.bot = False
     message.author.id = 9
     message.webhook_id = None
     message.guild = MagicMock()
