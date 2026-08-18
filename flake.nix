@@ -632,6 +632,38 @@
               '';
             };
 
+            # Malkuth Ban Trap Bot
+            systemd.services.amc-ban-trap = {
+              wantedBy = ["multi-user.target"];
+              after = ["network.target"];
+              description = "Malkuth Ban Trap Bot";
+              restartIfChanged = false;
+              # Non-secret config lives here as plain env vars (same pattern as
+              # amc-bot's role/channel IDs). Only DISCORD_TOKEN_MALKUTH is a
+              # secret and comes from the EnvironmentFile below.
+              environment = {
+                BAN_TRAP_CHANNEL_ID = "1529987241278177352";
+                GUILD_ID = "1341775494026231859";
+                # WARNING: verify these exempt role IDs before deploying — a
+                # wrong value here can auto-ban staff who post in the trap.
+                BAN_TRAP_ALLOWED_ROLE_IDS = "1395460420189421713,1496482029892669500";
+                BAN_TRAP_ANNOUNCEMENT = "My apologies, but they had to go.";
+                BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT = "0";
+                BAN_TRAP_CLEANUP_WINDOW_SECONDS = "60";
+                BAN_TRAP_DELETE_DELAY_SECONDS = "5";
+              };
+              serviceConfig = {
+                Type = "simple";
+                Restart = "on-failure";
+                RestartSec = "10";
+                SyslogIdentifier = "amc-ban-trap";
+                EnvironmentFile = "${cfg.environmentFile}";
+              };
+              script = ''
+                ${self.packages.${pkgs.system}.default}/bin/amc_ban_trap
+              '';
+            };
+
             # Sharry file sharing service
             services.sharry = lib.mkIf cfg.sharry.enable {
               enable = true;
