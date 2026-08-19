@@ -1,8 +1,5 @@
 """Tests for amc_peripheral.bot.wiki_kb (DokuWiki page-store knowledge reader)."""
 
-import os
-from pathlib import Path
-
 import pytest
 
 from amc_peripheral.bot import wiki_kb
