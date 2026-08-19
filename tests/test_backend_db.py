@@ -180,3 +180,121 @@ class TestNoUrlConfigured:
             result = backend_db_module.execute_query("SELECT 1")
             assert "error" in result
             assert "not configured" in result["error"]
+
+
+class TestLocationLookup:
+    """Tests for the map/delivery-point location lookup."""
+
+    def test_empty_name_returns_error(self, mock_backend_db_url):
+        result = mock_backend_db_url.lookup_location("")
+        assert "error" in result
+        assert "required" in result["error"].lower()
+
+    def test_whitespace_name_returns_error(self, mock_backend_db_url):
+        result = mock_backend_db_url.lookup_location("   ")
+        assert "error" in result
+
+    def test_no_db_url_returns_error(self):
+        with patch("amc_peripheral.settings.BACKEND_DB_URL", None):
+            import importlib
+            import amc_peripheral.bot.backend_db as backend_db_module
+            importlib.reload(backend_db_module)
+            result = backend_db_module.lookup_location("oji")
+            assert "error" in result
+
+    def test_uses_parameterized_query(self, mock_backend_db_url):
+        """The name must be passed as a bound parameter, never interpolated (SQLi-safe)."""
+        calls = {}
+
+        def fake_execute(self, sql, params):
+            calls["sql"] = sql
+            calls["params"] = params
+            return None
+
+        fake_cursor = type("Cursor", (), {
+            "execute": fake_execute,
+            "fetchall": lambda self: [],
+            "close": lambda self: None,
+        })()
+        fake_conn = type("Conn", (), {
+            "cursor": lambda self, **kw: fake_cursor,
+            "close": lambda self: None,
+        })()
+        with patch.object(mock_backend_db_url, "_get_connection", return_value=fake_conn):
+            mock_backend_db_url.lookup_location("oji drilling")
+        # The literal name must NOT appear inline in the SQL; it must be a %s bound param.
+        assert "oji" not in calls["sql"].lower()
+        assert "%s" in calls["sql"]
+        assert calls["params"][0] == "%oji drilling%"
+
+    def test_results_shape(self, mock_backend_db_url):
+        rows = [
+            {"name": "Oji Drilling", "type": "", "x": -225673, "y": 1020560, "z": -17800, "guid": "g1"},
+            {"name": "Oji Gate Warehouse", "type": "Warehouse", "x": 128449, "y": 343937, "z": -15995, "guid": "g2"},
+        ]
+        fake_cursor = type("Cursor", (), {
+            "execute": lambda self, *a, **k: None,
+            "fetchall": lambda self: rows,
+            "close": lambda self: None,
+        })()
+        fake_conn = type("Conn", (), {
+            "cursor": lambda self, **kw: fake_cursor,
+            "close": lambda self: None,
+        })()
+        with patch.object(mock_backend_db_url, "_get_connection", return_value=fake_conn):
+            result = mock_backend_db_url.lookup_location("oji")
+        assert result["count"] == 2
+        assert result["results"][0]["name"] == "Oji Drilling"
+        assert result["results"][0]["x"] == -225673
+
+    def test_no_rows_returns_note(self, mock_backend_db_url):
+        fake_cursor = type("Cursor", (), {
+            "execute": lambda self, *a, **k: None,
+            "fetchall": lambda self: [],
+            "close": lambda self: None,
+        })()
+        fake_conn = type("Conn", (), {
+            "cursor": lambda self, **kw: fake_cursor,
+            "close": lambda self: None,
+        })()
+        with patch.object(mock_backend_db_url, "_get_connection", return_value=fake_conn):
+            result = mock_backend_db_url.lookup_location("nonexistentplace")
+        assert result["results"] == []
+        assert "note" in result
+
+
+class TestLocationIndex:
+    """Tests for the compact location index used in prompt injection."""
+
+    def test_index_empty_when_no_names(self, mock_backend_db_url):
+        fake_cursor = type("Cursor", (), {
+            "execute": lambda self, *a, **k: None,
+            "fetchall": lambda self: [],
+            "close": lambda self: None,
+        })()
+        fake_conn = type("Conn", (), {
+            "cursor": lambda self, **kw: fake_cursor,
+            "close": lambda self: None,
+        })()
+        with patch.object(mock_backend_db_url, "_get_connection", return_value=fake_conn):
+            idx = mock_backend_db_url.get_location_index()
+        assert idx == ""
+
+    def test_index_mentions_location_command(self, mock_backend_db_url):
+        names = [("Oji Drilling",), ("Jeju",), ("Aewol",), ("Gosan",)]
+        fake_cursor = type("Cursor", (), {
+            "execute": lambda self, *a, **k: None,
+            "fetchall": lambda self: names,
+            "close": lambda self: None,
+        })()
+        fake_conn = type("Conn", (), {
+            "cursor": lambda self, **kw: fake_cursor,
+            "close": lambda self: None,
+        })()
+        with patch.object(mock_backend_db_url, "_get_connection", return_value=fake_conn):
+            idx = mock_backend_db_url.get_location_index()
+        assert "location" in idx
+        assert "amc_deliverypoint" in idx
+        assert "4 named places" in idx
+        # Notable places (oji/gosan/jeju) prioritized in sample
+        assert "Oji Drilling" in idx
