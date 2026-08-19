@@ -25,7 +25,7 @@ from amc_peripheral.settings import (
 from amc_peripheral.bot.ai_models import (
     ModerationResponse,
 )
-from amc_peripheral.utils.text_utils import split_markdown
+from amc_peripheral.utils.text_utils import split_markdown, strip_emoji
 from amc_peripheral.utils.discord_utils import (
     actual_discord_poll_creator,
     actual_discord_event_creator,
@@ -829,9 +829,13 @@ class KnowledgeCog(commands.Cog):
             if not response_message:
                 return "I received an empty response from my AI backend."
 
-            # If no tool calls, return the content
+            # If no tool calls, return the content.
+            # Strip Unicode emoji from the final reply: the in-game Motor Town
+            # chat can't render them (blank squares). ASCII emoticons/kaomoji
+            # pass through untouched. Applies to every entry point (Discord +
+            # in-game) since this is the shared LLM choke point.
             if not response_message.tool_calls:
-                return response_message.content or "I don't have a response."
+                return strip_emoji(response_message.content) or "I don't have a response."
 
             # Track last tool called for status messages
             last_tool_name = response_message.tool_calls[-1].function.name
