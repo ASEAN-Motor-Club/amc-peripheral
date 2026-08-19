@@ -349,7 +349,7 @@ def lookup_vehicle(name: str) -> dict:
                        COALESCE(vw.parts_weight_kg, 0) as parts_weight_kg,
                        COALESCE(vw.total_weight_kg, 0) as total_weight_kg
                 FROM vehicles v
-                LEFT JOIN vehicle_weights vw ON v.id = vw.vehicle_id
+                LEFT JOIN vehicles_with_weight vw ON v.id = vw.id
                 WHERE (v.id LIKE ? OR v.name LIKE ?)
                   AND (v.is_hidden = 0 OR v.is_hidden IS NULL)
                   AND (v.is_disabled = 0 OR v.is_disabled IS NULL)
