@@ -570,11 +570,11 @@ class RadioCog(commands.Cog):
 
         # Load game schema for segment generation
         try:
-            from amc_peripheral.bot import game_db
+            from amc_peripheral.bot import wiki_kb
 
-            self.game_schema_description = game_db.get_schema_description()
+            self.game_schema_description = wiki_kb.get_schema_description()
         except Exception as e:
-            log.error(f"Failed to load game schema: {e}")
+            log.error(f"Failed to load wiki knowledge: {e}")
 
         # Ensure cache directory exists
         Path(SONG_CACHE_PATH).mkdir(parents=True, exist_ok=True)
@@ -1255,9 +1255,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
     async def _execute_segment_tool(self, name: str, args: dict) -> str:
         """Execute tools for segment generation."""
         if name == "query_game_database":
-            from amc_peripheral.bot import game_db
+            from amc_peripheral.bot import backend_db
 
-            result = game_db.execute_raw_query(args.get("sql", ""))
+            result = backend_db.execute_query(args.get("sql", ""))
             if "error" in result:
                 return f"Query error: {result['error']}"
             return json.dumps(result.get("results", []), indent=2)

@@ -295,7 +295,7 @@ async def test_execute_tool_game_db(monkeypatch):
             "count": 1,
         }
     )
-    monkeypatch.setattr("amc_peripheral.bot.game_db.execute_raw_query", mock_execute)
+    monkeypatch.setattr("amc_peripheral.bot.backend_db.execute_query", mock_execute)
 
     result = await _execute_tool(
         "query_game_database",
@@ -311,7 +311,7 @@ async def test_execute_tool_game_db(monkeypatch):
 async def test_execute_tool_game_db_error(monkeypatch):
     """Test game DB tool handles query errors."""
     mock_execute = MagicMock(return_value={"error": "no such table: foo"})
-    monkeypatch.setattr("amc_peripheral.bot.game_db.execute_raw_query", mock_execute)
+    monkeypatch.setattr("amc_peripheral.bot.backend_db.execute_query", mock_execute)
 
     result = await _execute_tool(
         "query_game_database",
