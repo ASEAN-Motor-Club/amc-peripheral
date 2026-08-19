@@ -34,6 +34,7 @@ from amc_peripheral.utils.game_utils import announce_in_game
 from amc_peripheral.utils.rate_limiter import RateLimiter
 from amc_peripheral.bot import game_db
 from amc_peripheral.bot import backend_db
+from amc_peripheral.bot import motorpedia
 from amc_peripheral.memory.storage import MemoryStorage
 from amc_peripheral.memory.retrieval import MemoryRetrieval
 from amc_peripheral.memory.player_index import PlayerIndex
@@ -328,6 +329,10 @@ class KnowledgeCog(commands.Cog):
         if wiki_index_str:
             system_message += f"\n\n## Wiki Knowledge Index\n{wiki_index_str}"
 
+        motorpedia_index = await asyncio.to_thread(motorpedia.get_index)
+        if motorpedia_index:
+            system_message += f"\n\n{motorpedia_index}"
+
         memory_self = await asyncio.to_thread(self._get_memory_self_block)
         if memory_self:
             system_message += f"\n\n## Standing Memory\n{memory_self}"
@@ -425,6 +430,10 @@ class KnowledgeCog(commands.Cog):
 
         if wiki_index_str:
             system_message += f"\n\n## Wiki Knowledge Index\n{wiki_index_str}"
+
+        motorpedia_index = await asyncio.to_thread(motorpedia.get_index)
+        if motorpedia_index:
+            system_message += f"\n\n{motorpedia_index}"
 
         memory_self = await asyncio.to_thread(self._get_memory_self_block)
         if memory_self:
@@ -549,6 +558,7 @@ class KnowledgeCog(commands.Cog):
                     "description": "Execute a data query. Verbs: vehicle <name>, cargo <name>, "
                                    "compare <v1,v2,...>, subsidies, commands, server (status/players), "
                                    "player <name or id> (who a player is, their aliases & nicknames), "
+                                   "motorpedia <topic> (in-game help/encyclopedia article, e.g. 'town policy' or 'fuel management'), "
                                    "song (currently playing), db <SQL> (SELECT only). "
                                    "Example: 'vehicle Tronko' returns specs.",
                     "parameters": {
@@ -1171,10 +1181,13 @@ class KnowledgeCog(commands.Cog):
                 log.warning(f"player wiki sync failed: {e}")
             return json.dumps(results, indent=2)
 
+        elif verb == "motorpedia":
+            return await asyncio.to_thread(motorpedia.lookup, args)
+
         else:
             return (
                 f"Error: Unknown command '{verb}'. "
-                f"Available: vehicle, cargo, compare, subsidies, commands, song, db, server, player"
+                f"Available: vehicle, cargo, compare, subsidies, commands, song, db, server, motorpedia, player"
             )
 
     async def _execute_wiki(self, arguments: dict, player_id: Optional[str] = None) -> str:
