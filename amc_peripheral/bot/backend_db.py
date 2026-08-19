@@ -213,3 +213,99 @@ def format_results(result: dict) -> str:
         return output
     except Exception as e:
         return json.dumps({"error": f"Failed to format results: {str(e)}"})
+
+
+# ---------------------------------------------------------------------------
+# Map / delivery-point location lookup
+# ---------------------------------------------------------------------------
+# The amc_deliverypoint table (synced live from the game server by
+# monitor_deliverypoints) holds every named delivery point in the world with a
+# 3D coordinate (PostGIS Point, SRID 3857, dim=3). This is the authoritative
+# source for "where is X" map questions — far better than the bot wiki, which
+# only has community notes and no coordinates.
+
+_LOCATION_MAX_RESULTS = 8
+
+
+def lookup_location(name: str) -> dict:
+    """Look up named delivery points by fuzzy name match, returning coords.
+
+    Args:
+        name: Place name substring (e.g. 'oji', 'Oji Drilling', 'gosan').
+
+    Returns:
+        Dict with 'results' list [{name, type, x, y, z, guid}] or 'error'.
+    """
+    name = (name or "").strip()
+    if not name:
+        return {"error": "Location name required."}
+    try:
+        import psycopg2.extras
+        conn = _get_connection()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute(
+            """
+            SELECT name, type,
+                   ROUND(ST_X(coord))::bigint AS x,
+                   ROUND(ST_Y(coord))::bigint AS y,
+                   ROUND(ST_Z(coord))::bigint AS z,
+                   guid
+            FROM amc_deliverypoint
+            WHERE removed = false AND name ILIKE %s
+            ORDER BY name
+            LIMIT %s
+            """,
+            (f"%{name}%", _LOCATION_MAX_RESULTS),
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        if not rows:
+            return {"results": [], "note": f"No delivery point named like '{name}'."}
+        return {"results": rows, "count": len(rows)}
+    except Exception as e:
+        log.error(f"lookup_location failed: {e}")
+        return {"error": f"Location lookup failed: {e}"}
+
+
+def get_location_index() -> str:
+    """Build a compact index of named delivery points for prompt injection.
+
+    Returns a short block the LLM can read to learn that map/coordinate
+    knowledge exists and that 'location <place>' looks it up. Kept small
+    (distinct short names only) so it doesn't bloat every prompt.
+    """
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT DISTINCT name
+            FROM amc_deliverypoint
+            WHERE removed = false
+            ORDER BY name
+            """
+        )
+        names = [r[0] for r in cursor.fetchall()]
+        conn.close()
+    except Exception as e:
+        log.error(f"get_location_index failed: {e}")
+        return ""
+
+    if not names:
+        return ""
+
+    total = len(names)
+    # Show a representative sample, prioritizing well-known places, then note count.
+    notable = [
+        n for n in names
+        if any(k in n.lower() for k in ("oji", "gosan", "jeju", "araw", "hanon", "aewol", "gangjung", "harbor"))
+    ]
+    sample = notable if notable else names[:8]
+    sample_s = ", ".join(sample[:8])
+    return (
+        "## Map / Location Knowledge\n"
+        f"Named delivery points with 3D coordinates are available via the `location <place>` "
+        f"command (e.g. 'location Oji Drilling', 'location gas station'), or `db SELECT ... "
+        f"FROM amc_deliverypoint`. {total} named places exist. Examples: {sample_s}.\n"
+    )
+

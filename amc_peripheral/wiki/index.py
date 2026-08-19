@@ -31,9 +31,14 @@ class WikiIndex:
 
         lines = ["Annie's Wiki Index:"]
         for cat, cat_pages in sorted(categories.items()):
-            sample = ", ".join(p["title"] for p in sorted(cat_pages, key=lambda x: x["title"])[:5])
-            if len(cat_pages) > 5:
-                sample += f", ... (+{len(cat_pages) - 5} more)"
+            # Locations are the "where is X" content — show more of them so real
+            # place pages (e.g. 'Oji Drilling') aren't hidden behind "(+N more)".
+            sample_cap = 20 if cat == "location" else 5
+            sample = ", ".join(
+                p["title"] for p in sorted(cat_pages, key=lambda x: x["title"])[:sample_cap]
+            )
+            if len(cat_pages) > sample_cap:
+                sample += f", ... (+{len(cat_pages) - sample_cap} more)"
             lines.append(f"- {cat} ({len(cat_pages)}): {sample}")
 
         index = "\n".join(lines)

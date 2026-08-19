@@ -333,6 +333,10 @@ class KnowledgeCog(commands.Cog):
         if motorpedia_index:
             system_message += f"\n\n{motorpedia_index}"
 
+        location_index = await asyncio.to_thread(backend_db.get_location_index)
+        if location_index:
+            system_message += f"\n\n{location_index}"
+
         memory_self = await asyncio.to_thread(self._get_memory_self_block)
         if memory_self:
             system_message += f"\n\n## Standing Memory\n{memory_self}"
@@ -434,6 +438,10 @@ class KnowledgeCog(commands.Cog):
         motorpedia_index = await asyncio.to_thread(motorpedia.get_index)
         if motorpedia_index:
             system_message += f"\n\n{motorpedia_index}"
+
+        location_index = await asyncio.to_thread(backend_db.get_location_index)
+        if location_index:
+            system_message += f"\n\n{location_index}"
 
         memory_self = await asyncio.to_thread(self._get_memory_self_block)
         if memory_self:
@@ -559,6 +567,7 @@ class KnowledgeCog(commands.Cog):
                                    "compare <v1,v2,...>, subsidies, commands, server (status/players), "
                                    "player <name or id> (who a player is, their aliases & nicknames), "
                                    "motorpedia <topic> (in-game help/encyclopedia article, e.g. 'town policy' or 'fuel management'), "
+                                   "location <place> (map/delivery-point name → its 3D coordinates; answers 'where is X', e.g. 'location Oji Drilling'), "
                                    "song (currently playing), db <SQL> (SELECT only). "
                                    "Example: 'vehicle Tronko' returns specs.",
                     "parameters": {
@@ -1184,10 +1193,16 @@ class KnowledgeCog(commands.Cog):
         elif verb == "motorpedia":
             return await asyncio.to_thread(motorpedia.lookup, args)
 
+        elif verb == "location":
+            return json.dumps(
+                await asyncio.to_thread(backend_db.lookup_location, args),
+                indent=2,
+            )
+
         else:
             return (
                 f"Error: Unknown command '{verb}'. "
-                f"Available: vehicle, cargo, compare, subsidies, commands, song, db, server, motorpedia, player"
+                f"Available: vehicle, cargo, compare, subsidies, commands, song, db, server, motorpedia, player, location"
             )
 
     async def _execute_wiki(self, arguments: dict, player_id: Optional[str] = None) -> str:

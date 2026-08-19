@@ -108,3 +108,28 @@ def test_get_multi_page_context(wiki_index):
     ctx = wiki_index.get_multi_page_context([p1, p2])
     assert "Content A" in ctx
     assert "Content B" in ctx
+
+
+def test_location_category_shows_more_than_five(wiki_index):
+    """The 'location' category must list more than 5 titles so real place pages
+    (e.g. 'Oji Drilling') aren't hidden behind '(+N more)' in the injected index."""
+    loc_names = [
+        "Oji Drilling", "Oil Rig", "AMC", "Gosan Truck Dealership", "Jeju",
+        "Aewol", "Gwangjin Bus Terminal", "Hanon Rice Farm",
+        "Power Plant", "Scooter Dealership", "Barber Shop", "Architect Office",
+    ]
+    for name in loc_names:
+        wiki_index.storage.create_page(title=name, category="location", summary="")
+    # Non-location category with many pages still truncates to 5.
+    for i in range(8):
+        wiki_index.storage.create_page(title=f"player:{i}", category="player", summary="")
+
+    index = wiki_index.build_index()
+
+    # All 12 location names appear (no "+N more" hiding them).
+    for name in loc_names:
+        assert name in index
+    assert "+12 more" not in index
+
+    # Player category still truncates beyond 5.
+    assert "+3 more" in index
