@@ -384,10 +384,10 @@ async def _execute_tool(
             return f"No entry found for key '{key}'."
 
         elif name == "query_game_database":
-            from amc_peripheral.bot import game_db
+            from amc_peripheral.bot import backend_db
 
             sql = args.get("sql", "")
-            result = game_db.execute_raw_query(sql)
+            result = backend_db.execute_query(sql)
 
             if "error" in result:
                 return f"Database query failed: {result['error']}"
@@ -406,34 +406,34 @@ async def _execute_tool(
             return output
 
         elif name == "lookup_vehicle":
-            from amc_peripheral.bot import game_db
+            from amc_peripheral.bot import wiki_kb
 
             vehicle_name = args.get("name", "")
             if not vehicle_name:
                 return "Error: 'name' is required."
-            result = await asyncio.to_thread(game_db.lookup_vehicle, vehicle_name)
+            result = await asyncio.to_thread(wiki_kb.lookup_vehicle, vehicle_name)
             if "error" in result:
                 return result["error"]
             return json.dumps(result, indent=2)
 
         elif name == "lookup_cargo":
-            from amc_peripheral.bot import game_db
+            from amc_peripheral.bot import wiki_kb
 
             cargo_name = args.get("name", "")
             if not cargo_name:
                 return "Error: 'name' is required."
-            result = await asyncio.to_thread(game_db.lookup_cargo, cargo_name)
+            result = await asyncio.to_thread(wiki_kb.lookup_cargo, cargo_name)
             if "error" in result:
                 return result["error"]
             return json.dumps(result, indent=2)
 
         elif name == "compare_vehicles":
-            from amc_peripheral.bot import game_db
+            from amc_peripheral.bot import wiki_kb
 
             names = args.get("names", [])
             if not names:
                 return "Error: 'names' list is required."
-            result = await asyncio.to_thread(game_db.compare_vehicles, names)
+            result = await asyncio.to_thread(wiki_kb.compare_vehicles, names)
             if not result:
                 return "No matching vehicles found."
             return json.dumps(result, indent=2)

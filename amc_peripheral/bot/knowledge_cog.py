@@ -32,7 +32,7 @@ from amc_peripheral.utils.discord_utils import (
 )
 from amc_peripheral.utils.game_utils import announce_in_game
 from amc_peripheral.utils.rate_limiter import RateLimiter
-from amc_peripheral.bot import game_db
+from amc_peripheral.bot import wiki_kb
 from amc_peripheral.bot import backend_db
 from amc_peripheral.bot import motorpedia
 from amc_peripheral.memory.storage import MemoryStorage
@@ -245,16 +245,16 @@ class KnowledgeCog(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         """Initialize knowledge base from forum channel on startup."""
-        # Validate game database schema
-        if not game_db.validate_schema():
+        # Validate the wiki page store is reachable/populated.
+        if not wiki_kb.validate_schema():
             log.warning(
-                "Game database schema validation failed - game queries may not work correctly"
+                "Wiki knowledge store validation failed - game queries may not work correctly"
             )
         else:
-            log.info("Game database schema validated successfully")
+            log.info("Wiki knowledge store validated successfully")
 
-        # Load game schema description for subagent (game_knowledge.py)
-        self.game_schema_description = game_db.get_schema_description()
+        # Load the wiki knowledge guide description for subagent (game_knowledge.py)
+        self.game_schema_description = wiki_kb.get_schema_description()
         log.info(f"Game schema loaded: {len(self.game_schema_description)} characters")
 
         forum_channel = self.bot.get_channel(KNOWLEDGE_FORUM_CHANNEL_ID)
@@ -564,7 +564,9 @@ class KnowledgeCog(commands.Cog):
                 "function": {
                     "name": "run",
                     "description": "Execute a data query. Verbs: vehicle <name>, cargo <name>, "
-                                   "compare <v1,v2,...>, subsidies, commands, server (status/players), "
+                                   "part <name>, deliverypoint <name>, cargospace <type>, "
+                                   "cargotype <type>, compare <v1,v2,...>, subsidies, commands, "
+                                   "server (status/players), "
                                    "player <name or id> (who a player is, their aliases & nicknames), "
                                    "motorpedia <topic> (in-game help/encyclopedia article, e.g. 'town policy' or 'fuel management'), "
                                    "location <place> (map/delivery-point name → its 3D coordinates; answers 'where is X', e.g. 'location Oji Drilling'), "
@@ -1051,12 +1053,12 @@ class KnowledgeCog(commands.Cog):
                     )
                 return "Error: Economy management is not available."
 
-            # Legacy query_game_database (kept for backward compat)
+            # Legacy query_game_database (kept for backward compat) -> backend
             elif function_name == "query_game_database":
                 sql = arguments.get("sql")
                 if not sql:
                     return "Database query failed: sql parameter required"
-                result = game_db.execute_raw_query(sql)
+                result = backend_db.execute_query(sql)
                 if "error" in result:
                     return f"Database query failed: {result['error']}"
                 results = result.get("results", [])
@@ -1091,7 +1093,7 @@ class KnowledgeCog(commands.Cog):
         if verb == "vehicle":
             if not args:
                 return "Error: Vehicle name required. Usage: vehicle <name>"
-            result = await asyncio.to_thread(game_db.lookup_vehicle, args)
+            result = await asyncio.to_thread(wiki_kb.lookup_vehicle, args)
             if "error" in result:
                 return result["error"]
             return json.dumps(result, indent=2)
@@ -1099,7 +1101,39 @@ class KnowledgeCog(commands.Cog):
         elif verb == "cargo":
             if not args:
                 return "Error: Cargo name required. Usage: cargo <name>"
-            result = await asyncio.to_thread(game_db.lookup_cargo, args)
+            result = await asyncio.to_thread(wiki_kb.lookup_cargo, args)
+            if "error" in result:
+                return result["error"]
+            return json.dumps(result, indent=2)
+
+        elif verb == "part":
+            if not args:
+                return "Error: Part name required. Usage: part <name>"
+            result = await asyncio.to_thread(wiki_kb.lookup_part, args)
+            if "error" in result:
+                return result["error"]
+            return json.dumps(result, indent=2)
+
+        elif verb == "deliverypoint":
+            if not args:
+                return "Error: Delivery point required. Usage: deliverypoint <name>"
+            result = await asyncio.to_thread(wiki_kb.lookup_delivery_point, args)
+            if "error" in result:
+                return result["error"]
+            return json.dumps(result, indent=2)
+
+        elif verb == "cargospace":
+            if not args:
+                return "Error: Cargo space type required. Usage: cargospace <type>"
+            result = await asyncio.to_thread(wiki_kb.lookup_cargo_space, args)
+            if "error" in result:
+                return result["error"]
+            return json.dumps(result, indent=2)
+
+        elif verb == "cargotype":
+            if not args:
+                return "Error: Cargo type required. Usage: cargotype <type>"
+            result = await asyncio.to_thread(wiki_kb.lookup_cargo_type, args)
             if "error" in result:
                 return result["error"]
             return json.dumps(result, indent=2)
@@ -1108,7 +1142,7 @@ class KnowledgeCog(commands.Cog):
             if not args:
                 return "Error: Vehicle names required. Usage: compare <v1>, <v2>, ..."
             names = [n.strip() for n in args.split(",")]
-            result = await asyncio.to_thread(game_db.compare_vehicles, names)
+            result = await asyncio.to_thread(wiki_kb.compare_vehicles, names)
             if not result:
                 return "No matching vehicles found."
             return json.dumps(result, indent=2)
@@ -1202,7 +1236,8 @@ class KnowledgeCog(commands.Cog):
         else:
             return (
                 f"Error: Unknown command '{verb}'. "
-                f"Available: vehicle, cargo, compare, subsidies, commands, song, db, server, motorpedia, player, location"
+                f"Available: vehicle, cargo, part, deliverypoint, cargospace, cargotype, "
+                f"compare, subsidies, commands, song, db, server, motorpedia, player, location"
             )
 
     async def _execute_wiki(self, arguments: dict, player_id: Optional[str] = None) -> str:
