@@ -1,6 +1,30 @@
 import re
 
 
+# Removes Unicode emoji glyphs so Annie's replies never contain characters the
+# in-game Motor Town chat can't render (they come through as blank squares).
+# Covers pictographs/emoticons/transport (U+1F000-1FAFF), misc symbols +
+# dingbats (U+2600-27BF), emoji-presentation variation selector (VS16), the
+# zero-width joiner (ZWJ sequences), regional-indicator flag pairs, and
+# skin-tone modifiers. ASCII emoticons and kaomoji like ":)" or "(◕‿◕)" are NOT
+# in these ranges, so they pass through untouched.
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F000-\U0001FAFF"  # emoticons, pictographs, transport & symbols ext-A
+    "\u2600-\u27BF"          # misc symbols + dingbats
+    "\uFE0F"                 # emoji presentation (variation selector-16)
+    "\u200D"                 # zero-width joiner (ZWJ sequences)
+    "\U0001F1E6-\U0001F1FF"  # regional indicator symbols (flag pairs)
+    "\U0001F3FB-\U0001F3FF"  # emoji skin-tone modifiers
+    "]"
+)
+
+
+def strip_emoji(text: str | None) -> str:
+    """Return ``text`` with Unicode emoji glyphs removed (ASCII emoticons kept)."""
+    return _EMOJI_RE.sub("", text or "")
+
+
 def is_code_block_open(text):
     """Return True if there's an unclosed code block in the text."""
     return text.count("```") % 2 == 1
