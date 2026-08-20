@@ -317,7 +317,7 @@
 
                 <limits>
                   <clients>500</clients>
-                  <sources>2</sources>
+                  <sources>3</sources>
                   <queue-size>1048576</queue-size>
                   <client-timeout>30</client-timeout>
                   <header-timeout>15</header-timeout>
