@@ -571,7 +571,7 @@ class KnowledgeCog(commands.Cog):
                                    "player <name or id> (who a player is, their aliases & nicknames), "
                                    "motorpedia <topic> (in-game help/encyclopedia article, e.g. 'town policy' or 'fuel management'), "
                                    "location <place> (map/delivery-point name → its 3D coordinates; answers 'where is X', e.g. 'location Oji Drilling'), "
-                                   "song (currently playing), db <SQL> (SELECT only). "
+                                   "song (currently playing). "
                                    "Example: 'vehicle Tronko' returns specs.",
                     "parameters": {
                         "type": "object",
@@ -580,7 +580,7 @@ class KnowledgeCog(commands.Cog):
                                 "type": "string",
                                 "description": "The command string. First word = verb, rest = args. "
                                                "e.g. 'vehicle Tronko', 'cargo Steel Coil', 'compare Tronko, Maity', "
-                                               "'subsidies', 'commands', 'server', 'song', 'db SELECT ...'",
+                                               "'subsidies', 'commands', 'server', 'song'",
                             }
                         },
                         "required": ["command"],
@@ -1205,14 +1205,6 @@ class KnowledgeCog(commands.Cog):
             self._api_cache[cache_key] = (now, result)
             return result
 
-        elif verb == "db":
-            if not args:
-                return "Error: SQL query required. Usage: db <SELECT query>"
-            result = await asyncio.to_thread(backend_db.execute_query, args)
-            if "error" in result:
-                return f"Backend database query failed: {result['error']}"
-            return backend_db.format_results(result)
-
         elif verb == "server":
             return await self._cached_api_get(
                 "https://server.aseanmotorclub.com/api/active_players/"
@@ -1246,7 +1238,7 @@ class KnowledgeCog(commands.Cog):
             return (
                 f"Error: Unknown command '{verb}'. "
                 f"Available: vehicle, cargo, part, deliverypoint, cargospace, cargotype, "
-                f"compare, subsidies, commands, song, db, server, motorpedia, player, location, search"
+                f"compare, subsidies, commands, song, server, motorpedia, player, location, search"
             )
 
     async def _execute_wiki(self, arguments: dict, player_id: Optional[str] = None) -> str:
