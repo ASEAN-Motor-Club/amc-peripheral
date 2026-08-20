@@ -327,8 +327,8 @@
                   <client-timeout>30</client-timeout>
                   <header-timeout>15</header-timeout>
                   <source-timeout>30</source-timeout>
-                  <burst-on-connect>0</burst-on-connect>
-                  <burst-size>0</burst-size>
+                  <burst-on-connect>1</burst-on-connect>
+                  <burst-size>65536</burst-size>
                 </limits>
 
                 <mount>
