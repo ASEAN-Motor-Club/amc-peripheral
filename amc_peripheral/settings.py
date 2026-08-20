@@ -126,6 +126,23 @@ WIKI_EXPORT_PATH = os.environ.get(
     "WIKI_EXPORT_PATH", os.path.join(MEMORY_DATA_DIR, "annie-wiki-export")
 )
 
+# Public DokuWiki page store (the single consolidated knowledge source).
+# wiki_kb.py also defaults to this; defining it here lets the plain-text
+# memory substrate and other modules share one canonical value.
+WIKI_PAGES_PATH = os.environ.get(
+    "WIKI_PAGES_PATH",
+    "/var/lib/dokuwiki/wiki.aseanmotorclub.com/data/pages",
+)
+
+# Plain-text memory substrate (architecture revamp: all memory in plain text,
+# not SQL/vector stores). Memory pages live as Markdown-body DokuWiki `.txt`
+# files under the public page store's `memory/` namespace so they are
+# web-renderable (native GFM via $conf['syntax']="dw+md"). Annie writes here
+# freely; the curated `core/` knowledge quadrant stays read-only to her.
+PLAIN_MEMORY_PATH = os.environ.get(
+    "PLAIN_MEMORY_PATH", os.path.join(WIKI_PAGES_PATH, "memory")
+)
+
 
 # Mapping Helpers
 def get_env_dict(var_name, default):
