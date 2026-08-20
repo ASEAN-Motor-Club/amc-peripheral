@@ -49,6 +49,9 @@ CATEGORIES = {
 # Cache built once per process: category -> {lower_display_key: slug}
 _INDEX: Optional[dict[str, dict[str, str]]] = None
 
+# Search corpus: category -> {slug: (name, title, body)} — lazily built once.
+_SEARCH_CORPUS: Optional[dict[str, dict[str, tuple[str, str, str]]]] = None
+
 
 # --------------------------------------------------------------------------- #
 # Retrieval
@@ -137,6 +140,63 @@ def _build_index() -> dict[str, dict[str, str]]:
 
     _INDEX = index
     return index
+
+
+def _build_search_corpus() -> dict[str, dict[str, tuple[str, str, str]]]:
+    """Lazily build a cross-category search corpus once per process.
+
+    Returns ``{category: {slug: (name, title, body)}}`` where ``name`` is the
+    best display name, ``title`` the main page heading, and ``body`` the first
+    non-directive paragraph. Reading every page's *details* sub-pages for a
+    search would be needlessly heavy, so this only scans the main ``<slug>.txt``
+    for the title + intro paragraph plus the infobox for the display name —
+    enough for lexical keyword matching, and cheap enough to hold every page in
+    memory once.
+    """
+    global _SEARCH_CORPUS
+    if _SEARCH_CORPUS is not None:
+        return _SEARCH_CORPUS
+
+    corpus: dict[str, dict[str, tuple[str, str, str]]] = {}
+    for category, namespace in CATEGORIES.items():
+        dirpath = os.path.join(WIKI_PAGES_PATH, namespace)
+        if not os.path.isdir(dirpath):
+            continue
+        cat: dict[str, tuple[str, str, str]] = {}
+        for entry in os.listdir(dirpath):
+            if not entry.endswith(".txt"):
+                continue
+            slug = entry[: -len(".txt")]
+            main_path = os.path.join(dirpath, entry)
+            try:
+                text = _read_text(main_path)
+            except OSError:
+                continue
+            main_title = ""
+            m = re.search(r"^======\s*(.+?)\s*======\s*$", text, re.MULTILINE)
+            if m:
+                main_title = m.group(1)
+            # First paragraph (not an infobox/page directive) is the intro body.
+            body = ""
+            for para in text.split("\n\n"):
+                p = para.strip()
+                if p and not p.startswith("{{") and not p.startswith("="):
+                    body = p
+                    break
+            # Infobox display name for the canonical name.
+            infobox: dict = {}
+            infobox_path = os.path.join(dirpath, slug, "auto_infobox.txt")
+            if os.path.isfile(infobox_path):
+                try:
+                    infobox = _parse_infobox(_read_text(infobox_path))
+                except OSError:
+                    infobox = {}
+            name = _display_name(slug, infobox, main_title)
+            cat[slug] = (name, main_title, body)
+        corpus[category] = cat
+
+    _SEARCH_CORPUS = corpus
+    return corpus
 
 
 def _resolve_slug(category: str, query: str) -> Optional[str]:
@@ -441,6 +501,69 @@ def compare_vehicles(names: list[str]) -> list[dict]:
         if "error" not in result:
             out.append(result)
     return out
+
+
+def _sanitize_query(query: str) -> str:
+    """Strip control/NUL chars and normalize a search term for lexical matching.
+
+    Mirrors the lexical-sanitize step of both DeepSeek Harness and Hermes: no
+    synonym generation, no stemming, no query embedding — just trim, drop
+    reserved/control chars, collapse whitespace, lowercase. The raw term then
+    goes straight into a substring match.
+    """
+    cleaned = re.sub(r"[\x00-\x1f\x7f]", " ", query)
+    return _normalize(cleaned)
+
+
+def search_wiki(query: str, limit: int = 8) -> dict:
+    """Plain lexical (substring) cross-category search — no embeddings, no query
+    expansion.
+
+    Identifies what an unknown term refers to when the caller doesn't yet know
+    the right category (e.g. ``search_wiki('air city')`` → the ``vehicle`` Air
+    City bus). The FULL sanitized term is matched as a substring against each
+    page's name, then title, then slug, then description, in that priority
+    order — there is no synonym/stem/embedding step. Any recall gap is the
+    caller's to close by retrying a different phrasing (the model is coached to
+    do this via the tool description). Returns matches across every category so
+    the caller can then use the targeted ``lookup_*`` verb for full details.
+
+    Returns:
+        dict with ``results: [{category, slug, name, title}]`` or
+        ``{"error": ...}`` for an empty query.
+    """
+    q = _sanitize_query(query)
+    if not q:
+        return {"error": "Search query required."}
+    corpus = _build_search_corpus()
+
+    hits: list[tuple[int, str, str, str, str]] = []  # (priority, cat, slug, name, title)
+    for category, pages in corpus.items():
+        for slug, (name, title, body) in pages.items():
+            n_name = _normalize(name)
+            n_title = _normalize(title)
+            n_slug = _normalize(slug)
+            n_body = _normalize(body)
+            if q in n_name:
+                prio = 1
+            elif q in n_title:
+                prio = 2
+            elif q in n_slug:
+                prio = 3
+            elif q in n_body:
+                prio = 4
+            else:
+                continue
+            hits.append((prio, category, slug, name, title))
+
+    hits.sort(key=lambda x: (x[0], x[1], x[2]))
+    results = [
+        {"category": c, "slug": s, "name": n, "title": t}
+        for _, c, s, n, t in hits[:limit]
+    ]
+    if not results:
+        return {"results": [], "note": f"No wiki pages matched '{query}'."}
+    return {"results": results, "count": len(results)}
 
 
 # --------------------------------------------------------------------------- #

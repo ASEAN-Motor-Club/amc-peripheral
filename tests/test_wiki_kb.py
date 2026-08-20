@@ -35,6 +35,19 @@ def page_store(tmp_path, monkeypatch):
         "====== Tuscan ======\n\n**Tuscan** is a small vehicle in Motor Town.\n",
         encoding="utf-8",
     )
+    # vehicles/air_city (the real-world Air City bus)
+    v2 = pages / "vehicles" / "air_city"
+    v2.mkdir()
+    (v2 / "auto_infobox.txt").write_text(
+        "{{infobox>\nname = Air City\nType = Bus\nCost = 120,000\n}}\n",
+        encoding="utf-8",
+    )
+    (pages / "vehicles" / "air_city.txt").write_text(
+        "{{page>vehicles:air_city:auto_infobox&nodate&nomdate}}\n\n"
+        "====== Air City ======\n\n**Air City** is a medium duty bus vehicle with "
+        "33 passenger seats and an LED route display.\n",
+        encoding="utf-8",
+    )
     # cargos/steelcoil
     c = pages / "cargos" / "steelcoil_10t"
     (pages / "cargos").mkdir(parents=True)
@@ -89,8 +102,9 @@ def page_store(tmp_path, monkeypatch):
     )
 
     monkeypatch.setattr(wiki_kb, "WIKI_PAGES_PATH", str(pages))
-    # reset the module-level index cache
+    # reset the module-level index + search caches
     monkeypatch.setattr(wiki_kb, "_INDEX", None)
+    monkeypatch.setattr(wiki_kb, "_SEARCH_CORPUS", None)
     return pages
 
 
@@ -154,3 +168,63 @@ def test_compare_vehicles_drops_misses(page_store):
 
 def test_validate_schema_true(page_store):
     assert wiki_kb.validate_schema() is True
+
+
+def test_search_wiki_finds_air_city_vehicle(page_store):
+    """'air city' should resolve to the Air City vehicle via name hit."""
+    r = wiki_kb.search_wiki("air city")
+    assert "error" not in r
+    assert r["results"], "expected at least one match for 'air city'"
+    top = r["results"][0]
+    assert top["category"] == "vehicle"
+    assert top["slug"] == "air_city"
+    assert top["name"] == "Air City"
+
+
+def test_search_wiki_finds_by_body_keyword(page_store):
+    """Search by a term that only appears in the page body (e.g. 'bus')."""
+    r = wiki_kb.search_wiki("bus")
+    assert "error" not in r
+    slugs = {hit["slug"] for hit in r["results"]}
+    assert "air_city" in slugs, f"expected air_city in results, got {slugs}"
+
+
+def test_search_wiki_ranks_name_over_body(page_store):
+    """A name hit outranks a body-only hit for the same term."""
+    r = wiki_kb.search_wiki("tuscan")
+    assert "error" not in r
+    assert r["results"][0]["slug"] == "tuscan"
+    assert r["results"][0]["category"] == "vehicle"
+
+
+def test_search_wiki_miss(page_store):
+    r = wiki_kb.search_wiki("zzz_nonexistent")
+    assert r["results"] == []
+
+
+def test_search_wiki_full_phrase_substring(page_store):
+    """A multi-word term must match as a whole substring, not split into tokens.
+
+    'air city' should hit only the Air City page (full-phrase substring) and not
+    spuriously surface unrelated pages that merely contain one of the words —
+    the lexical mechanism does no token/synonym expansion.
+    """
+    r = wiki_kb.search_wiki("air city")
+    assert "error" not in r
+    assert r["results"][0]["slug"] == "air_city"
+    assert r["results"][0]["category"] == "vehicle"
+    # None of the other fixture pages contain the full phrase "air city".
+    assert all(hit["slug"] == "air_city" for hit in r["results"])
+
+
+def test_search_wiki_empty_query(page_store):
+    r = wiki_kb.search_wiki("   ")
+    assert "error" in r
+
+
+def test_search_wiki_cross_category(page_store):
+    """A term present in two categories surfaces the higher-scored one first."""
+    r = wiki_kb.search_wiki("steel coil")
+    assert "error" not in r
+    assert r["results"][0]["category"] == "cargo"
+    assert r["results"][0]["slug"] == "steelcoil_10t"
