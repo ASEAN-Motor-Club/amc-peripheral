@@ -7,6 +7,7 @@ from amc_peripheral.wiki.ingest import WikiIngest
 from amc_peripheral.wiki.lint import WikiLint
 from amc_peripheral.wiki.export import WikiExporter
 from amc_peripheral.wiki.synthesis import WikiSynthesizer
+from amc_peripheral.wiki.plain_memory import PlainTextMemory
 
 __all__ = [
     "WikiStorage",
@@ -16,4 +17,5 @@ __all__ = [
     "WikiLint",
     "WikiExporter",
     "WikiSynthesizer",
+    "PlainTextMemory",
 ]

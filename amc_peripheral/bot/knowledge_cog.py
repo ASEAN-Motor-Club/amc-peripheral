@@ -39,6 +39,7 @@ from amc_peripheral.memory.storage import MemoryStorage
 from amc_peripheral.memory.retrieval import MemoryRetrieval
 from amc_peripheral.memory.player_index import PlayerIndex
 from amc_peripheral.wiki.memory import MemoryStore
+from amc_peripheral.wiki.plain_memory import PlainTextMemory, PLAIN_MEMORY_PATH
 from amc_peripheral.wiki import (
     WikiStorage,
     WikiRetrieval,
@@ -157,14 +158,23 @@ class KnowledgeCog(commands.Cog):
             self._player_index = None
 
         # Durable agent memory (self + fact categories over the wiki)
-        if self._wiki_storage and self._wiki_retrieval:
-            self._memory_store = MemoryStore(
-                self._wiki_storage, self._wiki_retrieval
-            )
-            log.info("Memory store initialized")
-        else:
-            self._memory_store = None
-            log.warning("Memory store unavailable (no wiki storage/retrieval)")
+        # Architecture revamp: prefer the plain-text, Chroma-free substrate
+        # (memory as files under the public page store's memory/ namespace).
+        # Fall back to the SQLite+Chroma MemoryStore only when the wiki
+        # storage/retrieval is present but the plain store can't initialize.
+        try:
+            self._memory_store = PlainTextMemory(root=PLAIN_MEMORY_PATH)
+            log.info(f"Plain-text memory store initialized at {PLAIN_MEMORY_PATH}")
+        except Exception as e:
+            log.warning(f"Plain-text memory store unavailable ({e}); falling back to wiki MemoryStore")
+            if self._wiki_storage and self._wiki_retrieval:
+                self._memory_store = MemoryStore(
+                    self._wiki_storage, self._wiki_retrieval
+                )
+                log.info("Legacy MemoryStore initialized (SQLite + Chroma)")
+            else:
+                self._memory_store = None
+                log.warning("Memory store unavailable (no wiki storage/retrieval)")
 
         if self._wiki_storage and self._wiki_retrieval:
             try:
@@ -569,6 +579,7 @@ class KnowledgeCog(commands.Cog):
                                    "server (status/players), "
                                    "search <term> (literal full-text/cross-category lookup to identify what a term is — e.g. 'search air city' finds the Air City vehicle; matches page names/titles/descriptions as-is with no synonyms, so if it returns nothing or the wrong thing, RETRY with a different word or a shorter distinctive term like 'air' or 'city'), " \
                                    "player <name or id> (who a player is, their aliases & nicknames), "
+                                   "history <term> [player] (search the raw chat message log, NOT memory), "
                                    "motorpedia <topic> (in-game help/encyclopedia article, e.g. 'town policy' or 'fuel management'), "
                                    "location <place> (map/delivery-point name → its 3D coordinates; answers 'where is X', e.g. 'location Oji Drilling'), "
                                    "song (currently playing). "
@@ -1234,11 +1245,36 @@ class KnowledgeCog(commands.Cog):
                 indent=2,
             )
 
+        elif verb == "history":
+            if not args:
+                return "Error: Search term required. Usage: history <term> [player name]"
+            parts = args.rsplit(maxsplit=1)
+            if len(parts) == 2 and self._player_index and self._player_index.lookup(parts[1]):
+                term, speaker = parts
+            else:
+                term, speaker = args, None
+            if not self._memory_storage:
+                return "Message history is not available right now."
+            rows = await asyncio.to_thread(
+                self._memory_storage.search_log, term, player_name=speaker, limit=20
+            )
+            if not rows:
+                tail = f" by '{speaker}'" if speaker else ""
+                return f"No chat history found for '{term}'{tail}."
+            lines = []
+            for r in rows:
+                name = r.get("player_name", "?")
+                ts = (r.get("timestamp") or "")[:16]
+                msg = (r.get("message") or "").strip().replace("\n", " ")
+                mark = "(bot)" if r.get("is_bot_response") else ""
+                lines.append(f"[{ts}] {name}{mark}: {msg[:300]}")
+            return "Message history (raw log, not memory):\n" + "\n".join(lines)
+
         else:
             return (
                 f"Error: Unknown command '{verb}'. "
                 f"Available: vehicle, cargo, part, deliverypoint, cargospace, cargotype, "
-                f"compare, subsidies, commands, song, server, motorpedia, player, location, search"
+                f"compare, subsidies, commands, song, server, motorpedia, player, history, location, search"
             )
 
     async def _execute_wiki(self, arguments: dict, player_id: Optional[str] = None) -> str:

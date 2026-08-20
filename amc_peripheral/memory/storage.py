@@ -126,6 +126,38 @@ class MemoryStorage:
             cursor = self.conn.execute("SELECT COUNT(*) FROM player_memory")
         return cursor.fetchone()[0]
 
+    def search_log(
+        self,
+        term: str,
+        player_name: Optional[str] = None,
+        limit: int = 20,
+    ) -> list[dict]:
+        """Search the RAW message history (append-only log) for a term.
+
+        This is the ``history`` tool backend: the message log is NOT part of
+        Annie's wiki/memory — it stays a raw SQLite log, searchable here and
+        never injected into prompts. Ordered most-recent first. Optionally
+        scoped to a speaker by (case-insensitive) player_name.
+        """
+        term = (term or "").strip()
+        if not term:
+            return []
+        params: list = [f"%{term}%"]
+        where = "message LIKE ? COLLATE NOCASE"
+        if player_name:
+            where += " AND player_name = ? COLLATE NOCASE"
+            params.append(player_name)
+        cursor = self.conn.execute(
+            f"""
+            SELECT * FROM player_memory
+            WHERE {where}
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """,
+            [*params, limit],
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
     def cleanup_old_memories(self, days: int = 90, min_relevance: float = 0.3) -> int:
         """Delete old memories with low relevance. Returns count deleted."""
         cursor = self.conn.execute(
