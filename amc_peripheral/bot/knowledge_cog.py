@@ -567,6 +567,7 @@ class KnowledgeCog(commands.Cog):
                                    "part <name>, deliverypoint <name>, cargospace <type>, "
                                    "cargotype <type>, compare <v1,v2,...>, subsidies, commands, "
                                    "server (status/players), "
+                                   "search <term> (literal full-text/cross-category lookup to identify what a term is — e.g. 'search air city' finds the Air City vehicle; matches page names/titles/descriptions as-is with no synonyms, so if it returns nothing or the wrong thing, RETRY with a different word or a shorter distinctive term like 'air' or 'city'), " \
                                    "player <name or id> (who a player is, their aliases & nicknames), "
                                    "motorpedia <topic> (in-game help/encyclopedia article, e.g. 'town policy' or 'fuel management'), "
                                    "location <place> (map/delivery-point name → its 3D coordinates; answers 'where is X', e.g. 'location Oji Drilling'), "
@@ -1138,6 +1139,14 @@ class KnowledgeCog(commands.Cog):
                 return result["error"]
             return json.dumps(result, indent=2)
 
+        elif verb == "search":
+            if not args:
+                return "Error: Search term required. Usage: search <term>"
+            result = await asyncio.to_thread(wiki_kb.search_wiki, args)
+            if "error" in result:
+                return result["error"]
+            return json.dumps(result, indent=2)
+
         elif verb == "compare":
             if not args:
                 return "Error: Vehicle names required. Usage: compare <v1>, <v2>, ..."
@@ -1237,7 +1246,7 @@ class KnowledgeCog(commands.Cog):
             return (
                 f"Error: Unknown command '{verb}'. "
                 f"Available: vehicle, cargo, part, deliverypoint, cargospace, cargotype, "
-                f"compare, subsidies, commands, song, db, server, motorpedia, player, location"
+                f"compare, subsidies, commands, song, db, server, motorpedia, player, location, search"
             )
 
     async def _execute_wiki(self, arguments: dict, player_id: Optional[str] = None) -> str:
