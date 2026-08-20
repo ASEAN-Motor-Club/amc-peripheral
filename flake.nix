@@ -311,6 +311,7 @@
               listen.port = cfg.icecast.listen.port;
 
               extraConf = ''
+                <loglevel>4</loglevel>
                 <location>ASEAN Motor Club</location>
                 <admin>admin@aseanmotorclub.com</admin>
 
