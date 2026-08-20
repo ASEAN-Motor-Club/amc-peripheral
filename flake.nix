@@ -278,8 +278,14 @@
           };
 
           config = lib.mkIf cfg.enable {
-            # Apply Sharry's overlay to make pkgs.sharry available
-            nixpkgs.overlays = [inputs.sharry.overlays.default];
+            # Apply Sharry's overlay to make pkgs.sharry available, and the
+            # icecast 2.5.0 overlay (+vendored libigloo) so the radio's :8443
+            # native-TLS burst-on-connect race is fixed (see
+            # docs/icecast-2.5-upgrade-handoff.md). This keeps nixpkgs pinned.
+            nixpkgs.overlays = [
+              inputs.sharry.overlays.default
+              (import ./nix/overlay/icecast-2.5.nix)
+            ];
 
             # Stable symlinks for static web packages so nginx config
             # doesn't change on every rebuild (prevents unnecessary reloads)
