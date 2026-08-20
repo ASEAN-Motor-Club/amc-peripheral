@@ -294,7 +294,8 @@ class TestLocationIndex:
         with patch.object(mock_backend_db_url, "_get_connection", return_value=fake_conn):
             idx = mock_backend_db_url.get_location_index()
         assert "location" in idx
-        assert "amc_deliverypoint" in idx
+        # Raw SQL access was disabled — the index must NOT advertise the DB/table.
+        assert "amc_deliverypoint" not in idx
         assert "4 named places" in idx
         # Notable places (oji/gosan/jeju) prioritized in sample
         assert "Oji Drilling" in idx

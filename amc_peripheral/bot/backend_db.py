@@ -305,7 +305,7 @@ def get_location_index() -> str:
     return (
         "## Map / Location Knowledge\n"
         f"Named delivery points with 3D coordinates are available via the `location <place>` "
-        f"command (e.g. 'location Oji Drilling', 'location gas station'), or `db SELECT ... "
-        f"FROM amc_deliverypoint`. {total} named places exist. Examples: {sample_s}.\n"
+        f"command (e.g. 'location Oji Drilling', 'location gas station'). {total} named places exist. "
+        f"Examples: {sample_s}.\n"
     )
 
