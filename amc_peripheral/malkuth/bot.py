@@ -4,7 +4,8 @@ import discord
 from discord.ext import commands
 
 from .cog import BanTrapCog
-from .settings import DISCORD_TOKEN_MALKUTH
+from .moderation import ModerationCog
+from .settings import DISCORD_TOKEN_MALKUTH, GUILD_ID
 
 log = logging.getLogger(__name__)
 
@@ -18,9 +19,17 @@ class BanTrapBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         await self.add_cog(BanTrapCog(self))
+        await self.add_cog(ModerationCog(self))
+        # Guild-scoped sync so the slash commands appear immediately. Wrapped:
+        # a sync failure must never take the ban trap down — worst case the
+        # moderation commands stay stale/absent until the next restart.
+        try:
+            await self.tree.sync(guild=discord.Object(id=GUILD_ID))
+        except Exception:
+            log.exception("Slash command sync failed — ban trap remains active")
 
     async def on_ready(self):
-        log.info("malkuth online: %s", self.user)
+        log.info("malkuth online: %s (cogs: ban-trap, moderation)", self.user)
 
 
 async def _async_main():
