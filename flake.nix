@@ -657,15 +657,6 @@
                 BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT = "0";
                 BAN_TRAP_CLEANUP_WINDOW_SECONDS = "60";
                 BAN_TRAP_DELETE_DELAY_SECONDS = "5";
-                # ModerationCog: roles allowed to use /timeout /untimeout /kick
-                # /ban /unban. WARNING: verify these IDs before deploying —
-                # holders can moderate any member (staff/protected roles are
-                # refused by the cog). Currently mirrors the ban-trap exempt
-                # staff roles; an empty value fail-closes all mod commands.
-                MOD_ALLOWED_ROLE_IDS = "1395460420189421713,1496482029892669500";
-                # Optional: text channel that receives an embed for every
-                # moderation action. Empty → no mod-log embeds.
-                MOD_LOG_CHANNEL_ID = "";
               };
               serviceConfig = {
                 Type = "simple";
