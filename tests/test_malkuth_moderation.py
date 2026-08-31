@@ -67,6 +67,22 @@ def cog():
     return ModerationCog(MockBot())
 
 
+@pytest.fixture(autouse=True)
+def _mod_config():
+    """Pin moderation module globals regardless of test import order.
+
+    In the full suite, test_ban_trap_cog.py (alphabetically first) imports
+    malkuth.settings BEFORE this module's os.environ.setdefault runs, so the
+    settings snapshot can lack MOD_ALLOWED_ROLE_IDS. Patch the module globals
+    directly instead of relying on env timing.
+    """
+    with (
+        patch("amc_peripheral.malkuth.moderation.MOD_ALLOWED_ROLE_IDS", {MOD_ROLE}),
+        patch("amc_peripheral.malkuth.moderation.GUILD_ID", GUILD_ID),
+    ):
+        yield
+
+
 @pytest.fixture
 def mod_interaction():
     return make_interaction(mod=True)
