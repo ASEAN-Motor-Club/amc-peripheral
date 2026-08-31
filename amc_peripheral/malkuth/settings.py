@@ -40,15 +40,3 @@ BAN_TRAP_DELETE_DELAY_SECONDS = int(
     os.environ.get("BAN_TRAP_DELETE_DELAY_SECONDS", "5")
 )
 DISCORD_TOKEN_MALKUTH = os.environ.get("DISCORD_TOKEN_MALKUTH")
-
-# --- ModerationCog (optional, fail-closed) ---------------------------------
-# Roles allowed to use /timeout /untimeout /kick /ban /unban. Empty set → the
-# cog loads but refuses EVERY command (fail-closed), and the ban trap is
-# unaffected. Never defaulted to production IDs.
-MOD_ALLOWED_ROLE_IDS = {
-    int(x) for x in os.environ.get("MOD_ALLOWED_ROLE_IDS", "").split(",") if x.strip()
-}
-# Optional audit channel: every moderation action posts an embed there.
-# Unset/empty → no mod-log embeds (actions still reply ephemerally to the mod).
-_MOD_LOG_CHANNEL_RAW = os.environ.get("MOD_LOG_CHANNEL_ID", "").strip()
-MOD_LOG_CHANNEL_ID = int(_MOD_LOG_CHANNEL_RAW) if _MOD_LOG_CHANNEL_RAW else None
