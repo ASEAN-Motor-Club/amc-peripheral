@@ -2,6 +2,7 @@ import urllib.parse
 import logging
 from yarl import URL
 from amc_peripheral.settings import GAME_SERVER_API_URL
+from amc_peripheral.utils.text_utils import strip_emoji
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +33,12 @@ async def game_api_request(http_session, url, method="get", password="", params=
 
 
 async def announce_in_game(http_session, message, type="message", color="FFFF00"):
+    # In-game Motor Town chat renders Unicode emoji as blank squares, so strip
+    # them at the ONE chokepoint every game-chat path funnels through
+    # (knowledge/radio/utils/translation cogs all post via announce_in_game).
+    # Code-enforced, mirrors the knowledge_cog._call_llm_with_tools rule (PR #34)
+    # which only covered that cog's own replies — radio_cog was leaking emoji.
+    message = strip_emoji(message)
     params = {"message": message, "type": type}
     if color is not None:
         params["color"] = color

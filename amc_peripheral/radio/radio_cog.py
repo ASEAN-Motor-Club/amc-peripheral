@@ -54,7 +54,7 @@ from amc_peripheral.settings import (
     BACKEND_API_URL,
 )
 from amc_peripheral.db import RadioDB
-from amc_peripheral.utils.text_utils import split_markdown
+from amc_peripheral.utils.text_utils import split_markdown, truncate_reply
 from amc_peripheral.radio.tts import tts_dispatch, tts_multi_dispatch
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
 from amc_peripheral.radio.radio_server import (
@@ -2370,7 +2370,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 await channel.send(response)
             await announce_in_game(
                 self.bot.http_session,
-                response[:520],
+                truncate_reply(response),
                 color="FEE75C",
             )
         except Exception as e:
@@ -2766,7 +2766,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     if self._wiki_index
                     else ""
                 )
-                + "\nRespond briefly — game chat has a character limit. Keep it under 500 chars.\nDo NOT use any emojis — the game client cannot render them.",
+                + "\nRespond briefly — game chat has a character limit. Keep it under 140 characters.\nDo NOT use any emojis — the game client cannot render them.",
             },
             {
                 "role": "user",
@@ -2793,12 +2793,12 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         async def ingame_notify(msg: str):
             if channel:
                 await channel.send(msg)
-            await announce_in_game(self.bot.http_session, msg[:520])
+            await announce_in_game(self.bot.http_session, truncate_reply(msg))
 
         response = await self._call_annie_llm(
             messages, tools, player_name, ingame_notify, player_id=player_id
         )
-        await announce_in_game(self.bot.http_session, response[:520])
+        await announce_in_game(self.bot.http_session, truncate_reply(response))
 
         # Persist interaction to long-term memory
         await self._store_annie_interaction(
@@ -3474,7 +3474,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         async def ingame_notify(msg: str):
             if channel:
                 await channel.send(msg)
-            await announce_in_game(self.bot.http_session, msg[:520])
+            await announce_in_game(self.bot.http_session, truncate_reply(msg))
 
         await self._play_user_playlist(songs, requester, ingame_notify)
 
