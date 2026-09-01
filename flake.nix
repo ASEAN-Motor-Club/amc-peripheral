@@ -561,6 +561,7 @@
                 RADIO_DB_PATH = "${cfg.dbPath}";
                 TTS_PROVIDER = "google";
                 MEMORY_DATA_DIR = "/var/lib/data/amc-memory";
+                DEFAULT_AI_MODEL = "deepseek/deepseek-v4-flash-0731:nitro";
               };
               restartIfChanged = false;
               serviceConfig = {
