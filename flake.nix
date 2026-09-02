@@ -445,6 +445,18 @@
                   send_timeout 300s;
                 '';
               };
+              # Cloudflare applies its default 4h static TTL to /sw.js and the
+              # upstream service worker is cache-first with a fixed cache name
+              # and no pruning. After a sharry upgrade, browsers can keep
+              # running the stale webapp for hours (silent dead UI — e.g. the
+              # signup page swallowing failed requests). Force revalidation.
+              locations."= /sw.js" = {
+                proxyPass = "http://127.0.0.1:${toString cfg.sharry.bindPort}";
+                extraConfig = ''
+                  proxy_set_header Host $host;
+                  add_header Cache-Control "no-cache" always;
+                '';
+              };
             };
 
             # Radio ASEAN Web Interface (Discord Activity)
@@ -672,6 +684,10 @@
             };
 
             # Sharry file sharing service
+            # NOTE: the DB must live on the local PostgreSQL — the upstream
+            # module default is a demo H2 file in /tmp, which systemd-tmpfiles
+            # deletes under the running server (accounts end up in an unlinked
+            # inode and are lost on the next restart).
             services.sharry = lib.mkIf cfg.sharry.enable {
               enable = true;
               config = {
@@ -682,6 +698,13 @@
                 };
                 backend = {
                   signup.mode = "open";
+                  # pg_hba on this host trusts ::1 loopback TCP; verified against
+                  # the running PostgreSQL 16 with sharry's bundled pgjdbc 42.7.5.
+                  jdbc = {
+                    url = "jdbc:postgresql://[::1]:5432/sharry";
+                    user = "sharry";
+                    password = "";
+                  };
                   files = {
                     default-store = "filesystem";
                     stores.filesystem = {
@@ -693,6 +716,24 @@
                 };
                 webapp.chunk-size = "100M";
               };
+            };
+
+            # Provision the Sharry database/role on the local PostgreSQL
+            # (list-typed NixOS options merge with any other module's config).
+            services.postgresql.ensureDatabases = lib.mkIf cfg.sharry.enable ["sharry"];
+            services.postgresql.ensureUsers = lib.mkIf cfg.sharry.enable [
+              {
+                name = "sharry";
+                ensureDBOwnership = true;
+              }
+            ];
+
+            # The upstream unit only waits for networking.target and sets no
+            # Restart; order sharry after PostgreSQL so flyway migrations can't
+            # race a not-yet-started database.
+            systemd.services.sharry = lib.mkIf cfg.sharry.enable {
+              after = ["postgresql.service"];
+              wants = ["postgresql.service"];
             };
           };
         };
