@@ -445,6 +445,18 @@
                   send_timeout 300s;
                 '';
               };
+              # Cloudflare applies its default 4h static TTL to /sw.js and the
+              # upstream service worker is cache-first with a fixed cache name
+              # and no pruning. After a sharry upgrade, browsers can keep
+              # running the stale webapp for hours (silent dead UI — e.g. the
+              # signup page swallowing failed requests). Force revalidation.
+              locations."= /sw.js" = {
+                proxyPass = "http://127.0.0.1:${toString cfg.sharry.bindPort}";
+                extraConfig = ''
+                  proxy_set_header Host $host;
+                  add_header Cache-Control "no-cache" always;
+                '';
+              };
             };
 
             # Radio ASEAN Web Interface (Discord Activity)
