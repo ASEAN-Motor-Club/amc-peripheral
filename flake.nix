@@ -697,7 +697,17 @@
                   port = cfg.sharry.bindPort;
                 };
                 backend = {
-                  signup.mode = "open";
+                  # Invite-only registration: random users can't create accounts
+                  # (and fill the disk). Invites are minted via the admin API:
+                  #   POST /api/v2/admin/signup/newinvite {"password": "<this secret>"}
+                  # -> {"success":true,"id":"<invite-key>"}; the key is single-use
+                  # (deleted on use) and expires after signup.invite-time.
+                  # NOTE: this secret lives in the store-rendered config
+                  # (root-readable on a single-tenant host). If that ever stops
+                  # being acceptable, move it to a runtime HOCON include from
+                  # /run/agenix instead.
+                  signup.mode = "invite";
+                  signup.invite-password = "24b49bea95540cab43b7419c8b19aed87432de07920dfe92";
                   # pg_hba on this host trusts ::1 loopback TCP; verified against
                   # the running PostgreSQL 16 with sharry's bundled pgjdbc 42.7.5.
                   jdbc = {
