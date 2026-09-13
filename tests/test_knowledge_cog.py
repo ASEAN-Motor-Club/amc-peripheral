@@ -707,3 +707,44 @@ async def test_ai_helper_discord_injects_semantic_memory():
     assert "Relevant past conversations:" in combined
     assert "I love buses" in combined
 
+
+@pytest.mark.asyncio
+async def test_ingame_reply_is_not_truncated():
+    """In-game /bot replies are announced in full — no 140/520-char cap (2026-09-13)."""
+    from unittest.mock import patch
+
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+
+    long_answer = (
+        "Hey Moo! Couldn't dig up the exact command in my notes, sorry. "
+        "Most servers handle it by standing next to the player and opening "
+        "their interact menu, or via the company menu in-game. Check your keys "
+        "for Player Interaction - that usually has the invite option. "
+        "If that's not it, this is prime material for the fine folks in our "
+        "chaotic radio family - drop into the Discord (code aseanmotorclub) "
+        "and ask there, someone will walk you through the whole thing. "
+        "Also worth checking the company menu, which lists every member and "
+        "the invite button is right there next to the roster."
+    )
+    assert len(long_answer) > 520
+
+    cog.ai_helper = AsyncMock(return_value=long_answer)
+    cog._store_bot_interaction = AsyncMock()
+
+    announced = []
+
+    async def fake_announce(http_session, message, **kwargs):
+        announced.append(message)
+
+    with patch("amc_peripheral.bot.knowledge_cog.announce_in_game", fake_announce):
+        await cog._handle_ingame_bot_command(
+            player_name="MrMoo6000",
+            player_id="76561198000000000",
+            discord_id=None,
+            message="how do I invite someone to my company",
+        )
+
+    assert announced == [long_answer]
+

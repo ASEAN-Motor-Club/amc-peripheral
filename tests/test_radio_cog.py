@@ -2661,3 +2661,58 @@ class AsyncContextManagerMock:
 
     async def __aexit__(self, *args):
         pass
+
+
+@pytest.mark.asyncio
+async def test_ingame_annie_reply_is_not_truncated(cog, mock_bot, monkeypatch):
+    """In-game @annie replies go out in full — the 140-char cap is gone (2026-09-13)."""
+    from amc_peripheral.radio import radio_cog
+
+    long_answer = (
+        "Hey Moo! Couldn't dig up the exact command in my notes, sorry. "
+        "Most servers handle it by standing next to the player and opening "
+        "their interact menu, or via the company menu in-game. Check your keys "
+        "for Player Interaction - that usually has the invite option. "
+        "If that's not it, drop into the Discord and ask there."
+    )
+    assert len(long_answer) > 140
+
+    mock_channel = MagicMock()
+    mock_channel.history = MagicMock(return_value=AsyncIteratorMock([]))
+    mock_bot.get_channel = MagicMock(return_value=mock_channel)
+
+    cog._get_player_memory_context = AsyncMock(return_value="")
+    cog._get_wiki_context = AsyncMock(return_value="")
+    cog._call_annie_llm = AsyncMock(return_value=long_answer)
+    cog._store_annie_interaction = AsyncMock()
+
+    announced = AsyncMock()
+    monkeypatch.setattr(radio_cog, "announce_in_game", announced)
+
+    await cog._handle_annie_chat_ingame("MrMoo6000", "how do I invite someone?")
+
+    announced.assert_awaited_once()
+    assert announced.await_args.args[1] == long_answer
+
+
+@pytest.mark.asyncio
+async def test_agent_game_request_song_not_truncated(cog, mock_bot, monkeypatch):
+    """In-game song-request acks go out in full too (2026-09-13)."""
+    from amc_peripheral.radio import radio_cog
+
+    monkeypatch.setattr(radio_cog, "GAME_ANNOUNCEMENTS_CHANNEL_ID", 99999)
+
+    mock_channel = MagicMock()
+    mock_channel.send = AsyncMock()
+    mock_bot.get_channel = MagicMock(return_value=mock_channel)
+
+    long_ack = "Right on! " + "This track is downloading now, hang tight. " * 5
+    assert len(long_ack) > 140
+
+    cog._agent_song_request = AsyncMock(return_value=long_ack)
+    announced = AsyncMock()
+    monkeypatch.setattr(radio_cog, "announce_in_game", announced)
+
+    await cog._agent_game_request_song("cool song", "PlayerOne")
+
+    assert announced.await_args.args[1] == long_ack

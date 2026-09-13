@@ -77,3 +77,13 @@ async def test_announce_preserves_type_and_color_params():
     query = parse_qs(urlparse(session.urls[0]).query)
     assert query["type"] == ["jingle"]
     assert query["color"] == ["FEE75C"]
+
+
+@pytest.mark.asyncio
+async def test_announce_does_not_truncate_long_message():
+    """Replies go out in full — no 140-char game-chat brevity cap (2026-09-13)."""
+    long = "Hey Moo! Couldn't dig up the exact command in my notes, sorry. " * 5
+    assert len(long) > 140
+    session = FakeSession()
+    await announce_in_game(session, long)
+    assert _posted_message(session.urls[0]) == long
