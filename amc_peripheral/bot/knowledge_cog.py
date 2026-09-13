@@ -436,7 +436,7 @@ class KnowledgeCog(commands.Cog):
 
         system_message = (
             "You are a helpful bot in Motor Town, an open world driving game, specifically in 'ASEAN Motor Club'.\n"
-            "This reply goes through the game chat: reply as short as possible, ideally under 140 characters, since the game only allows short messages, and avoid using newlines.\n"
+            "This reply goes through the game chat: write your full answer, never cut it short, and avoid using newlines.\n"
             "Only use the following knowledge. Do not use markdown, tables, or emojis.\n"
             "For game-related questions, use the ask_game_knowledge tool instead of guessing.\n\n"
             + knowledge
@@ -2219,7 +2219,7 @@ class KnowledgeCog(commands.Cog):
                 ingame_feedback_fn=ingame_status_fn,
                 player_id=player_id,
             )
-            await announce_in_game(self.bot.http_session, answer[:520])
+            await announce_in_game(self.bot.http_session, answer)
 
             # Store interaction in long-term memory + schedule wiki ingest (fire-and-forget)
             task = asyncio.create_task(self._store_bot_interaction(

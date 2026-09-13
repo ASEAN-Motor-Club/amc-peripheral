@@ -26,12 +26,11 @@ def strip_emoji(text: str | None) -> str:
 
 
 def truncate_reply(text: str | None, limit: int = 140) -> str:
-    """Shorten a bot game-chat reply to ``limit`` chars, cutting at a word boundary.
+    """Shorten text to ``limit`` chars, cutting at a word boundary.
 
-    Game-chat replies must stay brief (output spec: under 140 characters).
-    Cuts at the last whole word and appends an ASCII ellipsis ("..." renders
-    fine in-game, unlike the U+2026 glyph). Combined with ``strip_emoji``
-    applied inside ``announce_in_game``, the final message is always <= limit.
+    NOTE: this is no longer applied to bot replies. The 140-char game-chat
+    brevity cap was removed (operator decision 2026-09-13) — replies are now
+    sent in full. Kept as a general word-boundary shortener for other uses.
     """
     text = (text or "").strip()
     if len(text) <= limit:
