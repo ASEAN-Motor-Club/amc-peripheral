@@ -19,7 +19,6 @@ from amc_peripheral.settings import (
     NEWS_CHANNEL_ID,
     BACKEND_API_URL,
     BOT_MAX_ITERATIONS,
-    BOT_TOOL_STATUS_DELAY_SECONDS,
     ASK_BOT_CHANNEL_ID,
 )
 from amc_peripheral.bot.ai_models import (
@@ -755,6 +754,30 @@ class KnowledgeCog(commands.Cog):
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "send_message",
+                    "description": "Send an interim message to the user BEFORE your final "
+                                   "answer — e.g. 'ok let me look up the Air City specs' or "
+                                   "'one sec, checking the delivery points'. Use it when a "
+                                   "lookup will take a few steps so the user isn't left "
+                                   "waiting in silence. Do NOT use it for the answer itself: "
+                                   "your final reply is delivered automatically without any "
+                                   "tool call. Keep it short and natural, one sentence.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "message": {
+                                "type": "string",
+                                "description": "The short interim message to show the user, "
+                                               "e.g. 'let me check the cargo table'",
+                            }
+                        },
+                        "required": ["message"],
+                    },
+                },
+            },
         ]
 
     async def _call_llm_with_tools(
@@ -781,42 +804,23 @@ class KnowledgeCog(commands.Cog):
         Returns:
             Final response text
         """
-        max_iterations = BOT_MAX_ITERATIONS
-        iteration = 0
-        start_time = asyncio.get_event_loop().time()
-
-        # Feedback state
-        tool_feedback_sent = False
-        last_tool_name: Optional[str] = None
-
-        # IMMEDIATE feedback — before first LLM call.
-        # Discord (interaction) already shows the "thinking" defer flag, so an
-        # explicit "Working on it..." edit is redundant there. Only the in-game
-        # path (no defer) gets the immediate status.
-        if not interaction:
+        # Feedback channel for the send_message tool (interim user-visible updates).
+        # Discord (interaction) already shows the "thinking" defer flag for the
+        # final answer; in-game uses the announce callback. No automatic
+        # canned "Working on it..." status anymore — the model decides via the
+        # send_message tool when to say something mid-answer.
+        async def _send_interim(message: str) -> None:
             await self._send_progress_feedback(
-                message="Working on it...",
+                message=message,
                 interaction=interaction,
                 ingame_feedback_fn=ingame_feedback_fn,
             )
 
+        max_iterations = BOT_MAX_ITERATIONS
+        iteration = 0
+
         while iteration < max_iterations:
             iteration += 1
-            elapsed = asyncio.get_event_loop().time() - start_time
-
-            # --- Progress Feedback Logic ---
-            if (
-                not tool_feedback_sent
-                and elapsed >= BOT_TOOL_STATUS_DELAY_SECONDS
-                and last_tool_name
-            ):
-                tool_msg = self._get_tool_status_message(last_tool_name)
-                await self._send_progress_feedback(
-                    message=tool_msg,
-                    interaction=interaction,
-                    ingame_feedback_fn=ingame_feedback_fn,
-                )
-                tool_feedback_sent = True
 
             # Call LLM with timeout and provider pinning
             try:
@@ -849,9 +853,6 @@ class KnowledgeCog(commands.Cog):
             if not response_message.tool_calls:
                 return strip_emoji(response_message.content) or "I don't have a response."
 
-            # Track last tool called for status messages
-            last_tool_name = response_message.tool_calls[-1].function.name
-
             # Add assistant message to conversation
             messages.append(response_message)
 
@@ -862,10 +863,25 @@ class KnowledgeCog(commands.Cog):
 
                 log.info(f"Tool call: {function_name}")
 
-                # Call the appropriate tool
-                tool_result = await self._execute_tool(
-                    function_name, function_args, interaction, player_id=player_id
-                )
+                # send_message is handled in-loop: it needs the per-call
+                # feedback channels (interaction / ingame callback), which
+                # _execute_tool doesn't receive.
+                if function_name == "send_message":
+                    message_text = (
+                        function_args.get("message") or ""
+                    ).strip()
+                    if message_text:
+                        await _send_interim(
+                            strip_emoji(message_text)
+                        )
+                        tool_result = "Message sent."
+                    else:
+                        tool_result = "Error: message parameter required."
+                else:
+                    # Call the appropriate tool
+                    tool_result = await self._execute_tool(
+                        function_name, function_args, interaction, player_id=player_id
+                    )
 
                 # Add tool result to messages
                 messages.append(
@@ -897,24 +913,6 @@ class KnowledgeCog(commands.Cog):
                 await ingame_feedback_fn(message)
         except Exception as e:
             log.warning(f"Failed to send progress feedback: {e}")
-
-    def _get_tool_status_message(self, tool_name: str) -> str:
-        """Return user-friendly status message for a tool."""
-        tool_messages = {
-            "run": "Running your query...",
-            "wiki": "Looking into that...",
-            "discord": "Working on it...",
-            "memory": "Checking my memory...",
-            "manage_subsidy_rules_list": "Fetching subsidy rules...",
-            "manage_subsidy_rule_create": "Creating subsidy rule...",
-            "manage_subsidy_rule_update": "Updating subsidy rule...",
-            "manage_subsidy_rule_deactivate": "Deactivating subsidy rule...",
-            "manage_subsidy_rule_reorder": "Reordering subsidy rules...",
-            "manage_job_config_get": "Fetching job configuration...",
-            "manage_job_config_update": "Updating job configuration...",
-            "query_game_database": "Crunching the numbers...",
-        }
-        return tool_messages.get(tool_name, f"Processing ({tool_name})...")
 
     async def _cached_api_get(self, url: str) -> str:
         now = time.monotonic()
