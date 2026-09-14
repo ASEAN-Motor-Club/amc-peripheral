@@ -332,6 +332,10 @@ class KnowledgeCog(commands.Cog):
                 "Your Standing Memory above is durable facts you chose to remember about yourself and the community — they are always in your context. "
                 "Use the memory tool to persist a lasting fact (write), retrieve remembered facts (recall), browse (list), or remove one (delete). "
                 "Remember facts that will still matter later; don't clutter memory with trivia.\n\n"
+                "## Interim Updates\n"
+                "If answering requires tool calls, call send_message FIRST (at most once per reply) "
+                "to tell the user what you are about to do, e.g. 'ok let me look up the Air City specs'. "
+                "Your final answer itself needs no tool call.\n\n"
                 f"{knowledge}"
             )
 
@@ -760,11 +764,15 @@ class KnowledgeCog(commands.Cog):
                     "name": "send_message",
                     "description": "Send an interim message to the user BEFORE your final "
                                    "answer — e.g. 'ok let me look up the Air City specs' or "
-                                   "'one sec, checking the delivery points'. Use it when a "
-                                   "lookup will take a few steps so the user isn't left "
-                                   "waiting in silence. Do NOT use it for the answer itself: "
-                                   "your final reply is delivered automatically without any "
-                                   "tool call. Keep it short and natural, one sentence.",
+                                   "'one sec, checking the delivery points'. When the "
+                                   "question needs tool calls, call send_message FIRST, in "
+                                   "the same turn as (or before) those tool calls, so the "
+                                   "user isn't left waiting in silence. Call it at most "
+                                   "ONCE per reply — not before every tool call. Explain "
+                                   "briefly what you are about to do. Do NOT use it for "
+                                   "the answer itself: your final reply is delivered "
+                                   "automatically without any tool call. Keep it short "
+                                   "and natural, one sentence.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -856,6 +864,25 @@ class KnowledgeCog(commands.Cog):
             # Add assistant message to conversation
             messages.append(response_message)
 
+            # Code-level guarantee that send_message is a ONE-TIME, PRE-TOOLS
+            # interim ack (prompt rules are advisory): send it before any other
+            # tool call in this batch, and only on the first turn of the loop.
+            send_message_pending = any(
+                tc.function.name == "send_message"
+                for tc in response_message.tool_calls
+            )
+            send_message_sent = False
+            if send_message_pending and iteration == 1:
+                for tool_call in response_message.tool_calls:
+                    if tool_call.function.name != "send_message":
+                        continue
+                    function_args = json.loads(tool_call.function.arguments)
+                    message_text = (function_args.get("message") or "").strip()
+                    if message_text:
+                        await _send_interim(strip_emoji(message_text))
+                        send_message_sent = True
+                        break
+
             # Execute tool calls
             for tool_call in response_message.tool_calls:
                 function_name = tool_call.function.name
@@ -867,16 +894,17 @@ class KnowledgeCog(commands.Cog):
                 # feedback channels (interaction / ingame callback), which
                 # _execute_tool doesn't receive.
                 if function_name == "send_message":
-                    message_text = (
-                        function_args.get("message") or ""
-                    ).strip()
-                    if message_text:
-                        await _send_interim(
-                            strip_emoji(message_text)
-                        )
+                    if send_message_sent:
+                        # Already sent above (pre-tools ordering). A repeat
+                        # call is silently downgraded to a no-op confirmation.
                         tool_result = "Message sent."
-                    else:
+                    elif not send_message_pending:
+                        tool_result = "Message not sent: send_message must be called in the first turn, together with the other tool calls."
+                    elif iteration == 1:
+                        # First turn but empty/blank message body
                         tool_result = "Error: message parameter required."
+                    else:
+                        tool_result = "Message already sent for this reply."
                 else:
                     # Call the appropriate tool
                     tool_result = await self._execute_tool(

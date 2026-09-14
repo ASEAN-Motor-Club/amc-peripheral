@@ -1,7 +1,7 @@
 import pytest
 import discord
 from discord.ext import commands
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from amc_peripheral.utils.text_utils import split_markdown, is_code_block_open
 from amc_peripheral.bot.knowledge_cog import KnowledgeCog
 
@@ -407,24 +407,34 @@ async def test_send_message_tool_definition_exists():
 
 @pytest.mark.asyncio
 async def test_send_message_tool_sends_interim_message():
-    """A send_message tool call routes to the feedback channels and confirms via tool result."""
+    """A first-turn send_message tool call sends BEFORE other tools run and returns the final answer."""
     bot = MagicMock()
     bot.http_session = AsyncMock()
     cog = KnowledgeCog(bot)
 
     sent: list[str] = []
+    order: list[str] = []
 
     async def feedback_fn(msg: str) -> None:
         sent.append(msg)
+        order.append("send_message")
 
-    # First LLM turn: call send_message. Second turn: final answer.
-    tool_call = MagicMock()
-    tool_call.id = "call_1"
-    tool_call.function.name = "send_message"
-    tool_call.function.arguments = '{"message": "let me look that up"}'
+    async def fake_execute_tool(name, args, interaction=None, player_id=None):
+        order.append(f"tool:{name}")
+        return "ok"
+
+    # First turn: send_message + run in the SAME batch. Second turn: final answer.
+    sm_call = MagicMock()
+    sm_call.id = "call_1"
+    sm_call.function.name = "send_message"
+    sm_call.function.arguments = '{"message": "let me look that up"}'
+    run_call = MagicMock()
+    run_call.id = "call_2"
+    run_call.function.name = "run"
+    run_call.function.arguments = '{"command": "vehicle Air City"}'
 
     interim_msg = MagicMock()
-    interim_msg.tool_calls = [tool_call]
+    interim_msg.tool_calls = [sm_call, run_call]
     final_msg = MagicMock()
     final_msg.content = "The answer is 42."
     final_msg.tool_calls = None
@@ -435,16 +445,72 @@ async def test_send_message_tool_sends_interim_message():
     cog.openai_client_openrouter.chat.completions.create = AsyncMock(
         side_effect=[completion_1, completion_2]
     )
+    with patch.object(cog, "_execute_tool", side_effect=fake_execute_tool):
+        result = await cog._call_llm_with_tools(
+            messages=[{"role": "user", "content": "what is it"}],
+            tools=cog._get_shared_tool_definitions(),
+            model="test-model",
+            ingame_feedback_fn=feedback_fn,
+        )
 
+    assert sent == ["let me look that up"]
+    assert result == "The answer is 42."
+    # send_message fired BEFORE the other tool call in the same batch
+    assert order.index("send_message") < order.index("tool:run")
+
+
+@pytest.mark.asyncio
+async def test_send_message_only_fires_once():
+    """A send_message in a LATER turn does not send again — user sees only one interim message."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+
+    sent: list[str] = []
+
+    async def feedback_fn(msg: str) -> None:
+        sent.append(msg)
+
+    sm_call_1 = MagicMock()
+    sm_call_1.id = "call_1"
+    sm_call_1.function.name = "send_message"
+    sm_call_1.function.arguments = '{"message": "first"}'
+    sm_call_2 = MagicMock()
+    sm_call_2.id = "call_2"
+    sm_call_2.function.name = "send_message"
+    sm_call_2.function.arguments = '{"message": "again"}'
+
+    turn1 = MagicMock()
+    turn1.tool_calls = [sm_call_1]
+    turn2 = MagicMock()
+    turn2.tool_calls = [sm_call_2]
+    final_msg = MagicMock()
+    final_msg.content = "done"
+    final_msg.tool_calls = None
+    completion_1 = MagicMock()
+    completion_1.choices = [MagicMock(message=turn1)]
+    completion_2 = MagicMock()
+    completion_2.choices = [MagicMock(message=turn2)]
+    completion_3 = MagicMock()
+    completion_3.choices = [MagicMock(message=final_msg)]
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        side_effect=[completion_1, completion_2, completion_3]
+    )
+
+    messages: list = [{"role": "user", "content": "hi"}]
     result = await cog._call_llm_with_tools(
-        messages=[{"role": "user", "content": "what is it"}],
+        messages=messages,
         tools=cog._get_shared_tool_definitions(),
         model="test-model",
         ingame_feedback_fn=feedback_fn,
     )
 
-    assert sent == ["let me look that up"]
-    assert result == "The answer is 42."
+    # Second-turn send_message is a no-op: nothing extra sent to the user
+    assert sent == ["first"]
+    assert result == "done"
+    # The repeat call got the downgrade tool-result
+    tool_results = [m["content"] for m in messages if m.get("role") == "tool"]
+    assert "Message already sent for this reply." in tool_results
 
 
 @pytest.mark.asyncio
