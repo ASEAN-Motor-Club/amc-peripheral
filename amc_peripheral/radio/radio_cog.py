@@ -102,14 +102,9 @@ Respond with EXACTLY one line:
 - "REJECT: <brief reason>" if the song should be blocked
 """
 
-# Queue-mutation tools are only exposed to the in-game chat agent when the
-# question itself has explicit music intent (code-enforced, not advisory —
-# the model queued songs unprompted mid-conversation, 2026-09-15).
+# Queue-mutation tool names (informational; gating is prompt-based — see the
+# on-air discipline block in ANNIE_SYSTEM_PROMPT).
 _QUEUE_TOOL_NAMES = {"search_and_queue_song", "queue_trending_song"}
-_MUSIC_INTENT_RE = re.compile(
-    r"\b(song|songs|play|music|queue|request|radio|playlist|trending|skip|dj)\b",
-    re.IGNORECASE,
-)
 
 
 def _format_chat_history(messages) -> str:
@@ -2816,7 +2811,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     else ""
                 )
                 + "\nRespond naturally — never cut your answer short; write the whole reply.\nDo NOT use any emojis — the game client cannot render them."
-                + "\nAnswer the question actually asked; never invent studio mishaps, technical failures, or on-air events that did not happen.",
+                + "\nAnswer the question actually asked; never invent studio mishaps, technical failures, or on-air events that did not happen."
+                + "\nQueue songs ONLY when the listener explicitly asks for music (a request like 'play X', 'song request', or naming a track). Never queue anything as a joke, a segue, or on your own initiative — if the chat isn't about music, no song gets queued.",
             },
             {
                 "role": "user",
@@ -2838,14 +2834,6 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         messages.append({"role": "user", "content": f"{player_name}: {question}"})
 
         tools = self._get_annie_tools()
-        if not _MUSIC_INTENT_RE.search(question):
-            # Code-level gate: queue-mutation tools only when the question
-            # has explicit music intent (prompt rules alone are advisory).
-            tools = [
-                t
-                for t in tools
-                if t["function"]["name"] not in _QUEUE_TOOL_NAMES
-            ]
         channel = self.bot.get_channel(GAME_ANNOUNCEMENTS_CHANNEL_ID)
 
         async def ingame_notify(msg: str):

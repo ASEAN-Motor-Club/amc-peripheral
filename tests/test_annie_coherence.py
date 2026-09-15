@@ -12,12 +12,21 @@ from unittest.mock import AsyncMock
 import pytest
 
 from amc_peripheral.radio.radio_cog import (
-    _MUSIC_INTENT_RE,
     _QUEUE_TOOL_NAMES,
     RadioCog,
     _format_chat_history,
 )
 from amc_peripheral.utils.text_utils import strip_role_tag
+
+
+def _in_game_suffix() -> str:
+    """The in-game system suffix source, so prompt-guardrail tests fail
+    loudly if the discipline lines are removed."""
+    import inspect
+
+    import amc_peripheral.radio.radio_cog as rc
+
+    return inspect.getsource(rc.RadioCog._handle_annie_chat_ingame)
 
 
 class _FakeAuthor:
@@ -82,20 +91,15 @@ class TestFormatChatHistory:
         assert "DJ Annie" in out
 
 
-class TestMusicIntent:
-    def test_music_questions_match(self):
-        assert _MUSIC_INTENT_RE.search("play Light On The Hill by Slim Dusty")
-        assert _MUSIC_INTENT_RE.search("queue something chill")
-        assert _MUSIC_INTENT_RE.search("@annie skip pls")
+class TestPromptGuardrails:
+    def test_on_air_discipline_line_present(self):
+        # The unprompted-queue fix lives in the in-game suffix: queue ONLY on
+        # explicit request, never on the model's own initiative.
+        suffix = _in_game_suffix()
+        assert "Queue songs ONLY when the listener explicitly asks" in suffix
+        assert "Never queue anything as a joke" in suffix
 
-    def test_non_music_questions_do_not_match(self):
-        assert not _MUSIC_INTENT_RE.search(
-            "what is difference between drifting and rallying?"
-        )
-        assert not _MUSIC_INTENT_RE.search("that why it is my favourite rally car")
-        assert not _MUSIC_INTENT_RE.search("how your day?")
-
-    def test_queue_tool_names(self):
+    def test_queue_tool_names_reference(self):
         assert "search_and_queue_song" in _QUEUE_TOOL_NAMES
         assert "queue_trending_song" in _QUEUE_TOOL_NAMES
 
