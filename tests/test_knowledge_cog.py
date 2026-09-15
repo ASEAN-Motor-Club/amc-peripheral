@@ -1,7 +1,7 @@
 import pytest
 import discord
 from discord.ext import commands
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from amc_peripheral.utils.text_utils import split_markdown, is_code_block_open
 from amc_peripheral.bot.knowledge_cog import KnowledgeCog
 
@@ -394,27 +394,168 @@ async def test_bot_command_excludes_current_message():
 
 
 @pytest.mark.asyncio
-async def test_tool_status_message_mapping():
-    """Test that tool names map to user-friendly status messages."""
+async def test_send_message_tool_definition_exists():
+    """send_message must be advertised to the LLM alongside run/wiki/discord/memory."""
     bot = MagicMock()
     bot.http_session = AsyncMock()
     cog = KnowledgeCog(bot)
 
-    # Test known tools have friendly messages
-    assert "numbers" in cog._get_tool_status_message("query_game_database").lower()
-    assert "radio" in cog._get_tool_status_message("get_currently_playing_song").lower()
-    assert "subsidy" in cog._get_tool_status_message("get_current_subsidies").lower()
-    assert "commands" in cog._get_tool_status_message("get_server_commands").lower()
-    
-    # Test unknown tool gets generic message
-    unknown_msg = cog._get_tool_status_message("some_unknown_tool")
-    assert "Processing" in unknown_msg
-    assert "some_unknown_tool" in unknown_msg
-    
-    # Verify no emojis in messages (not supported in-game)
-    for tool in ["query_game_database", "get_current_subsidies", "get_server_commands"]:
-        msg = cog._get_tool_status_message(tool)
-        assert not any(ord(c) > 127 for c in msg), f"Emoji found in message: {msg}"
+    tools = cog._get_shared_tool_definitions()
+    names = [t["function"]["name"] for t in tools]
+    assert "send_message" in names
+
+
+@pytest.mark.asyncio
+async def test_send_message_tool_sends_interim_message():
+    """A first-turn send_message tool call sends BEFORE other tools run and returns the final answer."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+
+    sent: list[str] = []
+    order: list[str] = []
+
+    async def feedback_fn(msg: str) -> None:
+        sent.append(msg)
+        order.append("send_message")
+
+    async def fake_execute_tool(name, args, interaction=None, player_id=None):
+        order.append(f"tool:{name}")
+        return "ok"
+
+    # First turn: send_message + run in the SAME batch. Second turn: final answer.
+    sm_call = MagicMock()
+    sm_call.id = "call_1"
+    sm_call.function.name = "send_message"
+    sm_call.function.arguments = '{"message": "let me look that up"}'
+    run_call = MagicMock()
+    run_call.id = "call_2"
+    run_call.function.name = "run"
+    run_call.function.arguments = '{"command": "vehicle Air City"}'
+
+    interim_msg = MagicMock()
+    interim_msg.tool_calls = [sm_call, run_call]
+    final_msg = MagicMock()
+    final_msg.content = "The answer is 42."
+    final_msg.tool_calls = None
+    completion_1 = MagicMock()
+    completion_1.choices = [MagicMock(message=interim_msg)]
+    completion_2 = MagicMock()
+    completion_2.choices = [MagicMock(message=final_msg)]
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        side_effect=[completion_1, completion_2]
+    )
+    with patch.object(cog, "_execute_tool", side_effect=fake_execute_tool):
+        result = await cog._call_llm_with_tools(
+            messages=[{"role": "user", "content": "what is it"}],
+            tools=cog._get_shared_tool_definitions(),
+            model="test-model",
+            ingame_feedback_fn=feedback_fn,
+        )
+
+    assert sent == ["let me look that up"]
+    assert result == "The answer is 42."
+    # send_message fired BEFORE the other tool call in the same batch
+    assert order.index("send_message") < order.index("tool:run")
+
+
+@pytest.mark.asyncio
+async def test_send_message_only_fires_once():
+    """A send_message in a LATER turn does not send again — user sees only one interim message."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+
+    sent: list[str] = []
+
+    async def feedback_fn(msg: str) -> None:
+        sent.append(msg)
+
+    sm_call_1 = MagicMock()
+    sm_call_1.id = "call_1"
+    sm_call_1.function.name = "send_message"
+    sm_call_1.function.arguments = '{"message": "first"}'
+    sm_call_2 = MagicMock()
+    sm_call_2.id = "call_2"
+    sm_call_2.function.name = "send_message"
+    sm_call_2.function.arguments = '{"message": "again"}'
+
+    turn1 = MagicMock()
+    turn1.tool_calls = [sm_call_1]
+    turn2 = MagicMock()
+    turn2.tool_calls = [sm_call_2]
+    final_msg = MagicMock()
+    final_msg.content = "done"
+    final_msg.tool_calls = None
+    completion_1 = MagicMock()
+    completion_1.choices = [MagicMock(message=turn1)]
+    completion_2 = MagicMock()
+    completion_2.choices = [MagicMock(message=turn2)]
+    completion_3 = MagicMock()
+    completion_3.choices = [MagicMock(message=final_msg)]
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        side_effect=[completion_1, completion_2, completion_3]
+    )
+
+    messages: list = [{"role": "user", "content": "hi"}]
+    result = await cog._call_llm_with_tools(
+        messages=messages,
+        tools=cog._get_shared_tool_definitions(),
+        model="test-model",
+        ingame_feedback_fn=feedback_fn,
+    )
+
+    # Second-turn send_message is a no-op: nothing extra sent to the user
+    assert sent == ["first"]
+    assert result == "done"
+    # The repeat call got the downgrade tool-result
+    tool_results = [m["content"] for m in messages if m.get("role") == "tool"]
+    assert "Message already sent for this reply." in tool_results
+
+
+@pytest.mark.asyncio
+async def test_send_message_tool_empty_message_is_rejected():
+    """An empty message body returns an error tool-result instead of sending."""
+    bot = MagicMock()
+    bot.http_session = AsyncMock()
+    cog = KnowledgeCog(bot)
+
+    sent: list[str] = []
+
+    async def feedback_fn(msg: str) -> None:
+        sent.append(msg)
+
+    tool_call = MagicMock()
+    tool_call.id = "call_1"
+    tool_call.function.name = "send_message"
+    tool_call.function.arguments = '{"message": ""}'
+
+    interim_msg = MagicMock()
+    interim_msg.tool_calls = [tool_call]
+    final_msg = MagicMock()
+    final_msg.content = "done"
+    final_msg.tool_calls = None
+    completion_1 = MagicMock()
+    completion_1.choices = [MagicMock(message=interim_msg)]
+    completion_2 = MagicMock()
+    completion_2.choices = [MagicMock(message=final_msg)]
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        side_effect=[completion_1, completion_2]
+    )
+
+    messages: list = [{"role": "user", "content": "hi"}]
+
+    result = await cog._call_llm_with_tools(
+        messages=messages,
+        tools=cog._get_shared_tool_definitions(),
+        model="test-model",
+        ingame_feedback_fn=feedback_fn,
+    )
+
+    assert sent == []  # nothing went out to the user
+    assert result == "done"
+    tool_results = [m["content"] for m in messages if m.get("role") == "tool"]
+    assert tool_results == ["Error: message parameter required."]
 
 
 @pytest.mark.asyncio
