@@ -6,11 +6,12 @@ from pathlib import Path
 import re
 import random
 import asyncio
+import time
 import discord
 from io import BytesIO
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, timezone, time as dt_time
-from collections import deque
+from collections import deque, OrderedDict
 from typing import List, Optional
 
 from discord.ext import tasks, commands
@@ -100,6 +101,31 @@ Respond with EXACTLY one line:
 - "ALLOW" if the song is acceptable
 - "REJECT: <brief reason>" if the song should be blocked
 """
+
+# Queue-mutation tools are only exposed to the in-game chat agent when the
+# question itself has explicit music intent (code-enforced, not advisory —
+# the model queued songs unprompted mid-conversation, 2026-09-15).
+_QUEUE_TOOL_NAMES = {"search_and_queue_song", "queue_trending_song"}
+_MUSIC_INTENT_RE = re.compile(
+    r"\b(song|songs|play|music|queue|request|radio|playlist|trending|skip|dj)\b",
+    re.IGNORECASE,
+)
+
+
+def _format_chat_history(messages) -> str:
+    """Label relayed game-chat lines with author names; drop /command spam.
+
+    Unlabeled history made the model invent narratives (e.g. "two distinct
+    speakers") from anonymous fragments — always attribute lines.
+    """
+    lines = []
+    for m in messages:
+        content = (m.content or "").strip()
+        if not content or content.startswith("/"):
+            continue
+        lines.append(f"{m.author.display_name}: {content}")
+    return "\n".join(reversed(lines))
+
 
 ANNIE_SYSTEM_PROMPT = """\
 You are DJ Annie, the charismatic and hilarious host of Radio ASEAN in Motor Town — an open-world driving game.
@@ -469,6 +495,12 @@ class RadioCog(commands.Cog):
         self._wiki_synthesizer = None
         self._wiki_pending_conversations: list[dict] = []
         self._sse_task: asyncio.Task | None = None
+        # SSE chat_message sender-id cache: (player_name, message) ->
+        # (backend player_id, monotonic ts). Lookup handle for matching the
+        # Discord-relayed @annie line to its SSE event — NEVER a storage key.
+        self._chat_sender_ids: OrderedDict[tuple[str, str], tuple[str, float]] = (
+            OrderedDict()
+        )
 
     async def cog_load(self):
         self.post_gazette_task.start()
@@ -2740,20 +2772,37 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             source="discord_dm",
         )
 
-    async def _handle_annie_chat_ingame(self, player_name: str, question: str):
-        """Handle @annie mention from in-game chat."""
+    async def _handle_annie_chat_ingame(
+        self, player_name: str, question: str, player_id: str | None = None
+    ):
+        """Handle @annie mention from in-game chat.
+
+        `player_id` is the sender's backend player_id resolved from the SSE
+        chat stream (deterministic). Memory keys are IDs ONLY — when no id
+        is available the interaction is answered but NOT stored and player
+        memory is not read. Names are display-only.
+        """
         now = datetime.now(self.local_tz)
-        player_id = player_name  # In-game we only have the player name as ID
+        if not player_id:
+            log.warning(
+                "No deterministic player_id for in-game chat from %r; "
+                "replying without memory read/write",
+                player_name,
+            )
 
         # Gather recent game chat from Discord channel
         prev = ""
         game_chat = self.bot.get_channel(GAME_CHAT_CHANNEL_ID)
         if game_chat:
-            async for m in game_chat.history(limit=20):
-                prev = f"{m.content}\n" + prev
+            msgs = [m async for m in game_chat.history(limit=20)]
+            prev = _format_chat_history(msgs)
 
-        # Retrieve this player's long-term memory
-        memory_context = await self._get_player_memory_context(player_id, question)
+        # Retrieve this player's long-term memory (ID-keyed only)
+        memory_context = (
+            await self._get_player_memory_context(player_id, question)
+            if player_id
+            else ""
+        )
 
         # Retrieve relevant wiki context
         wiki_context = await self._get_wiki_context(question)
@@ -2766,7 +2815,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     if self._wiki_index
                     else ""
                 )
-                + "\nRespond naturally — never cut your answer short; write the whole reply.\nDo NOT use any emojis — the game client cannot render them.",
+                + "\nRespond naturally — never cut your answer short; write the whole reply.\nDo NOT use any emojis — the game client cannot render them."
+                + "\nAnswer the question actually asked; never invent studio mishaps, technical failures, or on-air events that did not happen.",
             },
             {
                 "role": "user",
@@ -2788,6 +2838,14 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         messages.append({"role": "user", "content": f"{player_name}: {question}"})
 
         tools = self._get_annie_tools()
+        if not _MUSIC_INTENT_RE.search(question):
+            # Code-level gate: queue-mutation tools only when the question
+            # has explicit music intent (prompt rules alone are advisory).
+            tools = [
+                t
+                for t in tools
+                if t["function"]["name"] not in _QUEUE_TOOL_NAMES
+            ]
         channel = self.bot.get_channel(GAME_ANNOUNCEMENTS_CHANNEL_ID)
 
         async def ingame_notify(msg: str):
@@ -2800,14 +2858,15 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         )
         await announce_in_game(self.bot.http_session, response)
 
-        # Persist interaction to long-term memory
-        await self._store_annie_interaction(
-            player_id=player_id,
-            player_name=player_name,
-            question=question,
-            response=response,
-            source="game_chat",
-        )
+        # Persist interaction to long-term memory (ID-keyed only)
+        if player_id:
+            await self._store_annie_interaction(
+                player_id=player_id,
+                player_name=player_name,
+                question=question,
+                response=response,
+                source="game_chat",
+            )
 
     async def _call_annie_llm(
         self,
@@ -4665,20 +4724,60 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             participants = None
         return event_type, event_id, title, description, participants
 
+    # --- SSE chat sender-id cache ---
+
+    _CHAT_SENDER_CACHE_MAX = 500
+
+    def _remember_chat_sender(self, event: dict) -> None:
+        """Index an SSE chat_message so the Discord-relayed intake can recover
+        the sender's backend player_id deterministically.
+
+        The (player_name, message) pair is only a LOOKUP HANDLE for matching
+        the relayed Discord line to its SSE event — it is never used as a
+        storage key. Storage keys are the backend player_id alone.
+        """
+        name = event.get("player_name")
+        msg = event.get("message")
+        pid = event.get("player_id")
+        if not (name and msg and pid):
+            return
+        self._chat_sender_ids[(name, msg)] = (str(pid), time.monotonic())
+        while len(self._chat_sender_ids) > self._CHAT_SENDER_CACHE_MAX:
+            self._chat_sender_ids.popitem(last=False)
+
+    def _resolve_chat_sender(self, name: str, message: str) -> str | None:
+        """Resolve the backend player_id for a relayed in-game chat line.
+
+        Exact (name, message) match first; fall back to the most recent SSE
+        line from the same player_name (the relay may lag/reorder or the
+        text may be reformatted). Returns None when no SSE evidence exists —
+        the caller must then proceed WITHOUT a memory key (never derive a
+        key from the name).
+        """
+        hit = self._chat_sender_ids.get((name, message))
+        if hit:
+            self._chat_sender_ids.move_to_end((name, message))
+            return hit[0]
+        for (n, _m), (pid, _ts) in reversed(self._chat_sender_ids.items()):
+            if n == name:
+                return pid
+        return None
+
     async def _handle_backend_event(self, event: dict):
         """Route a single SSE event.
 
         - `heartbeat` → no-op (connection keepalive only).
-        - `chat_message` → explicitly skipped; already handled by the
-          `GAME_CHAT_CHANNEL_ID` Discord forwarder in `on_message`.
-          Subscribing here would double-process every in-game message.
+        - `chat_message` → index the sender's backend player_id so the
+          Discord-relayed @annie intake can key memory deterministically.
+          The event is ONLY indexed here — replying is still driven by the
+          Discord forwarder in `on_message` (no double-processing).
         - Anything else → routed through `ingest_game_event()` into the wiki.
         """
         event_type = event.get("type")
         if event_type == "heartbeat":
             return
         if event_type == "chat_message":
-            log.debug("SSE chat_message skipped (handled via Discord forwarding)")
+            self._remember_chat_sender(event)
             return
         if not event_type:
             log.warning(f"SSE event missing type: {event!r}")
@@ -4852,8 +4951,13 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                 name = annie_match.group("name")
                 question = annie_match.group("question")
                 if name not in self.banned_requesters:
+                    # Deterministic sender id from the SSE chat stream;
+                    # None → reply without memory (never name-derived).
+                    sender_id = self._resolve_chat_sender(name, question)
                     self.bot.loop.create_task(
-                        self._handle_annie_chat_ingame(name, question)
+                        self._handle_annie_chat_ingame(
+                            name, question, player_id=sender_id
+                        )
                     )
 
     @commands.Cog.listener()
