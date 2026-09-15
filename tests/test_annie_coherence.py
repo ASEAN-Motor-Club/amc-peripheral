@@ -6,7 +6,9 @@ UNLABELED chat history; unprompted song queues came from the always-on
 queue tools; memory was keyed on role-tagged display names.
 """
 
+import asyncio
 from collections import OrderedDict
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -102,6 +104,40 @@ class TestPromptGuardrails:
     def test_queue_tool_names_reference(self):
         assert "search_and_queue_song" in _QUEUE_TOOL_NAMES
         assert "queue_trending_song" in _QUEUE_TOOL_NAMES
+
+
+class TestMemoryContextAttribution:
+    def test_bot_rows_attributed_to_annie(self):
+        """Bot replies in a player's history must be labeled DJ Annie (you),
+        never under the player's name."""
+        cog = _bare_cog()
+        cog._memory_storage = SimpleNamespace(
+            get_recent_messages=lambda pid, limit=10: [
+                {
+                    "player_name": "Alex",
+                    "message": "what is the fastest car?",
+                    "is_bot_response": 0,
+                    "timestamp": "2026-09-15T05:00:00+07:00",
+                },
+                {
+                    "player_name": "Bot",
+                    "message": "the Tronko GT has the top speed",
+                    "is_bot_response": 1,
+                    "timestamp": "2026-09-15T05:01:00+07:00",
+                },
+            ]
+        )
+        out = asyncio.run(cog._get_player_memory_context("76561198000000001"))
+        assert "[2026-09-15] Alex: what is the fastest car?" in out
+        assert "[2026-09-15] DJ Annie (you): the Tronko GT has the top speed" in out
+        # The bot reply must never surface under the player's name or 'Bot'
+        assert "Alex: the Tronko GT" not in out
+        assert "Bot: the Tronko GT" not in out
+
+    def test_no_memory_storage_returns_empty(self):
+        cog = _bare_cog()
+        cog._memory_storage = None
+        assert asyncio.run(cog._get_player_memory_context("x")) == ""
 
 
 def _bare_cog() -> RadioCog:

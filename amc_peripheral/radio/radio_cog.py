@@ -2435,7 +2435,13 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 
             lines = []
             for m in recent:
-                sender = m.get("player_name", "Unknown")
+                # Bot replies share the row's player_id (the conversation
+                # owner) but must be attributed to Annie, not the player.
+                sender = (
+                    "DJ Annie (you)"
+                    if m.get("is_bot_response")
+                    else m.get("player_name", "Unknown")
+                )
                 msg = m.get("message", "")
                 ts = m.get("timestamp", "")[:10]  # YYYY-MM-DD
                 lines.append(f"[{ts}] {sender}: {msg}")
