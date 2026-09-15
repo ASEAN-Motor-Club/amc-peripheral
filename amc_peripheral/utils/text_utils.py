@@ -45,6 +45,23 @@ def is_code_block_open(text):
     return text.count("```") % 2 == 1
 
 
+# Motor Town prepends role/clan bracket tags to chat names ([M], [MG109],
+# [C10], [P123], …). DISPLAY-ONLY helper: the stripped result must never be
+# used as a storage key — player identity keys are deterministic IDs
+# (backend player_id / discord_user_id), never name-derived.
+_ROLE_TAG_RE = re.compile(r"^(?:\s*\[[A-Za-z0-9]+\]\s*)+")
+
+
+def strip_role_tag(name: str | None) -> str:
+    """Strip leading Motor Town role/clan tags ([M], [MG109], [C10]...).
+
+    DISPLAY ONLY — never use the result as a storage key.
+    """
+    if not name:
+        return ""
+    return _ROLE_TAG_RE.sub("", name).strip()
+
+
 def split_markdown(text, max_length=2000):
     """
     Split markdown text into chunks of up to max_length characters,
