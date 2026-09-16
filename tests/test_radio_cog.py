@@ -2716,3 +2716,96 @@ async def test_agent_game_request_song_not_truncated(cog, mock_bot, monkeypatch)
     await cog._agent_game_request_song("cool song", "PlayerOne")
 
     assert announced.await_args.args[1] == long_ack
+
+
+def _tool_call(name, arguments):
+    tc = MagicMock()
+    tc.id = "call_1"
+    tc.function.name = name
+    tc.function.arguments = arguments
+    return tc
+
+
+@pytest.mark.asyncio
+async def test_annie_send_message_sends_before_other_tools(cog):
+    """First-turn send_message fires via notify_fn BEFORE other tools execute."""
+    notifications: list[str] = []
+    order: list[str] = []
+
+    async def notify(msg: str) -> None:
+        notifications.append(msg)
+        order.append("notify")
+
+    async def fake_tool(name, args, requester, notify_fn, **kw):
+        order.append(f"tool:{name}")
+        return "ok"
+
+    cog._execute_annie_tool = AsyncMock(side_effect=fake_tool)
+
+    interim = MagicMock()
+    interim.tool_calls = [
+        _tool_call("send_message", '{"message": "one sec, checking the wiki"}'),
+        _tool_call("ask_game_knowledge", '{"question": "what is the Vamos"}'),
+    ]
+    final = MagicMock()
+    final.content = "The Vamos is a trailer."
+    final.tool_calls = None
+    completion_1 = MagicMock()
+    completion_1.choices = [MagicMock(message=interim)]
+    completion_2 = MagicMock()
+    completion_2.choices = [MagicMock(message=final)]
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        side_effect=[completion_1, completion_2]
+    )
+
+    result = await cog._call_annie_llm(
+        [{"role": "user", "content": "hi"}],
+        cog._get_annie_tools(),
+        "tester",
+        notify,
+    )
+
+    assert notifications == ["one sec, checking the wiki"]
+    assert result == "The Vamos is a trailer."
+    assert order.index("notify") < order.index("tool:ask_game_knowledge")
+
+
+@pytest.mark.asyncio
+async def test_annie_send_message_only_fires_once(cog):
+    """A send_message in a LATER turn sends nothing — user sees only one interim."""
+    notifications: list[str] = []
+
+    async def notify(msg: str) -> None:
+        notifications.append(msg)
+
+    turn1 = MagicMock()
+    turn1.tool_calls = [_tool_call("send_message", '{"message": "first"}')]
+    turn2 = MagicMock()
+    turn2.tool_calls = [_tool_call("send_message", '{"message": "again"}')]
+    final = MagicMock()
+    final.content = "done"
+    final.tool_calls = None
+    completions = []
+    for msg in (turn1, turn2, final):
+        c = MagicMock()
+        c.choices = [MagicMock(message=msg)]
+        completions.append(c)
+    cog.openai_client_openrouter.chat.completions.create = AsyncMock(
+        side_effect=completions
+    )
+
+    result = await cog._call_annie_llm(
+        [{"role": "user", "content": "hi"}],
+        cog._get_annie_tools(),
+        "tester",
+        notify,
+    )
+
+    assert notifications == ["first"]
+    assert result == "done"
+
+
+def test_annie_send_message_tool_defined(cog):
+    assert any(
+        t["function"]["name"] == "send_message" for t in cog._get_annie_tools()
+    )
