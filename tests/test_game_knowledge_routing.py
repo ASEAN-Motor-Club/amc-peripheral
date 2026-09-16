@@ -226,3 +226,35 @@ class TestNoSubagentDirectWikiTools:
             None,
         )
         assert "86.5" in result  # Box-type cargo space
+
+
+class TestGameChatSanitizer:
+    """_sanitize_for_game_chat: deterministic plain-text safety net."""
+
+    def _sanitize(self, text):
+        from amc_peripheral.radio.radio_cog import _sanitize_for_game_chat
+
+        return _sanitize_for_game_chat(text)
+
+    def test_strips_bold(self):
+        out = self._sanitize("noted that **max spacers** are your friend")
+        assert "**" not in out
+        assert "max spacers" in out
+
+    def test_strips_italic_code_headings_bullets(self):
+        out = self._sanitize(
+            "## Specs\n\n*item* and _em_ and `code`\n\n- bullet one\n- bullet two"
+        )
+        assert "##" not in out and "*" not in out and "_" not in out
+        assert "`" not in out and "\n\n" not in out
+        assert "- bullet" not in out
+        assert "bullet one" in out and "bullet two" in out and "code" in out
+
+    def test_content_preserved_no_truncation(self):
+        long = "Word " * 200
+        out = self._sanitize(long)
+        assert out == long.strip()
+
+    def test_empty_and_none_safe(self):
+        assert self._sanitize("") == ""
+        assert self._sanitize("plain reply") == "plain reply"

@@ -55,7 +55,7 @@ from amc_peripheral.settings import (
     BACKEND_API_URL,
 )
 from amc_peripheral.db import RadioDB
-from amc_peripheral.utils.text_utils import split_markdown
+from amc_peripheral.utils.text_utils import split_markdown, strip_emoji
 from amc_peripheral.radio.tts import tts_dispatch, tts_multi_dispatch
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
 from amc_peripheral.radio.radio_server import (
@@ -120,6 +120,35 @@ def _format_chat_history(messages) -> str:
             continue
         lines.append(f"{m.author.display_name}: {content}")
     return "\n".join(reversed(lines))
+
+
+_MD_PATTERNS = [
+    (re.compile(r"\*\*\*(.+?)\*\*\*", re.DOTALL), r"\1"),  # ***bold italic***
+    (re.compile(r"\*\*(.+?)\*\*", re.DOTALL), r"\1"),  # **bold**
+    (re.compile(r"(?<!\w)\*([^*\n]+)\*(?!\w)"), r"\1"),  # *italic*
+    (re.compile(r"(?<!\w)_([^_\n]+)_(?!\w)"), r"\1"),  # _italic_
+    (re.compile(r"~~(.+?)~~", re.DOTALL), r"\1"),  # ~~strikethrough~~
+    (re.compile(r"`{1,3}([^`]*)`{1,3}"), r"\1"),  # `code` / ```blocks```
+    (re.compile(r"^#{1,6}\s+", re.MULTILINE), ""),  # headings
+    (re.compile(r"^\s*[-*+]\s+", re.MULTILINE), ""),  # bullet points
+]
+
+
+def _sanitize_for_game_chat(text: str) -> str:
+    """Make an Annie reply safe for the plain game chat window.
+
+    Strips markdown (bold/italic/code/headings/bullets), drops emoji, and
+    collapses empty lines. Formatting cleanup only — content is preserved.
+    """
+    if not text:
+        return text
+    out = strip_emoji(text)
+    for pattern, repl in _MD_PATTERNS:
+        out = pattern.sub(repl, out)
+    # Collapse runs of blank lines / leading-trailing whitespace per line
+    out = "\n".join(line.rstrip() for line in out.splitlines())
+    out = re.sub(r"\n{2,}", "\n", out)
+    return out.strip()
 
 
 ANNIE_SYSTEM_PROMPT = """\
@@ -464,7 +493,9 @@ class RadioCog(commands.Cog):
         name="playlist", description="Manage your playlists", guild_ids=[GUILD_ID]
     )
     wiki_group = app_commands.Group(
-        name="wiki", description="Annie's wiki management (DJ only)", guild_ids=[GUILD_ID]
+        name="wiki",
+        description="Annie's wiki management (DJ only)",
+        guild_ids=[GUILD_ID],
     )
 
     def __init__(self, bot):
@@ -546,7 +577,9 @@ class RadioCog(commands.Cog):
             self._wiki_retrieval = WikiRetrieval()
             log.info("Wiki ChromaDB retrieval initialized")
         except Exception as e:
-            log.warning(f"Wiki ChromaDB not available, semantic wiki search disabled: {e}")
+            log.warning(
+                f"Wiki ChromaDB not available, semantic wiki search disabled: {e}"
+            )
             self._wiki_retrieval = None
 
         if self._wiki_storage:
@@ -1161,11 +1194,7 @@ Script:
             # Assign remaining speakers
             for speaker_name in sorted(speakers_in_turns - {"Host"}):
                 gender = speaker_gender.get(speaker_name, "male")
-                pool = (
-                    GUEST_VOICES_FEMALE
-                    if gender == "female"
-                    else GUEST_VOICES_MALE
-                )
+                pool = GUEST_VOICES_FEMALE if gender == "female" else GUEST_VOICES_MALE
                 available = [v for v in pool if v not in used_voices]
                 if not available:
                     available = pool  # fallback if we exhaust the pool
@@ -1292,23 +1321,23 @@ Script:
                 "function": {
                     "name": "send_message",
                     "description": "Send an interim message to the listener BEFORE your final "
-                                   "answer — e.g. 'one sec, let me look that up' or 'checking "
-                                   "the game knowledge, hold on'. When answering needs tool "
-                                   "calls (especially search_game_wiki/"
-                                   "read_game_wiki_page, which can take a "
-                                   "while), call send_message FIRST, in the same turn as "
-                                   "those tool calls, so the listener isn't left waiting in "
-                                   "silence. Call it at most ONCE per reply. Do NOT use it "
-                                   "for the answer itself: your final reply is delivered "
-                                   "automatically without any tool call. Keep it short and "
-                                   "in character, one sentence.",
+                    "answer — e.g. 'one sec, let me look that up' or 'checking "
+                    "the game knowledge, hold on'. When answering needs tool "
+                    "calls (especially search_game_wiki/"
+                    "read_game_wiki_page, which can take a "
+                    "while), call send_message FIRST, in the same turn as "
+                    "those tool calls, so the listener isn't left waiting in "
+                    "silence. Call it at most ONCE per reply. Do NOT use it "
+                    "for the answer itself: your final reply is delivered "
+                    "automatically without any tool call. Keep it short and "
+                    "in character, one sentence.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "message": {
                                 "type": "string",
                                 "description": "The short interim message to show the listener, "
-                                               "e.g. 'let me check the wiki for that'",
+                                "e.g. 'let me check the wiki for that'",
                             }
                         },
                         "required": ["message"],
@@ -2194,10 +2223,7 @@ Script:
                     f"- [{r['category']}] {r['name']} (slug: {r['slug']})"
                     for r in results
                 ]
-                return (
-                    "Game wiki pages matching "
-                    f"'{query}':\n" + "\n".join(lines)
-                )
+                return f"Game wiki pages matching '{query}':\n" + "\n".join(lines)
 
             elif name == "read_game_wiki_page":
                 # Read a full curated game wiki page (specs, capabilities,
@@ -2212,9 +2238,7 @@ Script:
                         "(get them from search_game_wiki results)."
                     )
                 try:
-                    page = await asyncio.to_thread(
-                        wiki_kb._load_page, category, slug
-                    )
+                    page = await asyncio.to_thread(wiki_kb._load_page, category, slug)
                 except Exception as e:  # noqa: BLE001
                     return f"Game wiki read failed: {e}"
                 if not page:
@@ -2267,7 +2291,9 @@ Script:
                     return "No wiki pages found."
                 lines = []
                 for p in pages:
-                    lines.append(f"- {p['title']} ({p['category']}): {p.get('summary', '')[:100]}")
+                    lines.append(
+                        f"- {p['title']} ({p['category']}): {p.get('summary', '')[:100]}"
+                    )
                 return "Wiki pages:\n" + "\n".join(lines)
 
             elif name == "write_wiki_page":
@@ -2283,7 +2309,9 @@ Script:
                 existing = self._wiki_storage.get_page_by_slug(slug)
                 if existing:
                     self._wiki_storage.update_page(
-                        existing["id"], content=content, summary=summary or existing.get("summary", "")
+                        existing["id"],
+                        content=content,
+                        summary=summary or existing.get("summary", ""),
                     )
                     refreshed = self._wiki_storage.get_page_by_id(existing["id"])
                     if refreshed:
@@ -2318,8 +2346,12 @@ Script:
                     return "Error: 'from_page' and 'to_page' are required."
                 if not self._wiki_storage:
                     return "Wiki storage not available."
-                from_p = self._wiki_storage.get_page_by_slug(from_page) or self._wiki_storage.get_page_by_title(from_page)
-                to_p = self._wiki_storage.get_page_by_slug(to_page) or self._wiki_storage.get_page_by_title(to_page)
+                from_p = self._wiki_storage.get_page_by_slug(
+                    from_page
+                ) or self._wiki_storage.get_page_by_title(from_page)
+                to_p = self._wiki_storage.get_page_by_slug(
+                    to_page
+                ) or self._wiki_storage.get_page_by_title(to_page)
                 if not from_p:
                     return f"From page '{from_page}' not found."
                 if not to_p:
@@ -2459,8 +2491,12 @@ Script:
             collected_notifications.append(msg)
 
         response = await self._call_annie_llm(
-            messages, tools, requester_name, collect_notify,
-            bypass_throttling=is_dj, player_id=requester_id,
+            messages,
+            tools,
+            requester_name,
+            collect_notify,
+            bypass_throttling=is_dj,
+            player_id=requester_id,
         )
 
         # Combine agent response with any background notifications
@@ -2686,8 +2722,16 @@ Script:
 
             if facts:
                 conversation_messages = [
-                    {"message": question, "is_bot_response": False, "timestamp": datetime.now().isoformat()},
-                    {"message": response, "is_bot_response": True, "timestamp": datetime.now().isoformat()},
+                    {
+                        "message": question,
+                        "is_bot_response": False,
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                    {
+                        "message": response,
+                        "is_bot_response": True,
+                        "timestamp": datetime.now().isoformat(),
+                    },
                 ]
                 self._wiki_ingest.ingest_conversation(
                     player_id=player_id,
@@ -2695,7 +2739,9 @@ Script:
                     messages=conversation_messages,
                     extracted_facts=facts,
                 )
-                log.info(f"Wiki ingest completed for {player_name}: {len(facts)} fact(s)")
+                log.info(
+                    f"Wiki ingest completed for {player_name}: {len(facts)} fact(s)"
+                )
         except Exception as e:
             log.warning(f"Wiki ingest failed for {player_name}: {e}")
 
@@ -2710,13 +2756,15 @@ Script:
 
         The wiki_background_ingest task drains this queue every 5 minutes.
         """
-        self._wiki_pending_conversations.append({
-            "player_id": player_id,
-            "player_name": player_name,
-            "question": question,
-            "response": response,
-            "timestamp": datetime.now(self.local_tz).isoformat(),
-        })
+        self._wiki_pending_conversations.append(
+            {
+                "player_id": player_id,
+                "player_name": player_name,
+                "question": question,
+                "response": response,
+                "timestamp": datetime.now(self.local_tz).isoformat(),
+            }
+        )
 
     async def _store_annie_interaction(
         self,
@@ -2809,20 +2857,14 @@ Script:
             },
         ]
         if memory_context:
-            messages.append(
-                {"role": "user", "content": memory_context}
-            )
+            messages.append({"role": "user", "content": memory_context})
         if wiki_context:
-            messages.append(
-                {"role": "user", "content": wiki_context}
-            )
+            messages.append({"role": "user", "content": wiki_context})
         if prev:
             messages.append(
                 {"role": "user", "content": f"Recent chat history:\n{prev}"}
             )
-        messages.append(
-            {"role": "user", "content": f"{player_name}: {question}"}
-        )
+        messages.append({"role": "user", "content": f"{player_name}: {question}"})
 
         tools = self._get_annie_tools()
 
@@ -2900,11 +2942,15 @@ Script:
                     if self._wiki_index
                     else ""
                 )
-                + "\nRespond naturally — for technical or factual questions (vehicles, cargo, game mechanics, commands), keep it SHORT and to the point: the facts, a few sentences at most, no filler or restating the question. For casual chat and non-technical questions, be yourself — pleasantries and fun talk are fine."
-                + "\nYour reply shows in a plain game chat window: NO markdown formatting of any kind (no **bold**, *italics*, `code`, headings, tables, or bullet points), no empty lines, no paragraphs. Plain text only. You may break the reply into at most 3 short lines using newlines."
-                + "\nDo NOT use any emojis — the game client cannot render them."
-                + "\nAnswer the question actually asked; never invent studio mishaps, technical failures, or on-air events that did not happen."
-                + "\nQueue songs ONLY when the listener explicitly asks for music (a request like 'play X', 'song request', or naming a track). Never queue anything as a joke, a segue, or on your own initiative — if the chat isn't about music, no song gets queued.",
+                + "\n\n## Game Chat Reply Rules (MANDATORY)\n"
+                + "Your reply is displayed in a plain in-game chat window that renders NO formatting whatsoever. These rules override everything else in this prompt:\n"
+                + "1. PLAIN TEXT ONLY. Never output markdown: no **bold**, no *italics*, no `code`, no headings, no tables, no bullet points. Never wrap anything in asterisks, underscores, or backticks.\n"
+                + "2. NO empty lines and NO paragraphs. You may break the reply into at most 3 short lines using single newlines.\n"
+                + "3. NO emojis — the game client cannot render them.\n"
+                + "4. Technical or factual questions (vehicles, cargo, game mechanics, commands): answer with the facts only, a few sentences at most, no filler, no restating the question, no radio-host preamble like 'great question' or 'let me give you the rundown'.\n"
+                + "5. Casual chat and non-technical questions: be yourself — pleasantries and fun talk are fine, but still plain text and at most 3 lines.\n"
+                + "6. Never invent studio mishaps, technical failures, or on-air events that did not happen.\n"
+                + "7. Queue songs ONLY when the listener explicitly asks for music (a request like 'play X', 'song request', or naming a track). Never queue anything as a joke, a segue, or on your own initiative — if the chat isn't about music, no song gets queued."
             },
             {
                 "role": "user",
@@ -2912,13 +2958,9 @@ Script:
             },
         ]
         if memory_context:
-            messages.append(
-                {"role": "user", "content": memory_context}
-            )
+            messages.append({"role": "user", "content": memory_context})
         if wiki_context:
-            messages.append(
-                {"role": "user", "content": wiki_context}
-            )
+            messages.append({"role": "user", "content": wiki_context})
         if prev:
             messages.append(
                 {"role": "user", "content": f"Recent in-game chat:\n{prev}"}
@@ -2936,6 +2978,12 @@ Script:
         response = await self._call_annie_llm(
             messages, tools, player_name, ingame_notify, player_id=player_id
         )
+        # Safety net for the game chat window: strip markdown + emoji and
+        # collapse blank lines before announcing. The prompt asks for plain
+        # text, but the model ignores it often enough (e.g. the Lomax
+        # "**max spacers**" reply) that a cheap deterministic final pass is
+        # worth it. This is cleanup of formatting only — never truncates.
+        response = _sanitize_for_game_chat(response)
         await announce_in_game(self.bot.http_session, response)
 
         # Persist interaction to long-term memory (ID-keyed only)
@@ -3824,13 +3872,19 @@ Script:
             else False
         )
 
-    @wiki_group.command(name="lint", description="Run wiki lint (orphan/stale/missing link scan)")
+    @wiki_group.command(
+        name="lint", description="Run wiki lint (orphan/stale/missing link scan)"
+    )
     async def wiki_lint_cmd(self, interaction: discord.Interaction):
         if not self._check_dj(interaction):
-            await interaction.response.send_message("Only DJs can use wiki commands.", ephemeral=True)
+            await interaction.response.send_message(
+                "Only DJs can use wiki commands.", ephemeral=True
+            )
             return
         if not self._wiki_lint or not self._wiki_storage:
-            await interaction.response.send_message("Wiki not initialized.", ephemeral=True)
+            await interaction.response.send_message(
+                "Wiki not initialized.", ephemeral=True
+            )
             return
         await interaction.response.defer()
         try:
@@ -3856,10 +3910,14 @@ Script:
     @wiki_group.command(name="stats", description="Show wiki statistics")
     async def wiki_stats_cmd(self, interaction: discord.Interaction):
         if not self._check_dj(interaction):
-            await interaction.response.send_message("Only DJs can use wiki commands.", ephemeral=True)
+            await interaction.response.send_message(
+                "Only DJs can use wiki commands.", ephemeral=True
+            )
             return
         if not self._wiki_storage:
-            await interaction.response.send_message("Wiki not initialized.", ephemeral=True)
+            await interaction.response.send_message(
+                "Wiki not initialized.", ephemeral=True
+            )
             return
         await interaction.response.defer()
         try:
@@ -3884,10 +3942,14 @@ Script:
     @wiki_group.command(name="export", description="Export wiki to markdown files")
     async def wiki_export_cmd(self, interaction: discord.Interaction):
         if not self._check_dj(interaction):
-            await interaction.response.send_message("Only DJs can use wiki commands.", ephemeral=True)
+            await interaction.response.send_message(
+                "Only DJs can use wiki commands.", ephemeral=True
+            )
             return
         if not self._wiki_exporter:
-            await interaction.response.send_message("Wiki exporter not initialized.", ephemeral=True)
+            await interaction.response.send_message(
+                "Wiki exporter not initialized.", ephemeral=True
+            )
             return
         await interaction.response.defer()
         try:
@@ -3902,10 +3964,14 @@ Script:
     @wiki_group.command(name="synth", description="Generate weekly wiki synthesis")
     async def wiki_synth_cmd(self, interaction: discord.Interaction):
         if not self._check_dj(interaction):
-            await interaction.response.send_message("Only DJs can use wiki commands.", ephemeral=True)
+            await interaction.response.send_message(
+                "Only DJs can use wiki commands.", ephemeral=True
+            )
             return
         if not self._wiki_synthesizer:
-            await interaction.response.send_message("Wiki synthesizer not initialized.", ephemeral=True)
+            await interaction.response.send_message(
+                "Wiki synthesizer not initialized.", ephemeral=True
+            )
             return
         await interaction.response.defer()
         try:
@@ -4662,7 +4728,9 @@ Script:
                     item["response"],
                 )
             except Exception as e:
-                log.warning(f"Wiki background ingest failed for {item.get('player_name')}: {e}")
+                log.warning(
+                    f"Wiki background ingest failed for {item.get('player_name')}: {e}"
+                )
 
     @wiki_background_ingest.before_loop
     async def before_wiki_background_ingest(self):
@@ -4688,7 +4756,9 @@ Script:
                 + len(report.get("inactive_players", []))
             )
             fixes = len(report.get("fixes_applied", []))
-            log.info(f"Wiki daily lint: {total_issues} issues found, {fixes} auto-fixed")
+            log.info(
+                f"Wiki daily lint: {total_issues} issues found, {fixes} auto-fixed"
+            )
         except Exception as e:
             log.error(f"Wiki daily lint failed: {e}", exc_info=e)
 
@@ -4747,8 +4817,7 @@ Script:
                 log.info("Weekly synthesis produced no page (no recent activity)")
             else:
                 log.info(
-                    f"Weekly synthesis page written: "
-                    f"{page.get('title', 'synthesis')}"
+                    f"Weekly synthesis page written: {page.get('title', 'synthesis')}"
                 )
         except Exception as e:
             log.error(f"Weekly synthesis failed: {e}", exc_info=e)
