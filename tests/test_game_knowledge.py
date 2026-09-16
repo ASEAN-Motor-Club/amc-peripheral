@@ -141,7 +141,7 @@ async def test_build_tools_includes_all_tools():
     assert "list_knowledge" in tool_names
     assert "save_knowledge" in tool_names
     assert "remove_knowledge" in tool_names
-    assert "query_game_database" in tool_names
+    assert "query_amc_database" in tool_names
     assert "get_current_subsidies" in tool_names
     assert "get_server_commands" in tool_names
 
@@ -298,7 +298,7 @@ async def test_execute_tool_game_db(monkeypatch):
     monkeypatch.setattr("amc_peripheral.bot.backend_db.execute_query", mock_execute)
 
     result = await _execute_tool(
-        "query_game_database",
+        "query_amc_database",
         {"sql": "SELECT name, weight FROM cargos"},
         AsyncMock(),
     )
@@ -314,7 +314,7 @@ async def test_execute_tool_game_db_error(monkeypatch):
     monkeypatch.setattr("amc_peripheral.bot.backend_db.execute_query", mock_execute)
 
     result = await _execute_tool(
-        "query_game_database",
+        "query_amc_database",
         {"sql": "SELECT * FROM foo"},
         AsyncMock(),
     )

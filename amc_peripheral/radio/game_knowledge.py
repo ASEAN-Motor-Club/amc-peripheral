@@ -3,8 +3,11 @@ Game Knowledge Subagent for DJ Annie.
 
 A lightweight agentic module that answers game-related questions using:
 - Annie's wiki (WikiStorage + WikiRetrieval + WikiIndex)
-- Game database queries (SQLite)
+- The game knowledge wiki (wiki_kb — public DokuWiki page store: vehicles,
+  cargos, parts, delivery points, cargo spaces/types)
 - Backend API calls (subsidies, server commands)
+- The AMC backend database (query_amc_database) — ONLY for player/server
+  operations data (players, deliveries, jobs), never game knowledge.
 
 This runs as an internal LLM call ("subagent") within the radio process,
 so Annie's main prompt stays lean and radio-focused.
@@ -35,8 +38,13 @@ log = logging.getLogger(__name__)
 MAX_ITERATIONS = 5
 
 
-def _build_tools(game_schema: str) -> list[dict]:
-    """Build tool definitions for the game knowledge subagent."""
+def _build_tools(game_knowledge_guide: str) -> list[dict]:
+    """Build tool definitions for the game knowledge subagent.
+
+    `game_knowledge_guide` is the wiki_kb page-store guide text (legacy param
+    name `game_schema`). It is no longer interpolated into a SQL tool
+    description — the SQL tool is a fixed player/server-ops tool.
+    """
     tools = [
         {
             "type": "function",
@@ -184,13 +192,20 @@ def _build_tools(game_schema: str) -> list[dict]:
         {
             "type": "function",
             "function": {
-                "name": "query_game_database",
-                "description": f"""Query MotorTown game database with SQL.
-
-{game_schema}
-
-Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates (COUNT, AVG, SUM, MIN, MAX).
-Results are limited to 100 rows. Database is read-only.""",
+                "name": "query_amc_database",
+                "description": (
+                    "Query the AMC backend database (PostgreSQL) with SQL. "
+                    "Use this for PLAYER and SERVER OPERATIONS data only: "
+                    "players, player deliveries/jobs, delivery points, "
+                    "subsidies, server commands, events. "
+                    "Do NOT use this for game knowledge (vehicle specs, cargo "
+                    "specs, parts, game mechanics) — the backend database has "
+                    "NO game data tables. For game facts use lookup_vehicle, "
+                    "lookup_cargo, lookup_knowledge or search_wiki instead. "
+                    "Supports SELECT with GROUP BY, ORDER BY, JOINs, "
+                    "aggregates (COUNT, AVG, SUM, MIN, MAX). Results are "
+                    "limited to 100 rows. Database is read-only."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -423,7 +438,7 @@ async def _execute_tool(
                 return f"Removed knowledge entry '{key}'."
             return f"No entry found for key '{key}'."
 
-        elif name == "query_game_database":
+        elif name == "query_amc_database":
             from amc_peripheral.bot import backend_db
 
             sql = args.get("sql", "")
@@ -550,7 +565,8 @@ async def ask_game_knowledge(
         wiki_storage: WikiStorage handle
         wiki_retrieval: Optional WikiRetrieval handle for semantic search
         wiki_index: Optional WikiIndex handle for compact prompt context
-        game_schema: Game database schema description for SQL tool
+        game_schema: Legacy name; the game-knowledge guide for tool descriptions
+            (wiki_kb page-store description, not a SQL schema)
         question: The game-related question to answer
         http_session: aiohttp session for API calls
         model: LLM model to use (defaults to DEFAULT_AI_MODEL)
@@ -566,6 +582,10 @@ async def ask_game_knowledge(
         "specifically in a dedicated server named 'ASEAN Motor Club'.\n"
         "Answer questions accurately and concisely using the tools provided.\n"
         "ALWAYS use lookup_knowledge first to retrieve relevant information before answering.\n"
+        "Game facts (vehicles, cargo, parts, game mechanics) come ONLY from the wiki "
+        "tools (lookup_vehicle, lookup_cargo, compare_vehicles, lookup_knowledge) — "
+        "never from SQL. The query_amc_database tool is for PLAYER and SERVER data "
+        "(players, deliveries, jobs) and contains NO game tables.\n"
         "You can save useful knowledge learned from conversations using save_knowledge.\n"
         "Do not use markdown tables or emojis.\n\n"
         f"{knowledge_index}"
@@ -577,7 +597,6 @@ async def ask_game_knowledge(
     ]
 
     tools = _build_tools(game_schema) if game_schema else []
-
     for _ in range(MAX_ITERATIONS):
         # pyrefly: ignore [no-matching-overload]
         completion = await openai_client.chat.completions.create(

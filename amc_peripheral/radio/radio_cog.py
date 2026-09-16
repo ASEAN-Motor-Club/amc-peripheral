@@ -601,7 +601,9 @@ class RadioCog(commands.Cog):
         # Start backend SSE event listener (forwards events into the wiki)
         self._sse_task = asyncio.create_task(self._listen_backend_events())
 
-        # Load game schema for segment generation
+        # Load game-knowledge guide for tool descriptions. Despite the legacy
+        # name, this describes the wiki_kb DokuWiki page store (NOT a SQL
+        # schema) — game facts come from the wiki, not SQL.
         try:
             from amc_peripheral.bot import wiki_kb
 
@@ -1253,12 +1255,19 @@ Script:
             {
                 "type": "function",
                 "function": {
-                    "name": "query_game_database",
-                    "description": f"""Query MotorTown game database with SQL.
-
-{self.game_schema_description}
-
-Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates.""",
+                    "name": "query_amc_database",
+                    "description": (
+                        "Query the AMC backend database (PostgreSQL) with SQL. "
+                        "Use this for PLAYER and SERVER OPERATIONS data only: "
+                        "players, player deliveries/jobs, delivery points, "
+                        "subsidies, server commands, events. Do NOT use this "
+                        "for game knowledge (vehicle specs, cargo specs, "
+                        "parts, game mechanics) — the backend database has NO "
+                        "game data tables. For game facts use "
+                        "ask_game_knowledge instead. Supports SELECT with "
+                        "GROUP BY, ORDER BY, JOINs, aggregates. Results are "
+                        "limited to 100 rows. Database is read-only."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {"sql": {"type": "string"}},
@@ -1287,7 +1296,7 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 
     async def _execute_segment_tool(self, name: str, args: dict) -> str:
         """Execute tools for segment generation."""
-        if name == "query_game_database":
+        if name == "query_amc_database":
             from amc_peripheral.bot import backend_db
 
             result = backend_db.execute_query(args.get("sql", ""))
