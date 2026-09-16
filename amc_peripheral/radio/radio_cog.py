@@ -2900,7 +2900,8 @@ Script:
                     if self._wiki_index
                     else ""
                 )
-                + "\nRespond naturally — never cut your answer short; write the whole reply.\nDo NOT use any emojis — the game client cannot render them."
+                + "\nRespond naturally — write the whole reply, but keep it SHORT and to the point: a few sentences at most, no filler or pleasantries, no restating the question. Give the facts and stop."
+                + "\nDo NOT use any emojis — the game client cannot render them."
                 + "\nAnswer the question actually asked; never invent studio mishaps, technical failures, or on-air events that did not happen."
                 + "\nQueue songs ONLY when the listener explicitly asks for music (a request like 'play X', 'song request', or naming a track). Never queue anything as a joke, a segue, or on your own initiative — if the chat isn't about music, no song gets queued.",
             },
