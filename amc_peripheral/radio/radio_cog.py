@@ -4776,11 +4776,13 @@ Script:
     async def wiki_background_ingest_error(self, error):
         log.error(f"wiki_background_ingest task error: {error}", exc_info=error)
 
-    ANNIE_IDLE_CHITCHAT_INTERVAL_MINUTES = 30
+    ANNIE_IDLE_CHITCHAT_INTERVAL_MINUTES = 15
+    _last_idle_chitchat_at: datetime | None = None
 
     @tasks.loop(minutes=5)
     async def annie_idle_chitchat(self):
-        """If no player chat for 30 minutes, Annie starts small talk.
+        """If no player chat for ANNIE_IDLE_CHITCHAT_INTERVAL_MINUTES, Annie
+        starts small talk.
 
         Uses whatever context her tools can find: recent deliveries, the job
         board, who's online, or just a joke if everything is quiet.
@@ -4789,15 +4791,21 @@ Script:
         if game_chat is None:
             return
 
-        # Cheap gate first: any Discord-relayed chat in the last 30 min?
         now = datetime.now(timezone.utc)
-        cutoff = now - timedelta(minutes=self.ANNIE_IDLE_CHITCHAT_INTERVAL_MINUTES)
+        interval = self.ANNIE_IDLE_CHITCHAT_INTERVAL_MINUTES
+        cutoff = now - timedelta(minutes=interval)
+        # Cheap gate first: any Discord-relayed chat in the window?
         try:
             recent = [m async for m in game_chat.history(limit=50, after=cutoff)]
         except Exception as e:  # noqa: BLE001
             log.warning(f"annie_idle_chitchat: history fetch failed: {e}")
             return
 
+        # Relayed player chat arrives as "AMC Server" bot messages in
+        # "**Name:** text" format (amc-backend tasks.py ChatLogEvent forward).
+        # Excluded: 📢 announcements and **🔴 Player Logout:** status lines
+        # (no bare "**" marker) and player→Annie pings (handled by the
+        # regular chat handler, not this loop).
         player_chat = [
             m
             for m in recent
@@ -4816,7 +4824,7 @@ Script:
 
             result = backend_db.execute_query(
                 "SELECT count(*) AS n FROM amc_playerchatlog "
-                "WHERE timestamp > NOW() - INTERVAL '30 minutes'"
+                f"WHERE timestamp > NOW() - INTERVAL '{interval} minutes'"
             )
             if result.get("results"):
                 if (result["results"][0].get("n") or 0) > 0:
@@ -4825,19 +4833,20 @@ Script:
             log.warning(f"annie_idle_chitchat: chatlog check failed: {e}")
             return
 
-        # Also skip if WE announced into the game chat recently (avoid
-        # talking to ourselves in a genuinely empty server loop).
-        try:
-            last_own = []
-            async for m in game_chat.history(limit=1):
-                last_own.append(m)
-            if last_own and last_own[0].author == self.bot.user:
-                if last_own[0].created_at > cutoff:
-                    return
-        except Exception as e:  # noqa: BLE001
-            log.warning(f"annie_idle_chitchat: own-last check failed: {e}")
+        # Annie's own in-game replies are NOT relayed into the Discord
+        # game-chat channel and amc_playerchatlog only records player
+        # (character) chat, so neither source can detect our own chatter.
+        # Track it in memory instead: skip if the last chitchat was fired
+        # inside the quiet window (prevents self-talk loops in an empty
+        # server — the DB gate alone would keep passing).
+        if self._last_idle_chitchat_at is not None:
+            if now - self._last_idle_chitchat_at < timedelta(minutes=interval * 2):
+                return
+        self._last_idle_chitchat_at = now
 
-        log.info("annie_idle_chitchat: 30min of chat silence — starting small talk")
+        log.info(
+            f"annie_idle_chitchat: {interval}min of chat silence — starting small talk"
+        )
         await self._annie_idle_chitchat()
 
     @annie_idle_chitchat.before_loop
@@ -4908,7 +4917,7 @@ Script:
             "You haven't heard from anyone in a while, so YOU are starting the "
             "conversation. You called this yourself — the server has been quiet. "
             "Use this live data if it gives you something fun to react to, or "
-            "just tell a joke / play a track / tease your listeners. Keep it "
+            "just tell a joke or tease your listeners. Keep it "
             "in character, natural, and short.\n"
             + (
                 "\n".join("- " + p for p in context_parts)
@@ -4941,13 +4950,24 @@ Script:
                 "role": "user",
                 "content": (
                     f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7). "
-                    "The chat has been quiet for 30 minutes. Start the conversation with something short and fun."
+                    f"The chat has been quiet for {self.ANNIE_IDLE_CHITCHAT_INTERVAL_MINUTES} minutes. "
+                    "Start the conversation with something short and fun."
                 ),
             },
         ]
 
-        tools = self._get_annie_tools()
-        channel = self.bot.get_channel(GAME_ANNOUNCEMENTS_CHANNEL_ID)
+        # Full Annie toolset EXCEPT the song-queue tools — idle chatter must
+        # never queue music (rule 7 is prompt-only; removing the tool is
+        # deterministic and the whole point of an idle trigger is that
+        # nobody asked for anything).
+        tools = [
+            t
+            for t in self._get_annie_tools()
+            if t["function"]["name"] not in _QUEUE_TOOL_NAMES
+        ]
+        # Interim acks go to the game-chat channel (same place the final
+        # reply lands), not the announcements channel.
+        channel = self.bot.get_channel(GAME_CHAT_CHANNEL_ID)
 
         async def idle_notify(msg: str):
             if channel:
