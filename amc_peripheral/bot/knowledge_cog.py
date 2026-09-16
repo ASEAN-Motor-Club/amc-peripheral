@@ -327,7 +327,7 @@ class KnowledgeCog(commands.Cog):
                 "Before answering questions about people, community dynamics, or long-running topics, search your wiki for relevant pages. "
                 "When you learn something new and notable from a conversation, update your wiki using update_wiki. "
                 "If the current speaker asks what you know about them, call get_my_wiki_profile (no arguments). "
-                "For game-related questions, use the ask_game_knowledge tool instead of guessing.\n\n"
+                "For game-related questions, use the wiki tool's 'ask' action (full-text search over the game wiki) instead of guessing.\n\n"
                 "## Your Memory\n"
                 "Your Standing Memory above is durable facts you chose to remember about yourself and the community — they are always in your context. "
                 "Use the memory tool to persist a lasting fact (write), retrieve remembered facts (recall), browse (list), or remove one (delete). "
@@ -441,7 +441,7 @@ class KnowledgeCog(commands.Cog):
             "You are a helpful bot in Motor Town, an open world driving game, specifically in 'ASEAN Motor Club'.\n"
             "This reply goes through the game chat: write your full answer, never cut it short, and avoid using newlines.\n"
             "Only use the following knowledge. Do not use markdown, tables, or emojis.\n"
-            "For game-related questions, use the ask_game_knowledge tool instead of guessing.\n\n"
+            "For game-related questions, use the wiki tool's 'ask' action (full-text search over the game wiki) instead of guessing.\n\n"
             "## Interim Updates\n"
             "If answering requires tool calls, call send_message FIRST (at most once per reply) "
             "to tell the user what you are about to do, e.g. 'ok let me look up the Vamos specs'. "
@@ -611,7 +611,9 @@ class KnowledgeCog(commands.Cog):
                     "name": "wiki",
                     "description": "Annie's personal wiki. Actions: search (semantic), read (by title), "
                                    "list (browse), write (create/update page), link (cross-reference), "
-                                   "ask (game knowledge research), summary (stats), profile (your page).",
+                                   "ask (full-text search over the GAME wiki: vehicles, cargo, parts, "
+                                   "delivery points — authoritative game facts), summary (stats), "
+                                   "profile (your page).",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -1433,26 +1435,53 @@ class KnowledgeCog(commands.Cog):
             return f"Linked '{from_p['title']}' -> '{to_p['title']}' ({link_type})."
 
         elif action == "ask":
-            from amc_peripheral.radio.game_knowledge import ask_game_knowledge
+            # Community bot path: answer game questions with the wiki_kb
+            # full-text search + page read (the radio bot's subagent is gone).
+            from amc_peripheral.bot import wiki_kb
 
             question = arguments.get("query", "")
             if not question:
                 return "Error: 'query' is required for ask action."
-            if not self._wiki_storage:
-                return "Wiki storage not available."
+
             try:
-                answer = await ask_game_knowledge(
-                    openai_client=self.openai_client_openrouter,
-                    wiki_storage=self._wiki_storage,
-                    wiki_retrieval=self._wiki_retrieval,
-                    wiki_index=self._wiki_index,
-                    game_schema=self.game_schema_description,
-                    question=question,
-                    http_session=self.bot.http_session,
+                search_result = await asyncio.to_thread(
+                    wiki_kb.search_wiki, question
                 )
-                return answer
             except Exception as e:
-                return f"Failed to get game knowledge: {e}"
+                return f"Game wiki search failed: {e}"
+
+            results = search_result.get("results", [])
+            if not results:
+                return (
+                    f"No game wiki pages matched '{question}'. "
+                    "Retry with a shorter or different phrasing."
+                )
+
+            parts = []
+            for hit in results[:3]:
+                page = await asyncio.to_thread(
+                    wiki_kb._load_page, hit["category"], hit["slug"]
+                )
+                if not page:
+                    continue
+                part = [f"--- {page['name']} ({page['category']}) ---"]
+                if page.get("body"):
+                    part.append(page["body"])
+                if page.get("infobox"):
+                    part.append("Info:")
+                    for k, v in page["infobox"].items():
+                        part.append(f"  {k}: {v}")
+                for section, content in (page.get("details") or {}).items():
+                    part.append(f"{section}:")
+                    part.append(json.dumps(content, indent=1, default=str))
+                parts.append("\n".join(part))
+
+            if not parts:
+                return (
+                    "Found matching pages but could not load their content. "
+                    "Try a different query."
+                )
+            return "\n\n".join(parts)
 
         elif action == "summary":
             if not self._wiki_storage:

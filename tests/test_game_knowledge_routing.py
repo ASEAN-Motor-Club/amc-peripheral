@@ -136,3 +136,93 @@ class TestSqlToolIsAmcOnly:
         assert "ONLY from the wiki" in src
         assert "never from SQL" in src
         assert "NO game tables" in src
+
+
+class TestNoSubagentDirectWikiTools:
+    """freeman: drop the subagent — Annie looks up game facts herself via
+    FTS tools (search_game_wiki / read_game_wiki_page) over wiki_kb."""
+
+    def test_annie_tools_have_no_ask_game_knowledge(self):
+        import inspect
+
+        from amc_peripheral.radio import radio_cog
+
+        src = inspect.getsource(radio_cog.RadioCog._get_annie_tools)
+        assert "ask_game_knowledge" not in src
+        assert '"search_game_wiki"' in src
+        assert '"read_game_wiki_page"' in src
+
+    def test_segment_tools_have_no_ask_game_knowledge(self):
+        import inspect
+
+        from amc_peripheral.radio import radio_cog
+
+        src = inspect.getsource(radio_cog.RadioCog._get_segment_tools)
+        assert "ask_game_knowledge" not in src
+
+    def test_annie_prompt_points_at_direct_wiki_tools(self):
+        import inspect
+
+        from amc_peripheral.radio import radio_cog
+
+        src = inspect.getsource(radio_cog)
+        assert "ask_game_knowledge" not in src
+        assert "search_game_wiki" in src
+
+    @pytest.fixture
+    def game_pages(self, tmp_path, monkeypatch):
+        """Minimal wiki_kb page store (mirrors tests/test_wiki_kb.py)."""
+        from amc_peripheral.bot import wiki_kb
+
+        pages = tmp_path / "pages"
+        v = pages / "vehicles" / "vamos3"
+        v.mkdir(parents=True)
+        (v / "auto_infobox.txt").write_text(
+            "{{infobox>\nname = Vamos3\nType = Trailer\n}}\n",
+            encoding="utf-8",
+        )
+        (v / "auto_details.txt").write_text(
+            "===== Specifications =====\n"
+            "^ Stat ^ Value ^\n"
+            "| Cargo Space | Box (86.5 m3) |\n",
+            encoding="utf-8",
+        )
+        (pages / "vehicles" / "vamos3.txt").write_text(
+            "{{page>vehicles:vamos3:auto_infobox&nodate&nomdate}}\n\n"
+            "====== Vamos3 ======\n\n**Vamos3** is a heavy-duty semi trailer.\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(wiki_kb, "WIKI_PAGES_PATH", str(pages))
+        monkeypatch.setattr(wiki_kb, "_INDEX", None)
+        monkeypatch.setattr(wiki_kb, "_SEARCH_CORPUS", None)
+        return pages
+
+    @pytest.mark.asyncio
+    async def test_search_game_wiki_finds_vamos(self, game_pages):
+        """End-to-end shape: the exact question that failed live."""
+        from unittest.mock import MagicMock
+
+        import amc_peripheral.radio.radio_cog as rc
+
+        cog = MagicMock()
+        result = await rc.RadioCog._execute_annie_tool(
+            cog, "search_game_wiki", {"query": "Vamos"}, None, None
+        )
+        assert "vamos3" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_read_game_wiki_page_returns_cargo_specs(self, game_pages):
+        """The Vamos defect: cargo space must be present in the page read."""
+        from unittest.mock import MagicMock
+
+        import amc_peripheral.radio.radio_cog as rc
+
+        cog = MagicMock()
+        result = await rc.RadioCog._execute_annie_tool(
+            cog,
+            "read_game_wiki_page",
+            {"category": "vehicle", "slug": "vamos3"},
+            None,
+            None,
+        )
+        assert "86.5" in result  # Box-type cargo space
