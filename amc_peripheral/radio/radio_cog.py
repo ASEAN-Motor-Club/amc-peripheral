@@ -175,6 +175,12 @@ When a listener asks about game mechanics, vehicles, cargo, locations, player st
 or anything game-related, you MUST call `ask_game_knowledge` first. Do NOT guess or make up game facts. \
 Even if you think you know the answer, always verify with the tool.
 
+## Interim Updates
+When a reply needs tool calls (especially ask_game_knowledge, which can take
+a while), call send_message FIRST (at most once per reply) to tell the listener
+what you are doing, e.g. 'one sec, checking the game knowledge'. Your final
+answer itself needs no tool call.
+
 ## Remembering Knowledge
 When players share useful tips, preferences, or facts (e.g., "the Micky is our favourite car", \
 "Steel Coils are the hardest cargo to deliver"), use `write_wiki_page` to record it in your wiki. \
@@ -1313,6 +1319,33 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
     def _get_annie_tools(self):
         """Tool definitions for Annie's agentic chat."""
         return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "send_message",
+                    "description": "Send an interim message to the listener BEFORE your final "
+                                   "answer — e.g. 'one sec, let me look that up' or 'checking "
+                                   "the game knowledge, hold on'. When answering needs tool "
+                                   "calls (especially ask_game_knowledge, which can take a "
+                                   "while), call send_message FIRST, in the same turn as "
+                                   "those tool calls, so the listener isn't left waiting in "
+                                   "silence. Call it at most ONCE per reply. Do NOT use it "
+                                   "for the answer itself: your final reply is delivered "
+                                   "automatically without any tool call. Keep it short and "
+                                   "in character, one sentence.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "message": {
+                                "type": "string",
+                                "description": "The short interim message to show the listener, "
+                                               "e.g. 'let me check the wiki for that'",
+                            }
+                        },
+                        "required": ["message"],
+                    },
+                },
+            },
             {
                 "type": "function",
                 "function": {
@@ -2878,8 +2911,9 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
         when multiple chats are in flight concurrently.
         """
         max_iterations = 20
+        send_message_sent = False
 
-        for _ in range(max_iterations):
+        for turn in range(max_iterations):
             # pyrefly: ignore [no-matching-overload]
             completion = await self.openai_client_openrouter.chat.completions.create(
                 model=DEFAULT_AI_MODEL,
@@ -2898,20 +2932,50 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
 
             messages.append(response)
 
+            # Code-level guarantee that send_message is a ONE-TIME, PRE-TOOLS
+            # interim ack (prompt rules are advisory): send it before any other
+            # tool call in the first turn's batch. Later-turn or repeat calls
+            # are no-ops with an explanatory tool-result.
+            send_message_pending = any(
+                tc.function.name == "send_message" for tc in response.tool_calls
+            )
+            if send_message_pending and turn == 0 and not send_message_sent:
+                for tool_call in response.tool_calls:
+                    if tool_call.function.name != "send_message":
+                        continue
+                    args = json.loads(tool_call.function.arguments)
+                    message_text = (args.get("message") or "").strip()
+                    if message_text:
+                        await notify_fn(message_text)
+                        send_message_sent = True
+                        break
+
             for tool_call in response.tool_calls:
-                result = await self._execute_annie_tool(
-                    tool_call.function.name,
-                    json.loads(tool_call.function.arguments),
-                    requester,
-                    notify_fn,
-                    bypass_throttling=bypass_throttling,
-                    player_id=player_id,
-                )
+                function_name = tool_call.function.name
+                if function_name == "send_message":
+                    if send_message_sent:
+                        result = "Message sent."
+                    elif turn == 0:
+                        result = "Error: message parameter required."
+                    else:
+                        result = (
+                            "Message not sent: send_message must be called in "
+                            "the first turn, together with the other tool calls."
+                        )
+                else:
+                    result = await self._execute_annie_tool(
+                        function_name,
+                        json.loads(tool_call.function.arguments),
+                        requester,
+                        notify_fn,
+                        bypass_throttling=bypass_throttling,
+                        player_id=player_id,
+                    )
                 messages.append(
                     {
                         "tool_call_id": tool_call.id,
                         "role": "tool",
-                        "name": tool_call.function.name,
+                        "name": function_name,
                         "content": result,
                     }
                 )
