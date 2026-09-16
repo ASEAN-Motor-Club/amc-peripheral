@@ -185,3 +185,78 @@ async def test_annie_ping_does_not_block_chitchat(mod):
         await _bind_and_run(mod, cog)
 
     assert called["v"]
+
+
+@pytest.mark.asyncio
+async def test_empty_server_blocks_chitchat(mod, monkeypatch):
+    """Live /player/list returns nobody → gate returns, chitchat skipped."""
+    import amc_peripheral.radio.radio_cog as rc
+
+    cog = _cog([])
+
+    called = {"v": False}
+
+    async def fake_chitchat():
+        called["v"] = True
+
+    async def fake_api(session, path, **kw):
+        assert path == "/player/list"
+        return {"data": {}}
+
+    monkeypatch.setattr(rc, "game_api_request", fake_api)
+    cog._annie_idle_chitchat = fake_chitchat
+
+    with _db_ctx(_db({"results": [{"n": 0}]})):
+        await _bind_and_run(mod, cog)
+
+    assert not called["v"]
+    assert cog._last_idle_chitchat_at is None  # not marked as talked
+
+
+@pytest.mark.asyncio
+async def test_online_players_allow_chitchat(mod, monkeypatch):
+    """Someone online → chitchat fires and timestamp is recorded."""
+    import amc_peripheral.radio.radio_cog as rc
+
+    cog = _cog([])
+
+    called = {"v": False}
+
+    async def fake_chitchat():
+        called["v"] = True
+
+    async def fake_api(session, path, **kw):
+        return {"data": {"1": {"name": "freeman"}}}
+
+    monkeypatch.setattr(rc, "game_api_request", fake_api)
+    cog._annie_idle_chitchat = fake_chitchat
+
+    with _db_ctx(_db({"results": [{"n": 0}]})):
+        await _bind_and_run(mod, cog)
+
+    assert called["v"]
+    assert cog._last_idle_chitchat_at is not None
+
+
+@pytest.mark.asyncio
+async def test_online_api_failure_is_nonfatal(mod, monkeypatch):
+    """Game API down → proceed (better to talk than never)."""
+    import amc_peripheral.radio.radio_cog as rc
+
+    cog = _cog([])
+
+    called = {"v": False}
+
+    async def fake_chitchat():
+        called["v"] = True
+
+    async def fake_api(session, path, **kw):
+        raise RuntimeError("api down")
+
+    monkeypatch.setattr(rc, "game_api_request", fake_api)
+    cog._annie_idle_chitchat = fake_chitchat
+
+    with _db_ctx(_db({"results": [{"n": 0}]})):
+        await _bind_and_run(mod, cog)
+
+    assert called["v"]

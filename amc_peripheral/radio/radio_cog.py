@@ -64,7 +64,7 @@ from amc_peripheral.radio.radio_server import (
     get_listener_count,
     parse_song_info,
 )
-from amc_peripheral.utils.game_utils import announce_in_game
+from amc_peripheral.utils.game_utils import announce_in_game, game_api_request
 from amc_peripheral.memory.storage import MemoryStorage
 from amc_peripheral.memory.retrieval import MemoryRetrieval
 from amc_peripheral.wiki.storage import WikiStorage
@@ -1738,6 +1738,19 @@ Script:
             {
                 "type": "function",
                 "function": {
+                    "name": "get_online_players",
+                    "description": (
+                        "Get the list of players currently online in the game "
+                        "server right now (live from the game API, not the "
+                        "database). Use this to see who's around before "
+                        "addressing anyone, or when asked who is online."
+                    ),
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "voice_reply_on_radio",
                     "description": "Speak a message on the radio via TTS. The audio will be overlaid on top of the current music, ducking its volume. Use this to reply to listeners on-air. The system will wait if a talking segment is playing to avoid overlap. Use sparingly for fun interactions.",
                     "parameters": {
@@ -2202,6 +2215,17 @@ Script:
                 if "error" in result:
                     return f"Query error: {result['error']}"
                 return json.dumps(result.get("results", []), indent=2)
+
+            elif name == "get_online_players":
+                data = await game_api_request(self.bot.http_session, "/player/list")
+                players = [
+                    p.get("name", "?") for p in (data.get("data") or {}).values() if p
+                ]
+                if not players:
+                    return "Nobody is online right now — the server is empty."
+                return f"Players online right now ({len(players)}): " + ", ".join(
+                    players
+                )
 
             elif name == "voice_reply_on_radio":
                 message_text = args.get("message", "")
@@ -4842,6 +4866,18 @@ Script:
         if self._last_idle_chitchat_at is not None:
             if now - self._last_idle_chitchat_at < timedelta(minutes=interval * 2):
                 return
+
+        # Don't talk to an empty server: check the live game API for who's
+        # actually online right now. Failure here is non-fatal (better to
+        # risk one monologue than to never talk because the API hiccuped).
+        try:
+            data = await game_api_request(self.bot.http_session, "/player/list")
+            online = [p for p in (data.get("data") or {}).values() if p]
+            if not online:
+                return
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"annie_idle_chitchat: online check failed: {e}")
+
         self._last_idle_chitchat_at = now
 
         log.info(
