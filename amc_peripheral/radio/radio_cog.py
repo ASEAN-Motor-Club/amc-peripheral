@@ -2986,7 +2986,7 @@ Script:
                 + "7. Queue songs ONLY when the listener explicitly asks for music (a request like 'play X', 'song request', or naming a track). Never queue anything as a joke, a segue, or on your own initiative — if the chat isn't about music, no song gets queued."
                 + "\n\n## Backend Database Schema\n"
                 + "When using the query_amc_database tool, rely on this schema guide for table and column names — do not guess column names:\n"
-                + (_backend_db.get_schema_description() or "")
+                + (_backend_db.get_schema_description() or ""),
             },
             {
                 "role": "user",
@@ -4775,6 +4775,189 @@ Script:
     @wiki_background_ingest.error
     async def wiki_background_ingest_error(self, error):
         log.error(f"wiki_background_ingest task error: {error}", exc_info=error)
+
+    ANNIE_IDLE_CHITCHAT_INTERVAL_MINUTES = 30
+
+    @tasks.loop(minutes=5)
+    async def annie_idle_chitchat(self):
+        """If no player chat for 30 minutes, Annie starts small talk.
+
+        Uses whatever context her tools can find: recent deliveries, the job
+        board, who's online, or just a joke if everything is quiet.
+        """
+        game_chat = self.bot.get_channel(GAME_CHAT_CHANNEL_ID)
+        if game_chat is None:
+            return
+
+        # Cheap gate first: any Discord-relayed chat in the last 30 min?
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(minutes=self.ANNIE_IDLE_CHITCHAT_INTERVAL_MINUTES)
+        try:
+            recent = [m async for m in game_chat.history(limit=50, after=cutoff)]
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"annie_idle_chitchat: history fetch failed: {e}")
+            return
+
+        player_chat = [
+            m
+            for m in recent
+            if m.created_at > cutoff
+            and m.author.name == "AMC Server"
+            and "**" in m.content
+            and "@annie" not in m.content.lower()
+        ]
+        if player_chat:
+            return
+
+        # Double-check against the authoritative DB chat log (the Discord
+        # relay can lag or drop lines). No rows since cutoff = truly idle.
+        try:
+            from amc_peripheral.bot import backend_db
+
+            result = backend_db.execute_query(
+                "SELECT count(*) AS n FROM amc_playerchatlog "
+                "WHERE timestamp > NOW() - INTERVAL '30 minutes'"
+            )
+            if result.get("results"):
+                if (result["results"][0].get("n") or 0) > 0:
+                    return
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"annie_idle_chitchat: chatlog check failed: {e}")
+            return
+
+        # Also skip if WE announced into the game chat recently (avoid
+        # talking to ourselves in a genuinely empty server loop).
+        try:
+            last_own = []
+            async for m in game_chat.history(limit=1):
+                last_own.append(m)
+            if last_own and last_own[0].author == self.bot.user:
+                if last_own[0].created_at > cutoff:
+                    return
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"annie_idle_chitchat: own-last check failed: {e}")
+
+        log.info("annie_idle_chitchat: 30min of chat silence — starting small talk")
+        await self._annie_idle_chitchat()
+
+    @annie_idle_chitchat.before_loop
+    async def before_annie_idle_chitchat(self):
+        await self.bot.wait_until_ready()
+
+    @annie_idle_chitchat.error
+    async def annie_idle_chitchat_error(self, error):
+        log.error(f"annie_idle_chitchat task error: {error}", exc_info=error)
+
+    async def _annie_idle_chitchat(self):
+        """Build an idle-moment context and let Annie make small talk."""
+        from amc_peripheral.bot import backend_db as _backend_db
+
+        context_parts = []
+
+        # Who's around lately?
+        try:
+            r = _backend_db.execute_query(
+                "SELECT name, last_vehicle_key FROM amc_character "
+                "WHERE last_online > NOW() - INTERVAL '15 minutes' "
+                "ORDER BY last_online DESC LIMIT 5"
+            )
+            players = r.get("results", [])
+            if players:
+                names = ", ".join(p.get("name", "?") for p in players)
+                context_parts.append(
+                    f"Players seen online in the last 15 minutes: {names}"
+                )
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"annie_idle_chitchat: online-players query failed: {e}")
+
+        # Recent deliveries
+        try:
+            r = _backend_db.execute_query(
+                "SELECT c.name AS player, l.cargo_key, l.payment "
+                "FROM amc_servercargoarrivedlog l "
+                "JOIN amc_character c ON c.id = l.character_id "
+                "WHERE l.timestamp > NOW() - INTERVAL '2 hours' "
+                "ORDER BY l.timestamp DESC LIMIT 5"
+            )
+            deliveries = r.get("results", [])
+            if deliveries:
+                lines = [
+                    f"{d.get('player', '?')} delivered {d.get('cargo_key', '?')} for {d.get('payment', 0)} coins"
+                    for d in deliveries
+                ]
+                context_parts.append("Recent deliveries: " + "; ".join(lines))
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"annie_idle_chitchat: deliveries query failed: {e}")
+
+        # Job board snapshot
+        try:
+            r = _backend_db.execute_query(
+                "SELECT name, bonus_multiplier, fulfilled FROM amc_deliveryjob "
+                "WHERE fulfilled = false AND (expired_at IS NULL OR expired_at > NOW()) "
+                "ORDER BY requested_at DESC LIMIT 5"
+            )
+            jobs = r.get("results", [])
+            if jobs:
+                lines = [j.get("name", "?") for j in jobs]
+                context_parts.append("Open job board postings: " + ", ".join(lines))
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"annie_idle_chitchat: job board query failed: {e}")
+
+        context_block = (
+            "\n\n## Idle Small-Talk Context\n"
+            "You haven't heard from anyone in a while, so YOU are starting the "
+            "conversation. You called this yourself — the server has been quiet. "
+            "Use this live data if it gives you something fun to react to, or "
+            "just tell a joke / play a track / tease your listeners. Keep it "
+            "in character, natural, and short.\n"
+            + (
+                "\n".join("- " + p for p in context_parts)
+                if context_parts
+                else "No live data available right now — go fully improvised."
+            )
+        )
+
+        now = datetime.now(self.local_tz)
+        messages = [
+            {
+                "role": "system",
+                "content": ANNIE_SYSTEM_PROMPT.format(
+                    knowledge_index=self._wiki_index.get_index()
+                    if self._wiki_index
+                    else ""
+                )
+                + "\n\n## Game Chat Reply Rules (MANDATORY)\n"
+                + "Your reply is displayed in a plain in-game chat window that renders NO formatting whatsoever. These rules override everything else in this prompt:\n"
+                + "1. PLAIN TEXT ONLY. Never output markdown: no **bold**, no *italics*, no `code`, no headings, no tables, no bullet points. Never wrap anything in asterisks, underscores, or backticks.\n"
+                + "2. NO empty lines and NO paragraphs. You may break the reply into at most 3 short lines using single newlines.\n"
+                + "3. NO emojis — the game client cannot render them.\n"
+                + "4. Technical or factual questions (vehicles, cargo, game mechanics, commands): answer with the facts only, a few sentences at most, no filler, no restating the question, no radio-host preamble like 'great question' or 'let me give you the rundown'.\n"
+                + "5. Casual chat and non-technical questions: be yourself — pleasantries and fun talk are fine, but still plain text and at most 3 lines.\n"
+                + "6. Never invent studio mishaps, technical failures, or on-air events that did not happen.\n"
+                + "7. Queue songs ONLY when the listener explicitly asks for music (a request like 'play X', 'song request', or naming a track). Never queue anything as a joke, a segue, or on your own initiative — if the chat isn't about music, no song gets queued."
+                + context_block,
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7). "
+                    "The chat has been quiet for 30 minutes. Start the conversation with something short and fun."
+                ),
+            },
+        ]
+
+        tools = self._get_annie_tools()
+        channel = self.bot.get_channel(GAME_ANNOUNCEMENTS_CHANNEL_ID)
+
+        async def idle_notify(msg: str):
+            if channel:
+                await channel.send(msg)
+
+        response = await self._call_annie_llm(
+            messages, tools, "the radio booth", idle_notify
+        )
+        response = _sanitize_for_game_chat(response)
+        await announce_in_game(self.bot.http_session, response)
 
     @tasks.loop(time=dt_time(hour=4, minute=0, tzinfo=ZoneInfo("Asia/Bangkok")))
     async def wiki_daily_lint(self):
