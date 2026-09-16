@@ -64,7 +64,7 @@ from amc_peripheral.radio.radio_server import (
     get_listener_count,
     parse_song_info,
 )
-from amc_peripheral.utils.game_utils import announce_in_game
+from amc_peripheral.utils.game_utils import announce_in_game, game_api_request
 from amc_peripheral.memory.storage import MemoryStorage
 from amc_peripheral.memory.retrieval import MemoryRetrieval
 from amc_peripheral.wiki.storage import WikiStorage
@@ -1738,6 +1738,19 @@ Script:
             {
                 "type": "function",
                 "function": {
+                    "name": "get_online_players",
+                    "description": (
+                        "Get the list of players currently online in the game "
+                        "server right now (live from the game API, not the "
+                        "database). Use this to see who's around before "
+                        "addressing anyone, or when asked who is online."
+                    ),
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "voice_reply_on_radio",
                     "description": "Speak a message on the radio via TTS. The audio will be overlaid on top of the current music, ducking its volume. Use this to reply to listeners on-air. The system will wait if a talking segment is playing to avoid overlap. Use sparingly for fun interactions.",
                     "parameters": {
@@ -2202,6 +2215,17 @@ Script:
                 if "error" in result:
                     return f"Query error: {result['error']}"
                 return json.dumps(result.get("results", []), indent=2)
+
+            elif name == "get_online_players":
+                data = await game_api_request(self.bot.http_session, "/player/list")
+                players = [
+                    p.get("name", "?") for p in (data.get("data") or {}).values() if p
+                ]
+                if not players:
+                    return "Nobody is online right now — the server is empty."
+                return f"Players online right now ({len(players)}): " + ", ".join(
+                    players
+                )
 
             elif name == "voice_reply_on_radio":
                 message_text = args.get("message", "")
@@ -2986,7 +3010,7 @@ Script:
                 + "7. Queue songs ONLY when the listener explicitly asks for music (a request like 'play X', 'song request', or naming a track). Never queue anything as a joke, a segue, or on your own initiative — if the chat isn't about music, no song gets queued."
                 + "\n\n## Backend Database Schema\n"
                 + "When using the query_amc_database tool, rely on this schema guide for table and column names — do not guess column names:\n"
-                + (_backend_db.get_schema_description() or "")
+                + (_backend_db.get_schema_description() or ""),
             },
             {
                 "role": "user",
@@ -4775,6 +4799,221 @@ Script:
     @wiki_background_ingest.error
     async def wiki_background_ingest_error(self, error):
         log.error(f"wiki_background_ingest task error: {error}", exc_info=error)
+
+    ANNIE_IDLE_CHITCHAT_INTERVAL_MINUTES = 15
+    _last_idle_chitchat_at: datetime | None = None
+
+    @tasks.loop(minutes=5)
+    async def annie_idle_chitchat(self):
+        """If no player chat for ANNIE_IDLE_CHITCHAT_INTERVAL_MINUTES, Annie
+        starts small talk.
+
+        Uses whatever context her tools can find: recent deliveries, the job
+        board, who's online, or just a joke if everything is quiet.
+        """
+        game_chat = self.bot.get_channel(GAME_CHAT_CHANNEL_ID)
+        if game_chat is None:
+            return
+
+        now = datetime.now(timezone.utc)
+        interval = self.ANNIE_IDLE_CHITCHAT_INTERVAL_MINUTES
+        cutoff = now - timedelta(minutes=interval)
+        # Cheap gate first: any Discord-relayed chat in the window?
+        try:
+            recent = [m async for m in game_chat.history(limit=50, after=cutoff)]
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"annie_idle_chitchat: history fetch failed: {e}")
+            return
+
+        # Relayed player chat arrives as "AMC Server" bot messages in
+        # "**Name:** text" format (amc-backend tasks.py ChatLogEvent forward).
+        # Excluded: 📢 announcements and **🔴 Player Logout:** status lines
+        # (no bare "**" marker) and player→Annie pings (handled by the
+        # regular chat handler, not this loop).
+        player_chat = [
+            m
+            for m in recent
+            if m.created_at > cutoff
+            and m.author.name == "AMC Server"
+            and "**" in m.content
+            and "@annie" not in m.content.lower()
+        ]
+        if player_chat:
+            return
+
+        # Double-check against the authoritative DB chat log (the Discord
+        # relay can lag or drop lines). No rows since cutoff = truly idle.
+        try:
+            from amc_peripheral.bot import backend_db
+
+            result = backend_db.execute_query(
+                "SELECT count(*) AS n FROM amc_playerchatlog "
+                f"WHERE timestamp > NOW() - INTERVAL '{interval} minutes'"
+            )
+            if result.get("results"):
+                if (result["results"][0].get("n") or 0) > 0:
+                    return
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"annie_idle_chitchat: chatlog check failed: {e}")
+            return
+
+        # Annie's own in-game replies are NOT relayed into the Discord
+        # game-chat channel and amc_playerchatlog only records player
+        # (character) chat, so neither source can detect our own chatter.
+        # Track it in memory instead: skip if the last chitchat was fired
+        # inside the quiet window (prevents self-talk loops in an empty
+        # server — the DB gate alone would keep passing).
+        if self._last_idle_chitchat_at is not None:
+            if now - self._last_idle_chitchat_at < timedelta(minutes=interval * 2):
+                return
+
+        # Don't talk to an empty server: check the live game API for who's
+        # actually online right now. Failure here is non-fatal (better to
+        # risk one monologue than to never talk because the API hiccuped).
+        try:
+            data = await game_api_request(self.bot.http_session, "/player/list")
+            online = [p for p in (data.get("data") or {}).values() if p]
+            if not online:
+                return
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"annie_idle_chitchat: online check failed: {e}")
+
+        self._last_idle_chitchat_at = now
+
+        log.info(
+            f"annie_idle_chitchat: {interval}min of chat silence — starting small talk"
+        )
+        await self._annie_idle_chitchat()
+
+    @annie_idle_chitchat.before_loop
+    async def before_annie_idle_chitchat(self):
+        await self.bot.wait_until_ready()
+
+    @annie_idle_chitchat.error
+    async def annie_idle_chitchat_error(self, error):
+        log.error(f"annie_idle_chitchat task error: {error}", exc_info=error)
+
+    async def _annie_idle_chitchat(self):
+        """Build an idle-moment context and let Annie make small talk."""
+        from amc_peripheral.bot import backend_db as _backend_db
+
+        context_parts = []
+
+        # Who's around lately?
+        try:
+            r = _backend_db.execute_query(
+                "SELECT name, last_vehicle_key FROM amc_character "
+                "WHERE last_online > NOW() - INTERVAL '15 minutes' "
+                "ORDER BY last_online DESC LIMIT 5"
+            )
+            players = r.get("results", [])
+            if players:
+                names = ", ".join(p.get("name", "?") for p in players)
+                context_parts.append(
+                    f"Players seen online in the last 15 minutes: {names}"
+                )
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"annie_idle_chitchat: online-players query failed: {e}")
+
+        # Recent deliveries
+        try:
+            r = _backend_db.execute_query(
+                "SELECT c.name AS player, l.cargo_key, l.payment "
+                "FROM amc_servercargoarrivedlog l "
+                "JOIN amc_character c ON c.id = l.character_id "
+                "WHERE l.timestamp > NOW() - INTERVAL '2 hours' "
+                "ORDER BY l.timestamp DESC LIMIT 5"
+            )
+            deliveries = r.get("results", [])
+            if deliveries:
+                lines = [
+                    f"{d.get('player', '?')} delivered {d.get('cargo_key', '?')} for {d.get('payment', 0)} coins"
+                    for d in deliveries
+                ]
+                context_parts.append("Recent deliveries: " + "; ".join(lines))
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"annie_idle_chitchat: deliveries query failed: {e}")
+
+        # Job board snapshot
+        try:
+            r = _backend_db.execute_query(
+                "SELECT name, bonus_multiplier, fulfilled FROM amc_deliveryjob "
+                "WHERE fulfilled = false AND (expired_at IS NULL OR expired_at > NOW()) "
+                "ORDER BY requested_at DESC LIMIT 5"
+            )
+            jobs = r.get("results", [])
+            if jobs:
+                lines = [j.get("name", "?") for j in jobs]
+                context_parts.append("Open job board postings: " + ", ".join(lines))
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"annie_idle_chitchat: job board query failed: {e}")
+
+        context_block = (
+            "\n\n## Idle Small-Talk Context\n"
+            "You haven't heard from anyone in a while, so YOU are starting the "
+            "conversation. You called this yourself — the server has been quiet. "
+            "Use this live data if it gives you something fun to react to, or "
+            "just tell a joke or tease your listeners. Keep it "
+            "in character, natural, and short.\n"
+            + (
+                "\n".join("- " + p for p in context_parts)
+                if context_parts
+                else "No live data available right now — go fully improvised."
+            )
+        )
+
+        now = datetime.now(self.local_tz)
+        messages = [
+            {
+                "role": "system",
+                "content": ANNIE_SYSTEM_PROMPT.format(
+                    knowledge_index=self._wiki_index.get_index()
+                    if self._wiki_index
+                    else ""
+                )
+                + "\n\n## Game Chat Reply Rules (MANDATORY)\n"
+                + "Your reply is displayed in a plain in-game chat window that renders NO formatting whatsoever. These rules override everything else in this prompt:\n"
+                + "1. PLAIN TEXT ONLY. Never output markdown: no **bold**, no *italics*, no `code`, no headings, no tables, no bullet points. Never wrap anything in asterisks, underscores, or backticks.\n"
+                + "2. NO empty lines and NO paragraphs. You may break the reply into at most 3 short lines using single newlines.\n"
+                + "3. NO emojis — the game client cannot render them.\n"
+                + "4. Technical or factual questions (vehicles, cargo, game mechanics, commands): answer with the facts only, a few sentences at most, no filler, no restating the question, no radio-host preamble like 'great question' or 'let me give you the rundown'.\n"
+                + "5. Casual chat and non-technical questions: be yourself — pleasantries and fun talk are fine, but still plain text and at most 3 lines.\n"
+                + "6. Never invent studio mishaps, technical failures, or on-air events that did not happen.\n"
+                + "7. Queue songs ONLY when the listener explicitly asks for music (a request like 'play X', 'song request', or naming a track). Never queue anything as a joke, a segue, or on your own initiative — if the chat isn't about music, no song gets queued."
+                + context_block,
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Current time: {now.strftime('%A, %Y-%m-%d %H:%M')} (Bangkok/GMT+7). "
+                    f"The chat has been quiet for {self.ANNIE_IDLE_CHITCHAT_INTERVAL_MINUTES} minutes. "
+                    "Start the conversation with something short and fun."
+                ),
+            },
+        ]
+
+        # Full Annie toolset EXCEPT the song-queue tools — idle chatter must
+        # never queue music (rule 7 is prompt-only; removing the tool is
+        # deterministic and the whole point of an idle trigger is that
+        # nobody asked for anything).
+        tools = [
+            t
+            for t in self._get_annie_tools()
+            if t["function"]["name"] not in _QUEUE_TOOL_NAMES
+        ]
+        # Interim acks go to the game-chat channel (same place the final
+        # reply lands), not the announcements channel.
+        channel = self.bot.get_channel(GAME_CHAT_CHANNEL_ID)
+
+        async def idle_notify(msg: str):
+            if channel:
+                await channel.send(msg)
+
+        response = await self._call_annie_llm(
+            messages, tools, "the radio booth", idle_notify
+        )
+        response = _sanitize_for_game_chat(response)
+        await announce_in_game(self.bot.http_session, response)
 
     @tasks.loop(time=dt_time(hour=4, minute=0, tzinfo=ZoneInfo("Asia/Bangkok")))
     async def wiki_daily_lint(self):
