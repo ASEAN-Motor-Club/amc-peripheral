@@ -1715,6 +1715,29 @@ Script:
             {
                 "type": "function",
                 "function": {
+                    "name": "query_amc_database",
+                    "description": (
+                        "Query the AMC backend database (PostgreSQL) with SQL. "
+                        "Use this for PLAYER and SERVER OPERATIONS data only: "
+                        "players, deliveries and delivery jobs, delivery points, "
+                        "subsidies, teams, events. Do NOT use this for game "
+                        "knowledge (vehicle specs, cargo specs, parts, game "
+                        "mechanics) — the backend database has NO game data "
+                        "tables; use search_game_wiki/read_game_wiki_page for "
+                        "those. Supports SELECT with GROUP BY, ORDER BY, JOINs, "
+                        "aggregates. Results are limited to 100 rows. "
+                        "Database is read-only."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"sql": {"type": "string"}},
+                        "required": ["sql"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "voice_reply_on_radio",
                     "description": "Speak a message on the radio via TTS. The audio will be overlaid on top of the current music, ducking its volume. Use this to reply to listeners on-air. The system will wait if a talking segment is playing to avoid overlap. Use sparingly for fun interactions.",
                     "parameters": {
@@ -2171,6 +2194,14 @@ Script:
                     return "Talkshow segment generated and queued for playback. It will play after the current track."
                 except Exception as e:
                     return f"Failed to generate talkshow segment: {e}"
+
+            elif name == "query_amc_database":
+                from amc_peripheral.bot import backend_db
+
+                result = backend_db.execute_query(args.get("sql", ""))
+                if "error" in result:
+                    return f"Query error: {result['error']}"
+                return json.dumps(result.get("results", []), indent=2)
 
             elif name == "voice_reply_on_radio":
                 message_text = args.get("message", "")
@@ -2934,6 +2965,8 @@ Script:
         # Retrieve relevant wiki context
         wiki_context = await self._get_wiki_context(question)
 
+        from amc_peripheral.bot import backend_db as _backend_db
+
         messages = [
             {
                 "role": "system",
@@ -2951,6 +2984,9 @@ Script:
                 + "5. Casual chat and non-technical questions: be yourself — pleasantries and fun talk are fine, but still plain text and at most 3 lines.\n"
                 + "6. Never invent studio mishaps, technical failures, or on-air events that did not happen.\n"
                 + "7. Queue songs ONLY when the listener explicitly asks for music (a request like 'play X', 'song request', or naming a track). Never queue anything as a joke, a segue, or on your own initiative — if the chat isn't about music, no song gets queued."
+                + "\n\n## Backend Database Schema\n"
+                + "When using the query_amc_database tool, rely on this schema guide for table and column names — do not guess column names:\n"
+                + (_backend_db.get_schema_description() or "")
             },
             {
                 "role": "user",

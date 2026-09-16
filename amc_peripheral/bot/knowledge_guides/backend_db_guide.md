@@ -107,17 +107,23 @@ Completed cargo deliveries — the main economic activity log.
 | data | jsonb | Full webhook payload with vehicle info, distance, etc. |
 
 ### amc_delivery
-Active in-progress deliveries (not yet delivered).
+In-progress deliveries (picked up, not yet delivered). Replaces the old
+"active delivery state" concept — rows here mean cargo is on a vehicle.
 
 | Column | Type | Notes |
 |--------|------|-------|
 | id | bigint | PK |
+| timestamp | timestamptz | When the delivery was recorded |
 | cargo_key | varchar | Cargo type ID |
 | quantity | int | Number of items |
+| payment | bigint | Amount paid for this delivery |
+| subsidy | bigint | Subsidy portion of the payment |
 | character_id | bigint | FK → amc_character.id |
-| source_point_id | varchar | Pickup location |
-| state | varchar | Current delivery state |
-| created_at | timestamptz | When cargo was picked up |
+| destination_point_id | varchar | Delivery location |
+| job_id | bigint | FK → amc_deliveryjob.id (null = free delivery) |
+| sender_point_id | varchar | Pickup location |
+| rp_mode | boolean | Recorded during RP mode |
+| criminal_record_id | bigint | FK → amc_criminalrecord.id (crime-linked delivery) |
 
 ### amc_deliveryjob
 Posted delivery jobs (board postings with rewards).
@@ -127,11 +133,21 @@ Posted delivery jobs (board postings with rewards).
 | id | bigint | PK |
 | name | varchar | Job title |
 | description | text | Job description |
+| cargo_key | varchar | Cargo type ID |
+| quantity_requested | int | Items the job asks for |
+| quantity_fulfilled | int | Items delivered so far |
+| requested_at | timestamptz | Job posted |
+| expired_at | timestamptz | Job expiry |
 | bonus_multiplier | float | Payment bonus multiplier |
-| completion_bonus | int | Flat bonus on completion |
-| fulfilled | bool | Whether job is completed |
-| rp_mode | bool | Roleplay job |
+| completion_bonus | bigint | Flat bonus paid on completion |
+| fulfilled | boolean | Job completed |
+| fulfilled_at | timestamptz | Completion time |
+| discord_message_id | varchar | Discord board posting message |
+| rp_mode | boolean | Created during RP mode |
+| escrowed_amount | bigint | Funds held in escrow |
 | funding_term_id | bigint | FK → amc_ministryterm.id (government-funded jobs) |
+| created_from_id | bigint | FK → amc_deliveryjobtemplate.id |
+| expiration_processed | boolean | Expiry payout handled |
 
 ## Racing System
 
