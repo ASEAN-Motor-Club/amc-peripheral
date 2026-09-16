@@ -3,6 +3,8 @@
 import os
 from datetime import datetime, timezone
 from sqlite_utils import Database
+from sqlite_utils.db import NotFoundError
+
 from amc_peripheral.settings import MEMORY_DATA_DIR
 
 
@@ -80,6 +82,23 @@ class AnnouncementsDB:
                 "SELECT COUNT(*) FROM announcements WHERE enabled = 1"
             ).fetchone()[0]
         return self.db.execute("SELECT COUNT(*) FROM announcements").fetchone()[0]
+
+    def set_rent_reminders(self, discord_user_id: str, enabled: bool) -> None:
+        """Enable or disable rent reminder DMs for a Discord user (default: enabled)."""
+        self.db["rent_reminder_settings"].insert(
+            {"discord_user_id": str(discord_user_id), "enabled": 1 if enabled else 0},
+            pk="discord_user_id",
+            replace=True,
+        )
+
+    def get_rent_reminders(self, discord_user_id: str) -> bool:
+        """Return whether rent reminder DMs are enabled for a Discord user (default True)."""
+        try:
+            # pyrefly: ignore [missing-attribute]
+            row = self.db["rent_reminder_settings"].get(str(discord_user_id))
+        except NotFoundError:
+            return True
+        return bool(row.get("enabled", 1))
 
     def seed_announcements(self, announcements: list[str], created_by: str = "system"):
         """Seed the database with initial announcements if empty."""

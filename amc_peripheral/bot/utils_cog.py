@@ -207,9 +207,10 @@ class UtilsCog(commands.Cog):
                     )
                 if member:
                     try:
-                        await member.send(
-                            f"Hi {nickname}! Just letting you know that your plot is expiring in {rent_left}"
-                        )
+                        if self.announcements_db.get_rent_reminders(member.id):
+                            await member.send(
+                                f"Hi {nickname}! Just letting you know that your plot is expiring in {rent_left}"
+                            )
                     except Exception:
                         pass
 
@@ -258,11 +259,30 @@ class UtilsCog(commands.Cog):
             self.race_announcement.stop()
             await interaction.response.send_message("Stopped")
 
-    @app_commands.command(name="remind_rent", description="Trigger rent reminders")
+    admin_group = app_commands.Group(
+        name="admin",
+        description="Admin utilities",
+    )
+
+    @admin_group.command(name="remind_rent", description="Trigger rent reminders now")
     async def remind_rent_cmd(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         await self.rent_reminders()
         await interaction.followup.send("Done", ephemeral=True)
+
+    @admin_group.command(
+        name="toggle_rent_reminders",
+        description="Switch rent reminder DMs on/off for yourself",
+    )
+    async def toggle_rent_reminders_cmd(self, interaction: discord.Interaction):
+        user_id = str(interaction.user.id)
+        current = self.announcements_db.get_rent_reminders(user_id)
+        new_state = not current
+        self.announcements_db.set_rent_reminders(user_id, new_state)
+        await interaction.response.send_message(
+            f"Rent reminder DMs {'enabled' if new_state else 'disabled'}.",
+            ephemeral=True,
+        )
 
     # --- Announcement Management Commands ---
 
