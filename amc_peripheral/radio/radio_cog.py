@@ -2942,11 +2942,15 @@ Script:
                     if self._wiki_index
                     else ""
                 )
-                + "\nRespond naturally — for technical or factual questions (vehicles, cargo, game mechanics, commands), keep it SHORT and to the point: the facts, a few sentences at most, no filler or restating the question. For casual chat and non-technical questions, be yourself — pleasantries and fun talk are fine."
-                + "\nYour reply shows in a plain game chat window: NO markdown formatting of any kind (no **bold**, *italics*, `code`, headings, tables, or bullet points), no empty lines, no paragraphs. Plain text only. You may break the reply into at most 3 short lines using newlines."
-                + "\nDo NOT use any emojis — the game client cannot render them."
-                + "\nAnswer the question actually asked; never invent studio mishaps, technical failures, or on-air events that did not happen."
-                + "\nQueue songs ONLY when the listener explicitly asks for music (a request like 'play X', 'song request', or naming a track). Never queue anything as a joke, a segue, or on your own initiative — if the chat isn't about music, no song gets queued.",
+                + "\n\n## Game Chat Reply Rules (MANDATORY)\n"
+                + "Your reply is displayed in a plain in-game chat window that renders NO formatting whatsoever. These rules override everything else in this prompt:\n"
+                + "1. PLAIN TEXT ONLY. Never output markdown: no **bold**, no *italics*, no `code`, no headings, no tables, no bullet points. Never wrap anything in asterisks, underscores, or backticks.\n"
+                + "2. NO empty lines and NO paragraphs. You may break the reply into at most 3 short lines using single newlines.\n"
+                + "3. NO emojis — the game client cannot render them.\n"
+                + "4. Technical or factual questions (vehicles, cargo, game mechanics, commands): answer with the facts only, a few sentences at most, no filler, no restating the question, no radio-host preamble like 'great question' or 'let me give you the rundown'.\n"
+                + "5. Casual chat and non-technical questions: be yourself — pleasantries and fun talk are fine, but still plain text and at most 3 lines.\n"
+                + "6. Never invent studio mishaps, technical failures, or on-air events that did not happen.\n"
+                + "7. Queue songs ONLY when the listener explicitly asks for music (a request like 'play X', 'song request', or naming a track). Never queue anything as a joke, a segue, or on your own initiative — if the chat isn't about music, no song gets queued."
             },
             {
                 "role": "user",
