@@ -170,14 +170,16 @@ Use the generate_talkshow_segment tool when a listener asks a question that woul
 or when someone wants a conversational segment. \
 These segments use two AI voices for a natural talk-show feel.
 
-You have access to a knowledge base about the game via the `ask_game_knowledge` tool. \
+You have access to a game knowledge wiki via the `search_game_wiki` and \
+`read_game_wiki_page` tools. \
 When a listener asks about game mechanics, vehicles, cargo, locations, player stats, subsidies, commands, \
-or anything game-related, you MUST call `ask_game_knowledge` first. Do NOT guess or make up game facts. \
-Even if you think you know the answer, always verify with the tool.
+or anything game-related, you MUST look up the facts with these tools first. Do NOT guess or make up game facts. \
+Even if you think you know the answer, always verify with the tools. \
+Search with `search_game_wiki`, then read the full page with `read_game_wiki_page` using the category + slug from the search results.
 
 ## Interim Updates
-When a reply needs tool calls (especially ask_game_knowledge, which can take
-a while), call send_message FIRST (at most once per reply) to tell the listener
+When a reply needs tool calls (especially search_game_wiki/read_game_wiki_page,
+which can take a while), call send_message FIRST (at most once per reply) to tell the listener
 what you are doing, e.g. 'one sec, checking the game knowledge'. Your final
 answer itself needs no tool call.
 
@@ -481,7 +483,6 @@ class RadioCog(commands.Cog):
             "LemurStreet",
         ]
         self.db = RadioDB(RADIO_DB_PATH)
-        self.game_schema_description = ""
         self._download_queue: asyncio.Queue = asyncio.Queue()
         self._download_worker_task: asyncio.Task | None = None
         self._pending_tracks: dict[str, tuple[str, bytes]] = {}
@@ -601,14 +602,6 @@ class RadioCog(commands.Cog):
         # Start backend SSE event listener (forwards events into the wiki)
         self._sse_task = asyncio.create_task(self._listen_backend_events())
 
-        # Load game schema for segment generation
-        try:
-            from amc_peripheral.bot import wiki_kb
-
-            self.game_schema_description = wiki_kb.get_schema_description()
-        except Exception as e:
-            log.error(f"Failed to load wiki knowledge: {e}")
-
         # Ensure cache directory exists
         Path(SONG_CACHE_PATH).mkdir(parents=True, exist_ok=True)
 
@@ -714,7 +707,7 @@ class RadioCog(commands.Cog):
         if topics:
             topic_list = "\n".join(f"- {name}" for name in topics)
             index = (
-                "Available game knowledge topics (call `ask_game_knowledge` for details on any of these):\n"
+                "Available game knowledge topics (look up details with `search_game_wiki` / `read_game_wiki_page`):\n"
                 + topic_list
             )
         else:
@@ -975,7 +968,7 @@ Only output the text of the article. Start with "Gangjung, [day of the week, dat
 
 {self._wiki_index.get_index() if self._wiki_index else ""}
 
-If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
+If the topic is game-related, look up accurate facts with `search_game_wiki` / `read_game_wiki_page` before writing the script."""
 
         tools = self._get_segment_tools()
 
@@ -1021,7 +1014,7 @@ Output only the spoken words, as if transcribed from a live recording.""",
 
 {self._wiki_index.get_index() if self._wiki_index else ""}
 
-If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
+If the topic is game-related, look up accurate facts with `search_game_wiki` / `read_game_wiki_page` before writing the script."""
 
         tools = self._get_segment_tools()
 
@@ -1064,7 +1057,7 @@ Make it engaging, fun, and in Annie's signature style — witty, warm, and enter
 
 {self._wiki_index.get_index() if self._wiki_index else ""}
 
-If the topic is game-related, use `ask_game_knowledge` to get accurate facts before writing the script."""
+If the topic is game-related, look up accurate facts with `search_game_wiki` / `read_game_wiki_page` before writing the script."""
 
         tools = self._get_segment_tools()
 
@@ -1253,12 +1246,21 @@ Script:
             {
                 "type": "function",
                 "function": {
-                    "name": "query_game_database",
-                    "description": f"""Query MotorTown game database with SQL.
-
-{self.game_schema_description}
-
-Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates.""",
+                    "name": "query_amc_database",
+                    "description": (
+                        "Query the AMC backend database (PostgreSQL) with SQL. "
+                        "Use this for PLAYER and SERVER OPERATIONS data only: "
+                        "players, player deliveries/jobs, delivery points, "
+                        "subsidies, server commands, events. Do NOT use this "
+                        "for game knowledge (vehicle specs, cargo specs, "
+                        "parts, game mechanics) — the backend database has NO "
+                        "game data tables. For game facts use the "
+                        "search_wiki/read_wiki_page tools instead (they cover "
+                        "both Annie's community wiki and the game wiki). "
+                        "Supports SELECT with GROUP BY, ORDER BY, JOINs, "
+                        "aggregates. Results are limited to 100 rows. "
+                        "Database is read-only."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {"sql": {"type": "string"}},
@@ -1266,51 +1268,17 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     },
                 },
             },
-            {
-                "type": "function",
-                "function": {
-                    "name": "ask_game_knowledge",
-                    "description": "Ask the game knowledge subagent a question about Motor Town gameplay, vehicles, cargo, player stats, subsidies, server commands, or any other game-related topic. Use this to get accurate game facts before writing scripts.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "question": {
-                                "type": "string",
-                                "description": "The game-related question to research",
-                            },
-                        },
-                        "required": ["question"],
-                    },
-                },
-            },
         ]
 
     async def _execute_segment_tool(self, name: str, args: dict) -> str:
         """Execute tools for segment generation."""
-        if name == "query_game_database":
+        if name == "query_amc_database":
             from amc_peripheral.bot import backend_db
 
             result = backend_db.execute_query(args.get("sql", ""))
             if "error" in result:
                 return f"Query error: {result['error']}"
             return json.dumps(result.get("results", []), indent=2)
-
-        elif name == "ask_game_knowledge":
-            from amc_peripheral.radio.game_knowledge import ask_game_knowledge
-
-            question = args.get("question", "")
-            try:
-                return await ask_game_knowledge(
-                    openai_client=self.openai_client_openrouter,
-                    wiki_storage=self._wiki_storage,
-                    wiki_retrieval=self._wiki_retrieval,
-                    wiki_index=self._wiki_index,
-                    game_schema=self.game_schema_description,
-                    question=question,
-                    http_session=self.bot.http_session,
-                )
-            except Exception as e:
-                return f"Knowledge lookup failed: {e}"
 
         return f"Unknown tool: {name}"
 
@@ -1326,7 +1294,8 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     "description": "Send an interim message to the listener BEFORE your final "
                                    "answer — e.g. 'one sec, let me look that up' or 'checking "
                                    "the game knowledge, hold on'. When answering needs tool "
-                                   "calls (especially ask_game_knowledge, which can take a "
+                                   "calls (especially search_game_wiki/"
+                                   "read_game_wiki_page, which can take a "
                                    "while), call send_message FIRST, in the same turn as "
                                    "those tool calls, so the listener isn't left waiting in "
                                    "silence. Call it at most ONCE per reply. Do NOT use it "
@@ -1664,17 +1633,53 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
             {
                 "type": "function",
                 "function": {
-                    "name": "ask_game_knowledge",
-                    "description": "Ask the game knowledge subagent a question about Motor Town gameplay, vehicles, cargo, player stats, subsidies, server commands, or any other game-related topic. Always use this instead of guessing game facts.",
+                    "name": "search_game_wiki",
+                    "description": (
+                        "Full-text search over the curated GAME wiki (Motor "
+                        "Town vehicles, cargo, parts, delivery points, cargo "
+                        "spaces/types). Use this for any game-fact lookup — "
+                        "it returns matching pages with category + slug, then "
+                        "use read_game_wiki_page for full specs. If nothing "
+                        "matches, retry with a shorter or different phrasing."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "question": {
+                            "query": {
                                 "type": "string",
-                                "description": "The game-related question to research",
+                                "description": "Search term (e.g. 'Vamos', 'steel coil', 'air city')",
                             },
                         },
-                        "required": ["question"],
+                        "required": ["query"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_game_wiki_page",
+                    "description": (
+                        "Read a full curated GAME wiki page by category + "
+                        "slug (from search_game_wiki results). Returns the "
+                        "intro, info fields, and all spec sections "
+                        "(Specifications, Capabilities, Default Parts, "
+                        "Production, Installable). This is the authoritative "
+                        "source for game facts — always verify vehicle/cargo "
+                        "details here instead of guessing."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "category": {
+                                "type": "string",
+                                "description": "Page category from search results (e.g. 'vehicle', 'cargo', 'part', 'delivery_point')",
+                            },
+                            "slug": {
+                                "type": "string",
+                                "description": "Page slug from search results (e.g. 'vamos3', 'air_city')",
+                            },
+                        },
+                        "required": ["category", "slug"],
                     },
                 },
             },
@@ -2149,24 +2154,6 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     "Voice reply is being generated and will play on the radio shortly."
                 )
 
-            elif name == "ask_game_knowledge":
-                from amc_peripheral.radio.game_knowledge import ask_game_knowledge
-
-                question = args.get("question", "")
-                try:
-                    answer = await ask_game_knowledge(
-                        openai_client=self.openai_client_openrouter,
-                        wiki_storage=self._wiki_storage,
-                        wiki_retrieval=self._wiki_retrieval,
-                        wiki_index=self._wiki_index,
-                        game_schema=self.game_schema_description,
-                        question=question,
-                        http_session=self.bot.http_session,
-                    )
-                    return answer
-                except Exception as e:
-                    return f"Failed to get game knowledge: {e}"
-
             elif name == "read_wiki_page":
                 title_or_slug = args.get("title_or_slug", "")
                 if not title_or_slug:
@@ -2184,6 +2171,70 @@ Use standard SQL with SELECT. Supports GROUP BY, ORDER BY, JOINs, aggregates."""
                     f"Summary: {page.get('summary', '')}\n"
                     f"Content:\n{page['content']}"
                 )
+
+            elif name == "search_game_wiki":
+                # Full-text search over the curated game wiki (DokuWiki page
+                # store: vehicles, cargo, parts, delivery points).
+                from amc_peripheral.bot import wiki_kb
+
+                query = args.get("query", "")
+                if not query:
+                    return "Error: 'query' is required."
+                try:
+                    result = await asyncio.to_thread(wiki_kb.search_wiki, query)
+                except Exception as e:  # noqa: BLE001
+                    return f"Game wiki search failed: {e}"
+                results = result.get("results", [])
+                if not results:
+                    return (
+                        f"No game wiki pages matched '{query}'. Retry with a "
+                        "shorter or different phrasing."
+                    )
+                lines = [
+                    f"- [{r['category']}] {r['name']} (slug: {r['slug']})"
+                    for r in results
+                ]
+                return (
+                    "Game wiki pages matching "
+                    f"'{query}':\n" + "\n".join(lines)
+                )
+
+            elif name == "read_game_wiki_page":
+                # Read a full curated game wiki page (specs, capabilities,
+                # production chains, installable parts).
+                from amc_peripheral.bot import wiki_kb
+
+                category = args.get("category", "")
+                slug = args.get("slug", "")
+                if not category or not slug:
+                    return (
+                        "Error: both 'category' and 'slug' are required "
+                        "(get them from search_game_wiki results)."
+                    )
+                try:
+                    page = await asyncio.to_thread(
+                        wiki_kb._load_page, category, slug
+                    )
+                except Exception as e:  # noqa: BLE001
+                    return f"Game wiki read failed: {e}"
+                if not page:
+                    return (
+                        f"No game wiki page '{slug}' in category '{category}'. "
+                        "Use search_game_wiki to find the right slug."
+                    )
+
+                lines = [f"--- {page['name']} ({page['category']}) ---"]
+                if page.get("body"):
+                    lines.append(page["body"])
+                if page.get("infobox"):
+                    lines.append("Info:")
+                    for k, v in page["infobox"].items():
+                        lines.append(f"  {k}: {v}")
+                details = page.get("details") or {}
+                for section, content in details.items():
+                    lines.append(f"{section}:")
+                    lines.append(json.dumps(content, indent=1, default=str))
+                return "\n".join(lines)
 
             elif name == "search_wiki":
                 query = args.get("query", "")
