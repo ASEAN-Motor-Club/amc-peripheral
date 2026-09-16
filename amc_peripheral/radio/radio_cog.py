@@ -2900,7 +2900,9 @@ Script:
                     if self._wiki_index
                     else ""
                 )
-                + "\nRespond naturally — never cut your answer short; write the whole reply.\nDo NOT use any emojis — the game client cannot render them."
+                + "\nRespond naturally — for technical or factual questions (vehicles, cargo, game mechanics, commands), keep it SHORT and to the point: the facts, a few sentences at most, no filler or restating the question. For casual chat and non-technical questions, be yourself — pleasantries and fun talk are fine."
+                + "\nYour reply shows in a plain game chat window: NO markdown formatting of any kind (no **bold**, *italics*, `code`, headings, tables, or bullet points), no empty lines, no paragraphs. Plain text only. You may break the reply into at most 3 short lines using newlines."
+                + "\nDo NOT use any emojis — the game client cannot render them."
                 + "\nAnswer the question actually asked; never invent studio mishaps, technical failures, or on-air events that did not happen."
                 + "\nQueue songs ONLY when the listener explicitly asks for music (a request like 'play X', 'song request', or naming a track). Never queue anything as a joke, a segue, or on your own initiative — if the chat isn't about music, no song gets queued.",
             },
