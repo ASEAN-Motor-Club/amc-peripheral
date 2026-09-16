@@ -32,7 +32,7 @@ from amc_peripheral.wiki.index import WikiIndex
 log = logging.getLogger(__name__)
 
 # Max iterations for the agentic tool loop
-MAX_ITERATIONS = 3
+MAX_ITERATIONS = 5
 
 
 def _build_tools(game_schema: str) -> list[dict]:
@@ -95,9 +95,12 @@ def _build_tools(game_schema: str) -> list[dict]:
             "function": {
                 "name": "lookup_knowledge",
                 "description": (
-                    "Search Annie's wiki for information about a topic. "
-                    "Pass a keyword or topic name. Uses a hybrid of substring and "
-                    "semantic search. You can call this multiple times for different queries."
+                    "Search BOTH knowledge sources for a topic: the game wiki "
+                    "(vehicles, cargo, parts, delivery points — authoritative game "
+                    "facts) and the DJ wiki (community/radio knowledge). Returns "
+                    "labeled results from each. For full game-wiki details follow "
+                    "up with lookup_vehicle / lookup_cargo / compare_vehicles. "
+                    "You can call this multiple times for different queries."
                 ),
                 "parameters": {
                     "type": "object",
@@ -233,11 +236,20 @@ def _lookup_knowledge(
     wiki_storage: WikiStorage,
     wiki_retrieval: Optional[WikiRetrieval] = None,
 ) -> str:
-    """Search the wiki for entries matching a topic query.
+    """Search BOTH knowledge sources for a topic query.
 
-    Hybrid search: combines substring matches (fast, exact) with semantic
-    matches from ChromaDB (broader recall). Results are de-duplicated by
-    page id.
+    - Game wiki (public DokuWiki corpus via ``wiki_kb``): authoritative for
+      game facts — vehicles, cargo, parts, delivery points. Lexical
+      full-phrase search; recall gaps are closed by the caller retrying a
+      different phrasing (by design — no query expansion).
+    - DJ wiki (``wiki_storage`` + optional ``wiki_retrieval``): Annie's
+      community/radio knowledge. Substring matches (fast, exact) plus
+      semantic matches from ChromaDB (broader recall), de-duplicated by
+      page id.
+
+    Both sections are returned labeled so the model can tell curated game
+    data from community memory, with the ``lookup_vehicle``/``lookup_cargo``
+    verbs named for full game-wiki details.
     """
     if not topic:
         return "No knowledge available."
@@ -268,23 +280,45 @@ def _lookup_knowledge(
                         "summary": "",
                     }
                 found[page_id] = page
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             log.warning(f"Semantic wiki search failed for '{topic}': {e}")
 
-    if not found:
-        titles = [p["title"] for p in wiki_storage.list_pages(limit=20)]
-        if not titles:
-            return "Wiki is empty."
-        available = ", ".join(titles)
-        extra = wiki_storage.get_page_count() - len(titles)
-        if extra > 0:
-            available += f", ... (+{extra} more)"
-        return f"No wiki pages found for '{topic}'. Available titles: {available}"
+    sections: list[str] = []
 
-    parts = []
-    for page in found.values():
-        parts.append(f"### {page['title']}\n{page.get('content', '')}")
-    return "\n\n".join(parts)
+    # Game wiki first — it is the authoritative source for game facts.
+    try:
+        from amc_peripheral.bot import wiki_kb
+
+        game_hits = wiki_kb.search_wiki(topic).get("results", [])
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"Game wiki search failed for '{topic}': {e}")
+        game_hits = []
+
+    if game_hits:
+        lines = [f"[Game wiki] pages matching '{topic}':"]
+        for hit in game_hits:
+            lines.append(f"- [{hit['category']}] {hit['name']} (slug: {hit['slug']})")
+        lines.append(
+            "Use lookup_vehicle / lookup_cargo / compare_vehicles to get full "
+            "details for a game-wiki hit."
+        )
+        sections.append("\n".join(lines))
+    else:
+        sections.append(
+            f"[Game wiki] no pages matched '{topic}'. If it is a vehicle or "
+            "cargo name, try lookup_vehicle / lookup_cargo directly, or "
+            "retry with a shorter/different phrasing."
+        )
+
+    if found:
+        parts = []
+        for page in found.values():
+            parts.append(f"### {page['title']}\n{page.get('content', '')}")
+        sections.append("[DJ wiki] (community/radio knowledge):\n" + "\n\n".join(parts))
+    else:
+        sections.append(f"[DJ wiki] no pages matched '{topic}'.")
+
+    return "\n\n".join(sections)
 
 
 async def _execute_tool(
@@ -299,17 +333,23 @@ async def _execute_tool(
         if name == "lookup_knowledge":
             if not wiki_storage:
                 return "Wiki not available."
-            return await asyncio.to_thread(_lookup_knowledge, args.get("topic", ""), wiki_storage, wiki_retrieval)
+            return await asyncio.to_thread(
+                _lookup_knowledge, args.get("topic", ""), wiki_storage, wiki_retrieval
+            )
 
         elif name == "list_knowledge":
             if not wiki_storage:
                 return "Wiki not available."
             type_filter = args.get("type_filter")
-            pages = await asyncio.to_thread(wiki_storage.list_pages, category=type_filter, limit=500)
+            pages = await asyncio.to_thread(
+                wiki_storage.list_pages, category=type_filter, limit=500
+            )
             if not pages:
                 return f"No entries found{f' for category {type_filter!r}' if type_filter else ''}."
             titles = sorted(p["title"] for p in pages)
-            return f"Wiki pages ({len(titles)}):\n" + "\n".join(f"- {t}" for t in titles)
+            return f"Wiki pages ({len(titles)}):\n" + "\n".join(
+                f"- {t}" for t in titles
+            )
 
         elif name == "save_knowledge":
             if not wiki_storage:
@@ -439,18 +479,12 @@ async def _execute_tool(
             return json.dumps(result, indent=2)
 
         elif name == "get_current_subsidies":
-            async with http_session.get(
-                f"{BACKEND_API_URL}/api/subsidies/"
-            ) as resp:
+            async with http_session.get(f"{BACKEND_API_URL}/api/subsidies/") as resp:
                 data = await resp.json()
-                return data.get(
-                    "subsidies_text", "No subsidy information available."
-                )
+                return data.get("subsidies_text", "No subsidy information available.")
 
         elif name == "get_server_commands":
-            async with http_session.get(
-                f"{BACKEND_API_URL}/api/commands/"
-            ) as resp:
+            async with http_session.get(f"{BACKEND_API_URL}/api/commands/") as resp:
                 if resp.status != 200:
                     return "Failed to fetch server commands."
                 commands_data = await resp.json()
