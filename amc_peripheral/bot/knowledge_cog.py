@@ -442,6 +442,10 @@ class KnowledgeCog(commands.Cog):
             "This reply goes through the game chat: write your full answer, never cut it short, and avoid using newlines.\n"
             "Only use the following knowledge. Do not use markdown, tables, or emojis.\n"
             "For game-related questions, use the ask_game_knowledge tool instead of guessing.\n\n"
+            "## Interim Updates\n"
+            "If answering requires tool calls, call send_message FIRST (at most once per reply) "
+            "to tell the user what you are about to do, e.g. 'ok let me look up the Vamos specs'. "
+            "Your final answer itself needs no tool call.\n\n"
             + knowledge
         )
 
