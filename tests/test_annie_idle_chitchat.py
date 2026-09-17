@@ -87,6 +87,63 @@ async def test_player_chat_blocks_chitchat(mod):
 
 
 @pytest.mark.asyncio
+async def test_slash_commands_do_not_block_chitchat(mod):
+    """Slash commands (/tp, /jobs, /d) logged as chat are NOT conversation —
+    they must not keep Annie silent (regression: players using /jobs every
+    few minutes while driving kept the gate closed forever)."""
+    cog = _cog(
+        [
+            _msg("AMC Server", "**freeman:** /tp gosan", 3),
+            _msg("AMC Server", "**freeman:** /jobs", 2),
+            _msg("AMC Server", "**freeman:** /d all", 1),
+        ]
+    )
+
+    called = {"v": False}
+
+    async def fake_chitchat():
+        called["v"] = True
+
+    cog._annie_idle_chitchat = fake_chitchat
+
+    async def fake_api(session, path, **kw):
+        return {"data": {"1": {"name": "freeman"}}}
+
+    import amc_peripheral.radio.radio_cog as rc
+
+    with (
+        _db_ctx(_db({"results": [{"n": 0}]})),
+        patch.object(rc, "game_api_request", fake_api),
+    ):
+        await _bind_and_run(mod, cog)
+
+    assert called["v"]
+
+
+@pytest.mark.asyncio
+async def test_mixed_chat_and_commands_block_chitchat(mod):
+    """Real chat next to commands inside the window → still silent."""
+    cog = _cog(
+        [
+            _msg("AMC Server", "**freeman:** /tp gosan", 6),
+            _msg("AMC Server", "**freeman:** nice weather today", 5),
+        ]
+    )
+
+    called = {"v": False}
+
+    async def fake_chitchat():
+        called["v"] = True
+
+    cog._annie_idle_chitchat = fake_chitchat
+
+    with _db_ctx(_db({"results": [{"n": 0}]})):
+        await _bind_and_run(mod, cog)
+
+    assert not called["v"]
+
+
+@pytest.mark.asyncio
 async def test_no_channel_is_safe(mod):
     """No game-chat channel configured → early return, no crash."""
     cog = _cog()
