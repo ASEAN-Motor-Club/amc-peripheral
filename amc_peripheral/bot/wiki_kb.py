@@ -44,6 +44,10 @@ CATEGORIES = {
     "delivery_point": "delivery_points",
     "cargo_space": "cargo_space",
     "cargo_type": "cargo_type",
+    # Server commands (auto-published from the backend's live registry by
+    # amc-backend's `amcm export_commands_to_wiki`). Lets Annie answer
+    # "how does /tp2marker work" from the wiki instead of guessing.
+    "command": "commands",
 }
 
 # Cache built once per process: category -> {lower_display_key: slug}
@@ -493,6 +497,11 @@ def lookup_cargo_type(name: str) -> dict:
     return _lookup("cargo_type", name)
 
 
+def lookup_command(name: str) -> dict:
+    """Server command page (what it does, shorthand, category, deprecation)."""
+    return _lookup("command", name)
+
+
 def compare_vehicles(names: list[str]) -> list[dict]:
     """Side-by-side comparison of multiple vehicles (their pages), drops misses."""
     out = []
@@ -577,7 +586,7 @@ def get_index(limit_chars: int = 4000) -> str:
     """
     index = _build_index()
     lines = ["## Game Wiki Knowledge", "Game data is served from the wiki. Use the "
-             "`run` tool's vehicle/cargo/part/deliverypoint/cargospace/cargotype verbs."]
+             "`run` tool's vehicle/cargo/part/deliverypoint/cargospace/cargotype/command verbs."]
     total = 0
     used = len("\n".join(lines))
     for category, cat_index in index.items():
@@ -603,11 +612,14 @@ def get_schema_description() -> str:
     return (
         "Game knowledge comes from the Motor Town wiki page store at "
         f"{WIKI_PAGES_PATH}. Look up vehicles, cargos, parts, delivery points, "
-        "cargo space types and cargo types with the `run` verbs (vehicle <name>, "
-        "cargo <name>, part <name>, deliverypoint <name>, cargospace <type>, "
-        "cargotype <type>, compare <v1,v2>). Each returns the curated wiki page "
-        "with its Specifications / Capabilities / Default Parts / Production / "
-        "Installable lists — the most current + comprehensive game data."
+        "cargo space types, cargo types and server commands with the `run` verbs "
+        "(vehicle <name>, cargo <name>, part <name>, deliverypoint <name>, "
+        "cargospace <type>, cargotype <type>, command </cmd>, compare <v1,v2>). "
+        "Each returns the curated wiki page with its Specifications / Capabilities "
+        "/ Default Parts / Production / Installable lists — the most current + "
+        "comprehensive game data. The `command` verb covers every in-game server "
+        "command (e.g. `command /tp2marker`) — use it when a player asks how a "
+        "command works."
     )
 
 

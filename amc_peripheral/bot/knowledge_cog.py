@@ -1186,6 +1186,17 @@ class KnowledgeCog(commands.Cog):
                 return result["error"]
             return json.dumps(result, indent=2)
 
+        elif verb == "command":
+            if not args:
+                return (
+                    "Error: Command name required. Usage: command <name> "
+                    "(e.g. command /tp2marker)"
+                )
+            result = await asyncio.to_thread(wiki_kb.lookup_command, args)
+            if "error" in result:
+                return result["error"]
+            return json.dumps(result, indent=2)
+
         elif verb == "search":
             if not args:
                 return "Error: Search term required. Usage: search <term>"
