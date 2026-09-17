@@ -4832,27 +4832,37 @@ Script:
         # Relayed player chat arrives as "AMC Server" bot messages in
         # "**Name:** text" format (amc-backend tasks.py ChatLogEvent forward).
         # Excluded: 📢 announcements and **🔴 Player Logout:** status lines
-        # (no bare "**" marker) and player→Annie pings (handled by the
-        # regular chat handler, not this loop).
-        player_chat = [
-            m
-            for m in recent
-            if m.created_at > cutoff
-            and m.author.name == "AMC Server"
-            and "**" in m.content
-            and "@annie" not in m.content.lower()
-        ]
+        # (no bare "**" marker), player→Annie pings (handled by the regular
+        # chat handler, not this loop), and slash commands ("/tp gosan" etc.
+        # — commands are logged as chat but are not conversation; without
+        # this a player driving around using /jobs keeps Annie silent
+        # forever).
+        player_chat = []
+        for m in recent:
+            if not (
+                m.created_at > cutoff
+                and m.author.name == "AMC Server"
+                and "**" in m.content
+                and "@annie" not in m.content.lower()
+            ):
+                continue
+            body = m.content.split(":**", 1)[-1].strip()
+            if body.startswith("/"):
+                continue
+            player_chat.append(m)
         if player_chat:
             return
 
         # Double-check against the authoritative DB chat log (the Discord
-        # relay can lag or drop lines). No rows since cutoff = truly idle.
+        # relay can lag or drop lines). No real (non-command) rows since
+        # cutoff = truly idle.
         try:
             from amc_peripheral.bot import backend_db
 
             result = backend_db.execute_query(
                 "SELECT count(*) AS n FROM amc_playerchatlog "
-                f"WHERE timestamp > NOW() - INTERVAL '{interval} minutes'"
+                f"WHERE timestamp > NOW() - INTERVAL '{interval} minutes' "
+                "AND text NOT LIKE '/%'"
             )
             if result.get("results"):
                 if (result["results"][0].get("n") or 0) > 0:
