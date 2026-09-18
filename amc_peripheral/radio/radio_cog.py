@@ -632,9 +632,10 @@ class RadioCog(commands.Cog):
         self.wiki_daily_export.start()
         self.wiki_weekly_synthesis.start()
 
-        # Start idle-chitchat watcher (Annie starts small talk when the
-        # game chat has been quiet for ANNIE_IDLE_CHITCHAT_INTERVAL_MINUTES)
-        self.annie_idle_chitchat.start()
+        # Idle-chitchat watcher DISABLED (user request: "Stop the chit chat").
+        # Annie only speaks when spoken to. Loop + gate remain in the code so
+        # this is a one-line re-enable.
+        # self.annie_idle_chitchat.start()
 
         # Start backend SSE event listener (forwards events into the wiki)
         self._sse_task = asyncio.create_task(self._listen_backend_events())
