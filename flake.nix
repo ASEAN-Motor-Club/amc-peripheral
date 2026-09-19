@@ -666,6 +666,11 @@
                 # WARNING: verify these exempt role IDs before deploying — a
                 # wrong value here can auto-ban staff who post in the trap.
                 BAN_TRAP_ALLOWED_ROLE_IDS = "1395460420189421713,1496482029892669500";
+                # AMC bot fleet, whitelisted by user ID. All OTHER bot
+                # accounts posting in the trap channel get banned (spam-bot
+                # escape fix 2026-09-19). Third-party bots (Patreon, Craig)
+                # are deliberately NOT on this list.
+                BAN_TRAP_WHITELISTED_BOT_IDS = "1342461449296936981,1359465917624352920,1375420925910057041,1456206285472010272,1456334529441697912,1529985745002037318,1533369516912803972,1537097440552034314";
                 BAN_TRAP_ANNOUNCEMENT = "My apologies, but they had to go.";
                 BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT = "0";
                 BAN_TRAP_CLEANUP_WINDOW_SECONDS = "60";
