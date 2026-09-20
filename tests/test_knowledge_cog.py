@@ -90,12 +90,13 @@ async def test_on_ready_handles_missing_channel():
 
 
 @pytest.mark.asyncio
-async def test_ai_helper_has_get_currently_playing_song_tool():
-    """Test that ai_helper includes the get_currently_playing_song tool."""
+async def test_ai_helper_discord_shared_tool_definitions():
+    """Test that the ask path advertises the shared agentic tool set."""
     # Use MagicMock instead of MockBot to allow setting guilds
     bot = MagicMock()
     bot.http_session = AsyncMock()
     cog = KnowledgeCog(bot)
+    cog._memory_store = None  # cog_load not run in unit tests
 
     # Mock the openai client
     mock_completion = MagicMock()
@@ -120,21 +121,16 @@ async def test_ai_helper_has_get_currently_playing_song_tool():
     mock_guild.scheduled_events = []
     bot.guilds = [mock_guild]
 
-    # Call ai_helper
-    result = await cog.ai_helper("TestPlayer", "What song is playing?", "")
+    # Call ai_helper_discord (the surviving ask path)
+    result = await cog.ai_helper_discord("TestPlayer", "What song is playing?", "")
 
     # Verify the completion was called with tools
     call_args = cog.openai_client_openrouter.chat.completions.create.call_args
     assert "tools" in call_args.kwargs
     tools = call_args.kwargs["tools"]
-    # Should now have 5 tools: song, game db, subsidies, server commands, backend db
-    assert len(tools) == 5
     tool_names = [t["function"]["name"] for t in tools]
-    assert "get_currently_playing_song" in tool_names
-    assert "query_game_database" in tool_names
-    assert "get_current_subsidies" in tool_names
-    assert "get_server_commands" in tool_names
-    assert "query_backend_database" in tool_names
+    # Shared agentic toolset: wiki/run/discord/memory + interim send_message
+    assert tool_names == ["run", "wiki", "discord", "memory", "send_message"]
     assert result == "The current song is Test Song by Test Artist."
 
 
@@ -145,6 +141,7 @@ async def test_ai_helper_handles_tool_call():
     bot = MagicMock()
     bot.http_session = AsyncMock()
     cog = KnowledgeCog(bot)
+    cog._memory_store = None  # cog_load not run in unit tests
 
     # Mock tool call response from OpenAI
     mock_tool_call = MagicMock()
@@ -200,8 +197,8 @@ async def test_ai_helper_handles_tool_call():
     mock_guild.scheduled_events = []
     bot.guilds = [mock_guild]
 
-    # Call ai_helper
-    result = await cog.ai_helper("TestPlayer", "What song is playing?", "")
+    # Call ai_helper_discord (the surviving ask path)
+    result = await cog.ai_helper_discord("TestPlayer", "What song is playing?", "")
 
     # Verify the second completion was called after tool handling
     assert cog.openai_client_openrouter.chat.completions.create.call_count == 2
@@ -274,120 +271,67 @@ async def test_global_chat_history_rolling_window():
 
 
 @pytest.mark.asyncio
-async def test_bot_command_receives_global_context():
-    """Test that /bot command receives context from all recent players' messages."""
+async def test_bot_command_sends_sunset_notice():
+    """In-game /bot is retired — the SSE handler announces the Discord redirect."""
     bot = MagicMock()
     bot.http_session = AsyncMock()
     cog = KnowledgeCog(bot)
-    
-    # Mock _handle_ingame_bot_command to capture arguments
-    captured_args = {}
-    
-    async def mock_handler(
-        player_name: str,
-        player_id: str,
-        discord_id: int | None,
-        message: str,
-        prev_messages: str = "",
-        semantic_context: str = "",
-    ):
-        captured_args.update({
-            "player_name": player_name,
-            "player_id": player_id,
-            "discord_id": discord_id,
-            "message": message,
-            "prev_messages": prev_messages,
-            "semantic_context": semantic_context,
+
+    announced = []
+
+    async def fake_announce(http_session, message, **kwargs):
+        announced.append(message)
+
+    with patch("amc_peripheral.bot.knowledge_cog.announce_in_game", fake_announce):
+        await cog._handle_backend_event({
+            "type": "chat_message",
+            "player_id": "player_b",
+            "player_name": "Bob",
+            "message": "is it?",
+            "timestamp": "2026-01-05T10:00:02",
+            "is_bot_command": True,
         })
-    
-    cog._handle_ingame_bot_command = mock_handler
 
-    # Simulate conversation between two players
-    await cog._handle_backend_event({
-        "type": "chat_message",
-        "player_id": "player_a",
-        "player_name": "Alice",
-        "message": "I think the factory is closed",
-        "timestamp": "2026-01-05T10:00:00",
-    })
-    await cog._handle_backend_event({
-        "type": "chat_message",
-        "player_id": "player_b",
-        "player_name": "Bob",
-        "message": "Really? Are you sure?",
-        "timestamp": "2026-01-05T10:00:01",
-    })
-    
-    # Now player B asks the bot a contextual question
-    await cog._handle_backend_event({
-        "type": "chat_message",
-        "player_id": "player_b",
-        "player_name": "Bob",
-        "message": "is it?",
-        "timestamp": "2026-01-05T10:00:02",
-        "is_bot_command": True,
-    })
-
-    # Verify the bot received context from BOTH players
-    prev_messages = captured_args.get("prev_messages", "")
-    assert isinstance(prev_messages, str)
-    assert "Alice: I think the factory is closed" in prev_messages
-    assert "Bob: Really? Are you sure?" in prev_messages
+    assert len(announced) == 1
+    assert "retired" in announced[0]
+    assert "#ask-bot" in announced[0]
+    # The command text itself still lands in global chat history
+    assert any(msg == "is it?" for _, _, msg in cog._global_chat_history)
 
 
 @pytest.mark.asyncio
-async def test_bot_command_excludes_current_message():
-    """Test that the /bot command itself is NOT included in prev_messages."""
+async def test_bot_command_sunset_notice_cooldown():
+    """Repeat /bot commands don't spam game chat: one notice per player per window."""
     bot = MagicMock()
     bot.http_session = AsyncMock()
     cog = KnowledgeCog(bot)
-    
-    captured_args = {}
-    
-    async def mock_handler(
-        player_name: str,
-        player_id: str,
-        discord_id: int | None,
-        message: str,
-        prev_messages: str = "",
-        semantic_context: str = "",
-    ):
-        captured_args.update({
-            "player_name": player_name,
-            "player_id": player_id,
-            "discord_id": discord_id,
-            "message": message,
-            "prev_messages": prev_messages,
-            "semantic_context": semantic_context,
+
+    announced = []
+
+    async def fake_announce(http_session, message, **kwargs):
+        announced.append(message)
+
+    with patch("amc_peripheral.bot.knowledge_cog.announce_in_game", fake_announce):
+        for ts in ("2026-01-05T10:00:00", "2026-01-05T10:00:10", "2026-01-05T10:00:20"):
+            await cog._handle_backend_event({
+                "type": "chat_message",
+                "player_id": "player_b",
+                "player_name": "Bob",
+                "message": "hello?",
+                "timestamp": ts,
+                "is_bot_command": True,
+            })
+        # A different player still gets their own notice
+        await cog._handle_backend_event({
+            "type": "chat_message",
+            "player_id": "player_c",
+            "player_name": "Carol",
+            "message": "anyone there?",
+            "timestamp": "2026-01-05T10:00:30",
+            "is_bot_command": True,
         })
-    
-    cog._handle_ingame_bot_command = mock_handler
 
-    # Add some chat context
-    await cog._handle_backend_event({
-        "type": "chat_message",
-        "player_id": "player_a",
-        "player_name": "Alice",
-        "message": "Some context",
-        "timestamp": "2026-01-05T10:00:00",
-    })
-    
-    # Bot command
-    await cog._handle_backend_event({
-        "type": "chat_message",
-        "player_id": "player_b",
-        "player_name": "Bob",
-        "message": "what do you think?",
-        "timestamp": "2026-01-05T10:00:01",
-        "is_bot_command": True,
-    })
-
-    # The bot's own query should NOT be in prev_messages
-    prev_messages = captured_args.get("prev_messages", "")
-    assert isinstance(prev_messages, str)
-    assert "what do you think?" not in prev_messages
-    # But Alice's message should be
-    assert "Alice: Some context" in prev_messages
+    assert len(announced) == 2
 
 
 # --- Progress Feedback Tests ---
@@ -624,8 +568,8 @@ async def test_send_progress_feedback_handles_errors():
 
 
 @pytest.mark.asyncio
-async def test_ai_helper_accepts_feedback_callback():
-    """Test that ai_helper accepts and forwards the ingame_feedback_fn parameter."""
+async def test_call_llm_with_tools_accepts_feedback_callback():
+    """Test that the shared LLM loop accepts and forwards ingame_feedback_fn."""
     bot = MagicMock()
     bot.http_session = AsyncMock()
     cog = KnowledgeCog(bot)
@@ -638,28 +582,16 @@ async def test_ai_helper_accepts_feedback_callback():
     mock_completion.choices = [MagicMock(message=mock_message)]
     cog.openai_client_openrouter.chat.completions.create = AsyncMock(return_value=mock_completion)
 
-    # Mock active players API
-    mock_response = AsyncMock()
-    mock_response.text = AsyncMock(return_value="Player1")
-    bot.http_session.get = MagicMock(
-        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
-    )
-
-    # Mock guilds
-    mock_guild = MagicMock()
-    mock_guild.scheduled_events = []
-    bot.guilds = [mock_guild]
-
     # Define callback
     feedback_received = []
     async def feedback_fn(msg):
         feedback_received.append(msg)
 
-    # Call ai_helper with callback (should not crash)
-    result = await cog.ai_helper(
-        "TestPlayer",
-        "Quick question",
-        "",
+    # Call the shared loop with callback (should not crash)
+    result = await cog._call_llm_with_tools(
+        [{"role": "user", "content": "Quick question"}],
+        [],
+        "test-model",
         ingame_feedback_fn=feedback_fn,
     )
 
@@ -784,51 +716,15 @@ async def test_on_message_ignores_own_messages(knowledge_cog_with_ai):
 
 
 @pytest.mark.asyncio
-async def test_retrieve_semantic_context_formats_memories():
-    """_retrieve_semantic_context returns formatted past conversations from ChromaDB."""
-    cog = KnowledgeCog(MagicMock())
-    mock_retrieval = MagicMock()
-    mock_retrieval.retrieve_relevant.return_value = [
-        {"timestamp": "2026-08-01T10:00:00", "player_name": "Alice", "message": "I love buses"},
-        {"timestamp": "2026-08-02T09:00:00", "player_name": "Alice", "message": "Steel Coils are heavy"},
-    ]
-    cog._memory_retrieval = mock_retrieval
-
-    result = await cog._retrieve_semantic_context("123", "what should I drive?")
-
-    assert mock_retrieval.retrieve_relevant.call_args.kwargs["player_id"] == "123"
-    assert mock_retrieval.retrieve_relevant.call_args.kwargs["query"] == "what should I drive?"
-    assert "[2026-08-01] Alice: I love buses" in result
-    assert "[2026-08-02] Alice: Steel Coils are heavy" in result
-
-
-@pytest.mark.asyncio
-async def test_retrieve_semantic_context_empty_without_retrieval():
-    """_retrieve_semantic_context returns '' when ChromaDB is unavailable or no matches."""
-    cog = KnowledgeCog(MagicMock())
-
-    # No retrieval configured
-    cog._memory_retrieval = None
-    assert await cog._retrieve_semantic_context("123", "hi") == ""
-
-    # Retrieval returns nothing
-    mock_retrieval = MagicMock()
-    mock_retrieval.retrieve_relevant.return_value = []
-    cog._memory_retrieval = mock_retrieval
-    assert await cog._retrieve_semantic_context("123", "hi") == ""
-
-
-@pytest.mark.asyncio
-async def test_ai_helper_discord_injects_semantic_memory():
-    """Discord /bot injects the player's long-term memory as context, same as in-game /bot."""
+async def test_ai_helper_discord_no_legacy_semantic_memory():
+    """Legacy ChromaDB semantic memory is retired — the Discord ask path must not
+    reference it and must build its prompt from wiki/memory/chat context only."""
     bot = MagicMock()
     cog = KnowledgeCog(bot)
     cog.knowledge_system_message = ""
+    cog._memory_store = None  # cog_load not run in unit tests
     cog._wiki_index = MagicMock()
     cog._wiki_index.get_index = MagicMock(return_value="")
-    cog._retrieve_semantic_context = AsyncMock(
-        return_value="[2026-08-01] Alice: I love buses"
-    )
     cog._call_llm_with_tools = AsyncMock(return_value="Bot response")
 
     await cog.ai_helper_discord(
@@ -839,53 +735,40 @@ async def test_ai_helper_discord_injects_semantic_memory():
         player_id="123",
     )
 
-    cog._retrieve_semantic_context.assert_awaited_once_with("123", "do you remember my favourite vehicle?")
     args, _ = cog._call_llm_with_tools.call_args
     messages = args[0]
     combined = "\n".join(
         m.get("content", "") for m in messages if m.get("role") == "user"
     )
-    assert "Relevant past conversations:" in combined
-    assert "I love buses" in combined
+    assert "Relevant past conversations:" not in combined
 
 
 @pytest.mark.asyncio
 async def test_ingame_reply_is_not_truncated():
-    """In-game /bot replies are announced in full — no 140/520-char cap (2026-09-13)."""
-    from unittest.mock import patch
-
+    """RETIRED with the in-game /bot (2026-09-20): the in-game reply path is gone.
+    Sunset notice text lives in the SSE handler and is announced unmodified."""
     bot = MagicMock()
     bot.http_session = AsyncMock()
     cog = KnowledgeCog(bot)
 
-    long_answer = (
-        "Hey Moo! Couldn't dig up the exact command in my notes, sorry. "
-        "Most servers handle it by standing next to the player and opening "
-        "their interact menu, or via the company menu in-game. Check your keys "
-        "for Player Interaction - that usually has the invite option. "
-        "If that's not it, this is prime material for the fine folks in our "
-        "chaotic radio family - drop into the Discord (code aseanmotorclub) "
-        "and ask there, someone will walk you through the whole thing. "
-        "Also worth checking the company menu, which lists every member and "
-        "the invite button is right there next to the roster."
+    notice = (
+        "The in-game /bot has been retired. Ask me on Discord instead: "
+        "#ask-bot or @mention me."
     )
-    assert len(long_answer) > 520
-
-    cog.ai_helper = AsyncMock(return_value=long_answer)
-    cog._store_bot_interaction = AsyncMock()
-
     announced = []
 
     async def fake_announce(http_session, message, **kwargs):
         announced.append(message)
 
     with patch("amc_peripheral.bot.knowledge_cog.announce_in_game", fake_announce):
-        await cog._handle_ingame_bot_command(
-            player_name="MrMoo6000",
-            player_id="76561198000000000",
-            discord_id=None,
-            message="how do I invite someone to my company",
-        )
+        await cog._handle_backend_event({
+            "type": "chat_message",
+            "player_id": "76561198000000000",
+            "player_name": "MrMoo6000",
+            "message": "how do I invite someone to my company",
+            "timestamp": "2026-01-05T10:00:00",
+            "is_bot_command": True,
+        })
 
-    assert announced == [long_answer]
+    assert announced == [notice]
 

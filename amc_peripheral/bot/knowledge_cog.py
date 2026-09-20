@@ -30,12 +30,10 @@ from amc_peripheral.utils.discord_utils import (
     actual_discord_event_creator,
 )
 from amc_peripheral.utils.game_utils import announce_in_game
-from amc_peripheral.utils.rate_limiter import RateLimiter
 from amc_peripheral.bot import wiki_kb
 from amc_peripheral.bot import backend_db
 from amc_peripheral.bot import motorpedia
 from amc_peripheral.memory.storage import MemoryStorage
-from amc_peripheral.memory.retrieval import MemoryRetrieval
 from amc_peripheral.memory.player_index import PlayerIndex
 from amc_peripheral.wiki.memory import MemoryStore
 from amc_peripheral.wiki.plain_memory import PlainTextMemory, PLAIN_MEMORY_PATH
@@ -67,7 +65,8 @@ class KnowledgeCog(commands.Cog):
         # state
         self.knowledge_system_message = ""
         self.game_schema_description = ""
-        self._ingame_bot_limiter = RateLimiter(max_calls=100, period_minutes=10)
+        # Per-player cooldown for the in-game /bot sunset notice (seconds)
+        self._sunset_notice_sent: dict[str, float] = {}
 
         # Debounced knowledge reload
         self._knowledge_reload_task: Optional[asyncio.Task] = None
@@ -86,9 +85,8 @@ class KnowledgeCog(commands.Cog):
         ] = []  # (player_id, player_name, message)
         self._max_global_history = 30
 
-        # Long-term memory storage
+        # Long-term memory storage (SQLite conversation log — backs `history`)
         self._memory_storage: Optional[MemoryStorage] = None
-        self._memory_retrieval: Optional[MemoryRetrieval] = None
 
         # Wiki subsystem
         self._wiki_storage: Optional[WikiStorage] = None
@@ -114,14 +112,6 @@ class KnowledgeCog(commands.Cog):
         except Exception as e:
             log.error(f"Failed to initialize memory storage: {e}")
             self._memory_storage = None
-
-        # Initialize semantic retrieval (ChromaDB)
-        try:
-            self._memory_retrieval = MemoryRetrieval()
-            log.info("ChromaDB memory retrieval initialized")
-        except Exception as e:
-            log.warning(f"ChromaDB not available, semantic search disabled: {e}")
-            self._memory_retrieval = None
 
         # Initialize wiki storage and retrieval
         try:
@@ -297,13 +287,6 @@ class KnowledgeCog(commands.Cog):
     ):
         now = datetime.now(self.local_tz)
 
-        # Retrieve the speaker's long-term memory so the Discord /bot command,
-        # #ask-bot, and @mention paths answer from the SAME ChromaDB memory that
-        # the in-game /bot path uses (parity: write + recall across all entry points).
-        semantic_context = ""
-        if player_id:
-            semantic_context = await self._retrieve_semantic_context(player_id, question)
-
         KNOWLEDGE_MAX_CHARS = 20000
 
         # Parallelize wiki index fetching
@@ -377,8 +360,6 @@ class KnowledgeCog(commands.Cog):
                 "content": f"## Context\nThe current date and time (in Bangkok GMT+7 timezone) is: {now.strftime('%A, %Y-%m-%d %H:%M')}",
             },
         ]
-        if semantic_context:
-            prev_messages_str = f"Relevant past conversations:\n{semantic_context}\n\nRecent messages:\n{prev_messages_str}" if prev_messages_str else f"Relevant past conversations:\n{semantic_context}"
         if prev_messages_str:
             messages.append(
                 {
@@ -393,106 +374,6 @@ class KnowledgeCog(commands.Cog):
         # Use agentic loop (tools are always available)
         return await self._call_llm_with_tools(
             messages, tools, model, interaction=interaction, player_id=player_id
-        )
-
-    async def ai_helper(
-        self,
-        player_name,
-        question,
-        prev_messages,
-        ingame_feedback_fn: Optional[Callable[[str], Awaitable[None]]] = None,
-        player_id: Optional[str] = None,
-    ):
-        now = datetime.now(self.local_tz)
-
-        KNOWLEDGE_MAX_CHARS = 20000
-
-        # Parallelize: active players, wiki index
-        async def _fetch_active_players():
-            async with self.bot.http_session.get(
-                "https://server.aseanmotorclub.com/api/active_players/"
-            ) as resp:
-                return await resp.text()
-
-        def _build_events_str():
-            return "\n\n".join(
-                [
-                    f"## {event.name}\nDate/Time:{event.start_time.replace(tzinfo=ZoneInfo('UTC')).astimezone(self.local_tz).strftime('%A, %Y-%m-%d %H:%M')}\nLocation: {event.location}\n{event.description}"
-                    for event in self.bot.guilds[0].scheduled_events
-                    if event.start_time > now
-                ]
-            )
-
-        players_task = asyncio.create_task(_fetch_active_players())
-        wiki_index_task = asyncio.create_task(
-            asyncio.to_thread(lambda: self._wiki_index.get_index() if self._wiki_index else "")
-        )
-
-        player_data, wiki_index_str = await asyncio.gather(
-            players_task, wiki_index_task
-        )
-        events_str = _build_events_str()
-
-        knowledge = self.knowledge_system_message
-        if len(knowledge) > KNOWLEDGE_MAX_CHARS:
-            knowledge = knowledge[:KNOWLEDGE_MAX_CHARS] + "\n\n[...continued — use wiki tools for full detail]"
-
-        system_message = (
-            "You are a helpful bot in Motor Town, an open world driving game, specifically in 'ASEAN Motor Club'.\n"
-            "This reply goes through the game chat: write your full answer, never cut it short, and avoid using newlines.\n"
-            "Only use the following knowledge. Do not use markdown, tables, or emojis.\n"
-            "For game-related questions, use the wiki tool's 'ask' action (full-text search over the game wiki) instead of guessing.\n\n"
-            "## Interim Updates\n"
-            "If answering requires tool calls, call send_message FIRST (at most once per reply) "
-            "to tell the user what you are about to do, e.g. 'ok let me look up the Vamos specs'. "
-            "Your final answer itself needs no tool call.\n\n"
-            + knowledge
-        )
-
-        if wiki_index_str:
-            system_message += f"\n\n## Wiki Knowledge Index\n{wiki_index_str}"
-
-        motorpedia_index = await asyncio.to_thread(motorpedia.get_index)
-        if motorpedia_index:
-            system_message += f"\n\n{motorpedia_index}"
-
-        location_index = await asyncio.to_thread(backend_db.get_location_index)
-        if location_index:
-            system_message += f"\n\n{location_index}"
-
-        memory_self = await asyncio.to_thread(self._get_memory_self_block)
-        if memory_self:
-            system_message += f"\n\n## Standing Memory\n{memory_self}"
-
-        messages = [
-            {"role": "system", "content": system_message},
-        ]
-        if events_str:
-            messages.append(
-                {"role": "user", "content": "# Upcoming events:\n\n" + events_str}
-            )
-
-        messages.extend(
-            [
-                {
-                    "role": "user",
-                    "content": f"## Context\nTime: {now.strftime('%A, %Y-%m-%d %H:%M')}\n\n### Online Players:\n{player_data}\n\n### Previous messages:\n{prev_messages}",
-                },
-                {
-                    "role": "user",
-                    "content": f"### Message from {player_name}:\n{question}",
-                },
-            ]
-        )
-
-        tools = self._get_shared_tool_definitions()
-
-        return await self._call_llm_with_tools(
-            messages,
-            tools,
-            DEFAULT_AI_MODEL,
-            ingame_feedback_fn=ingame_feedback_fn,
-            player_id=player_id,
         )
 
     async def moderation(self, prev_messages=[]):
@@ -1985,21 +1866,6 @@ class KnowledgeCog(commands.Cog):
                 except Exception as e:
                     log.warning(f"Failed to store message in memory: {e}")
 
-            # Add to semantic search (ChromaDB)
-            if self._memory_retrieval:
-                try:
-                    await asyncio.to_thread(
-                        self._memory_retrieval.add_memory,
-                        player_id=player_id,
-                        player_name=player_name,
-                        message=message,
-                        source="game_chat",
-                        timestamp=timestamp,
-                        discord_user_id=str(discord_id) if discord_id else None,
-                    )
-                except Exception as e:
-                    log.warning(f"Failed to add memory to ChromaDB: {e}")
-
             # Track message history per player
             if player_id not in self._player_message_history:
                 self._player_message_history[player_id] = []
@@ -2019,30 +1885,18 @@ class KnowledgeCog(commands.Cog):
                     -self._max_global_history :
                 ]
 
-            # Handle /bot command if this is one
+            # In-game /bot is retired — Annie answers on Discord only
+            # (#ask-bot, @mention, /bot slash). Point players there, at most
+            # once per player per cooldown window to avoid game-chat spam.
             if event.get("is_bot_command"):
-                log.info(f"Bot command detected from {player_name}: {message}")
-                prev_messages = (
-                    "\n".join(
-                        f"{name}: {msg}"
-                        for _, name, msg in self._global_chat_history[:-1]
+                log.info(f"/bot command from {player_name} (retired): {message}")
+                now_mono = time.monotonic()
+                if now_mono - self._sunset_notice_sent.get(player_id, 0.0) > 300:
+                    self._sunset_notice_sent[player_id] = now_mono
+                    await announce_in_game(
+                        self.bot.http_session,
+                        "The in-game /bot has been retired. Ask me on Discord instead: #ask-bot or @mention me.",
                     )
-                    if len(self._global_chat_history) > 1
-                    else ""
-                )
-
-                semantic_context = await self._retrieve_semantic_context(
-                    player_id, message
-                )
-
-                await self._handle_ingame_bot_command(
-                    player_name=player_name,
-                    player_id=player_id,
-                    discord_id=discord_id,
-                    message=message,
-                    prev_messages=prev_messages,
-                    semantic_context=semantic_context,
-                )
             return
 
         # Non-chat events → wiki ingest
@@ -2104,27 +1958,6 @@ class KnowledgeCog(commands.Cog):
             )
         except Exception as e:
             log.warning(f"Failed to store bot response: {e}")
-
-        if self._memory_retrieval:
-            try:
-                await asyncio.to_thread(
-                    self._memory_retrieval.add_memory,
-                    player_id=player_id,
-                    player_name=player_name,
-                    message=question,
-                    source=source,
-                    is_bot_response=False,
-                )
-                await asyncio.to_thread(
-                    self._memory_retrieval.add_memory,
-                    player_id=player_id,
-                    player_name="Bot",
-                    message=response,
-                    source=source,
-                    is_bot_response=True,
-                )
-            except Exception as e:
-                log.warning(f"Failed to add bot interaction to ChromaDB: {e}")
 
         self._schedule_wiki_ingest(player_id, player_name, question, response)
 
@@ -2224,88 +2057,6 @@ class KnowledgeCog(commands.Cog):
         except Exception as e:
             log.warning(f"Wiki ingest failed for {player_name}: {e}")
 
-    async def _retrieve_semantic_context(
-        self, player_id: str, query: str, n_results: int = 3
-    ) -> str:
-        """Retrieve a player's relevant past conversations from ChromaDB long-term memory.
-
-        Shared by the in-game `/bot` path and the Discord `/bot`/`#ask-bot`/mention
-        paths so every entry point answers from the *same* memory the bot writes to.
-        Returns an empty string when retrieval is unavailable or nothing matches.
-        """
-        if not self._memory_retrieval or not player_id:
-            return ""
-        try:
-            memories = await asyncio.to_thread(
-                self._memory_retrieval.retrieve_relevant,
-                player_id=player_id,
-                query=query,
-                n_results=n_results,
-            )
-            if not memories:
-                return ""
-            return "\n".join(
-                f"[{m['timestamp'][:10]}] {m['player_name']}: {m['message']}"
-                for m in memories
-            )
-        except Exception as e:
-            log.warning(f"Failed to retrieve semantic memories: {e}")
-            return ""
-
-    async def _handle_ingame_bot_command(
-        self,
-        player_name: str,
-        player_id: str,
-        discord_id: int | None,
-        message: str,
-        prev_messages: str = "",
-        semantic_context: str = "",
-    ):
-        """Handle /bot command from in-game with full player context."""
-        allowed, wait_time = self._ingame_bot_limiter.check()
-        if not allowed:
-            assert wait_time is not None
-            await announce_in_game(
-                self.bot.http_session,
-                f"I need some rest, please wait {wait_time.seconds} seconds, or #ask-bot on discord instead!",
-            )
-            return
-
-        # Build full context with semantic memories
-        full_context = prev_messages
-        if semantic_context:
-            full_context = f"Relevant past conversations:\n{semantic_context}\n\nRecent messages:\n{prev_messages}"
-
-        # Define feedback callback for in-game status updates
-        async def ingame_status_fn(status_msg: str) -> None:
-            await announce_in_game(self.bot.http_session, status_msg)
-
-        try:
-            # Now we have player_id, discord_id, message history, AND semantic context!
-            answer = await self.ai_helper(
-                player_name,
-                message,
-                full_context,
-                ingame_feedback_fn=ingame_status_fn,
-                player_id=player_id,
-            )
-            await announce_in_game(self.bot.http_session, answer)
-
-            # Store interaction in long-term memory + schedule wiki ingest (fire-and-forget)
-            task = asyncio.create_task(self._store_bot_interaction(
-                player_id=player_id,
-                player_name=player_name,
-                question=message,
-                response=answer,
-                source="game_chat",
-            ))
-            task.add_done_callback(
-                lambda t: t.exception() and log.warning(f"_store_bot_interaction failed: {t.exception()}")
-            )
-        except Exception as e:
-            log.error(f"Bot command error for {player_name}: {e}")
-            await announce_in_game(self.bot.http_session, f"{e}")
-
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author == self.bot.user:
@@ -2364,8 +2115,8 @@ class KnowledgeCog(commands.Cog):
             )
             return
 
-        # Note: In-game /bot commands are now handled via SSE backend connection
-        # which provides richer player context (player_id, discord_id, character_guid)
+        # Note: the in-game /bot is retired — the SSE handler replies with a
+        # sunset notice pointing to #ask-bot / @mention.
 
         # 2. Knowledge Update (Forum/News)
         # Forum channel knowledge update
