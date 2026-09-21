@@ -58,7 +58,15 @@ flashes** — bearing and distance to the suspect. The design:
 
 Speed and distance cut both ways: a suspect driving fast and far is
 harder to corner, but hiding slow and close clears their wanted status
-faster.
+faster. The meter pivots at **50 km/h**:
+
+- **Above 50 km/h** the suspect's wanted timer grows (up to +3 s/s at
+  200 km/h point-blank) — speed builds heat.
+- **Below 50 km/h** it decays (up to −1 s/s parked) — hiding bleeds it.
+- Distance only ever helps the suspect when far away: far from any cop,
+  hiding decays up to **3× faster** and speeding builds up to **3×
+  slower**. There is no freeze — the meter never stalls, even parked
+  next to an officer (updates just go silent inside the 500 m ring).
 
 **No cops on duty = no wanted system.** If every officer goes off duty,
 all active wanted statuses are cleared (amnesty) and no new triggers
