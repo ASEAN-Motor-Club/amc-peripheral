@@ -1,9 +1,21 @@
 ---
-title: Life of a criminal
+title: Playing a criminal
 description: Illicit cargo, criminal score, wanted status, chases and jail.
 sidebar:
-  order: 2
+  label: Playing a criminal
+  order: 1
 ---
+
+This guide is for the **criminal** side of the club's law-enforcement
+system. (Running police instead? Read [Serving as
+police](/police/).)
+
+Hauling **illicit cargo** (money pallets, moonshine, cocaine, ganja and
+friends) builds your **criminal score**. Deliveries can trigger a random
+**Wanted** status, police will chase and try to **arrest** you, and an
+arrest means **jail** plus **confiscation**. Escape, and your wanted
+status decays — pulling it off while cops are on duty earns an
+**evasion bonus**.
 
 ## Criminal score
 
@@ -87,7 +99,3 @@ An arrest means:
   on the server takes a cut of **5–25%** (progressive — the closer your
   level is to the boss's, the more you pay). It's transferred through the
   bank, works while they're offline, and arrives as a private popup.
-
-## See also
-
-Playing the other side? Read [Serving as police](/cops-criminals/police/).

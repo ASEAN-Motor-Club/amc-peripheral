@@ -2,8 +2,19 @@
 title: Serving as police
 description: Going on duty, chases, arrests and rewards.
 sidebar:
-  order: 3
+  label: Serving as police
+  order: 2
 ---
+
+This guide is for the **police** side of the club's law-enforcement
+system. (On the other side of the law? Read [Playing a
+criminal](/criminals/).)
+
+Criminals build a **criminal score** by hauling illicit cargo, which can
+trigger a **Wanted** status. While wanted, every on-duty officer gets
+**compass flashes** pointing to the suspect — chase them down and make
+the **arrest** for jail time, confiscation, and a reward split across
+the force.
 
 ## Going on duty
 
@@ -76,7 +87,3 @@ you, going underwater, or entering a portal while wanted.
 
 Your **police level** (shown in the `P` of your duty tag) grows from
 confiscations you've been part of.
-
-## See also
-
-Playing the other side? Read [Life of a criminal](/cops-criminals/criminals/).

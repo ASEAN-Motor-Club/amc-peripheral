@@ -18,12 +18,12 @@ export default defineConfig({
 			],
 			sidebar: [
 				{
-					label: 'Cops & Criminals',
-					items: [
-						{ label: 'Overview', slug: 'cops-criminals' },
-						{ label: 'Life of a criminal', slug: 'cops-criminals/criminals' },
-						{ label: 'Serving as police', slug: 'cops-criminals/police' },
-					],
+					label: 'Criminals',
+					items: [{ label: 'Playing a criminal', slug: 'criminals' }],
+				},
+				{
+					label: 'Police',
+					items: [{ label: 'Serving as police', slug: 'police' }],
 				},
 			],
 		}),
