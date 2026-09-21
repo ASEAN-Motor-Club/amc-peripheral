@@ -45,6 +45,23 @@ popup asks you to switch to a suitable vehicle. You are **not** wanted
 yet — no chase, no tracking. But logging out during those 30 seconds is
 an unconditional arrest.
 
+### Chance table (base odds, before cop attenuation)
+
+Real delivery window: typical 100k–500k hauls, absolute max ~1.5M.
+
+| Score \ delivery | 10k | 50k | 100k | 300k | 500k | 1M | 1.5M |
+|---|---|---|---|---|---|---|---|
+| fresh (<100k) | 9.5 | 38.1 | 46.3 | 49.6 | 49.8 | 50.0 | 50.0 |
+| 1M | 5.2 | 8.6 | 16.7 | 39.2 | 45.4 | 48.8 | 49.4 |
+| 5M | 5.0 | 5.4 | 6.4 | 14.9 | 24.8 | 39.1 | 44.4 |
+| 20M (kingpin) | 5.0 | 5.0 | 5.2 | 6.5 | 9.0 | 17.7 | 26.1 |
+| 50M | 5.0 | 5.0 | 5.0 | 5.4 | 6.1 | 9.1 | 13.2 |
+
+
+Heat fades as the record builds — that's the rank protection at work:
+repeated 100k runs see the chance fall 46% → 41% → 27% → 17% → 10% as
+your score grows.
+
 ## While wanted
 
 You always spawn at **5 stars**. Stars are a countdown display only —
@@ -62,6 +79,18 @@ How wanted decays:
 
 If your wanted status runs out **while cops are on duty**, that's a
 successful evasion: you get a **bonus of 10% of your score** added to it.
+
+### Time to clear while hiding (minutes, from 5★)
+
+| Hide speed | ≤500 m from a cop | 1 km | 2 km | 3 km | 5 km | 10 km |
+|---|---|---|---|---|---|---|
+| 0 km/h | 10.0 | 7.1 | 5.4 | 4.7 | 4.2 | 3.8 |
+| 25 km/h | 20.0 | 14.3 | 10.8 | 9.5 | 8.4 | 7.5 |
+| 45 km/h (creep) | 100.0 | 71.4 | 53.8 | 47.4 | 41.9 | 37.7 |
+
+
+Creeping at 45 km/h stays terrible at every distance — don't creep, stop
+and hide, or run.
 
 ## Getting arrested
 
