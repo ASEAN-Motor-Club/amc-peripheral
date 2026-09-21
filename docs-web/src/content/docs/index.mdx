@@ -4,18 +4,25 @@ description: Documentation for the ASEAN Motor Club community servers.
 hero:
   tagline: Documentation for the ASEAN Motor Club community servers.
   actions:
-    - text: Cops & Criminals
-      link: /cops-criminals/
+    - text: Playing a criminal
+      link: /criminals/
       icon: right-arrow
       variant: primary
+    - text: Serving as police
+      link: /police/
+      icon: right-arrow
+      variant: secondary
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
 <CardGrid stagger>
-	<Card title="Cops & Criminals" href="/cops-criminals/">
-		AMC's native law-enforcement loop for Motor Town — illicit cargo,
-		criminal score, wanted chases, arrests, jail, and the boss tax.
+	<Card title="Playing a criminal" href="/criminals/">
+		Illicit cargo, criminal score, wanted chases, jail, and the boss
+		tax.
+	</Card>
+	<Card title="Serving as police" href="/police/">
+		Duty-up, on-duty rules, compass chases, arrests, and rewards.
 	</Card>
 </CardGrid>
 
