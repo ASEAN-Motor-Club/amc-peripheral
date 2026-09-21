@@ -8,7 +8,7 @@ sidebar:
 
 This guide is for the **criminal** side of the club's law-enforcement
 system. (Running police instead? Read [Serving as
-police](/police/).)
+police](/justice/police/).)
 
 Hauling **illicit cargo** (money pallets, moonshine, cocaine, ganja and
 friends) builds your **criminal score**. Deliveries can trigger a random

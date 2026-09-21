@@ -2,29 +2,26 @@
 title: AMC Docs
 description: Documentation for the ASEAN Motor Club community servers.
 hero:
-  tagline: Documentation for the ASEAN Motor Club community servers.
-  actions:
-    - text: Playing a criminal
-      link: /criminals/
-      icon: right-arrow
-      variant: primary
-    - text: Serving as police
-      link: /police/
-      icon: right-arrow
-      variant: secondary
+  tagline: Guides and references for the ASEAN Motor Club — servers, systems, and gameplay.
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 <CardGrid stagger>
-	<Card title="Playing a criminal" href="/criminals/">
-		Illicit cargo, criminal score, wanted chases, jail, and the boss
-		tax.
-	</Card>
-	<Card title="Serving as police" href="/police/">
-		Duty-up, on-duty rules, compass chases, arrests, and rewards.
+	<Card title="Law & Order">
+		The club's justice system — how criminals build a score and get
+		chased, and how police duty, arrests and rewards work.
 	</Card>
 </CardGrid>
 
-More sections (RP Mode, economy, server guides) will be added here as
-they are written.
+<Card title="Where to go next">
+	<LinkCard title="Government portal" href="https://gov.aseanmotorclub.com/">
+		Fiscal policy, treasury, banking, loans, UBI and official reports.
+	</LinkCard>
+	<LinkCard title="Community site" href="https://www.aseanmotorclub.com/">
+		News, downloads, and the main community hub.
+	</LinkCard>
+</Card>
+
+More sections are being written — economy and jobs, vehicles and mods,
+events, and getting-started guides will land here.

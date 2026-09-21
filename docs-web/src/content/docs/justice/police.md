@@ -8,7 +8,7 @@ sidebar:
 
 This guide is for the **police** side of the club's law-enforcement
 system. (On the other side of the law? Read [Playing a
-criminal](/criminals/).)
+criminal](/justice/criminals/).)
 
 Criminals build a **criminal score** by hauling illicit cargo, which can
 trigger a **Wanted** status. While wanted, every on-duty officer gets
