@@ -23,9 +23,11 @@ the score, 100% of it.
 - Escape and your wanted status decays; pull it off while cops are on duty
   and you even earn an **evasion bonus**.
 
-## The two guides
+## This section
 
-- [Life of a criminal](/cops-criminals/criminals) — illicit cargo, criminal
-  score, wanted status, chases, jail, the boss tax.
-- [Serving as police](/cops-criminals/police) — duty-up, chases, arrests,
-  rewards, and the rules of the badge.
+The two guides are written per role — read the one you play, or both:
+
+- [Life of a criminal](/cops-criminals/criminals/) — illicit cargo,
+  criminal score, wanted status, chases, jail, the boss tax.
+- [Serving as police](/cops-criminals/police/) — duty-up, chases,
+  arrests, rewards, and the rules of the badge.

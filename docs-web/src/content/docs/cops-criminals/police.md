@@ -76,3 +76,7 @@ you, going underwater, or entering a portal while wanted.
 
 Your **police level** (shown in the `P` of your duty tag) grows from
 confiscations you've been part of.
+
+## See also
+
+Playing the other side? Read [Life of a criminal](/cops-criminals/criminals/).

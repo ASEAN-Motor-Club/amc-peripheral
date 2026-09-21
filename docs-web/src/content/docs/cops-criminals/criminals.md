@@ -87,3 +87,7 @@ An arrest means:
   on the server takes a cut of **5–25%** (progressive — the closer your
   level is to the boss's, the more you pay). It's transferred through the
   bank, works while they're offline, and arrives as a private popup.
+
+## See also
+
+Playing the other side? Read [Serving as police](/cops-criminals/police/).
