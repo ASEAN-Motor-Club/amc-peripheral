@@ -20,8 +20,9 @@ export default defineConfig({
 				{
 					label: 'Cops & Criminals',
 					items: [
-						// Each item here is one entry in the navigation menu.
 						{ label: 'Overview', slug: 'cops-criminals' },
+						{ label: 'Life of a criminal', slug: 'cops-criminals/criminals' },
+						{ label: 'Serving as police', slug: 'cops-criminals/police' },
 					],
 				},
 			],
