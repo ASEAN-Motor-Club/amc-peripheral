@@ -47,8 +47,7 @@ in {
         # songs = playlist(reload_mode="watch", "/var/lib/radio/songs")
         songs = playlist("/var/lib/radio/prev_requests")
         # songs = random(weights=[1, 2], [songs, prev_requests])
-        q_or_songs = amplify(1., override="replaygain_track_gain",
-          fallback(track_sensitive=true, [queue, songs]))
+        music = amplify(1., override="replaygain_track_gain", songs)
 
         event_songs = crossfade(amplify(1., override="replaygain_track_gain",
           playlist(reload_mode="watch", "/var/lib/radio/event_songs")))
@@ -62,17 +61,18 @@ in {
         talkshows_or_jingles = rotate(weights=[1, 2], [talkshows, jingles])
         segments_or_talking = fallback(track_sensitive=true, [segments, talkshows_or_jingles])
         segments_or_talking.on_track(fun (_) -> current_source_type := "talking")
-        q_or_songs.on_track(fun (_) -> current_source_type := "music")
+        music.on_track(fun (_) -> current_source_type := "music")
+        queue.on_track(fun (_) -> current_source_type := "music")
         prog = rotate(weights=[1,1,3], [
           segments_or_talking,
           blank(duration=2.0),
-          q_or_songs,
+          music,
         ])
         prog = cross(insert_intro, prog)
 
         radio_unnormaliszed = fallback(
-          track_sensitive=false,
-          [prog, default_playlist]
+          track_sensitive=true,
+          [queue, prog, default_playlist]
         )
 
         live = blank.strip(max_blank=2., min_noise=.1, threshold=-20., live)
@@ -96,7 +96,7 @@ in {
         # --- Harbor HTTP API (port 6001) ---
 
         last_metadata = ref([])
-        q_or_songs.on_track(fun (m) -> last_metadata := m)
+        radio.on_track(fun (m) -> last_metadata := m)
         def show_metadata(_)
           http.response(
             content_type="application/json; charset=UTF-8",
@@ -123,7 +123,7 @@ in {
         harbor.http.register.simple(port=6001, "/queue_length", handle_queue_length)
 
         def handle_skip(_)
-          source.skip(q_or_songs)
+          source.skip(radio_unnormaliszed)
           http.response(content_type="application/json", data='{"ok":true}')
         end
         harbor.http.register.simple(port=6001, method="POST", "/skip", handle_skip)
