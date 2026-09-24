@@ -31,7 +31,6 @@
   rhash,
   speex,
 }:
-
 stdenv.mkDerivation (finalAttrs: {
   pname = "icecast";
   version = "2.5.0";
@@ -41,7 +40,7 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-2aoHx0Ka7BnZUP9v1CXDcfdxWM00/yIPwZGywYbGfHo=";
   };
 
-  nativeBuildInputs = [ pkg-config ];
+  nativeBuildInputs = [pkg-config];
 
   buildInputs = [
     curl
@@ -71,7 +70,7 @@ stdenv.mkDerivation (finalAttrs: {
 
     homepage = "https://www.icecast.org";
     license = lib.licenses.gpl2Plus;
-    maintainers = with lib.maintainers; [ jcumming ];
+    maintainers = with lib.maintainers; [jcumming];
     platforms = with lib.platforms; unix;
   };
 })

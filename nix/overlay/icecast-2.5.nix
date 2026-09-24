@@ -15,8 +15,7 @@
 #
 # deps: rhash + pkg-config already exist in the pinned rev (rhash 1.4.4);
 # only libbigloo is vendored (nix/pkgs/libigloo.nix).
-
 final: prev: {
-  libigloo = final.pkgs.callPackage ../pkgs/libigloo.nix { };
-  icecast = final.pkgs.callPackage ../pkgs/icecast.nix { };
+  libigloo = final.pkgs.callPackage ../pkgs/libigloo.nix {};
+  icecast = final.pkgs.callPackage ../pkgs/icecast.nix {};
 }

@@ -10,7 +10,6 @@
   rhash,
   icecast,
 }:
-
 stdenv.mkDerivation (finalAttrs: {
   pname = "libigloo";
   version = "0.9.5";
@@ -20,7 +19,7 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-6iLpEZ96IYiBD5kQDFFVxnYtRZWuITuawp5ptPC4cok=";
   };
 
-  buildInputs = [ rhash ];
+  buildInputs = [rhash];
 
   doCheck = true;
 
