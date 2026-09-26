@@ -15,7 +15,7 @@ friends) builds your **criminal score**. Deliveries can trigger a random
 **Wanted** status, police will chase and try to **arrest** you, and an
 arrest means **jail** plus **confiscation**. Escape, and your wanted
 status decays — pulling it off while cops are on duty earns an
-**evasion bonus**.
+**evasion bonus** scaled by how real the chase was.
 
 ## Criminal score
 
@@ -78,7 +78,19 @@ How wanted decays:
 - With no pressure, the timer clears in roughly **10 minutes**.
 
 If your wanted status runs out **while cops are on duty**, that's a
-successful evasion: you get a **bonus of 10% of your score** added to it.
+successful evasion — but the size of the reward depends on the **chase
+quality**. While you're wanted, a meter builds from how close the nearest
+officer is and how fast you're driving; a chase only counts if an officer
+is actually within ~1 km of you. On evasion you get a bonus of **up to
+10% of your score**, scaled by that meter:
+
+- **Full chase** — officers on your tail at speed for several minutes:
+  the full **+10%**.
+- **Some pressure** — a genuine but short or distant chase: a few percent.
+- **No chase at all** — nobody ever got close: **nothing**.
+
+The public announcement when you evade reflects the same thing, from
+"spectacular escape" down to a plain "no longer wanted".
 
 ### Time to clear while hiding (minutes, from 5★)
 
