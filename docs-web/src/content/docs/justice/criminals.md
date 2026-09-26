@@ -64,10 +64,12 @@ your score grows.
 
 ## While wanted
 
-You always spawn at **5 stars**. Stars are a countdown display only —
-they don't change any mechanic. Severity lives in your **bounty**, which
-is set once at the trigger: **10% of your criminal score**, and it stays
-frozen for the whole chase.
+You spawn at **at least 5 stars** — and the bigger the haul that
+triggered it, the higher: every full **$100,000 of the delivery payment
+adds one star** ($800k delivery → 8★, $1M → 10★). Stars are a countdown
+display only — they don't change any mechanic. Severity lives in your
+**bounty**, which is set once at the trigger: **10% of your criminal
+score**, and it stays frozen for the whole chase.
 
 How wanted decays:
 
@@ -102,7 +104,8 @@ The public announcement when you evade reflects the same thing, from
 
 
 Creeping at 45 km/h stays terrible at every distance — don't creep, stop
-and hide, or run.
+and hide, or run. (The table assumes the 5★ minimum; bigger hauls start
+with more heat on the clock, so their times scale up proportionally.)
 
 ## Getting arrested
 
