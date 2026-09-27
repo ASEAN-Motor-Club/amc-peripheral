@@ -1,18 +1,18 @@
 ---
-title: Illicit Trade
-description: The drug cargo economy - criminal score, the boss tax and the /criminals leaderboard.
+title: Illicit Delivery
+description: Illicit delivery - criminal score, the boss tax and the /criminals leaderboard.
 sidebar:
-  label: Illicit Trade
+  label: Illicit Delivery
   order: 1
 ---
 
 Hauling illicit cargo is the criminal side of the club's law-enforcement
-system. The trade runs on **drugs**: ganja, coca and cocaine products,
+system. Illicit delivery runs on **drugs**: ganja, coca and cocaine products,
 moonshine - with money pallets as just one cargo among them. Every illicit
 delivery builds your **criminal score**, the single measure of your
 criminal career.
 
-This page covers the trade itself and the score. See [Playing a
+This page covers illicit delivery and the score. See [Playing a
 criminal](/justice/criminals/) for wanted status, chases and jail, and
 [Serving as police](/justice/police/) for the other side of the law.
 
