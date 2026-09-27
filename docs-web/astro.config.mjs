@@ -51,7 +51,7 @@ export default defineConfig({
 					label: 'Law & Order',
 					items: [
 						{ label: 'Overview', slug: 'justice' },
-						{ label: 'Money Laundering', slug: 'justice/money-laundering' },
+						{ label: 'Illicit Trade', slug: 'justice/illicit-trade' },
 						{ label: 'Playing a criminal', slug: 'justice/criminals' },
 						{ label: 'Serving as police', slug: 'justice/police' },
 					],

@@ -3,7 +3,7 @@ title: Serving as police
 description: Going on duty, chases, arrests and rewards.
 sidebar:
   label: Serving as police
-  order: 2
+  order: 3
 ---
 
 This guide is for the **police** side of the club's law-enforcement
