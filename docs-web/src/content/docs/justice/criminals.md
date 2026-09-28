@@ -65,12 +65,22 @@ Heat fades as the record builds - rank protection in action: repeated
 
 ## While wanted
 
-You spawn at **at least 5 stars** - and the bigger the haul that
-triggered it, the higher: every full **$100,000 of the delivery payment
-adds one star** ($800k delivery → 8★, $1M → 10★). Stars are a countdown
-display only - they don't change any mechanic. Severity lives in your
-**bounty**, set once at the trigger: **10% of your criminal score**,
-frozen for the whole chase.
+You spawn at **at least 3 stars** — and the bigger the haul that
+triggered it, the higher. The payment → star tiers:
+
+| Delivery payment | Stars |
+|---|---|
+| up to $150k | 3★ |
+| $150k – $200k | 4★ |
+| $200k – $350k | 5★ |
+| $350k – $450k | 6★ |
+| ... +1★ per $100k ... | |
+| $750k – $1M | 10★ |
+| $1M+ | 11★, then +1★ per full $250k |
+
+Stars are a countdown display only — they don't change any mechanic.
+Severity lives in your **bounty**, set once at the trigger: **10% of
+your criminal score**, frozen for the whole chase.
 
 How wanted decays:
 
@@ -95,7 +105,7 @@ is actually within ~1 km of you. On evasion you get a bonus of **up to
 The public announcement when you evade reflects the same thing, from
 "spectacular escape" down to a plain "no longer wanted".
 
-### Time to clear while hiding (minutes, from 5★)
+### Time to clear while hiding (minutes, from 3★)
 
 - Parked (0 km/h): 500 m from a cop → 10.0 · 1 km → 7.1 · 2 km → 5.4 · 3 km → 4.7 · 5 km → 4.2 · 10 km → 3.8
 - Creeping (25 km/h): 500 m → 20.0 · 1 km → 14.3 · 2 km → 10.8 · 3 km → 9.5 · 5 km → 8.4 · 10 km → 7.5
