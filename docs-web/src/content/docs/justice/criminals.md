@@ -84,8 +84,10 @@ your criminal score**, frozen for the whole chase.
 
 How wanted decays:
 
-- **Speed matters most.** The pivot is **50 km/h**: above it your wanted
-  timer grows, below it the timer decays.
+- **Speed matters most.** In a vehicle, the pivot is **50 km/h**: above it
+  your wanted timer grows, below it the timer decays. On foot there is a
+  separate rule: standing still decays exactly like a parked car, and above
+  **5 km/h** on foot your heat grows again (5 km/h on foot = no change).
 - **Distance helps.** Far from any cop, hiding decays much faster than
   point-blank.
 - With no pressure, the timer clears in roughly **10 minutes**.
