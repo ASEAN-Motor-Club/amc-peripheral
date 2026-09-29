@@ -599,6 +599,10 @@
                 RADIO_DB_PATH = "${cfg.dbPath}";
                 TTS_PROVIDER = "google";
                 MEMORY_DATA_DIR = "/var/lib/data/amc-memory";
+                # Annie manages the in-game announcement rotation via her
+                # tools; the rotation loop itself runs in amc-bot, so point
+                # this service at amc-bot's store file (single shared list).
+                ANNOUNCEMENTS_DB_PATH = "/var/lib/data/amc-memory-bot/announcements.db";
                 DEFAULT_AI_MODEL = "deepseek/deepseek-v4-flash-0731:nitro";
               };
               restartIfChanged = false;

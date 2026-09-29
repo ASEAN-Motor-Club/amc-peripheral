@@ -3,7 +3,7 @@
 import os
 from datetime import datetime, timezone
 from sqlite_utils import Database
-from amc_peripheral.settings import MEMORY_DATA_DIR
+from amc_peripheral.settings import ANNOUNCEMENTS_DB_PATH, MEMORY_DATA_DIR
 
 
 class AnnouncementsDB:
@@ -11,7 +11,7 @@ class AnnouncementsDB:
 
     def __init__(self, db_path: str | None = None):
         if db_path is None:
-            db_path = os.path.join(MEMORY_DATA_DIR, "announcements.db")
+            db_path = ANNOUNCEMENTS_DB_PATH
         os.makedirs(os.path.dirname(db_path) or MEMORY_DATA_DIR, exist_ok=True)
         self.db = Database(db_path)
         self._ensure_tables()

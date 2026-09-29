@@ -118,6 +118,13 @@ GAME_DB_PATH = os.environ.get("GAME_DB_PATH", "/var/lib/motortown/gamedata.db")
 MEMORY_DATA_DIR = os.environ.get("MEMORY_DATA_DIR", "./data")
 MEMORY_DB_PATH = os.path.join(MEMORY_DATA_DIR, "player_memories.db")
 
+# Shared in-game announcements store. Both bot services read the SAME list —
+# amc-bot's utils_cog rotation loop and (via ANNIE tools) amc-radio's DJ Annie.
+# Default keeps the per-service layout; on the host both point at one file.
+ANNOUNCEMENTS_DB_PATH = os.environ.get(
+    "ANNOUNCEMENTS_DB_PATH", os.path.join(MEMORY_DATA_DIR, "announcements.db")
+)
+
 # Wiki Storage (Annie's structured knowledge base)
 WIKI_DB_PATH = os.path.join(MEMORY_DATA_DIR, "annie_wiki.db")
 WIKI_EXPORT_PATH = os.environ.get(

@@ -26,6 +26,7 @@ from pydantic import BaseModel
 
 from amc_peripheral.settings import (
     GUILD_ID,
+    ADMIN_ROLE_ID,
     OPENAI_API_KEY_OPENROUTER,
     DEFAULT_AI_MODEL,
     GENERAL_CHANNEL_ID,
@@ -66,6 +67,7 @@ from amc_peripheral.radio.radio_server import (
 )
 from amc_peripheral.utils.game_utils import announce_in_game, game_api_request
 from amc_peripheral.memory.storage import MemoryStorage
+from amc_peripheral.announcements import AnnouncementsDB
 from amc_peripheral.wiki.storage import WikiStorage
 from amc_peripheral.wiki.retrieval import WikiRetrieval
 from amc_peripheral.wiki.index import WikiIndex
@@ -239,6 +241,18 @@ Explicit lyrics (profanity, sexual content, drug references) are FINE — the
 system only blocks hate music (racial slurs, white supremacist anthems, etc.).
 If the system rejects a song, you'll get the rejection reason in the tool
 response — relay it to the user briefly.
+
+## In-Game Announcements (admin only)
+The server posts a regular rotation of announcements into the game chat every
+15 minutes. You can manage that list with `list_announcements`, `add_announcement`,
+`remove_announcement` and `toggle_announcement`. The system only allows ADMINS
+to use them — the tool result will say DENIED otherwise; if so, tell the
+speaker politely that only admins can manage the list.
+When an admin asks to change the list (add/remove/edit the rotation), USE the
+tools. Announcement texts must be plain in-game chat style: no markdown, no
+emoji, short enough for one chat line. Adding fires the new text once in game
+immediately and puts it in the rotation. Show the list with ids when an admin
+asks what's on it, so they can pick what to remove.
 
 {knowledge_index}
 """
@@ -513,6 +527,12 @@ class RadioCog(commands.Cog):
             "LemurStreet",
         ]
         self.db = RadioDB(RADIO_DB_PATH)
+        # Shared announcements store (same SQLite the amc-bot utils_cog uses)
+        try:
+            self._announcements_db = AnnouncementsDB()
+        except Exception as e:
+            log.error(f"Announcements DB init failed: {e}")
+            self._announcements_db = None
         self._download_queue: asyncio.Queue = asyncio.Queue()
         self._download_worker_task: asyncio.Task | None = None
         self._pending_tracks: dict[str, tuple[str, bytes]] = {}
@@ -1901,6 +1921,57 @@ Script:
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "list_announcements",
+                    "description": "List the in-game announcement rotation (the regular server-wide chat notices). Shows each entry's id, enabled state and text. Admin only.",
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "add_announcement",
+                    "description": "Add a new text to the in-game announcement rotation AND fire it once immediately as a server-wide chat notice. Plain text only: NO markdown, NO emoji (the game client strips/breaks both). Keep it short (fits a chat line). Admin only.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "text": {"type": "string", "description": "The announcement text, plain in-game chat style"},
+                        },
+                        "required": ["text"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "remove_announcement",
+                    "description": "Delete an announcement from the rotation by id (get ids from list_announcements). Admin only.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "announcement_id": {"type": "integer", "description": "The id of the announcement to delete"},
+                        },
+                        "required": ["announcement_id"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "toggle_announcement",
+                    "description": "Enable or disable an announcement without deleting it (it stays in the list). Admin only.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "announcement_id": {"type": "integer", "description": "The id of the announcement"},
+                            "enabled": {"type": "boolean", "description": "True to enable, False to disable"},
+                        },
+                        "required": ["announcement_id", "enabled"],
+                    },
+                },
+            },
         ]
 
     # --- TTS Voice-Over Insertion ---
@@ -1951,6 +2022,39 @@ Script:
             log.debug(f"Cleaned up temp audio file: {path}")
         except OSError:
             pass
+
+    async def _requester_is_admin(self, requester: str, player_id: str | None) -> bool:
+        """Check whether the current speaker holds Discord admin rights.
+
+        The request may come from Discord (@mention, requester = display name +
+        author id handled by callers) or in-game chat (requester = in-game
+        name). Resolve to a guild member by display_name, then require the
+        ADMIN_ROLE_ID role or guild administrator permission. Falls back to
+        False when the name can't be resolved — in-game-only nicknames that
+        don't match any Discord member are NOT admins by default.
+        """
+        guild = self.bot.get_guild(GUILD_ID)
+        if not guild:
+            return False
+        member = None
+        # player_id equals the Discord user id when the speaker is a Discord
+        # user; otherwise try an in-game name -> member display_name match.
+        if player_id:
+            try:
+                member = guild.get_member(int(player_id))
+            except (ValueError, TypeError):
+                member = None
+        if member is None:
+            lowered = (requester or "").lower()
+            member = next(
+                (m for m in guild.members if m.display_name.lower() == lowered),
+                None,
+            )
+        if member is None:
+            return False
+        if getattr(member, "guild_permissions", None) and member.guild_permissions.administrator:
+            return True
+        return any(r.id == ADMIN_ROLE_ID for r in getattr(member, "roles", []))
 
     async def _execute_annie_tool(
         self,
@@ -2433,6 +2537,56 @@ Script:
                 # can't ask about someone else by impersonating an id, and
                 # so a concurrent chat can't overwrite the active speaker.
                 return self._get_player_wiki_summary(player_id or "")
+
+            elif name in (
+                "list_announcements",
+                "add_announcement",
+                "remove_announcement",
+                "toggle_announcement",
+            ):
+                if not await self._requester_is_admin(requester, player_id):
+                    return "DENIED: announcement management is admin-only. Tell the speaker only admins can manage the announcement list."
+                if not self._announcements_db:
+                    return "Announcements storage is unavailable."
+
+                if name == "list_announcements":
+                    rows = self._announcements_db.list_announcements()
+                    if not rows:
+                        return "The announcement list is empty."
+                    lines = [
+                        f"- [{r['id']}] {'ON' if r['enabled'] else 'off'}: {r['text']}"
+                        for r in rows
+                    ]
+                    return (
+                        "In-game announcement rotation:\n" + "\n".join(lines)
+                    )
+
+                if name == "add_announcement":
+                    text = (args.get("text") or "").strip()
+                    if not text:
+                        return "Error: 'text' is required."
+                    ann_id = self._announcements_db.add_announcement(text, requester)
+                    if ann_id is None:
+                        return "Failed to save the announcement."
+                    # Fire it once immediately (operator preference)
+                    await announce_in_game(self.bot.http_session, text, color="53EAFD")
+                    return (
+                        f"Announcement saved (ID: {ann_id}) and fired once in game. "
+                        "It will now repeat as part of the regular rotation."
+                    )
+
+                if name == "remove_announcement":
+                    ann_id = args.get("announcement_id")
+                    if self._announcements_db.remove_announcement(ann_id):
+                        return f"Announcement {ann_id} deleted."
+                    return f"Announcement {ann_id} not found."
+
+                # toggle_announcement
+                ann_id = args.get("announcement_id")
+                enabled = bool(args.get("enabled", True))
+                if self._announcements_db.toggle_announcement(ann_id, enabled):
+                    return f"Announcement {ann_id} {'enabled' if enabled else 'disabled'}."
+                return f"Announcement {ann_id} not found."
 
             return f"Unknown tool: {name}"
         except Exception as e:
