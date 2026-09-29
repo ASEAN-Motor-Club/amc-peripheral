@@ -2045,7 +2045,8 @@ class KnowledgeCog(commands.Cog):
                         "timestamp": datetime.now().isoformat(),
                     },
                 ]
-                self._wiki_ingest.ingest_conversation(
+                await asyncio.to_thread(
+                    self._wiki_ingest.ingest_conversation,
                     player_id=player_id,
                     player_name=player_name,
                     messages=conversation_messages,

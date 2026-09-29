@@ -19,10 +19,10 @@ def wiki_env():
     """Create a wiki storage + retrieval in a temp dir."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "wiki.db")
-        chroma_path = os.path.join(tmpdir, "chromadb")
+        wiki_db = os.path.join(tmpdir, "wiki_fts.db")
 
         storage = WikiStorage(db_path=db_path)
-        retrieval = WikiRetrieval(path=chroma_path)
+        retrieval = WikiRetrieval(path=wiki_db)
         yield storage, retrieval
         storage.close()
 

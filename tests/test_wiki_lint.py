@@ -14,10 +14,10 @@ def wiki_lint():
     """Create a temporary wiki lint instance for testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "wiki.db")
-        chroma_path = os.path.join(tmpdir, "chromadb")
+        wiki_db = os.path.join(tmpdir, "wiki_fts.db")
 
         storage = WikiStorage(db_path=db_path)
-        retrieval = WikiRetrieval(path=chroma_path)
+        retrieval = WikiRetrieval(path=wiki_db)
         lint = WikiLint(storage=storage, retrieval=retrieval)
         yield lint
 

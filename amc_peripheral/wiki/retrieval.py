@@ -1,35 +1,79 @@
-"""ChromaDB-based semantic retrieval for wiki pages."""
+"""SQLite FTS5-based retrieval for wiki pages.
+
+Replaces the former ChromaDB index: the wiki pages already live in
+``annie_wiki.db`` (``wiki_pages`` table), so we index them with SQLite FTS5
+in the same database. No embeddings, no extra daemon state, no compaction.
+
+All methods are synchronous — callers on the async event loop MUST wrap them
+in ``asyncio.to_thread``.
+"""
 
 import logging
+import re
+import sqlite3
 from typing import Optional
 
-try:
-    import chromadb
-    CHROMADB_AVAILABLE = True
-except ImportError:
-    CHROMADB_AVAILABLE = False
-
-from amc_peripheral.settings import WIKI_CHROMADB_PATH
+from amc_peripheral.settings import WIKI_DB_PATH
 
 log = logging.getLogger(__name__)
 
+_FTS_SCHEMA = """
+    CREATE VIRTUAL TABLE IF NOT EXISTS wiki_pages_fts USING fts5(
+        page_id UNINDEXED,
+        title,
+        content,
+        category UNINDEXED,
+        updated_at UNINDEXED
+    );
+"""
+
 
 class WikiRetrieval:
-    """Semantic search for wiki pages using ChromaDB."""
+    """Full-text search over Annie's wiki pages (SQLite FTS5)."""
 
-    def __init__(self, path: str = WIKI_CHROMADB_PATH):
-        if not CHROMADB_AVAILABLE:
-            raise ImportError("chromadb is not installed. Install with: pip install chromadb")
+    def __init__(self, path: str = WIKI_DB_PATH):
+        self.db_path = path
+        self.conn = sqlite3.connect(path, check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.executescript(_FTS_SCHEMA)
+        self.conn.commit()
+        self._backfill_from_wiki_pages()
+        count = self.get_indexed_count()
+        log.info(f"Wiki FTS5 retrieval initialized at {path} ({count} pages)")
 
-        import os
-        os.makedirs(path, exist_ok=True)
+    def _backfill_from_wiki_pages(self) -> None:
+        """Index any wiki_pages rows not yet present in the FTS table.
 
-        self.client = chromadb.PersistentClient(path=path)
-        self.collection = self.client.get_or_create_collection(
-            name="wiki_pages",
-            metadata={"description": "Annie's wiki pages for semantic search"}
-        )
-        log.info(f"Wiki ChromaDB initialized at {path}")
+        The SQLite wiki_pages table is the source of truth; the FTS index is
+        derived. This makes the migration from the old ChromaDB path
+        automatic on first start.
+        """
+        existing = {
+            row[0]
+            for row in self.conn.execute("SELECT page_id FROM wiki_pages_fts")
+        }
+        missing = []
+        try:
+            missing = self.conn.execute(
+                "SELECT id, title, content, category, updated_at FROM wiki_pages"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            pass  # no wiki_pages table (fresh test DB) — nothing to backfill
+        added = 0
+        for row in missing:
+            if row["id"] in existing:
+                continue
+            self.index_page(
+                page_id=row["id"],
+                title=row["title"],
+                content=row["content"] or "",
+                category=row["category"] or "",
+                updated_at=row["updated_at"] or "",
+            )
+            added += 1
+        if added:
+            log.info(f"Wiki FTS backfill: indexed {added} page(s) from wiki_pages")
 
     def index_page(
         self,
@@ -39,28 +83,24 @@ class WikiRetrieval:
         category: str,
         updated_at: str,
     ) -> str:
-        """Add or update a wiki page in the ChromaDB index. Returns the doc ID."""
+        """Add or update a wiki page in the FTS index. Returns the doc ID."""
         doc_id = f"wiki_page_{page_id}"
-        self.collection.upsert(
-            documents=[content],
-            metadatas=[{
-                "page_id": page_id,
-                "title": title,
-                "category": category,
-                "updated_at": updated_at,
-            }],
-            ids=[doc_id]
+        self.remove_page(page_id)
+        self.conn.execute(
+            "INSERT INTO wiki_pages_fts (page_id, title, content, category, updated_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (str(page_id), title or "", content or "", category or "", updated_at or ""),
         )
+        self.conn.commit()
         return doc_id
 
     def remove_page(self, page_id: int) -> bool:
-        """Remove a wiki page from the ChromaDB index."""
-        doc_id = f"wiki_page_{page_id}"
-        try:
-            self.collection.delete(ids=[doc_id])
-            return True
-        except Exception:
-            return False
+        """Remove a wiki page from the FTS index."""
+        self.conn.execute(
+            "DELETE FROM wiki_pages_fts WHERE page_id = ?", (str(page_id),)
+        )
+        self.conn.commit()
+        return True
 
     def search(
         self,
@@ -69,57 +109,74 @@ class WikiRetrieval:
         category: Optional[str] = None,
         max_distance: float = 1.5,
     ) -> list[dict]:
-        """Search wiki pages by semantic similarity.
+        """Search wiki pages by keyword match (FTS5, LIKE fallback).
 
         Args:
             query: The query text.
             n_results: Maximum number of results.
-            category: Optional category filter.
-            max_distance: Maximum distance (lower = more similar).
+            category: Optional category filter (applied client-side).
+            max_distance: Unused (kept for API compatibility with the old
+                ChromaDB signature).
 
         Returns:
-            List of result dicts with keys: page_id, title, category, content, distance.
+            List of result dicts with keys: page_id, title, category, content,
+            distance, updated_at. Best match first.
         """
-        where_filter = None
-        if category:
-            where_filter = {"category": category}
+        query = (query or "").strip()
+        if not query:
+            return []
 
-        results = self.collection.query(
-            query_texts=[query],
-            n_results=n_results,
-            where=where_filter,
-            include=["documents", "metadatas", "distances"]
-        )
+        rows: list = []
+        try:
+            # Sanitize into an FTS query: strip punctuation, AND the terms so
+            # more specific queries rank first.
+            terms = re.findall(r"[\w']+", query)[:8]
+            match = " AND ".join(f'"{t}"' for t in terms)
+            rows = self.conn.execute(
+                "SELECT page_id, title, content, category, updated_at"
+                " FROM wiki_pages_fts WHERE wiki_pages_fts MATCH ?"
+                " ORDER BY rank LIMIT ?",
+                (match, n_results),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            rows = []
+
+        if not rows:
+            # Fallback: substring match on title/content (handles short or
+            # punctuation-only queries that FTS5 rejects or can't rank).
+            like = f"%{query}%"
+            rows = self.conn.execute(
+                "SELECT page_id, title, content, category, updated_at"
+                " FROM wiki_pages_fts WHERE title LIKE ? OR content LIKE ?"
+                " LIMIT ?",
+                (like, like, n_results),
+            ).fetchall()
 
         pages = []
-        if results["documents"] and results["documents"][0]:
-            for i, doc in enumerate(results["documents"][0]):
-                distance = results["distances"][0][i] if results["distances"] else 0
-                if distance > max_distance:
-                    continue
-                metadata = results["metadatas"][0][i] if results["metadatas"] else {}
-                pages.append({
-                    "page_id": metadata.get("page_id"),
-                    "title": metadata.get("title", ""),
-                    "category": metadata.get("category", ""),
-                    "content": doc,
-                    "distance": distance,
-                    "updated_at": metadata.get("updated_at", ""),
-                })
+        for row in rows:
+            if category and (row["category"] or "") != category:
+                continue
+            pages.append(
+                {
+                    "page_id": int(row["page_id"]) if row["page_id"] else None,
+                    "title": row["title"] or "",
+                    "category": row["category"] or "",
+                    "content": row["content"] or "",
+                    "distance": 0.0,
+                    "updated_at": row["updated_at"] or "",
+                }
+            )
         return pages
 
     def get_indexed_count(self) -> int:
         """Get the number of indexed pages."""
-        return self.collection.count()
+        return self.conn.execute("SELECT COUNT(*) FROM wiki_pages_fts").fetchone()[0]
 
     def clear_index(self) -> bool:
         """Clear all indexed pages. Use with caution."""
         try:
-            self.client.delete_collection("wiki_pages")
-            self.collection = self.client.get_or_create_collection(
-                name="wiki_pages",
-                metadata={"description": "Annie's wiki pages for semantic search"}
-            )
+            self.conn.execute("DELETE FROM wiki_pages_fts")
+            self.conn.commit()
             return True
         except Exception:
             return False

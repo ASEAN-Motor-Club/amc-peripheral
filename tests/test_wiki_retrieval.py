@@ -1,4 +1,4 @@
-"""Tests for wiki retrieval (ChromaDB) module."""
+"""Tests for wiki retrieval (SQLite FTS5) module."""
 
 import os
 import tempfile
@@ -12,8 +12,8 @@ from amc_peripheral.wiki.retrieval import WikiRetrieval
 def wiki_retrieval():
     """Create a temporary wiki retrieval instance for testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        chroma_path = os.path.join(tmpdir, "chromadb")
-        retrieval = WikiRetrieval(path=chroma_path)
+        wiki_db = os.path.join(tmpdir, "wiki_fts.db")
+        retrieval = WikiRetrieval(path=wiki_db)
         yield retrieval
 
 

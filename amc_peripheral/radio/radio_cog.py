@@ -66,7 +66,6 @@ from amc_peripheral.radio.radio_server import (
 )
 from amc_peripheral.utils.game_utils import announce_in_game, game_api_request
 from amc_peripheral.memory.storage import MemoryStorage
-from amc_peripheral.memory.retrieval import MemoryRetrieval
 from amc_peripheral.wiki.storage import WikiStorage
 from amc_peripheral.wiki.retrieval import WikiRetrieval
 from amc_peripheral.wiki.index import WikiIndex
@@ -518,7 +517,6 @@ class RadioCog(commands.Cog):
         self._download_worker_task: asyncio.Task | None = None
         self._pending_tracks: dict[str, tuple[str, bytes]] = {}
         self._memory_storage = None
-        self._memory_retrieval = None
         self._wiki_storage = None
         self._wiki_retrieval = None
         self._wiki_index = None
@@ -556,14 +554,6 @@ class RadioCog(commands.Cog):
         except Exception as e:
             log.error(f"Failed to initialize memory storage: {e}")
             self._memory_storage = None
-
-        # Initialize semantic retrieval (ChromaDB)
-        try:
-            self._memory_retrieval = MemoryRetrieval()
-            log.info("ChromaDB memory retrieval initialized")
-        except Exception as e:
-            log.warning(f"ChromaDB not available, semantic search disabled: {e}")
-            self._memory_retrieval = None
 
         # Initialize wiki storage and retrieval
         try:
@@ -2327,7 +2317,9 @@ Script:
                     return "Error: 'query' is required."
                 if not self._wiki_retrieval:
                     return "Wiki retrieval not available."
-                results = self._wiki_retrieval.search(query, n_results=n_results)
+                results = await asyncio.to_thread(
+                    self._wiki_retrieval.search, query, n_results=n_results
+                )
                 if not results:
                     return f"No wiki pages found for '{query}'."
                 lines = []
@@ -2705,7 +2697,9 @@ Script:
         try:
             # If we have a query, do semantic search
             if query:
-                results = self._wiki_retrieval.search(query, n_results=3)
+                results = await asyncio.to_thread(
+                    self._wiki_retrieval.search, query, n_results=3
+                )
                 if results:
                     page_ids = [r["page_id"] for r in results if r.get("page_id")]
                     if self._wiki_index and page_ids:
@@ -2793,7 +2787,8 @@ Script:
                         "timestamp": datetime.now().isoformat(),
                     },
                 ]
-                self._wiki_ingest.ingest_conversation(
+                await asyncio.to_thread(
+                    self._wiki_ingest.ingest_conversation,
                     player_id=player_id,
                     player_name=player_name,
                     messages=conversation_messages,
@@ -2860,25 +2855,8 @@ Script:
         except Exception as e:
             log.warning(f"Failed to store Annie response: {e}")
 
-        # Also add to ChromaDB for semantic retrieval
-        if self._memory_retrieval:
-            try:
-                self._memory_retrieval.add_memory(
-                    player_id=player_id,
-                    player_name=player_name,
-                    message=question,
-                    source=source,
-                    is_bot_response=False,
-                )
-                self._memory_retrieval.add_memory(
-                    player_id=player_id,
-                    player_name="DJ Annie",
-                    message=response,
-                    source=source,
-                    is_bot_response=True,
-                )
-            except Exception as e:
-                log.warning(f"Failed to add Annie interaction to ChromaDB: {e}")
+        # (Player memory is persisted by store_message above; the former
+        # ChromaDB duplicate index was removed — nothing ever queried it.)
 
         # Schedule debounced wiki ingest
         self._schedule_wiki_ingest(player_id, player_name, question, response)
