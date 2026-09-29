@@ -57,6 +57,15 @@ export default defineConfig({
 					],
 				},
 				{
+					label: 'Schedule I',
+					items: [
+						{ label: 'Overview', slug: 'schedule-i' },
+						{ label: 'Cargo', slug: 'schedule-i/cargo' },
+						{ label: 'Production', slug: 'schedule-i/production' },
+						{ label: 'Delivery Points', slug: 'schedule-i/delivery-points' },
+					],
+				},
+				{
 					label: 'Reference',
 					items: [
 						{ label: 'Mods & Downloads', slug: 'mods' },
