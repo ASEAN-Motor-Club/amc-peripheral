@@ -3428,6 +3428,55 @@ Script:
 
         return title, duration
 
+    @staticmethod
+    def _pick_best_search_entry(entries: list, search_query: str) -> dict:
+        """Pick the search result whose title best matches the requested song.
+
+        YouTube's top result for a song query is frequently a different track
+        from the same artist or a compilation containing it (e.g. "El Ratón"
+        resolved to the "Si Tú Me Dices Ven" video). Score candidates by
+        weighted word overlap between the query and each entry's title, with
+        position as a light tie-breaker. Falls back to the first entry when
+        nothing scores above zero.
+        """
+        import re as _re
+
+        def tokens(s: str) -> set:
+            return set(_re.findall(r"[\w']+", s.lower())) - {
+                "official",
+                "video",
+                "audio",
+                "lyrics",
+                "hd",
+                "hq",
+                "mv",
+            }
+
+        query_tokens = tokens(search_query)
+        best: dict | None = None
+        best_score = -1.0
+        for pos, entry in enumerate(entries):
+            title_tokens = tokens(entry.get("title") or "")
+            if not title_tokens:
+                continue
+            overlap = title_tokens & query_tokens
+            # Weight matched tokens by rarity in the title (title words are
+            # usually distinctive; matched words that are rare in titles
+            # carry more signal than words like "el" appearing everywhere).
+            score = 0.0
+            for tok in overlap:
+                rare = 1.0 if len(tok) > 3 else 0.4
+                score += rare
+            # Ratio vs title length: a short title almost fully covered by
+            # query words is a strong match.
+            score /= len(title_tokens) + 1
+            score -= pos * 0.01  # gentle preference for higher-ranked results
+            if score > best_score:
+                best_score = score
+                best = entry
+
+        return best if best is not None and best_score > 0 else entries[0]
+
     async def _get_or_download(self, query: str) -> tuple:
         """Resolve metadata and return cached file or download fresh.
 
@@ -3443,6 +3492,10 @@ Script:
             "default_search": "ytsearch",
             "cookiefile": YT_COOKIES_PATH,
             "js_runtimes": {"deno": {"path": DENO_PATH}},
+            # Fetch several candidates so we can pick the one that actually
+            # matches the requested song title (YouTube's top result is
+            # often a different track from the same artist/collection).
+            "playlistend": 8,
         }
 
         try:
@@ -3454,8 +3507,10 @@ Script:
                 )
             # pyrefly: ignore [bad-typed-dict-key]
             if "entries" in info_dict and info_dict["entries"]:
-                # pyrefly: ignore [bad-typed-dict-key]
-                info_dict = info_dict["entries"][0]
+                entries = [
+                    e for e in info_dict["entries"] if e and e.get("id")
+                ]
+                info_dict = self._pick_best_search_entry(entries, search_query)
         except asyncio.TimeoutError:
             raise Exception(
                 "Song search timed out. YouTube may be slow — please try again."
