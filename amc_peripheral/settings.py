@@ -117,11 +117,9 @@ GAME_DB_PATH = os.environ.get("GAME_DB_PATH", "/var/lib/motortown/gamedata.db")
 # NixOS: Set MEMORY_DATA_DIR=/var/lib/amc-peripheral via StateDirectory
 MEMORY_DATA_DIR = os.environ.get("MEMORY_DATA_DIR", "./data")
 MEMORY_DB_PATH = os.path.join(MEMORY_DATA_DIR, "player_memories.db")
-CHROMADB_PATH = os.path.join(MEMORY_DATA_DIR, "chromadb")
 
 # Wiki Storage (Annie's structured knowledge base)
 WIKI_DB_PATH = os.path.join(MEMORY_DATA_DIR, "annie_wiki.db")
-WIKI_CHROMADB_PATH = os.path.join(MEMORY_DATA_DIR, "annie_wiki_chromadb")
 WIKI_EXPORT_PATH = os.environ.get(
     "WIKI_EXPORT_PATH", os.path.join(MEMORY_DATA_DIR, "annie-wiki-export")
 )
