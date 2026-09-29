@@ -259,7 +259,7 @@ def _lookup_knowledge(
       different phrasing (by design — no query expansion).
     - DJ wiki (``wiki_storage`` + optional ``wiki_retrieval``): Annie's
       community/radio knowledge. Substring matches (fast, exact) plus
-      semantic matches from ChromaDB (broader recall), de-duplicated by
+      FTS5 matches from the wiki index (broader recall), de-duplicated by
       page id.
 
     Both sections are returned labeled so the model can tell curated game
@@ -282,7 +282,7 @@ def _lookup_knowledge(
                 page_id = result.get("page_id")
                 if page_id is None or page_id in found:
                     continue
-                # ChromaDB may not have full content in sync with storage —
+                # The FTS index may not have full content in sync with storage —
                 # prefer the storage record if it exists, otherwise fall
                 # back to the retrieval snapshot.
                 page = wiki_storage.get_page_by_id(page_id)

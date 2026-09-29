@@ -55,7 +55,7 @@ class WikiSynthesizer:
 
         Args:
             storage: Wiki storage layer.
-            retrieval: Wiki ChromaDB retrieval (used to index the new page).
+            retrieval: Wiki retrieval (used to index the new page).
             llm_client: An `openai.AsyncOpenAI`-compatible client.
             model: Model name to use for the synthesis LLM call.
         """
@@ -273,7 +273,7 @@ class WikiSynthesizer:
                     updated_at=refreshed["updated_at"],
                 )
             except Exception as e:
-                log.warning(f"Synthesis ChromaDB indexing failed: {e}")
+                log.warning(f"Synthesis wiki indexing failed: {e}")
 
         # Cross-link cited pages (skip self)
         cited_ids: list[int] = []

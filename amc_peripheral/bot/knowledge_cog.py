@@ -123,10 +123,10 @@ class KnowledgeCog(commands.Cog):
 
         try:
             self._wiki_retrieval = WikiRetrieval()
-            log.info("Wiki ChromaDB retrieval initialized")
+            log.info("Wiki FTS5 retrieval initialized")
         except Exception as e:
             log.warning(
-                f"Wiki ChromaDB not available, semantic wiki search disabled: {e}"
+                f"Wiki retrieval (FTS5) not available, wiki search disabled: {e}"
             )
             self._wiki_retrieval = None
 
@@ -901,7 +901,7 @@ class KnowledgeCog(commands.Cog):
         """Ensure a canonical player profile page exists for the resolved player.
 
         Syncs the PlayerIndex alias/nickname facts into Annie's wiki (and indexes
-        the page into ChromaDB) so later generic ``wiki`` recall agrees with the
+        the page into the FTS index) so later generic ``wiki`` recall agrees with the
         explicit ``player <name>`` lookup. Never raises; returns the wiki page id
         when a sync happened, else None.
         """

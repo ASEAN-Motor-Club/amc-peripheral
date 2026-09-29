@@ -5,7 +5,7 @@ the agent can deliberately persist compact durable facts that outlive the
 current conversation, and a small set of *standing* self-facts are injected
 into every turn so core truths are always present.
 
-Backed by Annie's wiki so facts get the wiki's persistence + ChromaDB semantic
+Backed by Annie's wiki so facts get the wiki's persistence + FTS5
 recall for free:
 
 - ``self`` category pages = Annie's standing/self memory (always injected).
@@ -43,7 +43,7 @@ class MemoryStore:
     ) -> int:
         """Upsert a durable fact page (create or update, idempotent).
 
-        Returns the page id. Re-indexes into ChromaDB when the content changes
+        Returns the page id. Re-indexes into the FTS index when the content changes
         so the fact stays semantically retrievable.
         """
         if not title or not content:
