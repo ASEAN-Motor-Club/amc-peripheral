@@ -565,10 +565,10 @@ class RadioCog(commands.Cog):
 
         try:
             self._wiki_retrieval = WikiRetrieval()
-            log.info("Wiki ChromaDB retrieval initialized")
+            log.info("Wiki FTS5 retrieval initialized")
         except Exception as e:
             log.warning(
-                f"Wiki ChromaDB not available, semantic wiki search disabled: {e}"
+                f"Wiki retrieval (FTS5) not available, wiki search disabled: {e}"
             )
             self._wiki_retrieval = None
 
@@ -2688,7 +2688,7 @@ Script:
     async def _get_wiki_context(self, query: str = "") -> str:
         """Retrieve relevant wiki pages for Annie chats.
 
-        Searches ChromaDB for semantically relevant pages and returns a
+        Searches the wiki FTS index for relevant pages and returns a
         formatted context string. If no query is provided, returns the wiki index.
         """
         if not self._wiki_storage or not self._wiki_retrieval:

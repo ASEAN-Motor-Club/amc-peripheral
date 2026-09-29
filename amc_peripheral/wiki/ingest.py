@@ -208,7 +208,7 @@ class WikiIngest:
             elif summary and summary != existing["summary"]:
                 self.storage.update_page(page_id, summary=summary)
             self.storage.add_source(page_id, "fact_extraction", source_id)
-            # Re-fetch once for ChromaDB indexing
+            # Re-fetch once for FTS indexing
             refreshed = self.storage.get_page_by_id(page_id)
             self.retrieval.index_page(
                 page_id=page_id,
@@ -332,7 +332,7 @@ class WikiIngest:
         return "\n".join(lines)
 
     def _index_profile_page(self, page_id: int, title: str, content: str, category: str):
-        """Index the profile page into ChromaDB, tolerating retrieval being absent."""
+        """Index the profile page into the FTS index, tolerating retrieval being absent."""
         try:
             if not self.retrieval:
                 return
