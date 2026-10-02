@@ -46,26 +46,21 @@ const pct = (v: number) => (v * 100).toFixed(0) + '%';
       <img src="/charts/money-supply-flows.svg" alt="Monthly interest minted, wealth tax collected, and delivery income" style="width:100%;" />
 
       <h2 id="vault-flows">4. Real coins in and out of the vault</h2>
-      <p>Real coins enter the vault when players deposit earnings (wallet cash paid by the game) and when the treasury funds the bank; they leave when players withdraw cash to their wallet, take out loans, and when subsidies are paid. The chart shows why the backing gap appeared in 2026 rather than earlier: the vault spent 2025 taking in more real coins than it paid out, then from December 2025 outflows caught up.</p>
-      <img src="/charts/money-supply-vault-flows.svg" alt="Monthly cash inflow and outflow of the vault, with the net flow overlaid" style="width:100%;" />
+      <p>Real coins enter the vault when players deposit earnings (wallet cash paid by the game); they leave when players withdraw cash to their wallet. The chart shows why the backing gap appeared in 2026 rather than earlier: deposits of real coins outran withdrawals through 2025, then from December 2025 withdrawals caught up.</p>
+      <img src="/charts/money-supply-vault-flows.svg" alt="Monthly bank deposits and withdrawals of real coins, with the net flow overlaid" style="width:100%;" />
       <InsetText>
         Interest never touches these flows: it is created on the ledger side of the bank and is not backed by any coin movement. Cumulative minted interest was already ~$4.1B by end-2025, but the vault held more real coins than it owed depositors then — the printing was absorbed by that surplus. Once withdrawals drained the surplus (net vault outflow from Dec 2025), each minted dollar started showing up one-for-one as unbacked expansion.
       </InsetText>
       <table class="govuk-table govuk-table--numeric">
         <caption>Vault cash flows — last 6 months</caption>
-        <thead><tr><th>Month</th><th>Cash in</th><th>Cash out</th><th>Net</th><th>Withdrawals out</th><th>Earnings deposits in</th><th>Gov funding in</th><th>Subsidies out</th><th>Loans out</th></tr></thead>
+        <thead><tr><th>Month</th><th>Deposits in</th><th>Withdrawals out</th><th>Net</th></tr></thead>
         <tbody>
           {data.vault_flow_table.map((r: any) => (
             <tr>
               <td style="text-align:left">{r.month}</td>
-              <td>{fmtM(r.inflow * 1e6)}</td>
-              <td>{fmtM(r.outflow * 1e6)}</td>
-              <td>{fmtM(r.net * 1e6)}</td>
-              <td>{fmtM(r.withdrawals * 1e6)}</td>
               <td>{fmtM(r.earnings * 1e6)}</td>
-              <td>{fmtM(r.gov_funding * 1e6)}</td>
-              <td>{fmtM(r.subsidies * 1e6)}</td>
-              <td>{fmtM(r.loans * 1e6)}</td>
+              <td>{fmtM(r.withdrawals * 1e6)}</td>
+              <td>{fmtM(r.net * 1e6)}</td>
             </tr>
           ))}
         </tbody>
