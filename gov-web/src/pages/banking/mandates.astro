@@ -1,0 +1,88 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import Sidebar from '../../components/Sidebar.astro';
+---
+
+<GovLayout title="Charter & Mandates of the Bank" department="Bank of ASEAN" description="The standing constitution of the Bank of ASEAN: objectives, instruments, governance, and reporting duties.">
+
+<PhaseBanner tag="Constitution" text="Charter of the Bank of ASEAN" />
+<Breadcrumbs items={[
+  { label: "Banking & Credit", href: "/banking" },
+  { label: "Charter & Mandates", href: "/banking/mandates" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Charter & Mandates of the Bank of ASEAN</h1>
+
+      <SummaryBox title="Status">
+        <p>This Charter states the standing objectives, instruments, and governance of the Bank of ASEAN. It binds the Bank and its governors regardless of prevailing economic conditions. Where this Charter and an operational decision conflict, the Charter prevails.</p>
+      </SummaryBox>
+
+      <h2 id="foundation">Article 1 — Foundation and Status</h2>
+      <p><strong>1.1 Establishment.</strong> The Bank of ASEAN (the Bank) is the central monetary authority of the ASEAN Motor Club. It is the sole issuer of bank money and the operator of all deposit accounts, loans, and credit services.</p>
+      <p><strong>1.2 Nature of the Bank.</strong> The Bank is a monetary issuer, not a commercial intermediary. It cannot become insolvent through the exercise of its payment obligations: all withdrawals and loan disbursements are payable at all times. The binding constraint upon the Bank is the integrity of the currency it issues, not the sufficiency of its holdings.</p>
+      <p><strong>1.3 Independence of the ledger.</strong> The books of the Bank shall at all times record every movement of bank money as a balanced double entry. No balance may be altered except through a journal entry. The ledger is authoritative, auditable, and open to inspection.</p>
+      <p><strong>1.4 Separation from the Treasury.</strong> The Bank and the Treasury are distinct institutions with distinct books. Money passes between them only through journaled, described transfers. Neither institution may spend the other's balance directly.</p>
+
+      <h2 id="objectives">Article 2 — Objectives</h2>
+      <p><strong>2.1 Primary objective: monetary integrity.</strong> The Bank shall conduct its policy so that the supply of bank money remains proportionate to the productive output of the economy. The issuance of bank money shall not persistently outrun the income actually earned by the community's work.</p>
+      <p><strong>2.2 Secondary objective: soundness of deposits.</strong> The Bank shall preserve the confidence of depositors by ensuring that the claims of depositors are matched, to the greatest practicable extent, by real holdings. Where the two diverge, the Bank shall adopt measures to close the divergence and shall state openly the pace at which it will do so.</p>
+      <p><strong>2.3 Tertiary objective: service of commerce.</strong> The Bank shall provide deposits, interest, loans, and credit scoring on terms that support honest commerce, and shall withhold services from participants who defraud it.</p>
+      <p><strong>2.4 Order of precedence.</strong> Where objectives conflict, monetary integrity (2.1) prevails over soundness of deposits (2.2), and soundness of deposits prevails over the convenience of services (2.3).</p>
+
+      <h2 id="instruments">Article 3 — Instruments</h2>
+      <p><strong>3.1 The interest rate.</strong> The Bank sets the rate of interest paid on deposits. The rate is the principal instrument by which the supply of bank money is governed: a higher rate expands it, a lower rate restrains it. The rate shall be set with regard to the objectives of Article 2 and shall be recorded whenever it is changed.</p>
+      <p><strong>3.2 The wealth tax.</strong> The Bank levies a recurring tax on large holdings. The wealth tax is the standing counterweight to the issuance of bank money: it retires excess claims and shall be available to the Bank at all times. The Bank may direct the proceeds of the wealth tax toward the retirement of unbacked claims.</p>
+      <p><strong>3.3 The interest budget.</strong> As an alternative to setting the rate directly, the governors may fix the total amount payable as interest over a period. Where a budget is fixed, the effective rate is derived from it. A budget exhausted before the period ends suspends further interest payments until the next period.</p>
+      <p><strong>3.4 Open-market operations.</strong> The governors may buy or sell bank money against real holdings in order to reinforce the standing of the currency. Every such operation shall be journaled and reported.</p>
+
+      <h2 id="interest">Article 4 — Rules on Interest</h2>
+      <p><strong>4.1 Legality of issuance.</strong> Interest may be paid by the creation of new bank money. Such creation is lawful only as an exercise of the rate-setting power under Article 3.1 or the budget power under Article 3.3.</p>
+      <p><strong>4.2 Bounds on issuance.</strong> The governors shall not set a rate whose expected issuance, measured month over month, exceeds the productive income of the economy, except by a recorded decision stating the reason and the duration of the exception.</p>
+      <p><strong>4.3 Publicity of the rate.</strong> The prevailing rate, and every change to it, shall be published before or when it takes effect. Interest shall not be paid at a rate that depositors have not been told of.</p>
+      <p><strong>4.4 No discrimination.</strong> Interest accrues to all depositors by the same published rules of accrual, without regard to the identity of the depositor.</p>
+
+      <h2 id="payments">Article 5 — Payments and Deposits</h2>
+      <p><strong>5.1 Withdrawal guarantee.</strong> Every depositor may withdraw the whole of their balance at any time. No fee, queue, or condition may be imposed that prevents a depositor from obtaining their money. A withdrawal may be refused only where the depositor's own account is insufficient or the request is fraudulent.</p>
+      <p><strong>5.2 Deposit acceptance.</strong> The Bank accepts deposits of real holdings from any citizen without discrimination. Deposits are claims against the Bank and carry no maturity.</p>
+      <p><strong>5.3 Loans.</strong> The Bank may lend against its own credit, subject to the eligibility rules it publishes. Every loan shall be journaled at disbursement and at each repayment. A loan shall never be created, forgiven, or altered except by journaled entry.</p>
+      <p><strong>5.4 Fees.</strong> The Bank may charge fees for defined services. Every fee shall be published in advance, charged by journaled entry, and the same schedule shall apply to all citizens.</p>
+
+      <h2 id="governance">Article 6 — Governance</h2>
+      <p><strong>6.1 The governors.</strong> The Bank is governed by the governors of the ASEAN Motor Club. The governors exercise the powers of this Charter collectively: setting the interest rate or interest budget, directing open-market operations, and adopting measures under Article 2.2.</p>
+      <p><strong>6.2 Records of decision.</strong> Every exercise of a governor power under this Charter shall be recorded: the decision, its parameters, its stated reason, and the identity of the deciding governor.</p>
+      <p><strong>6.3 Delegation.</strong> The governors may delegate the execution of a decision to an officer, but not the decision itself. Responsibility for a delegated execution remains with the governors.</p>
+      <p><strong>6.4 Amendment of published rules.</strong> The operational rules of accrual, fees, loan eligibility, and credit scoring may be amended by the governors at any time, provided the amendment is published before it takes effect and does not retroactively alter a citizen's accrued balance or outstanding obligation.</p>
+
+      <h2 id="reporting">Article 7 — Transparency and Reporting</h2>
+      <p><strong>7.1 The monetary report.</strong> The Bank shall publish, at regular intervals, a monetary report stating: the supply of bank money and its composition; the Bank's real holdings and the proportion of deposits they cover; the amount of money issued and retired during the period; the prevailing interest rate; and a projection of the supply at the prevailing rate.</p>
+      <p><strong>7.2 Candour in the report.</strong> The report shall state adverse facts with the same prominence as favourable ones. Where the proportion of deposits covered by real holdings falls, the report shall say so plainly and shall state the measures adopted under Article 2.2.</p>
+      <p><strong>7.3 Audit.</strong> The ledger shall remain subject to audit. An audit shall verify that every journal entry balances, that no balance moves outside the ledger, and that the recorded decisions of Article 6.2 correspond to journaled actions.</p>
+      <p><strong>7.4 Access.</strong> The monetary report and the published rules of this Charter shall be permanently available to all citizens.</p>
+
+      <h2 id="amendment">Article 8 — Amendment of the Charter</h2>
+      <p><strong>8.1 Amendment.</strong> This Charter may be amended by the governors, provided the amendment is published together with its reason, and does not take effect retroactively.</p>
+      <p><strong>8.2 Entrenchment.</strong> The withdrawal guarantee (5.1), the publicity of the rate (4.3), and the duty of candour in reporting (7.2) may not be amended except by a decision recording the express intent to entrench-breaking amendment.</p>
+
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Foundation and Status", href: "#foundation" },
+        { label: "Objectives", href: "#objectives" },
+        { label: "Instruments", href: "#instruments" },
+        { label: "Rules on Interest", href: "#interest" },
+        { label: "Payments and Deposits", href: "#payments" },
+        { label: "Governance", href: "#governance" },
+        { label: "Transparency and Reporting", href: "#reporting" },
+        { label: "Amendment", href: "#amendment" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>
