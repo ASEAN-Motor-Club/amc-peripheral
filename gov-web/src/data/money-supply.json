@@ -190,7 +190,7 @@
    297083497.0,
    375495216.0,
    215933995.0,
-   5701038.0
+   5883582.0
   ],
   "vault_flows": [
    {
@@ -434,51 +434,81 @@
  "vault_flow_table": [
   {
    "month": "2026-05",
-   "inflow": 561.0,
-   "outflow": 722.0,
-   "net": -161.0,
+   "inflow": 741.0,
+   "outflow": 754.0,
+   "net": -13.0,
    "withdrawals": 722.0,
-   "earnings": 561.0
+   "earnings": 561.0,
+   "gov_funding": 58.0,
+   "loan_repay": 43.0,
+   "subsidies": -0.0,
+   "loans": 32.0,
+   "other": 79.0
   },
   {
    "month": "2026-06",
-   "inflow": 356.0,
-   "outflow": 743.0,
-   "net": -387.0,
+   "inflow": 421.0,
+   "outflow": 766.0,
+   "net": -345.0,
    "withdrawals": 743.0,
-   "earnings": 356.0
+   "earnings": 356.0,
+   "gov_funding": 42.0,
+   "loan_repay": 23.0,
+   "subsidies": -0.0,
+   "loans": 23.0,
+   "other": 0.0
   },
   {
    "month": "2026-07",
-   "inflow": 498.0,
-   "outflow": 607.0,
-   "net": -109.0,
+   "inflow": 604.0,
+   "outflow": 641.0,
+   "net": -37.0,
    "withdrawals": 607.0,
-   "earnings": 498.0
+   "earnings": 498.0,
+   "gov_funding": 78.0,
+   "loan_repay": 28.0,
+   "subsidies": -0.0,
+   "loans": 34.0,
+   "other": 0.0
   },
   {
    "month": "2026-08",
-   "inflow": 721.0,
-   "outflow": 767.0,
-   "net": -46.0,
+   "inflow": 874.0,
+   "outflow": 801.0,
+   "net": 73.0,
    "withdrawals": 767.0,
-   "earnings": 721.0
+   "earnings": 721.0,
+   "gov_funding": 112.0,
+   "loan_repay": 41.0,
+   "subsidies": -0.0,
+   "loans": 34.0,
+   "other": 0.0
   },
   {
    "month": "2026-09",
-   "inflow": 251.0,
-   "outflow": 334.0,
-   "net": -83.0,
+   "inflow": 276.0,
+   "outflow": 339.0,
+   "net": -63.0,
    "withdrawals": 334.0,
-   "earnings": 251.0
+   "earnings": 251.0,
+   "gov_funding": 40.0,
+   "loan_repay": 8.0,
+   "subsidies": -0.0,
+   "loans": 5.0,
+   "other": -23.0
   },
   {
    "month": "2026-10",
-   "inflow": 9.0,
+   "inflow": 10.0,
    "outflow": 11.0,
-   "net": -2.0,
+   "net": -1.0,
    "withdrawals": 11.0,
-   "earnings": 9.0
+   "earnings": 9.0,
+   "gov_funding": 1.0,
+   "loan_repay": 0.0,
+   "subsidies": -0.0,
+   "loans": -0.0,
+   "other": 0.0
   }
  ]
 }
