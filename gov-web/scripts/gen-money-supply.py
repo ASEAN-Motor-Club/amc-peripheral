@@ -75,6 +75,26 @@ ORDER BY date_trunc('month', "timestamp");
 """
 
 
+VAULT_SQL = r"""
+SET statement_timeout='120s';
+SELECT to_char(date_trunc('month', je.created_at),'YYYY-MM') m,
+  CASE
+    WHEN je.description ILIKE 'Player Deposit%' OR je.description ILIKE 'Earnings Deposit%' THEN 'earnings'
+    WHEN je.description ILIKE 'Player Withdrawal%' THEN 'withdrawals'
+    WHEN je.description ILIKE 'Player Loan Repayment%' THEN 'loan_repay'
+    WHEN je.description ILIKE 'Player Loan%' THEN 'loans'
+    WHEN je.description ILIKE '%Subsidy%' THEN 'subsidies'
+    WHEN je.description ILIKE 'Government Funding%' OR je.description ILIKE '%Injection%' OR je.description ILIKE '%seizure%' THEN 'gov_funding'
+    ELSE 'other'
+  END bucket,
+  ROUND(SUM(le.debit)/1e6) inflow, ROUND(SUM(le.credit)/1e6) outflow
+FROM amc_finance_journalentry je JOIN amc_finance_ledgerentry le ON le.journal_entry_id=je.id
+JOIN amc_finance_account a ON a.id=le.account_id
+WHERE a.book='BANK' AND a.account_type='ASSET' AND a.character_id IS NULL AND a.name ILIKE '%vault%'
+  AND le.credit + le.debit > 0
+GROUP BY 1,2 ORDER BY 1;
+"""
+
 def ssh_psql(sql: str) -> str:
     cmd = ["ssh", "root@asean-mt-server", "psql -h ::1 -U amc -d amc -qAt -P pager=off"]
     out = subprocess.run(cmd, input=sql, capture_output=True, text=True, timeout=300)
@@ -124,6 +144,20 @@ def main():
         )
 
     delivery = {m: float(v) for m, v in parse_rows(ssh_psql(DELIVERY_SQL)) if m in months}
+
+    vault_buckets = {}
+    for m, b, inflow, outflow in parse_rows(ssh_psql(VAULT_SQL)):
+        vault_buckets.setdefault(m, {})[b] = {"inflow": float(inflow), "outflow": float(outflow)}
+    vault_flows = []
+    for m in months:
+        b = vault_buckets.get(m, {})
+        row = {k: b.get(k, {}).get("inflow", 0.0) - b.get(k, {}).get("outflow", 0.0) for k in
+               ["earnings", "withdrawals", "loan_repay", "loans", "subsidies", "gov_funding", "other"]}
+        # withdrawals/loans are OUT by nature -> store positive outflow magnitude
+        row["withdrawals"] = -row["withdrawals"]
+        row["loans"] = -row["loans"]
+        row["subsidies"] = -row["subsidies"]
+        vault_flows.append(row)
 
     # --- backward-integrated monthly series (anchors at today's balances) ---
     # walk months newest -> oldest accumulating net flows, then reverse.
@@ -210,6 +244,7 @@ def main():
             "wealth_tax": [f["wealth_tax"] for f in flows],
             "nirc": [f["nirc"] for f in flows],
             "delivery_income": [delivery.get(m) for m in months],
+            "vault_flows": vault_flows,
         },
         "projections": scenarios,
     }
@@ -290,6 +325,46 @@ def main():
     fig.tight_layout()
     fig.savefig(CHART_OUT / "money-supply-flows.svg", format="svg")
     plt.close(fig)
+
+    # 3b. vault cash flows: deposits/withdrawals
+    inflow_series = [f["earnings"] + f["loan_repay"] + f["gov_funding"] + f["other"] for f in vault_flows]
+    outflow_series = [f["withdrawals"] + f["loans"] + f["subsidies"] for f in vault_flows]
+    net_series = [i - o for i, o in zip(inflow_series, outflow_series)]
+    fig, ax = plt.subplots(figsize=(9, 4.2))
+    w2 = 0.27
+    xs2 = range(len(months))
+    ax.bar([i - w2 for i in xs2], inflow_series, width=w2, color="#00703c", alpha=0.8,
+           label="Cash in (earnings deposits, gov funding, loan repayments)")
+    ax.bar([i + w2 for i in xs2], [-o for o in outflow_series], width=w2, color="#d4351c", alpha=0.8,
+           label="Cash out (withdrawals, loans, subsidies)")
+    ax.plot(list(xs2), net_series, color="#0b0c0c", lw=2, marker="o", ms=3, label="Net vault flow")
+    ax.axhline(0, color="#0b0c0c", lw=0.8)
+    ax.set_xticks(list(xs2))
+    ax.set_xticklabels(months, rotation=30, ha="right")
+    ax.set_ylabel("$ millions / month")
+    ax.set_title("Real coins: cash into vs out of the vault", loc="left")
+    ax.legend(fontsize=9)
+    fig.tight_layout()
+    fig.savefig(CHART_OUT / "money-supply-vault-flows.svg", format="svg")
+    plt.close(fig)
+
+    # last-6-months table rows for the page
+    tbl = []
+    for i in range(max(1, len(months) - 6), len(months)):
+        f = vault_flows[i]
+        tbl.append({
+            "month": months[i],
+            "inflow": inflow_series[i],
+            "outflow": outflow_series[i],
+            "net": inflow_series[i] - outflow_series[i],
+            "withdrawals": f["withdrawals"],
+            "earnings": f["earnings"],
+            "gov_funding": f["gov_funding"],
+            "subsidies": f["subsidies"],
+            "loans": f["loans"],
+        })
+    data["vault_flow_table"] = tbl
+    (DATA_OUT / "money-supply.json").write_text(json.dumps(data, indent=1))
 
     # 4. projections
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4.2))
