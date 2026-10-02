@@ -542,6 +542,10 @@ class RadioCog(commands.Cog):
         self.embed_message_id = None
         self.user_requests = {}
         self.recent_song_queue = deque(maxlen=10)
+        # Intro cadence state: how many songs queued since the last spoken
+        # intro, and who queued the previous one.
+        self._songs_since_intro = 0
+        self._last_intro_requester = None
         self.banned_requesters = [
             "LemurStreet",
         ]
@@ -3542,6 +3546,14 @@ Script:
                     "You have queued too many songs. Please wait a moment. (Limit: 5 songs per 10 minutes)"
                 )
 
+    INTRO_EVERY_N_SONGS = 3
+
+    def _should_speak_intro(self, requester: str) -> bool:
+        """Speak an intro only on the first song, then every Nth, or on a requester change."""
+        if self._songs_since_intro == 0 or requester != self._last_intro_requester:
+            return True
+        return self._songs_since_intro >= self.INTRO_EVERY_N_SONGS
+
     async def _get_request_intro(self, requester: str, title: str, artist: str) -> str:
         """Return a path to a custom spoken intro for this request.
 
@@ -3640,8 +3652,12 @@ Script:
         # Liquidsoap's insert_intro transition plays it right before the
         # song (annotate:intro=...). Failures here must never block the
         # song — queue without an intro instead.
+        # Cadence: not on every request — first queued song, then every
+        # INTRO_EVERY_N_SONGS, or whenever the requester changes.
         intro_path = None
-        if requester.lower().strip() != "dj annie":
+        if requester.lower().strip() != "dj annie" and self._should_speak_intro(
+            requester
+        ):
             try:
                 intro_path = await self._get_request_intro(
                     requester, str(title), str(artist or "")
@@ -3679,6 +3695,12 @@ Script:
         self.user_requests.setdefault(requester, [])
         self.user_requests[requester].append(datetime.now(self.local_tz))
         self.recent_song_queue.append(title)
+        # Advance intro cadence counters (every intro'd song resets the gap)
+        if intro_path:
+            self._songs_since_intro = 1
+            self._last_intro_requester = requester
+        else:
+            self._songs_since_intro += 1
 
         # Persist request
         try:
