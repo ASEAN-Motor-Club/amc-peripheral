@@ -32,7 +32,7 @@ import Sidebar from '../../components/Sidebar.astro';
 
       <h2 id="reform">What is changing</h2>
       <p><strong>Two currencies instead of one.</strong> Bank balances become AMC dollars. The money in the game wallet, earned from deliveries and work, remains game coin. Both are real money; they are simply no longer declared identical by default.</p>
-      <p><strong>A market sets the exchange rate.</strong> Conversions between AMC dollars and game coin will run through an automated liquidity pool maintained by the Bank. The rate floats with demand: when citizens want coin, the AMC dollar weakens; when citizens want bank money, it strengthens. The rate is published hourly and applies fairly to everyone converting in that hour, so there is no advantage in racing to convert first.</p>
+      <p><strong>A market sets the exchange rate.</strong> Conversions between AMC dollars and game coin will run through an automated liquidity pool maintained by the Bank, at a constant-product formula that lets the rate float freely with demand: when citizens want coin, the AMC dollar weakens; when citizens want bank money, it strengthens. Nothing dampens or manages the rate in normal conditions; the Bank may intervene only in an emergency, and every intervention is reported.</p>
       <p><strong>Interest is paid from a managed inventory.</strong> The Chair of the Bank sets the interest rate, as provided by the Charter. Interest is paid from the Bank's managed inventory of AMC dollars. When the inventory is empty, interest payments pause until the governors refill it. The rate remains a matter of published policy; the inventory is the discipline that keeps issuance deliberate.</p>
       <p><strong>The wealth tax retires money.</strong> Wealth tax collections will be used to retire excess bank money, visibly reducing the unbacked stock over time. The weekly transparency post reports the amount retired.</p>
 
@@ -50,14 +50,14 @@ import Sidebar from '../../components/Sidebar.astro';
 
       <h2 id="pool">The exchange</h2>
       <p>The exchange is a constant-product automated market: the Bank provides initial liquidity in both currencies (game coin moved from the vault, and newly issued AMC dollars recorded as the Bank's own seigniorage), and every conversion trades against that pool. A small conversion fee remains in the pool to cover its operation. The pool keeps its own books, separate from the Bank's policy accounts, so its position is visible at all times.</p>
-      <p>The rate is posted hourly. Large conversions move the rate by a limited amount each hour, so no single participant can whipsaw the price. The Bank maintains a separate intervention reserve, may buy or sell in the market to reinforce the currency's standing, and reports every such operation as the Charter requires (Articles 3.3 and 7).</p>
+      <p>The exchange rate is published continuously. Large conversions move the rate immediately and visibly; the pool's reserves and depth are published so citizens can see what a large conversion will do before making one. The Bank maintains a separate intervention reserve, may buy or sell in the market in an emergency to reinforce the currency's standing, and reports every such operation as the Charter requires (Articles 3.3 and 7).</p>
 
       <h2 id="migration">How the migration will proceed</h2>
       <ol>
         <li><strong>Preparation.</strong> The Bank's systems gain currency-denominated accounts, the exchange pool, and the interest inventory. All changes are tested on the staging environment before deployment.</li>
         <li><strong>Relabelling.</strong> Existing balances are re-denominated one-for-one into AMC dollars. This is a change of label, not of value: no account is touched otherwise.</li>
         <li><strong>Seeding.</strong> The pool is funded with initial liquidity, and the exchange opens.</li>
-        <li><strong>Conversion begins.</strong> Withdrawals and deposits route through the exchange at the posted rate. Interest pays from the inventory at the Chair's rate.</li>
+        <li><strong>Conversion begins.</strong> Withdrawals and deposits route through the exchange at the market rate. Interest pays from the inventory at the Chair's rate.</li>
         <li><strong>Reporting.</strong> The Money Supply page and the weekly transparency post extend to cover the exchange rate, the pool's reserves, interest paid, and money retired by the wealth tax.</li>
       </ol>
 
