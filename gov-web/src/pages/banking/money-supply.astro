@@ -1,0 +1,95 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import InsetText from '../../components/InsetText.astro';
+import Sidebar from '../../components/Sidebar.astro';
+import data from '../../data/money-supply.json';
+
+const s = data.snapshot;
+const fmtB = (v: number) => '$' + (v / 1e9).toFixed(2) + 'B';
+const fmtM = (v: number) => '$' + (v / 1e6).toFixed(1) + 'M';
+const pct = (v: number) => (v * 100).toFixed(0) + '%';
+---
+
+<GovLayout title="Money Supply" department="Bank of ASEAN" description="The money supply, its backing in real coins, and 12-month projections under the current interest rate.">
+
+<PhaseBanner tag="Analysis" text={`Values as of ${data.as_of}`} />
+<Breadcrumbs items={[
+  { label: "Banking & Credit", href: "/banking" },
+  { label: "Money Supply", href: "/banking/money-supply" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Money Supply</h1>
+
+      <SummaryBox title="Summary">
+        <p>Bank deposits total <strong>{fmtB(s.deposits)}</strong>, but the vault holds only <strong>{fmtB(s.vault)}</strong> in real coins — the money supply is <strong>{pct(s.backing_ratio)} backed</strong>. The gap was created by interest that was printed rather than funded. At the current interest rate ({(data.policy_rate_daily * 100).toFixed(1)}% per day), the money supply still grows by about <strong>{fmtM(s.net_mint_daily)}</strong> per day after taxes.</p>
+      </SummaryBox>
+
+      <h2 id="backing">1. Backing over time</h2>
+      <p>Every deposit is a promise the bank pays you in real coins. The chart below compares the vault (real coins the bank actually holds) against total deposits. The two were briefly equal in late 2025 — since then, interest payments have created deposit money faster than real coins entered the vault.</p>
+      <img src="/charts/money-supply-backing.svg" alt="Vault versus total deposits over time, with the backing ratio overlaid" style="width:100%;" />
+      <InsetText>
+        The backing ratio peaked above 100% in late 2025, then collapsed as the old interest rate printed new deposits. It now stands at {pct(s.backing_ratio)}.
+      </InsetText>
+
+      <h2 id="composition">2. What the deposit stock is made of</h2>
+      <p>Of the {fmtB(s.deposits)} owed to depositors, {fmtB(s.vault)} is covered by real coins. The remaining {fmtB(s.deposits - s.vault)} exists only as printed interest that was never backed by anything.</p>
+      <img src="/charts/money-supply-composition.svg" alt="Stacked bar showing backed and unbacked portions of the deposit stock" style="width:100%;" />
+
+      <h2 id="flows">3. Printing versus sinks versus the real economy</h2>
+      <p>Each month the bank mints interest, the wealth tax burns money back, and the real economy pays out delivery income. Interest minted has been of the same order as everything the entire delivery workforce earns — passive capital earns as much as active labour.</p>
+      <img src="/charts/money-supply-flows.svg" alt="Monthly interest minted, wealth tax collected, and delivery income" style="width:100%;" />
+
+      <h2 id="projections">4. Projections at the current interest rate</h2>
+      <p>Projecting forward 12 months, assuming the deposit base changes only through minted interest and the wealth tax (both at recent observed rates):</p>
+      <img src="/charts/money-supply-projection.svg" alt="Projected deposits and backing ratio over 12 months under three interest-rate scenarios" style="width:100%;" />
+
+      <table class="govuk-table govuk-table--numeric">
+        <caption>12-month projections by scenario</caption>
+        <thead><tr><th>Scenario</th><th>Daily rate</th><th>Deposits after 12 months</th><th>Backing after 12 months</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left">Current rate</td><td>{(data.projections.current.rate_daily * 100).toFixed(1)}%</td><td>{fmtB(data.projections.current.deposits[12])}</td><td>{pct(data.projections.current.backing[12])}</td></tr>
+          <tr><td style="text-align:left">Zero interest</td><td>0%</td><td>{fmtB(data.projections.zero.deposits[12])}</td><td>{pct(data.projections.zero.backing[12])}</td></tr>
+          <tr><td style="text-align:left">Legacy rate</td><td>2.2%</td><td>{fmtB(data.projections.legacy.deposits[12])}</td><td>{pct(data.projections.legacy.backing[12])}</td></tr>
+        </tbody>
+      </table>
+
+      <InsetText>
+        Reading the table: at the current rate the money supply keeps eroding its backing slowly. At zero interest the wealth tax shrinks deposits back toward the vault. The legacy rate compounds deposits to several times the vault within a year.
+      </InsetText>
+
+      <h2 id="assumptions">5. Assumptions and limits</h2>
+      <ul class="govuk-list govuk-list--bullet">
+        <li>The deposit base changes only through minted interest and wealth tax. Large withdrawals, deposits of cash, and loans are not modelled — in aggregate they have netted to roughly zero per month.</li>
+        <li>Minted interest scales with the deposit base and the rate, with an offline/threshold decay factor of {s.decay_factor_k} calibrated from observed payments.</li>
+        <li>The wealth tax burn is held at its recent monthly level ({fmtM(s.wealth_tax_daily * 30)} per month).</li>
+        <li>The vault is held flat: cash deposits and withdrawals net to approximately zero monthly, and neither interest nor the tax routes coins into the vault.</li>
+        <li>These are projections, not guarantees — the Bank can change the rate at any time.</li>
+      </ul>
+
+      <h2 id="analysis">6. Analysis</h2>
+      <p><strong>Why only {pct(s.backing_ratio)} is backed.</strong> Interest on deposits was paid by creating new deposit money rather than from real income. Cumulative printed interest now stands at {fmtB(s.printed_interest)} — more than the entire deposit stock once over — while the vault holds {fmtB(s.vault)}.</p>
+      <p><strong>Is the bank broke?</strong> No. The bank is the money issuer: withdrawals are always payable because new cash can be issued. The binding constraint is not solvency but inflation — every unbacked deposit competes with real delivery income for the same goods and prices.</p>
+      <p><strong>Is the treasury healthy?</strong> Yes. Treasury revenue and expenses have tracked each other closely month to month, and every treasury payout is floor-guarded. The imbalance lives entirely in the banking side.</p>
+      <p><strong>Passive versus active income.</strong> At the current rate, deposit interest still pays out of the same order as the whole delivery workforce's earnings ({fmtM(s.interest_daily * 30)} per month in interest versus recent delivery income of $200–430M per month). Passive capital income at that scale is an economy-level policy question, which is why the rate was cut and why funded-only interest is being considered.</p>
+
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Backing over time", href: "#backing" },
+        { label: "Composition", href: "#composition" },
+        { label: "Flows", href: "#flows" },
+        { label: "Projections", href: "#projections" },
+        { label: "Assumptions", href: "#assumptions" },
+        { label: "Analysis", href: "#analysis" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>
