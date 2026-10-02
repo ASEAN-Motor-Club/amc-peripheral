@@ -2528,7 +2528,7 @@ Script:
                     return "Wiki storage not available."
                 stats = self._wiki_storage.get_stats()
                 lines = [
-                    f"Wiki summary:",
+                    "Wiki summary:",
                     f"- Total pages: {stats.get('total_pages', 0)}",
                     f"- Categories: {stats.get('total_categories', 0)}",
                     f"- Total sources: {stats.get('total_sources', 0)}",
@@ -3564,15 +3564,19 @@ Script:
         # If the push fails the song was NOT queued — say so and let the
         # caller retry. Never record it in recent_song_queue: a phantom
         # entry makes the next attempt reject with "has been queued
-        # recently" even though nothing ever played.
+        # recently" even though nothing ever played. push_to_queue returns
+        # False on a non-200 response (it does not raise), so treat a
+        # falsy result as a failure too.
         try:
-            await self.lq.push_to_queue(
+            pushed = await self.lq.push_to_queue(
                 self.bot.http_session,
                 "song_requests",
                 local_path,
                 title=str(title),
                 requester=requester,
             )
+            if not pushed:
+                raise Exception("Liquidsoap rejected the push (non-200).")
         except Exception as e:
             log.error(f"Failed to push song to queue: {e}")
             raise Exception(
