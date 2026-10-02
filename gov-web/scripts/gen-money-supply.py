@@ -326,17 +326,18 @@ def main():
     fig.savefig(CHART_OUT / "money-supply-flows.svg", format="svg")
     plt.close(fig)
 
-    # 3b. vault cash flows: deposits/withdrawals
-    inflow_series = [f["earnings"] + f["loan_repay"] + f["gov_funding"] + f["other"] for f in vault_flows]
-    outflow_series = [f["withdrawals"] + f["loans"] + f["subsidies"] for f in vault_flows]
+    # 3b. vault cash flows: bank deposits/withdrawals ONLY (earnings deposits in,
+    # withdrawals out) — subsidies/loans/funding excluded per operator decision.
+    inflow_series = [f["earnings"] for f in vault_flows]
+    outflow_series = [f["withdrawals"] for f in vault_flows]
     net_series = [i - o for i, o in zip(inflow_series, outflow_series)]
     fig, ax = plt.subplots(figsize=(9, 4.2))
     w2 = 0.27
     xs2 = range(len(months))
     ax.bar([i - w2 for i in xs2], inflow_series, width=w2, color="#00703c", alpha=0.8,
-           label="Cash in (earnings deposits, gov funding, loan repayments)")
+           label="Bank deposits (earnings deposits)")
     ax.bar([i + w2 for i in xs2], [-o for o in outflow_series], width=w2, color="#d4351c", alpha=0.8,
-           label="Cash out (withdrawals, loans, subsidies)")
+           label="Bank withdrawals")
     ax.plot(list(xs2), net_series, color="#0b0c0c", lw=2, marker="o", ms=3, label="Net vault flow")
     ax.axhline(0, color="#0b0c0c", lw=0.8)
     ax.set_xticks(list(xs2))
@@ -359,9 +360,6 @@ def main():
             "net": inflow_series[i] - outflow_series[i],
             "withdrawals": f["withdrawals"],
             "earnings": f["earnings"],
-            "gov_funding": f["gov_funding"],
-            "subsidies": f["subsidies"],
-            "loans": f["loans"],
         })
     data["vault_flow_table"] = tbl
     (DATA_OUT / "money-supply.json").write_text(json.dumps(data, indent=1))
