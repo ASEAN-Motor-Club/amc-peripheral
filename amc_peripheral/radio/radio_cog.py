@@ -237,6 +237,14 @@ song's YouTube metadata (title + artist). You do NOT need to ask the user for
 the song title or screen it yourself — just call `search_and_queue_song` and
 the system will reject inappropriate songs automatically.
 
+## Retrying failed requests
+If a song failed to download or queue earlier, that failure is NEVER a reason
+to refuse queueing it again. A failed attempt means the song is NOT in the
+queue — always retry when the listener asks, even minutes later. Only the
+system's own rejections (blacklist, duration, content screening) are real
+blocks. "Queued recently" duplicates only apply to songs that actually played
+or are actually waiting in the queue.
+
 Explicit lyrics (profanity, sexual content, drug references) are FINE — the
 system only blocks hate music (racial slurs, white supremacist anthems, etc.).
 If the system rejects a song, you'll get the rejection reason in the tool
@@ -3553,6 +3561,10 @@ Script:
             )
 
         # --- Push to Queue ---
+        # If the push fails the song was NOT queued — say so and let the
+        # caller retry. Never record it in recent_song_queue: a phantom
+        # entry makes the next attempt reject with "has been queued
+        # recently" even though nothing ever played.
         try:
             await self.lq.push_to_queue(
                 self.bot.http_session,
@@ -3563,8 +3575,11 @@ Script:
             )
         except Exception as e:
             log.error(f"Failed to push song to queue: {e}")
+            raise Exception(
+                "Downloaded the song but the radio queue rejected it — try again."
+            ) from e
 
-        # Update throttling
+        # Update throttling (only on a successful queue)
         self.user_requests.setdefault(requester, [])
         self.user_requests[requester].append(datetime.now(self.local_tz))
         self.recent_song_queue.append(title)
@@ -3661,7 +3676,20 @@ Script:
                 "Download timed out. The song may be too large or the server is under load. Please try again."
             )
         except Exception as e:
-            raise Exception(f"Failed to download audio: {e}")
+            # YouTube transient failures (signature solver churn, network
+            # blips) are common — retry once before giving up.
+            log.warning(f"Download of '{title}' failed ({e}); retrying once...")
+            await asyncio.sleep(3)
+            try:
+                # pyrefly: ignore [bad-argument-type]
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    # pyrefly: ignore [bad-argument-type]
+                    await asyncio.wait_for(
+                        asyncio.to_thread(ydl.download, [webpage_url]),
+                        timeout=DOWNLOAD_TIMEOUT,
+                    )
+            except Exception as e2:
+                raise Exception(f"Failed to download audio: {e2}") from e2
 
         # Record in cache
         file_size = os.path.getsize(cache_path) if os.path.exists(cache_path) else 0
