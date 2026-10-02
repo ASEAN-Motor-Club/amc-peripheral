@@ -49,12 +49,16 @@ class LiquidsoapController:
     async def push_to_queue(
         self, session: aiohttp.ClientSession, queue_name: str, uri: str,
         title: str | None = None, requester: str | None = None,
+        intro: str | None = None,
     ) -> bool:
         """Push a URI to the Liquidsoap request queue via HTTP.
 
         Metadata is sent via Liquidsoap's annotate: protocol. The annotated
         URI is URL-encoded so that '=' signs in annotations don't confuse
         Liquidsoap's query-string parser (which would split on them).
+
+        `intro` is a path to an audio file that Liquidsoap's insert_intro
+        transition plays immediately before this track (see radio/liquidsoap.nix).
         """
         annotated_uri = uri
         annotations = []
@@ -64,6 +68,9 @@ class LiquidsoapController:
         if requester:
             safe_requester = self._sanitize_annotation(requester)
             annotations.append(f'requester="{safe_requester}"')
+        if intro:
+            safe_intro = self._sanitize_annotation(intro)
+            annotations.append(f'intro="{safe_intro}"')
         if annotations:
             annotated_uri = f"annotate:{','.join(annotations)}:{uri}"
 
