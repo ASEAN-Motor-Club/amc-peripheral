@@ -1,0 +1,86 @@
+---
+import GovLayout from '../../layouts/GovLayout.astro';
+import PhaseBanner from '../../components/PhaseBanner.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import SummaryBox from '../../components/SummaryBox.astro';
+import InsetText from '../../components/InsetText.astro';
+import Sidebar from '../../components/Sidebar.astro';
+---
+
+<GovLayout title="Currency Reform: Gazette" department="Bank of ASEAN" description="The Bank of ASEAN's plan for migration to a dual currency - the AMC dollar and the game coin - with a market-set exchange rate.">
+
+<PhaseBanner tag="Gazette" text="Published by the Bank of ASEAN" />
+<Breadcrumbs items={[
+  { label: "Banking & Credit", href: "/banking" },
+  { label: "Currency Reform", href: "/banking/currency-reform" },
+]} />
+
+<main class="govuk-main-wrapper">
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1>Currency Reform: The AMC Dollar and the Game Coin</h1>
+      <p class="govuk-body-l">A plan by the Bank of ASEAN, under the Charter and Mandates of the Bank, for the migration of the community's money to a dual currency with a market-set exchange rate.</p>
+
+      <SummaryBox title="In brief">
+        <p>The Bank will separate bank money from game money. Balances in the bank will be denominated in a new currency, the AMC dollar. Game coin will remain the money earned by work. An exchange run by an automated market will set the rate between the two. Every existing balance converts one-for-one. Nobody loses a cent of their recorded balance, and withdrawals remain guaranteed at all times.</p>
+      </SummaryBox>
+
+      <h2 id="why">Why the currency is being reformed</h2>
+      <p>For the community's whole history, one unit of bank money has been treated as equal to one unit of game coin. The Bank paid interest on deposits by creating new bank money. Over time, the amount of bank money in existence grew well beyond the game coin the Bank actually holds: for every unit of game coin in the Bank's vault, there are roughly three units of bank balances claimed against it.</p>
+      <p>Under a single currency this gap is invisible. Depositors see a number and assume it is coin. The guarantee that withdrawals are always payable has masked the difference, because the Bank, as the issuer of bank money, can always pay. But the difference is real: most bank money today is not backed by coin, and the money supply grows each month by more than the community earns by working.</p>
+      <p>The Bank's own analysis, published on the <a href="/banking/money-supply">Money Supply page</a>, records this openly. The Charter of the Bank (Article 2) commits the Bank to keeping the supply of bank money proportionate to the productive output of the economy, and to preserving the confidence of depositors. The single-currency arrangement cannot deliver those objectives. The reform makes the divergence visible, priced, and manageable.</p>
+
+      <h2 id="reform">What is changing</h2>
+      <p><strong>Two currencies instead of one.</strong> Bank balances become AMC dollars. The money in the game wallet, earned from deliveries and work, remains game coin. Both are real money; they are simply no longer declared identical by default.</p>
+      <p><strong>A market sets the exchange rate.</strong> Conversions between AMC dollars and game coin will run through an automated liquidity pool maintained by the Bank. The rate floats with demand: when citizens want coin, the AMC dollar weakens; when citizens want bank money, it strengthens. The rate is published hourly and applies fairly to everyone converting in that hour, so there is no advantage in racing to convert first.</p>
+      <p><strong>Interest is paid from a managed inventory.</strong> The Chair of the Bank sets the interest rate, as provided by the Charter. Interest is paid from the Bank's managed inventory of AMC dollars. When the inventory is empty, interest payments pause until the governors refill it. The rate remains a matter of published policy; the inventory is the discipline that keeps issuance deliberate.</p>
+      <p><strong>The wealth tax retires money.</strong> Wealth tax collections will be used to retire excess bank money, visibly reducing the unbacked stock over time. The weekly transparency post reports the amount retired.</p>
+
+      <h2 id="unchanged">What is not changing</h2>
+      <ul>
+        <li><strong>Every balance converts one-for-one.</strong> When the reform takes effect, each account's balance is re-denominated as the same number of AMC dollars. No balance is reduced, revalued, or frozen.</li>
+        <li><strong>Withdrawals remain guaranteed.</strong> The Charter's withdrawal guarantee (Article 5.1) continues without exception. A depositor can always convert their full balance to game coin through the exchange, at the prevailing rate.</li>
+        <li><strong>Game coin earned by work is untouched.</strong> Delivery income, subsidies, and job pay are unaffected by the reform.</li>
+        <li><strong>The Bank remains the issuer.</strong> The Bank cannot run out of AMC dollars. What changes is that the relationship between AMC dollars and coin is now a visible price, not an assumption.</li>
+      </ul>
+
+      <InsetText>
+        <p>The initial reference between the two currencies will start at one-to-one, reflecting the historical assumption. Where the rate settles thereafter is set by the community's own conversion decisions, published hourly for all to see.</p>
+      </InsetText>
+
+      <h2 id="pool">The exchange</h2>
+      <p>The exchange is a constant-product automated market: the Bank provides initial liquidity in both currencies (game coin moved from the vault, and newly issued AMC dollars recorded as the Bank's own seigniorage), and every conversion trades against that pool. A small conversion fee remains in the pool to cover its operation. The pool keeps its own books, separate from the Bank's policy accounts, so its position is visible at all times.</p>
+      <p>The rate is posted hourly. Large conversions move the rate by a limited amount each hour, so no single participant can whipsaw the price. The Bank maintains a separate intervention reserve, may buy or sell in the market to reinforce the currency's standing, and reports every such operation as the Charter requires (Articles 3.3 and 7).</p>
+
+      <h2 id="migration">How the migration will proceed</h2>
+      <ol>
+        <li><strong>Preparation.</strong> The Bank's systems gain currency-denominated accounts, the exchange pool, and the interest inventory. All changes are tested on the staging environment before deployment.</li>
+        <li><strong>Relabelling.</strong> Existing balances are re-denominated one-for-one into AMC dollars. This is a change of label, not of value: no account is touched otherwise.</li>
+        <li><strong>Seeding.</strong> The pool is funded with initial liquidity, and the exchange opens.</li>
+        <li><strong>Conversion begins.</strong> Withdrawals and deposits route through the exchange at the posted rate. Interest pays from the inventory at the Chair's rate.</li>
+        <li><strong>Reporting.</strong> The Money Supply page and the weekly transparency post extend to cover the exchange rate, the pool's reserves, interest paid, and money retired by the wealth tax.</li>
+      </ol>
+
+      <h2 id="governance">Governance of the reform</h2>
+      <p>The reform is conducted under the <a href="/banking/mandates">Charter and Mandates of the Bank</a>. The Chair of the Bank sets the interest rate and is accountable to the governors for its conformity to the Charter's objectives (Articles 3.1 and 6.2). The governors direct the market operations of the Bank and may rebalance the pool and the intervention reserve at any time. Every monetary report will state the exchange rate, the coverage of bank money by real holdings, and the amounts issued and retired, with adverse facts given the same prominence as favourable ones (Article 7.2).</p>
+
+      <h2 id="dates">Dates and further information</h2>
+      <p>The migration schedule will be announced as each stage completes testing. Citizens do not need to take any action: balances convert automatically, and the withdrawal guarantee applies throughout.</p>
+      <p>Further information: <a href="/banking/money-supply">Money Supply</a>, <a href="/banking/mandates">Charter & Mandates of the Bank</a>, <a href="/banking/interest">Bank Interest</a>.</p>
+
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <Sidebar items={[
+        { label: "Why the currency is being reformed", href: "#why" },
+        { label: "What is changing", href: "#reform" },
+        { label: "What is not changing", href: "#unchanged" },
+        { label: "The exchange", href: "#pool" },
+        { label: "How the migration will proceed", href: "#migration" },
+        { label: "Governance of the reform", href: "#governance" },
+        { label: "Dates and further information", href: "#dates" },
+      ]} />
+    </div>
+  </div>
+</main>
+
+</GovLayout>
