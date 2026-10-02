@@ -45,7 +45,33 @@ const pct = (v: number) => (v * 100).toFixed(0) + '%';
       <p>Each month the bank mints interest, the wealth tax burns money back, and the real economy pays out delivery income. Interest minted has been of the same order as everything the entire delivery workforce earns — passive capital earns as much as active labour.</p>
       <img src="/charts/money-supply-flows.svg" alt="Monthly interest minted, wealth tax collected, and delivery income" style="width:100%;" />
 
-      <h2 id="projections">4. Projections at the current interest rate</h2>
+      <h2 id="vault-flows">4. Real coins in and out of the vault</h2>
+      <p>Real coins enter the vault when players deposit earnings (wallet cash paid by the game) and when the treasury funds the bank; they leave when players withdraw cash to their wallet, take out loans, and when subsidies are paid. The chart shows why the backing gap appeared in 2026 rather than earlier: the vault spent 2025 taking in more real coins than it paid out, then from December 2025 outflows caught up.</p>
+      <img src="/charts/money-supply-vault-flows.svg" alt="Monthly cash inflow and outflow of the vault, with the net flow overlaid" style="width:100%;" />
+      <InsetText>
+        Interest never touches these flows: it is created on the ledger side of the bank and is not backed by any coin movement. Cumulative minted interest was already ~$4.1B by end-2025, but the vault held more real coins than it owed depositors then — the printing was absorbed by that surplus. Once withdrawals drained the surplus (net vault outflow from Dec 2025), each minted dollar started showing up one-for-one as unbacked expansion.
+      </InsetText>
+      <table class="govuk-table govuk-table--numeric">
+        <caption>Vault cash flows — last 6 months</caption>
+        <thead><tr><th>Month</th><th>Cash in</th><th>Cash out</th><th>Net</th><th>Withdrawals out</th><th>Earnings deposits in</th><th>Gov funding in</th><th>Subsidies out</th><th>Loans out</th></tr></thead>
+        <tbody>
+          {data.vault_flow_table.map((r: any) => (
+            <tr>
+              <td style="text-align:left">{r.month}</td>
+              <td>{fmtM(r.inflow * 1e6)}</td>
+              <td>{fmtM(r.outflow * 1e6)}</td>
+              <td>{fmtM(r.net * 1e6)}</td>
+              <td>{fmtM(r.withdrawals * 1e6)}</td>
+              <td>{fmtM(r.earnings * 1e6)}</td>
+              <td>{fmtM(r.gov_funding * 1e6)}</td>
+              <td>{fmtM(r.subsidies * 1e6)}</td>
+              <td>{fmtM(r.loans * 1e6)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h2 id="projections">5. Projections at the current interest rate</h2>
       <p>Projecting forward 12 months, assuming the deposit base changes only through minted interest and the wealth tax (both at recent observed rates):</p>
       <img src="/charts/money-supply-projection.svg" alt="Projected deposits and backing ratio over 12 months under three interest-rate scenarios" style="width:100%;" />
 
@@ -63,7 +89,7 @@ const pct = (v: number) => (v * 100).toFixed(0) + '%';
         Reading the table: at the current rate the money supply keeps eroding its backing slowly. At zero interest the wealth tax shrinks deposits back toward the vault. The legacy rate compounds deposits to several times the vault within a year.
       </InsetText>
 
-      <h2 id="assumptions">5. Assumptions and limits</h2>
+      <h2 id="assumptions">6. Assumptions and limits</h2>
       <ul class="govuk-list govuk-list--bullet">
         <li>The deposit base changes only through minted interest and wealth tax. Large withdrawals, deposits of cash, and loans are not modelled — in aggregate they have netted to roughly zero per month.</li>
         <li>Minted interest scales with the deposit base and the rate, with an offline/threshold decay factor of {s.decay_factor_k} calibrated from observed payments.</li>
@@ -72,7 +98,7 @@ const pct = (v: number) => (v * 100).toFixed(0) + '%';
         <li>These are projections, not guarantees — the Bank can change the rate at any time.</li>
       </ul>
 
-      <h2 id="analysis">6. Analysis</h2>
+      <h2 id="analysis">7. Analysis</h2>
       <p><strong>Why only {pct(s.backing_ratio)} is backed.</strong> Interest on deposits was paid by creating new deposit money rather than from real income. Cumulative printed interest now stands at {fmtB(s.printed_interest)} — more than the entire deposit stock once over — while the vault holds {fmtB(s.vault)}.</p>
       <p><strong>Is the bank broke?</strong> No. The bank is the money issuer: withdrawals are always payable because new cash can be issued. The binding constraint is not solvency but inflation — every unbacked deposit competes with real delivery income for the same goods and prices.</p>
       <p><strong>Is the treasury healthy?</strong> Yes. Treasury revenue and expenses have tracked each other closely month to month, and every treasury payout is floor-guarded. The imbalance lives entirely in the banking side.</p>
@@ -84,6 +110,7 @@ const pct = (v: number) => (v * 100).toFixed(0) + '%';
         { label: "Backing over time", href: "#backing" },
         { label: "Composition", href: "#composition" },
         { label: "Flows", href: "#flows" },
+        { label: "Vault cash flows", href: "#vault-flows" },
         { label: "Projections", href: "#projections" },
         { label: "Assumptions", href: "#assumptions" },
         { label: "Analysis", href: "#analysis" },
