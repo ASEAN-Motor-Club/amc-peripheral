@@ -586,6 +586,12 @@
               wantedBy = ["multi-user.target"];
               after = ["network.target" "motortown-server.service"];
               description = "AMC Radio Service";
+              # ffmpeg for yt-dlp (conversion) and LUFS tagging
+              # (loudness.apply_lufs_tag runs ffmpeg/ffprobe at download
+              # time so Liquidsoap's replaygain resolver never analyzes
+              # tracks on the fly — an on-the-fly analysis runs on the
+              # Liquidsoap clock thread and wedges the stream).
+              path = [pkgs.ffmpeg];
               environment = {
                 PLAYLIST_PATH = "/var/lib/radio/playlist";
                 DENO_PATH = "${pkgs.deno}/bin/deno";
