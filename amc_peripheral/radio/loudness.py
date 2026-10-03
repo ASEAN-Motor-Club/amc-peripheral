@@ -101,28 +101,36 @@ def apply_lufs_tag(path: str) -> float | None:
     gain = round(TARGET_LUFS - integrated, 2)
 
     tmp = path + ".lufs-tmp"
+    # -movflags (+faststart/+use_metadata_tags) is MP4-only: the webm muxer
+    # rejects it ("Invalid argument"), which made the remux fail and the tag
+    # never stick for every .webm download. Only pass it for mp4/m4a inputs;
+    # webm/matroska take plain -metadata fine.
+    mp4_only = path.endswith((".mp4", ".m4a", ".m4b"))
     try:
+        cmd = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            path,
+            "-map",
+            "0",
+            "-map_metadata",
+            "0",
+            "-c",
+            "copy",
+        ]
+        if mp4_only:
+            cmd += ["-movflags", "+faststart+use_metadata_tags"]
+        cmd += [
+            "-metadata",
+            f"replaygain_track_gain={gain} dB",
+            tmp,
+        ]
         proc = subprocess.run(
-            [
-                "ffmpeg",
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-y",
-                "-i",
-                path,
-                "-map",
-                "0",
-                "-map_metadata",
-                "0",
-                "-c",
-                "copy",
-                "-movflags",
-                "+faststart+use_metadata_tags",
-                "-metadata",
-                f"replaygain_track_gain={gain} dB",
-                tmp,
-            ],
+            cmd,
             capture_output=True,
             text=True,
             check=False,
