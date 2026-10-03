@@ -19,7 +19,9 @@ class LiquidsoapController:
     All methods are async and require an aiohttp.ClientSession.
     """
 
-    def __init__(self, base_url: str = LIQUIDSOAP_API_BASE, timeout: int = 5):
+    def __init__(
+        self, base_url: str = LIQUIDSOAP_API_BASE, timeout: int = 30
+    ):
         self.base_url = base_url
         self.timeout = aiohttp.ClientTimeout(total=timeout)
 
