@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import suppress
 import sys
 from unittest.mock import MagicMock, AsyncMock
 
@@ -1227,6 +1228,41 @@ async def test_download_timeout_raises_friendly_error(cog, monkeypatch):
             await cog.request_song("test", "TestUser", bypass_throttling=True)
     finally:
         worker.cancel()
+
+
+@pytest.mark.asyncio
+async def test_push_failure_does_not_block_retry(cog, monkeypatch):
+    """A failed queue push must not leave a phantom recently-queued entry.
+
+    push_to_queue returns False on non-200 (it does not raise). The song was
+    never queued, so a retry right after must be allowed to queue it.
+    """
+    async def fake_download(query):
+        return "Future Times", 180, "/tmp/fake.webm", "https://example.com/ft", "Artist"
+
+    monkeypatch.setattr(cog, "_get_or_download", fake_download)
+    cog._screen_song_content = AsyncMock(return_value=None)
+    cog.lq.push_to_queue = AsyncMock(return_value=False)
+
+    worker = asyncio.create_task(cog._download_worker())
+    try:
+        with pytest.raises(Exception, match="rejected it"):
+            await cog.request_song("future times", "User", bypass_throttling=True)
+
+        # Phantom must NOT be recorded
+        assert "Future Times" not in [t.lower() for t in cog.recent_song_queue]
+
+        # Retry with a healthy push succeeds and records the title
+        cog.lq.push_to_queue = AsyncMock(return_value=True)
+        title, _ = await cog.request_song(
+            "future times", "User", bypass_throttling=True
+        )
+        assert title == "Future Times"
+        assert "Future Times" in [t for t in cog.recent_song_queue]
+    finally:
+        worker.cancel()
+        with suppress(asyncio.CancelledError):
+            await worker
 
 
 @pytest.mark.asyncio
