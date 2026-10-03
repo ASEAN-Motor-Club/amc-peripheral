@@ -4714,6 +4714,60 @@ Script:
         )
 
     @playlist_group.command(
+        name="claim",
+        description="Claim a legacy playlist (one without a Discord owner) as yours",
+    )
+    @app_commands.autocomplete(name=playlist_name_autocomplete)
+    @app_commands.checks.has_permissions(administrator=True)
+    async def playlist_claim_cmd(
+        self, interaction: discord.Interaction, name: str | None = None
+    ):
+        """Admin command. No arg = list claimable (legacy) playlists."""
+        await interaction.response.defer(ephemeral=True)
+        legacy = self.db.get_legacy_playlists()
+        if not name:
+            if not legacy:
+                await interaction.followup.send(
+                    "No legacy playlists — every playlist has a Discord owner.",
+                    ephemeral=True,
+                )
+                return
+            lines = [
+                f"- **{p['name']}** (owner: `{p['discord_id']}`)"
+                for p in legacy
+            ]
+            await interaction.followup.send(
+                "🧳 **Legacy playlists (claimable):**\n" + "\n".join(lines),
+                ephemeral=True,
+            )
+            return
+
+        pl, _matches = await self._resolve_playlist(interaction, name)
+        if not pl:
+            await interaction.followup.send(
+                f"Playlist '{name}' not found.", ephemeral=True
+            )
+            return
+        owner = str(pl["discord_id"])
+        if owner.isdigit():
+            member = (
+                interaction.guild.get_member(int(owner))
+                if interaction.guild
+                else None
+            )
+            who = member.display_name if member else f"user {owner}"
+            await interaction.followup.send(
+                f"**{pl['name']}** already has a Discord owner ({who}).",
+                ephemeral=True,
+            )
+            return
+        self.db.set_playlist_owner(pl["id"], str(interaction.user.id))
+        await interaction.followup.send(
+            f"✅ Claimed **{pl['name']}** (was `{owner}`) — you now own it.",
+            ephemeral=True,
+        )
+
+    @playlist_group.command(
         name="elevate",
         description="Promote a song to the permanent base radio playlist",
     )

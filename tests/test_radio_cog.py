@@ -1938,6 +1938,30 @@ async def test_get_playlist_names_lists_all_owners(cog):
 
 
 @pytest.mark.asyncio
+async def test_get_legacy_playlists(cog):
+    """Legacy (non-numeric owner) playlists are found; numeric-owned are not."""
+    legacy_id = cog.db.create_playlist(discord_id="[M] _LAMYSPEC_", name="lamy tonight")
+    cog.db.create_playlist(discord_id="123456789012345678", name="modern one")
+
+    legacy = cog.db.get_legacy_playlists()
+    assert [p["name"] for p in legacy] == ["lamy tonight"]
+    assert legacy[0]["id"] == legacy_id
+
+
+@pytest.mark.asyncio
+async def test_set_playlist_owner(cog):
+    """Owner transfer re-points the playlist to the new owner string."""
+    pid = cog.db.create_playlist(discord_id="[M] _LAMYSPEC_", name="legacy mix")
+    cog.db.set_playlist_owner(pid, "987654321098765432")
+
+    pl = cog.db.get_playlist_by_name(discord_id="987654321098765432", name="legacy mix")
+    assert pl is not None
+    assert pl["id"] == pid
+    # old owner no longer matches
+    assert cog.db.get_playlist_by_name(discord_id="[M] _LAMYSPEC_", name="legacy mix") is None
+
+
+@pytest.mark.asyncio
 async def test_annie_playlist_tools_defined(cog):
     """Verify all new playlist tools are in Annie's tool list."""
     tools = cog._get_annie_tools()

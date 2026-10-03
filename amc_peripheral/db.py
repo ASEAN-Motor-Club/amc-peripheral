@@ -379,6 +379,26 @@ class RadioDB:
             for r in self.db["user_playlists"].rows_where(select="DISTINCT name")
         ]
 
+    def get_legacy_playlists(self) -> list[dict]:
+        """Playlists owned by a non-numeric owner (legacy in-game creation).
+
+        These have no Discord user attached — nobody can manage them via
+        Discord commands until claimed.
+        """
+        rows = list(self.db["user_playlists"].rows_where())
+        legacy = []
+        for r in rows:
+            owner = str(r.get("discord_id") or "")
+            if not owner.isdigit():
+                # pyrefly: ignore [missing-attribute]
+                legacy.append(r)
+        return legacy
+
+    def set_playlist_owner(self, playlist_id: int, new_owner: str) -> None:
+        """Transfer playlist ownership to a new owner string."""
+        # pyrefly: ignore [missing-attribute]
+        self.db["user_playlists"].update(playlist_id, {"discord_id": str(new_owner)})
+
     def get_playlists(self, discord_id: str) -> list[dict]:
         """Get all playlists for a user."""
         query = """
