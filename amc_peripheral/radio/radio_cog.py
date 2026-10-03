@@ -2095,6 +2095,27 @@ Script:
             return True
         return any(r.id == ADMIN_ROLE_ID for r in getattr(member, "roles", []))
 
+    def _resolve_owner_id(self, requester: str) -> str | None:
+        """Resolve a requester to a numeric Discord owner id when possible.
+
+        A requester is either already a numeric Discord id (Discord path) or
+        an in-game display name. In-game names are matched against guild
+        member display_names (same fallback as _requester_is_admin) so a
+        playlist created in-game by a Discord member is OWNED by their
+        Discord id — not a stale display-name string.
+        """
+        if (requester or "").isdigit():
+            return requester
+        guild = self.bot.get_guild(GUILD_ID)
+        if not guild:
+            return None
+        lowered = (requester or "").lower()
+        member = next(
+            (m for m in guild.members if m.display_name.lower() == lowered),
+            None,
+        )
+        return str(member.id) if member else None
+
     async def _execute_annie_tool(
         self,
         name: str,
@@ -2212,7 +2233,10 @@ Script:
             elif name == "create_user_playlist":
                 playlist_name = args.get("name", "")
                 try:
-                    self.db.create_playlist(discord_id=requester, name=playlist_name)
+                    owner_id = self._resolve_owner_id(requester)
+                    self.db.create_playlist(
+                        discord_id=owner_id or requester, name=playlist_name
+                    )
                     return f"Created playlist '{playlist_name.strip().lower()}'!"
                 except Exception as e:
                     return str(e)
