@@ -58,6 +58,7 @@ from amc_peripheral.settings import (
 from amc_peripheral.db import RadioDB
 from amc_peripheral.utils.text_utils import split_markdown, strip_emoji
 from amc_peripheral.radio.tts import tts_dispatch, tts_multi_dispatch
+from amc_peripheral.radio.loudness import apply_lufs_tag
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
 from amc_peripheral.radio.radio_server import (
     get_current_song_metadata,
@@ -3358,7 +3359,16 @@ Script:
                 # pyrefly: ignore [bad-argument-type]
                 await asyncio.to_thread(ydl.download, [webpage_url])
         except Exception as e:
-            raise Exception(f"Failed to download audio: {e}")
+            raise Exception(f"Failed to download audio: {e}") from e
+
+        # Tag loudness before the track ever reaches Liquidsoap so its
+        # replaygain resolver reads the tag instead of a full-decode
+        # compute (a 20-40s stream stall at every untagged transition).
+        gain = await asyncio.to_thread(
+            apply_lufs_tag, f"{REQUESTS_PATH}/{base_filename}.webm"
+        )
+        if gain is not None:
+            log.info("LUFS-tagged %s: %.2f dB", base_filename, gain)
 
         return title, duration, base_filename, webpage_url
 
@@ -3418,6 +3428,10 @@ Script:
             raise Exception(f"Failed to download audio: {e}")
 
         filepath = f"{output_dir}/{base_filename}.webm"
+        # Tag loudness so Liquidsoap's resolver never computes on the fly.
+        gain = await asyncio.to_thread(apply_lufs_tag, filepath)
+        if gain is not None:
+            log.info("LUFS-tagged %s: %.2f dB", filepath, gain)
         return title, filepath
 
     async def _tool_search_playlist(self, query: str) -> str:
@@ -3697,6 +3711,13 @@ Script:
 
         # Record in cache
         file_size = os.path.getsize(cache_path) if os.path.exists(cache_path) else 0
+
+        # Tag loudness at download time: Liquidsoap's replaygain resolver
+        # otherwise decodes the whole file on first play (~20-40s stall).
+        gain = await asyncio.to_thread(apply_lufs_tag, cache_path)
+        if gain is not None:
+            log.info("LUFS-tagged cache %s: %.2f dB", video_id, gain)
+
         self.db.cache_song(
             video_id=video_id,
             title=title,
