@@ -100,7 +100,12 @@ def apply_lufs_tag(path: str) -> float | None:
         return None
     gain = round(TARGET_LUFS - integrated, 2)
 
-    tmp = path + ".lufs-tmp"
+    # ffmpeg picks the muxer from the output EXTENSION, so the tmp file must
+    # keep the original extension: "song.webm.lufs-tmp" has an unknown final
+    # extension ("Invalid argument" from the muxer), while "song.lufs-tmp.webm"
+    # remuxes fine.
+    root, ext = os.path.splitext(path)
+    tmp = f"{root}.lufs-tmp{ext}"
     # -movflags (+faststart/+use_metadata_tags) is MP4-only: the webm muxer
     # rejects it ("Invalid argument"), which made the remux fail and the tag
     # never stick for every .webm download. Only pass it for mp4/m4a inputs;
