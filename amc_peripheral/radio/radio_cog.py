@@ -518,6 +518,14 @@ class TrackConfirmView(discord.ui.View):
 METADATA_TIMEOUT = 45  # Max seconds for YouTube metadata extraction (search + info)
 DOWNLOAD_TIMEOUT = 120  # Max seconds for the actual audio download + ffmpeg conversion
 MAX_SONG_DURATION = 10 * 60  # Max song length in seconds (10 minutes)
+# Liquidsoap fully decodes/prepares each pushed request on its clock thread as
+# they arrive (~2.3s of ffmpeg work per ~4min track). A burst of pushes (e.g. a
+# 10-song playlist play) lands 20-25s of decode work at once and wedges the
+# clock 14s+ behind real-time — during which the harbor HTTP handler stalls and
+# further pushes time out. Spacing consecutive pushes out spreads that decode
+# work over time while still allowing arbitrarily long queues.
+PUSH_MIN_GAP = 5.0  # seconds between consecutive song_requests pushes
+PUSH_MAX_WAIT = 180.0  # max seconds a push may wait for its slot
 
 
 async def playlist_name_autocomplete(
@@ -574,6 +582,10 @@ class RadioCog(commands.Cog):
             self._announcements_db = None
         self._download_queue: asyncio.Queue = asyncio.Queue()
         self._download_worker_task: asyncio.Task | None = None
+        # Push pacing state: last time a song_requests push completed + lock so
+        # concurrent pushes (playlist play + player request) serialize on the gap.
+        self._last_push_at: float = 0.0
+        self._push_lock = asyncio.Lock()
         self._pending_tracks: dict[str, tuple[str, bytes]] = {}
         self._memory_storage = None
         self._wiki_storage = None
@@ -3653,6 +3665,40 @@ Script:
             raise Exception("LLM returned an empty intro script.")
         return script
 
+    async def _paced_push(self, local_path: str, title: str, requester: str, intro_path: str | None) -> bool:
+        """Push to the song_requests queue with a minimum gap between pushes.
+
+        Liquidsoap decodes each queued request on its clock thread as it
+        arrives; bursts of pushes wedge the clock behind real-time (see the
+        PUSH_MIN_GAP comment above). Serializes concurrent pushes and waits
+        until PUSH_MIN_GAP has elapsed since the previous one, bounded by
+        PUSH_MAX_WAIT so this can never hang forever.
+        """
+        deadline = asyncio.get_running_loop().time() + PUSH_MAX_WAIT
+        async with self._push_lock:
+            while True:
+                now = asyncio.get_running_loop().time()
+                wait = self._last_push_at + PUSH_MIN_GAP - now
+                if wait <= 0:
+                    break
+                if now >= deadline:
+                    log.warning(
+                        "Push pacing waited over %.0fs — pushing anyway",
+                        PUSH_MAX_WAIT,
+                    )
+                    break
+                await asyncio.sleep(wait)
+            pushed = await self.lq.push_to_queue(
+                self.bot.http_session,
+                "song_requests",
+                local_path,
+                title=title,
+                requester=requester,
+                intro=intro_path,
+            )
+            self._last_push_at = asyncio.get_running_loop().time()
+        return pushed
+
     async def request_song(
         self,
         youtube_link: str,
@@ -3723,13 +3769,8 @@ Script:
         # False on a non-200 response (it does not raise), so treat a
         # falsy result as a failure too.
         try:
-            pushed = await self.lq.push_to_queue(
-                self.bot.http_session,
-                "song_requests",
-                local_path,
-                title=str(title),
-                requester=requester,
-                intro=intro_path,
+            pushed = await self._paced_push(
+                local_path, str(title), requester, intro_path
             )
             if not pushed:
                 raise Exception("Liquidsoap rejected the push (non-200).")
