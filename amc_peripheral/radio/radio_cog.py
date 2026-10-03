@@ -520,6 +520,22 @@ DOWNLOAD_TIMEOUT = 120  # Max seconds for the actual audio download + ffmpeg con
 MAX_SONG_DURATION = 10 * 60  # Max song length in seconds (10 minutes)
 
 
+async def playlist_name_autocomplete(
+    interaction: discord.Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    """Autocomplete /playlist play|view names across ALL owners."""
+    cog = interaction.client.get_cog("RadioCog")
+    if cog is None:
+        return []
+    try:
+        names = cog.db.get_playlist_names()
+    except Exception:  # noqa: BLE001 - autocomplete must never error the UI
+        return []
+    cur = (current or "").strip().lower()
+    matches = [n for n in names if cur in n][:25]
+    return [app_commands.Choice(name=n, value=n) for n in matches]
+
+
 class RadioCog(commands.Cog):
     playlist_group = app_commands.Group(
         name="playlist", description="Manage your playlists", guild_ids=[GUILD_ID]
@@ -2220,6 +2236,10 @@ Script:
                     discord_id=requester, name=playlist_name
                 )
                 if not playlist:
+                    # Fall back to any owner's playlist with this name
+                    _matches = self.db.find_playlists_by_name(playlist_name)
+                    playlist = _matches[0] if _matches else None
+                if not playlist:
                     return f"Playlist '{playlist_name}' not found."
                 songs = self.db.get_playlist_songs(playlist["id"])
                 if not songs:
@@ -2242,6 +2262,10 @@ Script:
                 playlist = self.db.get_playlist_by_name(
                     discord_id=requester, name=playlist_name
                 )
+                if not playlist:
+                    # Fall back to any owner's playlist with this name (shared play)
+                    _matches = self.db.find_playlists_by_name(playlist_name)
+                    playlist = _matches[0] if _matches else None
                 if not playlist:
                     return f"Playlist '{playlist_name}' not found."
                 songs = self.db.get_playlist_songs(playlist["id"])
@@ -4019,6 +4043,10 @@ Script:
             discord_id=requester, name=playlist_name
         )
         if not playlist:
+            # Fall back to any owner's playlist with this name (shared play)
+            matches = self.db.find_playlists_by_name(playlist_name)
+            playlist = matches[0] if matches else None
+        if not playlist:
             msg = f"Playlist '{playlist_name}' not found, {requester}."
             if channel:
                 await channel.send(msg)
@@ -4581,14 +4609,35 @@ Script:
                 ephemeral=True,
             )
 
-    @playlist_group.command(
-        name="view", description="View songs in one of your playlists"
-    )
-    async def playlist_view_cmd(self, interaction: discord.Interaction, name: str):
-        await interaction.response.defer(ephemeral=True)
+    async def _resolve_playlist(
+        self, interaction: discord.Interaction, name: str
+    ) -> tuple[dict | None, list[dict]]:
+        """Own playlist first, then any owner's playlist with the same name."""
         pl = self.db.get_playlist_by_name(
             discord_id=str(interaction.user.id), name=name
         )
+        if pl:
+            return pl, [pl]
+        matches = self.db.find_playlists_by_name(name)
+        return (matches[0] if matches else None), matches
+
+    def _owner_display(self, discord_id: str, interaction: discord.Interaction) -> str:
+        """Human name for a playlist owner (Discord id or legacy display name)."""
+        raw = str(discord_id)
+        try:
+            uid = int(raw)
+        except ValueError:
+            return raw
+        member = interaction.guild.get_member(uid) if interaction.guild else None
+        return member.display_name if member else raw
+
+    @playlist_group.command(
+        name="view", description="View songs in one of your playlists"
+    )
+    @app_commands.autocomplete(name=playlist_name_autocomplete)
+    async def playlist_view_cmd(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=True)
+        pl, _matches = await self._resolve_playlist(interaction, name)
         if not pl:
             await interaction.followup.send(
                 f"Playlist '{name}' not found.", ephemeral=True
@@ -4600,9 +4649,12 @@ Script:
                 f"Playlist **{pl['name']}** is empty.", ephemeral=True
             )
             return
+        owner_note = ""
+        if str(pl["discord_id"]) != str(interaction.user.id):
+            owner_note = f" (by {self._owner_display(pl['discord_id'], interaction)})"
         lines = [f"{s['position']}. {s['song_title']}" for s in songs]
         await interaction.followup.send(
-            f"📋 **{pl['name']}** ({len(songs)} songs):\n" + "\n".join(lines),
+            f"📋 **{pl['name']}**{owner_note} ({len(songs)} songs):\n" + "\n".join(lines),
             ephemeral=True,
         )
 
@@ -4622,13 +4674,12 @@ Script:
         )
 
     @playlist_group.command(
-        name="play", description="Queue all songs from one of your playlists"
+        name="play", description="Queue all songs from a playlist (any owner)"
     )
+    @app_commands.autocomplete(name=playlist_name_autocomplete)
     async def playlist_play_cmd(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer(ephemeral=True)
-        pl = self.db.get_playlist_by_name(
-            discord_id=str(interaction.user.id), name=name
-        )
+        pl, matches = await self._resolve_playlist(interaction, name)
         if not pl:
             await interaction.followup.send(
                 f"Playlist '{name}' not found.", ephemeral=True
@@ -4640,9 +4691,16 @@ Script:
                 f"Playlist **{pl['name']}** is empty.", ephemeral=True
             )
             return
+        owner_note = ""
+        if str(pl["discord_id"]) != str(interaction.user.id):
+            owner_note = f" (by {self._owner_display(pl['discord_id'], interaction)})"
+            if len(matches) > 1:
+                owner_note += (
+                    f" — {len(matches)} playlists share this name; playing the oldest"
+                )
         capped = min(len(songs), self.PLAYLIST_PLAY_CAP)
         await interaction.followup.send(
-            f"🎶 Queueing {capped} song(s) from **{pl['name']}**. Each download takes ~30-60s — I'll notify you as each one is ready!",
+            f"🎶 Queueing {capped} song(s) from **{pl['name']}**{owner_note}. Each download takes ~30-60s — I'll notify you as each one is ready!",
             ephemeral=True,
         )
 

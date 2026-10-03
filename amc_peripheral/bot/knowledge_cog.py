@@ -20,6 +20,7 @@ from amc_peripheral.settings import (
     BACKEND_API_URL,
     BOT_MAX_ITERATIONS,
     ASK_BOT_CHANNEL_ID,
+    RADIO_API_PORT,
 )
 from amc_peripheral.bot.ai_models import (
     ModerationResponse,
@@ -315,6 +316,10 @@ class KnowledgeCog(commands.Cog):
                 "Your Standing Memory above is durable facts you chose to remember about yourself and the community — they are always in your context. "
                 "Use the memory tool to persist a lasting fact (write), retrieve remembered facts (recall), browse (list), or remove one (delete). "
                 "Remember facts that will still matter later; don't clutter memory with trivia.\n\n"
+                "## Radio\n"
+                "You can queue a radio playlist with queue_playlist: use action 'list' to see playlist names (they may belong to any player), "
+                "then action 'queue' with a playlist name to queue it for the requester (first 10 songs are queued). "
+                "When someone asks to play a playlist, use this tool.\n\n"
                 "## Interim Updates\n"
                 "If answering requires tool calls, call send_message FIRST (at most once per reply) "
                 "to tell the user what you are about to do, e.g. 'ok let me look up the Air City specs'. "
@@ -673,6 +678,34 @@ class KnowledgeCog(commands.Cog):
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "queue_playlist",
+                    "description": "Queue a radio playlist on the station. Actions: "
+                                   "list (see all playlist names, any owner), queue "
+                                   "(queue a playlist by name for the requester — "
+                                   "first 10 songs are queued; downloads take ~30-60s "
+                                   "each). Use 'list' first when unsure of the exact "
+                                   "playlist name, then confirm with the user before "
+                                   "queueing.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "action": {
+                                "type": "string",
+                                "enum": ["queue", "list"],
+                                "description": "What to do",
+                            },
+                            "name": {
+                                "type": "string",
+                                "description": "Playlist name (for queue action)",
+                            },
+                        },
+                        "required": ["action"],
+                    },
+                },
+            },
         ]
 
     async def _call_llm_with_tools(
@@ -971,6 +1004,11 @@ class KnowledgeCog(commands.Cog):
             elif function_name == "memory":
                 return await self._execute_memory(arguments)
 
+            elif function_name == "queue_playlist":
+                return await self._execute_queue_playlist(
+                    arguments, interaction=interaction, player_id=player_id
+                )
+
             # Economy tools still dispatched by EconomyCog
             elif function_name.startswith("manage_subsidy") or function_name.startswith(
                 "manage_job_config"
@@ -1009,6 +1047,59 @@ class KnowledgeCog(commands.Cog):
         except Exception as e:
             log.error(f"Tool execution error ({function_name}): {e}", exc_info=True)
             return json.dumps({"error": f"Tool execution failed: {str(e)}"})
+
+    async def _execute_queue_playlist(
+        self,
+        arguments: dict,
+        interaction: discord.Interaction | None = None,
+        player_id: str | None = None,
+    ) -> str:
+        """Queue a radio playlist via the radio bot's loopback API."""
+        action = str(arguments.get("action") or "queue").strip().lower()
+        base_url = f"http://127.0.0.1:{RADIO_API_PORT}/internal"
+        try:
+            if action == "list":
+                async with self.bot.http_session.get(
+                    f"{base_url}/playlists"
+                ) as resp:
+                    data = await resp.json()
+                names = data.get("playlists") or []
+                if not names:
+                    return "No playlists exist yet."
+                return "Available radio playlists: " + ", ".join(names)
+
+            if action != "queue":
+                return f"Error: Unknown queue_playlist action '{action}'."
+
+            name = str(arguments.get("name") or "").strip()
+            if not name:
+                return (
+                    "Error: playlist name required. "
+                    "Use action 'list' to see available playlist names."
+                )
+            if interaction is not None and getattr(interaction, "user", None):
+                requester = interaction.user.display_name
+            else:
+                requester = player_id or "Radio"
+            async with self.bot.http_session.post(
+                f"{base_url}/queue-playlist",
+                json={"name": name, "requester": requester},
+            ) as resp:
+                data = await resp.json()
+            if resp.status != 200:
+                if data.get("error") == "not_found":
+                    return f"Error: playlist '{name}' not found."
+                if data.get("error") == "empty_playlist":
+                    return f"Error: playlist '{name}' is empty."
+                return f"Error: radio bot said {data.get('error', resp.status)}"
+            return (
+                f"Queued {data.get('queued')} song(s) from playlist "
+                f"'{data.get('playlist')}' for {requester} "
+                f"(playlist has {data.get('total')} songs total)."
+            )
+        except Exception as e:  # noqa: BLE001 - tool must never raise into the loop
+            log.warning(f"queue_playlist failed: {e}")
+            return f"Error: could not reach the radio bot: {e}"
 
     async def _execute_run(self, command: str, interaction=None) -> str:
         """Execute a 'run' command by parsing the first word as verb."""

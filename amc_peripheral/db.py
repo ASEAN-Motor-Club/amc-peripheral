@@ -355,6 +355,30 @@ class RadioDB:
         ))
         return rows[0] if rows else None
 
+    def find_playlists_by_name(self, name: str) -> list[dict]:
+        """Find playlists by name across ALL owners (shared play/view).
+
+        Returns oldest-first; each row carries song_count.
+        """
+        normalized = name.strip().lower()
+        query = """
+            SELECT p.*, COUNT(s.id) as song_count
+            FROM user_playlists p
+            LEFT JOIN playlist_songs s ON s.playlist_id = p.id
+            WHERE p.name = ?
+            GROUP BY p.id
+            ORDER BY p.created_at ASC
+        """
+        return list(self.db.query(query, [normalized]))
+
+    def get_playlist_names(self) -> list[str]:
+        """All distinct playlist names (any owner) — for autocomplete."""
+        return [
+            # pyrefly: ignore [missing-attribute]
+            r["name"]
+            for r in self.db["user_playlists"].rows_where(select="DISTINCT name")
+        ]
+
     def get_playlists(self, discord_id: str) -> list[dict]:
         """Get all playlists for a user."""
         query = """
