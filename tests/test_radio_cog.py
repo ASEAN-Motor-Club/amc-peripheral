@@ -1927,6 +1927,28 @@ async def test_find_playlists_by_name_across_owners(cog):
 
 
 @pytest.mark.asyncio
+async def test_resolve_owner_id(cog, mock_bot):
+    """Playlist creation resolves in-game names to the creator's Discord id."""
+    import discord as _discord
+
+    numeric = "424242424242424242"
+    assert cog._resolve_owner_id(numeric) == numeric
+
+    member = MagicMock(spec=_discord.Member)
+    member.display_name = "lamy"
+    member.id = 505392310284976128
+    guild = MagicMock()
+    guild.members = [member]
+    mock_bot.get_guild = MagicMock(return_value=guild)
+    assert cog._resolve_owner_id("LAMY") == "505392310284976128"
+
+    mock_bot.get_guild = MagicMock(return_value=None)
+    assert cog._resolve_owner_id("unknown ingame name") is None
+    assert cog._resolve_owner_id("") is None
+    assert cog._resolve_owner_id(None) is None
+
+
+@pytest.mark.asyncio
 async def test_get_playlist_names_lists_all_owners(cog):
     """Autocomplete source lists distinct names across owners."""
     cog.db.create_playlist(discord_id="userA", name="road trip")
