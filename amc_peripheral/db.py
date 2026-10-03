@@ -5,7 +5,14 @@ class RadioDB:
     def __init__(self, db_path: str):
         """Initialize the database and ensure tables exist."""
         self.db = Database(db_path)
-        self.db.conn.execute("PRAGMA busy_timeout = 5000")
+        self.db.conn.execute("PRAGMA busy_timeout = 10000")
+        # WAL mode: readers and writers don't block each other, and a stray
+        # open write txn no longer starves readers (rollback-journal mode did).
+        # WAL is persistent — set it every init; cheap no-op once enabled.
+        try:
+            self.db.conn.execute("PRAGMA journal_mode = WAL")
+        except Exception:  # noqa: BLE001, S110 - keep rollback-journal as fallback
+            pass
         self._ensure_tables()
 
     def _ensure_tables(self):
@@ -341,10 +348,13 @@ class RadioDB:
         if not rows:
             return False
         playlist_id = rows[0]["id"]
-        # Delete songs first
-        self.db.execute("DELETE FROM playlist_songs WHERE playlist_id = ?", [playlist_id])
-        # pyrefly: ignore [missing-attribute]
-        self.db["user_playlists"].delete(playlist_id)
+        # Delete songs first — wrap in a txn so the DELETE commits immediately
+        # (raw execute() opens a deferred txn that would otherwise sit holding
+        # the write lock until some later with-conn block commits).
+        with self.db.conn:
+            self.db.execute("DELETE FROM playlist_songs WHERE playlist_id = ?", [playlist_id])
+            # pyrefly: ignore [missing-attribute]
+            self.db["user_playlists"].delete(playlist_id)
         return True
 
     def get_playlist_by_name(self, discord_id: str, name: str) -> dict | None:
@@ -438,11 +448,15 @@ class RadioDB:
         ))
         if not rows:
             return None
-        # Update last_used_at
-        self.db.execute(
-            "UPDATE downloaded_songs SET last_used_at = ? WHERE video_id = ?",
-            [datetime.now(timezone.utc).isoformat(), video_id],
-        )
+        # Update last_used_at — wrap in a txn so the UPDATE commits immediately
+        # (raw execute() opens a deferred txn that would otherwise sit holding
+        # the write lock until some later with-conn block commits; this runs on
+        # every cache hit, so it was a recurring multi-minute lock holder).
+        with self.db.conn:
+            self.db.execute(
+                "UPDATE downloaded_songs SET last_used_at = ? WHERE video_id = ?",
+                [datetime.now(timezone.utc).isoformat(), video_id],
+            )
         return rows[0]
 
     def cache_song(self, video_id: str, title: str, duration: int, local_path: str, webpage_url: str, file_size: int) -> int | None:
