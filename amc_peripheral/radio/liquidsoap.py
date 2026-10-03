@@ -2,7 +2,6 @@
 
 import contextlib
 import logging
-from typing import Optional
 from urllib.parse import quote
 
 import aiohttp
@@ -78,7 +77,13 @@ class LiquidsoapController:
 
         # Do NOT include '=' in safe chars — Liquidsoap's harbor query
         # parser splits on bare '=' and corrupts annotate key=value pairs.
-        url = f"{self.base_url}/push?uri={quote(annotated_uri, safe='/:')}"
+        # Encode the URI value TWICE: Liquidsoap's harbor decodes the query
+        # value once, then hands the raw string to its own URI/query parser
+        # — a literal '?' inside it truncates the path and the request
+        # 404s ("This page isn't available"). Double-encoding leaves a
+        # harmless literal %3F after the single decode.
+        uri_value = quote(annotated_uri, safe="/:")
+        url = f"{self.base_url}/push?uri={quote(uri_value, safe='/:')}"
         try:
             async with self._fresh_post(url) as resp:
                 if resp.status == 200:
@@ -95,7 +100,7 @@ class LiquidsoapController:
 
     async def get_queue_length(
         self, session: aiohttp.ClientSession, queue_name: str
-    ) -> Optional[int]:
+    ) -> int | None:
         """Get the number of pending items in the request queue."""
         url = f"{self.base_url}/queue_length"
         try:
