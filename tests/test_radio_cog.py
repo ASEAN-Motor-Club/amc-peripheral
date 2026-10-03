@@ -1913,6 +1913,31 @@ async def test_get_playlists_by_user(cog):
 
 
 @pytest.mark.asyncio
+async def test_find_playlists_by_name_across_owners(cog):
+    """Same playlist name under different owners is found by the shared lookup."""
+    cog.db.create_playlist(discord_id="userA", name="night drive")
+    cog.db.create_playlist(discord_id="userB", name="night drive")
+
+    matches = cog.db.find_playlists_by_name("Night Drive")
+    assert len(matches) == 2
+    assert all(m["name"] == "night drive" for m in matches)
+    # Oldest first
+    assert [m["discord_id"] for m in matches] == ["userA", "userB"]
+    assert cog.db.find_playlists_by_name("no such list") == []
+
+
+@pytest.mark.asyncio
+async def test_get_playlist_names_lists_all_owners(cog):
+    """Autocomplete source lists distinct names across owners."""
+    cog.db.create_playlist(discord_id="userA", name="road trip")
+    cog.db.create_playlist(discord_id="userB", name="road trip")
+    cog.db.create_playlist(discord_id="userA", name="dub night")
+
+    names = cog.db.get_playlist_names()
+    assert sorted(names) == ["dub night", "road trip"]
+
+
+@pytest.mark.asyncio
 async def test_annie_playlist_tools_defined(cog):
     """Verify all new playlist tools are in Annie's tool list."""
     tools = cog._get_annie_tools()

@@ -79,6 +79,22 @@ def require_auth(fn):
     return wrapper
 
 
+def require_loopback(fn):
+    """Internal endpoints: loopback peers only (same-host bots, e.g. Annie).
+
+    The API server binds to 127.0.0.1, so this is a belt-and-braces check.
+    """
+
+    @wraps(fn)
+    async def wrapper(request: web.Request) -> web.Response:
+        peer = request.remote or ""
+        if peer not in ("127.0.0.1", "::1"):
+            return web.json_response({"error": "forbidden"}, status=403)
+        return await fn(request)
+
+    return wrapper
+
+
 def _is_dj_or_admin(request: web.Request) -> bool:
     """Check if the authenticated user has DJ or admin role."""
     member = request.get("discord_member")
@@ -267,6 +283,54 @@ async def _phase2_stub(_request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# Internal endpoints — loopback-only (same-host bots, e.g. Annie's knowledge cog)
+# ---------------------------------------------------------------------------
+
+
+@require_loopback
+async def handle_internal_playlists(request: web.Request) -> web.Response:
+    """List all playlist names (any owner) for autocomplete/tool use."""
+    names = request.app["radio_cog"].db.get_playlist_names()
+    return web.json_response({"playlists": names})
+
+
+@require_loopback
+async def handle_internal_queue_playlist(request: web.Request) -> web.Response:
+    """Queue a playlist by name (any owner) into the song request flow."""
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001 - malformed body is just a 400
+        return web.json_response({"error": "bad_json"}, status=400)
+    name = str(data.get("name") or "").strip()
+    requester = str(data.get("requester") or "DJ Annie").strip() or "DJ Annie"
+    if not name:
+        return web.json_response({"error": "missing_name"}, status=400)
+    cog = request.app["radio_cog"]
+    matches = cog.db.find_playlists_by_name(name)
+    if not matches:
+        return web.json_response({"error": "not_found", "name": name}, status=404)
+    pl = matches[0]
+    songs = cog.db.get_playlist_songs(pl["id"])
+    if not songs:
+        return web.json_response(
+            {"error": "empty_playlist", "playlist": pl["name"]}, status=400
+        )
+    # _play_user_playlist caps internally at PLAYLIST_PLAY_CAP and notifies.
+    async def _notify(msg: str):
+        log.info(f"playlist queue (internal, owner={pl['discord_id']}): {msg}")
+
+    cog.bot.loop.create_task(
+        cog._play_user_playlist(songs, requester, _notify)
+    )
+    return web.json_response({
+        "ok": True,
+        "playlist": pl["name"],
+        "total": len(songs),
+        "queued": min(len(songs), cog.PLAYLIST_PLAY_CAP),
+    })
+
+
+# ---------------------------------------------------------------------------
 # CORS middleware
 # ---------------------------------------------------------------------------
 
@@ -309,6 +373,10 @@ def create_api_app(
     app.router.add_get("/api/recent-requests", handle_recent_requests)
     app.router.add_get("/api/top-liked", handle_top_liked)
     app.router.add_post("/api/queue-trending", handle_queue_trending)
+
+    # Internal — loopback-only, no Discord OAuth (same-host bots)
+    app.router.add_get("/internal/playlists", handle_internal_playlists)
+    app.router.add_post("/internal/queue-playlist", handle_internal_queue_playlist)
 
     # Phase 2 — stubs
     for method, path in [
