@@ -1266,6 +1266,159 @@ async def test_push_failure_does_not_block_retry(cog, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_request_song_pushes_intro_annotation(cog, monkeypatch):
+    """User requests get an intro= annotation pushed with the song.
+
+    DJ Annie's own queues (trending/auto) must NOT get an intro.
+    """
+    async def fake_download(query):
+        return "Future Times", 180, "/tmp/fake.webm", "https://example.com/ft", "Artist"
+
+    monkeypatch.setattr(cog, "_get_or_download", fake_download)
+    cog._screen_song_content = AsyncMock(return_value=None)
+    cog.lq.push_to_queue = AsyncMock(return_value=True)
+
+    async def fake_intro(requester, title, artist):
+        return f"/var/lib/radio/tts/request-{requester}-{title}.mp3"
+
+    monkeypatch.setattr(cog, "_get_request_intro", fake_intro)
+
+    worker = asyncio.create_task(cog._download_worker())
+    try:
+        await cog.request_song("future times", "User", bypass_throttling=True)
+        kwargs = cog.lq.push_to_queue.call_args.kwargs
+        assert kwargs["intro"] == "/var/lib/radio/tts/request-User-Future Times.mp3"
+
+        # Reset for the DJ Annie path
+        cog.recent_song_queue.clear()
+        cog._songs_since_intro = 0
+        cog._last_intro_requester = None
+        cog.lq.push_to_queue = AsyncMock(return_value=True)
+        await cog.request_song("other song", "DJ Annie", bypass_throttling=True)
+        kwargs = cog.lq.push_to_queue.call_args.kwargs
+        assert kwargs["intro"] is None
+    finally:
+        worker.cancel()
+        with suppress(asyncio.CancelledError):
+            await worker
+
+
+@pytest.mark.asyncio
+async def test_intro_cadence(cog, monkeypatch):
+    """Intros fire on the first song, every Nth after, and on requester change."""
+    async def fake_download(query):
+        return "Future Times", 180, "/tmp/fake.webm", "https://example.com/ft", "Artist"
+
+    monkeypatch.setattr(cog, "_get_or_download", fake_download)
+    cog._screen_song_content = AsyncMock(return_value=None)
+    cog.lq.push_to_queue = AsyncMock(return_value=True)
+
+    async def fake_intro(requester, title, artist):
+        return f"/var/lib/radio/tts/request-{requester}-{title}.mp3"
+
+    monkeypatch.setattr(cog, "_get_request_intro", fake_intro)
+
+    worker = asyncio.create_task(cog._download_worker())
+    try:
+        # 1st song: intro
+        await cog.request_song("song 1", "User", bypass_throttling=True)
+        assert cog.lq.push_to_queue.call_args.kwargs["intro"] is not None
+
+        # 2nd and 3rd songs, same requester: no intro
+        for i in (2, 3):
+            cog.recent_song_queue.clear()
+            cog.lq.push_to_queue = AsyncMock(return_value=True)
+            await cog.request_song(f"song {i}", "User", bypass_throttling=True)
+            assert cog.lq.push_to_queue.call_args.kwargs["intro"] is None
+
+        # 4th song (3rd since last intro): intro again
+        cog.recent_song_queue.clear()
+        cog.lq.push_to_queue = AsyncMock(return_value=True)
+        await cog.request_song("song 4", "User", bypass_throttling=True)
+        assert cog.lq.push_to_queue.call_args.kwargs["intro"] is not None
+
+        # Requester change: immediate intro
+        cog.recent_song_queue.clear()
+        cog._songs_since_intro = 1
+        cog._last_intro_requester = "User"
+        cog.lq.push_to_queue = AsyncMock(return_value=True)
+        await cog.request_song("song 5", "Other", bypass_throttling=True)
+        assert cog.lq.push_to_queue.call_args.kwargs["intro"] is not None
+    finally:
+        worker.cancel()
+        with suppress(asyncio.CancelledError):
+            await worker
+
+
+@pytest.mark.asyncio
+async def test_intro_failure_still_queues_song(cog, monkeypatch):
+    """A failed intro generation must never block the song from queueing."""
+    async def fake_download(query):
+        return "Future Times", 180, "/tmp/fake.webm", "https://example.com/ft", "Artist"
+
+    monkeypatch.setattr(cog, "_get_or_download", fake_download)
+    cog._screen_song_content = AsyncMock(return_value=None)
+    cog.lq.push_to_queue = AsyncMock(return_value=True)
+
+    async def failing_intro(requester, title, artist):
+        raise Exception("TTS down")
+
+    monkeypatch.setattr(cog, "_get_request_intro", failing_intro)
+
+    worker = asyncio.create_task(cog._download_worker())
+    try:
+        title, _ = await cog.request_song("future times", "User", bypass_throttling=True)
+        assert title == "Future Times"
+        kwargs = cog.lq.push_to_queue.call_args.kwargs
+        assert kwargs["intro"] is None
+    finally:
+        worker.cancel()
+        with suppress(asyncio.CancelledError):
+            await worker
+
+
+def test_push_to_queue_intro_annotation():
+    """push_to_queue builds an annotate: URI carrying intro= alongside title/requester."""
+    from amc_peripheral.radio.liquidsoap import LiquidsoapController
+
+    client = LiquidsoapController(base_url="http://127.0.0.1:6001")
+    captured = {}
+
+    class FakeResp:
+        status = 200
+
+        async def text(self):
+            return ""
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return None
+
+    class FakeSession:
+        def post(self, url, **kw):
+            captured["url"] = url
+            return FakeResp()
+
+    client._fresh_post = lambda url: FakeSession().post(url)
+
+    asyncio.run(
+        client.push_to_queue(
+            None, "song_requests", "/var/lib/radio/cache/abc.webm",
+            title='My "Song", Part: 2', requester="User", intro="/var/lib/radio/tts/request-User-My_Song.mp3",
+        )
+    )
+    from urllib.parse import unquote
+
+    assert 'intro="/var/lib/radio/tts/request-User-My_Song.mp3"' in unquote(
+        captured["url"]
+    )
+    # Sanitizer removed chars that break annotate syntax
+    assert '"Song"' not in captured["url"]
+
+
+@pytest.mark.asyncio
 async def test_download_queue_does_not_reject(cog, monkeypatch):
     """Verify that concurrent requests queue up instead of being rejected."""
     counter = {"n": 0}

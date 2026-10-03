@@ -49,6 +49,7 @@ from amc_peripheral.settings import (
     SONG_CACHE_MAX_MB,
     SONGS_PATH,
     JINGLES_PATH,
+    SONG_INTROS_PATH,
     RADIO_DB_PATH,
     DENO_PATH,
     LASTFM_API_KEY,
@@ -357,6 +358,15 @@ Good: 'He even said he was sweating trying to stop! [short pause] Well, the serv
 Do NOT overuse tags. Most sentences need no tags at all — only add them where a real person would naturally pause, laugh, hesitate, or shift tone.
 """
 
+INTRO_SCRIPT_PROMPT = f"""\
+You are DJ Annie, the charismatic host of Radio ASEAN in Motor Town.
+Write a short spoken intro (1-2 sentences, max ~10 seconds when read aloud) to play right before a listener's song request.
+Give the requester a warm shout-out and tease the song. Keep it light, fun and natural — no list of facts, no fake enthusiasm over unknown song details.
+Do not make up facts about the song, the requester, or the community.
+Your output will be fed directly to TTS, so only include spoken words — no sound effect cues, stage directions, or speaker labels.
+{GEMINI_TTS_MARKUP_INSTRUCTIONS}
+"""
+
 # Voice registry — all available Gemini TTS voices
 VOICES_FEMALE = [
     "Achernar",
@@ -532,6 +542,10 @@ class RadioCog(commands.Cog):
         self.embed_message_id = None
         self.user_requests = {}
         self.recent_song_queue = deque(maxlen=10)
+        # Intro cadence state: how many songs queued since the last spoken
+        # intro, and who queued the previous one.
+        self._songs_since_intro = 0
+        self._last_intro_requester = None
         self.banned_requesters = [
             "LemurStreet",
         ]
@@ -3532,6 +3546,65 @@ Script:
                     "You have queued too many songs. Please wait a moment. (Limit: 5 songs per 10 minutes)"
                 )
 
+    INTRO_EVERY_N_SONGS = 3
+
+    def _should_speak_intro(self, requester: str) -> bool:
+        """Speak an intro only on the first song, then every Nth, or on a requester change."""
+        if self._songs_since_intro == 0 or requester != self._last_intro_requester:
+            return True
+        return self._songs_since_intro >= self.INTRO_EVERY_N_SONGS
+
+    async def _get_request_intro(self, requester: str, title: str, artist: str) -> str:
+        """Return a path to a custom spoken intro for this request.
+
+        Writes / reuses files named request-<requester>-<title>.mp3 under
+        SONG_INTROS_PATH — the same layout as the legacy (pre-rewrite)
+        intro archive, so files generated before the March 2026 radio
+        rewrite are picked up without regenerating.
+        """
+        safe_requester = re.sub(r"[^a-zA-Z0-9]", "_", requester)
+        safe_title = re.sub(r"[^a-zA-Z0-9]", "_", title)
+        os.makedirs(SONG_INTROS_PATH, exist_ok=True)
+        intro_path = os.path.join(
+            SONG_INTROS_PATH, f"request-{safe_requester}-{safe_title}.mp3"
+        )
+        if os.path.exists(intro_path) and os.path.getsize(intro_path) > 0:
+            log.info(f"Reusing existing intro for '{title}'")
+            return intro_path
+
+        script = await self._generate_intro_script(requester, title, artist)
+        audio_bytes = await asyncio.to_thread(
+            tts_dispatch, discord.utils.remove_markdown(script), use_markup=True
+        )
+        tmp_path = intro_path + ".tmp.mp3"
+        with open(tmp_path, "wb") as f:
+            f.write(audio_bytes)
+        os.chmod(tmp_path, 0o644)  # Liquidsoap runs as a different user
+        os.replace(tmp_path, intro_path)
+        log.info(f"Generated intro for '{title}' ({len(audio_bytes)} bytes)")
+        return intro_path
+
+    async def _generate_intro_script(
+        self, requester: str, title: str, artist: str
+    ) -> str:
+        """Ask the LLM for a one-to-two sentence spoken intro for a request."""
+        # pyrefly: ignore [no-matching-overload]
+        completion = await self.openai_client_openrouter.chat.completions.create(
+            model=DEFAULT_AI_MODEL,
+            reasoning_effort="low",
+            messages=[
+                {"role": "system", "content": INTRO_SCRIPT_PROMPT},
+                {
+                    "role": "user",
+                    "content": f"Requester: {requester}\nSong: {title}\nArtist: {artist or 'unknown'}",
+                },
+            ],
+        )
+        script = (completion.choices[0].message.content or "").strip()
+        if not script:
+            raise Exception("LLM returned an empty intro script.")
+        return script
+
     async def request_song(
         self,
         youtube_link: str,
@@ -3574,6 +3647,26 @@ Script:
                 f'"{title}" is too long ({duration // 60}m). Max duration is {MAX_SONG_DURATION // 60} minutes.'
             )
 
+        # --- Custom DJ intro (optional) ---
+        # Annie records a short spoken line about the request, and
+        # Liquidsoap's insert_intro transition plays it right before the
+        # song (annotate:intro=...). Failures here must never block the
+        # song — queue without an intro instead.
+        # Cadence: not on every request — first queued song, then every
+        # INTRO_EVERY_N_SONGS, or whenever the requester changes.
+        intro_path = None
+        if requester.lower().strip() != "dj annie" and self._should_speak_intro(
+            requester
+        ):
+            try:
+                intro_path = await self._get_request_intro(
+                    requester, str(title), str(artist or "")
+                )
+            except Exception as e:
+                log.warning(
+                    f"Intro generation failed for '{title}' (queueing without): {e}"
+                )
+
         # --- Push to Queue ---
         # If the push fails the song was NOT queued — say so and let the
         # caller retry. Never record it in recent_song_queue: a phantom
@@ -3588,6 +3681,7 @@ Script:
                 local_path,
                 title=str(title),
                 requester=requester,
+                intro=intro_path,
             )
             if not pushed:
                 raise Exception("Liquidsoap rejected the push (non-200).")
@@ -3601,6 +3695,12 @@ Script:
         self.user_requests.setdefault(requester, [])
         self.user_requests[requester].append(datetime.now(self.local_tz))
         self.recent_song_queue.append(title)
+        # Advance intro cadence counters (every intro'd song resets the gap)
+        if intro_path:
+            self._songs_since_intro = 1
+            self._last_intro_requester = requester
+        else:
+            self._songs_since_intro += 1
 
         # Persist request
         try:
