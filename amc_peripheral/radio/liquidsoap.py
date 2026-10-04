@@ -1,6 +1,7 @@
 """Async HTTP client for Liquidsoap harbor API (localhost:6001)."""
 
 import contextlib
+import json
 import logging
 from urllib.parse import quote
 
@@ -9,6 +10,20 @@ import aiohttp
 logger = logging.getLogger("liquidsoap_controller")
 
 LIQUIDSOAP_API_BASE = "http://localhost:6001"
+
+
+class QueuePushError(Exception):
+    """The liquidsoap queue rejected the request — the song did NOT queue.
+
+    Raised by push_to_queue when the harbor answers non-200 (bad URI,
+    resolve failure, queue error) or when the HTTP call itself fails.
+    The message carries liquidsoap's own resolve trace when available.
+    """
+
+    def __init__(self, status: int | None, detail: str):
+        self.status = status
+        self.detail = detail
+        super().__init__(f"liquidsoap /push failed ({status}): {detail}")
 
 
 class LiquidsoapController:
@@ -51,7 +66,7 @@ class LiquidsoapController:
         self, session: aiohttp.ClientSession, queue_name: str, uri: str,
         title: str | None = None, requester: str | None = None,
         intro: str | None = None,
-    ) -> bool:
+    ) -> str | None:
         """Push a URI to the Liquidsoap request queue via HTTP.
 
         Metadata is sent via Liquidsoap's annotate: protocol. The annotated
@@ -60,6 +75,18 @@ class LiquidsoapController:
 
         `intro` is a path to an audio file that Liquidsoap's insert_intro
         transition plays immediately before this track (see radio/liquidsoap.nix).
+
+        The harbor handler resolves the request (parse + local-file +
+        decodability check) BEFORE queueing: a 200 means the request is
+        verified queueable and the response body carries its request ID
+        (RID); anything else raises QueuePushError with the resolve trace.
+        Returns the RID on success, None if the response predates the RID
+        field.
+
+        Raises:
+            QueuePushError: the request was not accepted (or the harbor
+                could not be reached) — callers should surface this to the
+                requester instead of silently dropping the song.
         """
         annotated_uri = uri
         annotations = []
@@ -84,17 +111,30 @@ class LiquidsoapController:
         url = f"{self.base_url}/push?uri={uri_value}"
         try:
             async with self._fresh_post(url) as resp:
-                if resp.status == 200:
-                    logger.info(f"Pushed {uri} to {queue_name}")
-                    return True
                 body = await resp.text()
-                logger.warning(
-                    f"Failed to push {uri} to {queue_name}: {resp.status} {body}"
+                if resp.status != 200:
+                    logger.error(
+                        f"Push rejected by {queue_name} ({resp.status}): {body}"
+                    )
+                    raise QueuePushError(resp.status, body)
+                try:
+                    data = json.loads(body)
+                except ValueError:
+                    logger.warning(
+                        f"Push to {queue_name} returned unparseable body: {body}"
+                    )
+                    return None
+                rid = data.get("id")
+                logger.info(
+                    f"Pushed {uri} to {queue_name}"
+                    + (f" (rid={rid})" if rid else "")
                 )
-                return False
+                return str(rid) if rid is not None else None
+        except QueuePushError:
+            raise
         except Exception as e:
             logger.error(f"Error pushing to queue {queue_name}: {e}")
-            return False
+            raise QueuePushError(None, f"harbor unreachable: {e}") from e
 
     async def get_queue_length(
         self, session: aiohttp.ClientSession, queue_name: str

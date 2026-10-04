@@ -1418,6 +1418,90 @@ def test_push_to_queue_intro_annotation():
     assert '"Song"' not in captured["url"]
 
 
+def test_push_to_queue_returns_rid_on_verified_ok():
+    """A 200 response with {"ok":true,"id":N} returns the RID as a string."""
+    from amc_peripheral.radio.liquidsoap import LiquidsoapController
+
+    client = LiquidsoapController(base_url="http://127.0.0.1:6001")
+
+    class FakeResp:
+        status = 200
+
+        async def text(self):
+            return '{"ok":true,"id":"512"}'
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return None
+
+    class FakeSession:
+        def post(self, url, **kw):
+            return FakeResp()
+
+    client._fresh_post = lambda url: FakeSession().post(url)
+
+    rid = asyncio.run(
+        client.push_to_queue(None, "song_requests", "/tmp/song.webm")
+    )
+    assert rid == "512"
+
+
+def test_push_to_queue_raises_on_resolve_failure():
+    """Non-200 (resolve failed) raises QueuePushError with the trace detail."""
+    from amc_peripheral.radio.liquidsoap import (
+        LiquidsoapController,
+        QueuePushError,
+    )
+
+    client = LiquidsoapController(base_url="http://127.0.0.1:6001")
+
+    class FakeResp:
+        status = 502
+
+        async def text(self):
+            return '{"ok":false,"id":"9","error":"resolve failed","trace":"Unknown protocol"}'
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return None
+
+    class FakeSession:
+        def post(self, url, **kw):
+            return FakeResp()
+
+    client._fresh_post = lambda url: FakeSession().post(url)
+
+    with pytest.raises(QueuePushError, match="502.*Unknown protocol"):
+        asyncio.run(
+            client.push_to_queue(None, "song_requests", "/tmp/bad.webm")
+        )
+
+
+def test_push_to_queue_raises_on_harbor_unreachable():
+    """A network failure raises QueuePushError instead of returning None."""
+    from amc_peripheral.radio.liquidsoap import (
+        LiquidsoapController,
+        QueuePushError,
+    )
+
+    client = LiquidsoapController(base_url="http://127.0.0.1:6001")
+
+    class FakeSession:
+        def post(self, url, **kw):
+            raise ConnectionError("server disconnected")
+
+    client._fresh_post = lambda url: FakeSession().post(url)
+
+    with pytest.raises(QueuePushError, match="harbor unreachable"):
+        asyncio.run(
+            client.push_to_queue(None, "song_requests", "/tmp/song.webm")
+        )
+
+
 @pytest.mark.asyncio
 async def test_download_queue_does_not_reject(cog, monkeypatch):
     """Verify that concurrent requests queue up instead of being rejected."""

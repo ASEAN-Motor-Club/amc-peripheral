@@ -110,8 +110,24 @@ in {
           if uri == "" then
             http.response(status_code=400, content_type="application/json", data='{"error":"missing uri param"}')
           else
-            queue.push(request.create(uri))
-            http.response(content_type="application/json", data='{"ok":true}')
+            rid = request.create(uri)
+            # Resolve BEFORE queueing: resolution parses the annotate:
+            # metadata, checks the file exists and is decodable, and
+            # returns false on any of those failures. This makes push
+            # failures synchronous — previously a broken URI was accepted
+            # with {"ok":true} and only died minutes later with a silent
+            # [request.dynamic] "Fetch failed" in the journal (the
+            # double-encoded URIs of push #97 killed EVERY request this
+            # way for ~19h before anyone could see it).
+            resolved = request.resolve(rid, timeout=10.)
+            if not resolved then
+              tr = request.log(rid)
+              print("PUSH-REJECTED rid=#{rid} uri=#{uri} trace=#{tr}")
+              http.response(status_code=502, content_type="application/json", data='{"ok":false,"id":"#{rid}","error":"resolve failed","trace":"#{tr}"}')
+            else
+              queue.push(rid)
+              http.response(content_type="application/json", data='{"ok":true,"id":"#{rid}"}')
+            end
           end
         end
         harbor.http.register.simple(port=6001, method="POST", "/push", handle_push)
