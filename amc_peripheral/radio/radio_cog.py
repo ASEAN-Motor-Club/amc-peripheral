@@ -2554,7 +2554,9 @@ Script:
                     )
                     refreshed = self._wiki_storage.get_page_by_id(existing["id"])
                     if refreshed:
-                        self._wiki_retrieval.index_page(
+                        # sqlite writes: keep fsync commits off the event loop
+                        await asyncio.to_thread(
+                            self._wiki_retrieval.index_page,
                             page_id=existing["id"],
                             title=refreshed["title"],
                             content=refreshed["content"],
@@ -2568,7 +2570,8 @@ Script:
                     )
                     refreshed = self._wiki_storage.get_page_by_id(page_id)
                     if refreshed:
-                        self._wiki_retrieval.index_page(
+                        await asyncio.to_thread(
+                            self._wiki_retrieval.index_page,
                             page_id=page_id,
                             title=refreshed["title"],
                             content=refreshed["content"],
@@ -5548,7 +5551,10 @@ Script:
             log.warning("Wiki ingest not available, cannot ingest game event")
             return []
         try:
-            return self._wiki_ingest.ingest_event(
+            # Sync sqlite writes (2 fsync commits per page): keep them off the
+            # event loop so a slow/stalled disk can't freeze the bot.
+            return await asyncio.to_thread(
+                self._wiki_ingest.ingest_event,
                 event_type=event_type,
                 event_id=event_id,
                 title=title,
