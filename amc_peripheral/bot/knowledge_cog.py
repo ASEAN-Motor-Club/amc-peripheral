@@ -1889,7 +1889,10 @@ class KnowledgeCog(commands.Cog):
             log.warning("Wiki ingest not available, cannot ingest game event")
             return []
         try:
-            return self._wiki_ingest.ingest_event(
+            # Sync sqlite writes (2 fsync commits per page): keep them off the
+            # event loop so a slow/stalled disk can't freeze the bot.
+            return await asyncio.to_thread(
+                self._wiki_ingest.ingest_event,
                 event_type=event_type,
                 event_id=event_id,
                 title=title,

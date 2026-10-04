@@ -36,6 +36,9 @@ class WikiRetrieval:
         self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
+        # Cap how long any statement waits on a competing writer instead of
+        # blocking forever (e.g. during a host disk stall).
+        self.conn.execute("PRAGMA busy_timeout = 10000")
         self.conn.executescript(_FTS_SCHEMA)
         self.conn.commit()
         self._backfill_from_wiki_pages()
@@ -61,18 +64,29 @@ class WikiRetrieval:
         except sqlite3.OperationalError:
             pass  # no wiki_pages table (fresh test DB) — nothing to backfill
         added = 0
+        indexed = False
         for row in missing:
             if row["id"] in existing:
                 continue
-            self.index_page(
-                page_id=row["id"],
-                title=row["title"],
-                content=row["content"] or "",
-                category=row["category"] or "",
-                updated_at=row["updated_at"] or "",
+            self.conn.execute("DELETE FROM wiki_pages_fts WHERE page_id = ?", (str(row["id"]),))
+            self.conn.execute(
+                "INSERT INTO wiki_pages_fts (page_id, title, content, category, updated_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (
+                    str(row["id"]),
+                    row["title"] or "",
+                    row["content"] or "",
+                    row["category"] or "",
+                    row["updated_at"] or "",
+                ),
             )
             added += 1
-        if added:
+            indexed = True
+        if indexed:
+            # One commit for the whole backfill: under a host disk stall each
+            # commit's fsync can take seconds, and the startup path must not
+            # block the event loop for the per-page count (2 fsyncs/page).
+            self.conn.commit()
             log.info(f"Wiki FTS backfill: indexed {added} page(s) from wiki_pages")
 
     def index_page(
