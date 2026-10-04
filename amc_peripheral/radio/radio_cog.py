@@ -3668,7 +3668,9 @@ Script:
             raise Exception("LLM returned an empty intro script.")
         return script
 
-    async def _paced_push(self, local_path: str, title: str, requester: str, intro_path: str | None) -> bool:
+    async def _paced_push(
+        self, local_path: str, title: str, requester: str, intro_path: str | None
+    ) -> str | None:
         """Push to the song_requests queue with a minimum gap between pushes.
 
         Liquidsoap decodes each queued request on its clock thread as it
@@ -3676,31 +3678,41 @@ Script:
         PUSH_MIN_GAP comment above). Serializes concurrent pushes and waits
         until PUSH_MIN_GAP has elapsed since the previous one, bounded by
         PUSH_MAX_WAIT so this can never hang forever.
+
+        Returns the liquidsoap request ID (RID) on success. Raises
+        QueuePushError when the queue rejects the request — the harbor
+        handler resolves (validates) the request before queueing, so a
+        200 means liquidsoap confirmed the file is parseable and decodable,
+        and the era of "ok:true but Fetch failed 5s later" is over.
         """
         deadline = asyncio.get_running_loop().time() + PUSH_MAX_WAIT
-        async with self._push_lock:
-            while True:
-                now = asyncio.get_running_loop().time()
-                wait = self._last_push_at + PUSH_MIN_GAP - now
-                if wait <= 0:
-                    break
-                if now >= deadline:
-                    log.warning(
-                        "Push pacing waited over %.0fs — pushing anyway",
-                        PUSH_MAX_WAIT,
-                    )
-                    break
-                await asyncio.sleep(wait)
-            pushed = await self.lq.push_to_queue(
-                self.bot.http_session,
-                "song_requests",
-                local_path,
-                title=title,
-                requester=requester,
-                intro=intro_path,
-            )
-            self._last_push_at = asyncio.get_running_loop().time()
-        return pushed
+        try:
+            async with self._push_lock:
+                while True:
+                    now = asyncio.get_running_loop().time()
+                    wait = self._last_push_at + PUSH_MIN_GAP - now
+                    if wait <= 0:
+                        break
+                    if now >= deadline:
+                        log.warning(
+                            "Push pacing waited over %.0fs — pushing anyway",
+                            PUSH_MAX_WAIT,
+                        )
+                        break
+                    await asyncio.sleep(wait)
+                rid = await self.lq.push_to_queue(
+                    self.bot.http_session,
+                    "song_requests",
+                    local_path,
+                    title=title,
+                    requester=requester,
+                    intro=intro_path,
+                )
+                self._last_push_at = asyncio.get_running_loop().time()
+        except Exception:
+            log.exception("Push to liquidsoap failed for '%s'", title)
+            raise
+        return rid
 
     async def request_song(
         self,
@@ -3768,15 +3780,18 @@ Script:
         # If the push fails the song was NOT queued — say so and let the
         # caller retry. Never record it in recent_song_queue: a phantom
         # entry makes the next attempt reject with "has been queued
-        # recently" even though nothing ever played. push_to_queue returns
-        # False on a non-200 response (it does not raise), so treat a
-        # falsy result as a failure too.
+        # recently" even though nothing ever played. push_to_queue raises
+        # QueuePushError on any rejection (non-200, resolve failure with
+        # liquidsoap's trace, harbor unreachable); keep the falsy check as
+        # a belt-and-braces guard for callers/legacy responses that
+        # neither raise nor return an RID.
         try:
-            pushed = await self._paced_push(
+            rid = await self._paced_push(
                 local_path, str(title), requester, intro_path
             )
-            if not pushed:
-                raise Exception("Liquidsoap rejected the push (non-200).")
+            if not rid:
+                raise Exception("Liquidsoap rejected the push (no RID).")
+            log.info(f"Song '{title}' verified queued (rid={rid})")
         except Exception as e:
             log.error(f"Failed to push song to queue: {e}")
             raise Exception(
