@@ -75,15 +75,13 @@ class LiquidsoapController:
         if annotations:
             annotated_uri = f"annotate:{','.join(annotations)}:{uri}"
 
-        # Do NOT include '=' in safe chars — Liquidsoap's harbor query
-        # parser splits on bare '=' and corrupts annotate key=value pairs.
-        # Encode the URI value TWICE: Liquidsoap's harbor decodes the query
-        # value once, then hands the raw string to its own URI/query parser
-        # — a literal '?' inside it truncates the path and the request
-        # 404s ("This page isn't available"). Double-encoding leaves a
-        # harmless literal %3F after the single decode.
+        # Single-encode the value: the harbor decodes the query value once.
+        # PR #97's double-encode broke every push on Liquidsoap 2.3.0 — the
+        # extra layer left the annotate keys unreadable ("Unknown protocol
+        # \"requester=...\"") and every request died with Fetch failed.
+        # Single encoding also survives '?' in titles (verified live).
         uri_value = quote(annotated_uri, safe="/:")
-        url = f"{self.base_url}/push?uri={quote(uri_value, safe='/:')}"
+        url = f"{self.base_url}/push?uri={uri_value}"
         try:
             async with self._fresh_post(url) as resp:
                 if resp.status == 200:
