@@ -165,7 +165,11 @@
             };
             dbPath = lib.mkOption {
               type = lib.types.str;
-              default = "/var/lib/radio/radio.db";
+              # On the system disk (vda), not /var/lib/data (vdb): the vdb
+              # volume stalls under write pressure and froze the radio bot's
+              # request bookkeeping. Only the DB moves — the media cache
+              # stays on vdb.
+              default = "/var/lib/amc-bots/radio/radio.db";
               description = "Path to the sqlite database.";
             };
 
@@ -604,13 +608,28 @@
                 YT_COOKIES_PATH = "${cfg.cookiesPath}";
                 RADIO_DB_PATH = "${cfg.dbPath}";
                 TTS_PROVIDER = "google";
-                MEMORY_DATA_DIR = "/var/lib/data/amc-memory";
+                MEMORY_DATA_DIR = "/var/lib/amc-bots/radio";
                 # Annie manages the in-game announcement rotation via her
                 # tools; the rotation loop itself runs in amc-bot, so point
                 # this service at amc-bot's store file (single shared list).
-                ANNOUNCEMENTS_DB_PATH = "/var/lib/data/amc-memory-bot/announcements.db";
+                ANNOUNCEMENTS_DB_PATH = "/var/lib/amc-bots/bot/announcements.db";
                 DEFAULT_AI_MODEL = "deepseek/deepseek-v4-flash-0731:nitro";
               };
+              preStart = ''
+                # One-time migration to /var/lib/amc-bots/radio: copy the DB
+                # files from the old locations only while the destination DB
+                # does not exist yet. Runs after the previous service process
+                # has stopped, so sqlite WAL is already checkpointed.
+                copy_once() {
+                  if [ -e "$1" ] && [ ! -e "$2" ]; then cp -a "$1" "$2"; fi
+                }
+                for f in radio.db radio.db-wal radio.db-shm; do
+                  copy_once "/var/lib/radio/$f" "/var/lib/amc-bots/radio/$f"
+                done
+                for f in player_memories.db player_memories.db-wal player_memories.db-shm annie_wiki.db annie_wiki.db-wal annie_wiki.db-shm announcements.db; do
+                  copy_once "/var/lib/data/amc-memory/$f" "/var/lib/amc-bots/radio/$f"
+                done
+              '';
               restartIfChanged = false;
               serviceConfig = {
                 Type = "simple";
@@ -633,7 +652,7 @@
                 GAME_DB_PATH = "/var/lib/motortown/gamedata.db";
                 YT_COOKIES_PATH = "${cfg.cookiesPath}";
                 DENO_PATH = "${pkgs.deno}/bin/deno";
-                MEMORY_DATA_DIR = "/var/lib/data/amc-memory-bot";
+                MEMORY_DATA_DIR = "/var/lib/amc-bots/bot";
                 DEFAULT_AI_MODEL = "deepseek/deepseek-v4-flash-0731";
                 TRANSLATION_AI_MODEL = "openai/gpt-oss-120b";
                 FINANCIAL_MINISTER_ROLE_ID = "1453698145950109779";
@@ -641,6 +660,16 @@
                 COURT_CATEGORY_ID = "1498624085217902602";
                 COURT_CHANNEL_ID = "1498624125227368468";
               };
+              preStart = ''
+                # One-time migration to /var/lib/amc-bots/bot (same rules as
+                # amc-radio above).
+                copy_once() {
+                  if [ -e "$1" ] && [ ! -e "$2" ]; then cp -a "$1" "$2"; fi
+                }
+                for f in player_memories.db player_memories.db-wal player_memories.db-shm annie_wiki.db annie_wiki.db-wal annie_wiki.db-shm announcements.db; do
+                  copy_once "/var/lib/data/amc-memory-bot/$f" "/var/lib/amc-bots/bot/$f"
+                done
+              '';
               restartIfChanged = false;
               serviceConfig = {
                 Type = "notify";
