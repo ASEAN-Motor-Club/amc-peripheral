@@ -4985,10 +4985,21 @@ Script:
             # Filter out songs auto-queued in the last 24 hours
             recent_auto = self.db.get_recent_auto_queued(hours=24)
             recent_titles = {r["song_title"].lower() for r in recent_auto}
+            def _within_duration_cap(t):
+                # Last.fm duration is often missing/0; only filter when present.
+                # Keeps oversize tracks (e.g. Thriller, 13m) out of the pick so
+                # auto-queue doesn't burn a cycle on a guaranteed rejection.
+                try:
+                    dur = int(t.get("duration") or 0)
+                except (TypeError, ValueError):
+                    return True
+                return dur == 0 or dur <= 600
+
             candidates = [
                 t
                 for t in tracks
                 if f"{t['artist']['name']} - {t['name']}".lower() not in recent_titles
+                and _within_duration_cap(t)
             ]
             if not candidates:
                 candidates = tracks  # fallback to full list if all filtered
@@ -5011,14 +5022,23 @@ Script:
                 return
 
             song_query = await self._pick_trending_song()
-            title, _ = await self.request_song(
-                song_query,
-                requester="DJ Annie",
-                discord_id=None,
-                bypass_throttling=True,
-            )
-            self.db.add_auto_queue(song_title=str(title))
-            log.info(f"Auto-queued trending song: {title}")
+            try:
+                title, _ = await self.request_song(
+                    song_query,
+                    requester="DJ Annie",
+                    discord_id=None,
+                    bypass_throttling=True,
+                )
+                self.db.add_auto_queue(song_title=str(title))
+                log.info(f"Auto-queued trending song: {title}")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                # e.g. "X is too long (13m). Max duration is 10 minutes" — the
+                # trending picker has no duration data, so oversize chart
+                # tracks error here instead of queueing. Log and let the next
+                # cycle pick a different song.
+                log.warning(f"Auto-queue candidate rejected, will retry next cycle: {e}")
         except Exception as e:
             log.error(f"Failed to auto-queue trending song: {e}")
 
