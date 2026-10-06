@@ -14,7 +14,7 @@ sys.modules["google"] = MagicMock()
 import pytest  # noqa: E402
 import discord  # noqa: E402
 from discord.ext import tasks  # noqa: E402
-from amc_peripheral.radio.radio_cog import RadioCog  # noqa: E402
+from amc_peripheral.radio.radio_cog import PlaylistEditView, RadioCog  # noqa: E402
 
 
 @pytest.fixture
@@ -1994,6 +1994,129 @@ async def test_get_playlists_by_user(cog):
     playlists_b = cog.db.get_playlists(discord_id="userB")
     assert len(playlists_b) == 1
     assert playlists_b[0]["name"] == "playlist2"
+
+
+@pytest.mark.asyncio
+async def test_rename_playlist(cog):
+    """Renaming normalizes the new name and updates the lookup."""
+    cog.db.create_playlist(discord_id="user1", name="old name")
+    err = cog.db.rename_playlist(discord_id="user1", old_name="old name", new_name="  New Name  ")
+    assert err is None
+    pl = cog.db.get_playlist_by_name(discord_id="user1", name="new name")
+    assert pl is not None
+    assert cog.db.get_playlist_by_name(discord_id="user1", name="old name") is None
+
+
+@pytest.mark.asyncio
+async def test_rename_playlist_not_found(cog):
+    err = cog.db.rename_playlist(discord_id="user1", old_name="ghost", new_name="x")
+    assert err is not None
+    assert "not found" in err
+
+
+@pytest.mark.asyncio
+async def test_rename_playlist_duplicate(cog):
+    """Renaming onto an existing name returns an error string, not a crash."""
+    cog.db.create_playlist(discord_id="user1", name="a")
+    cog.db.create_playlist(discord_id="user1", name="b")
+    err = cog.db.rename_playlist(discord_id="user1", old_name="a", new_name="b")
+    assert err is not None
+    assert "already exists" in err
+    # Original intact
+    assert cog.db.get_playlist_by_name(discord_id="user1", name="a") is not None
+
+
+@pytest.mark.asyncio
+async def test_remove_playlist_songs_renumbers(cog):
+    """Multi-remove deletes the rows and compacts positions to 1..N."""
+    playlist_id = cog.db.create_playlist(discord_id="user1", name="multi rm")
+    a = cog.db.add_song_to_playlist(playlist_id, "Song A", "Song A")
+    b = cog.db.add_song_to_playlist(playlist_id, "Song B", "Song B")
+    c = cog.db.add_song_to_playlist(playlist_id, "Song C", "Song C")
+
+    removed = cog.db.remove_playlist_songs(playlist_id, [a, c])
+    assert removed == 2
+
+    songs = cog.db.get_playlist_songs(playlist_id)
+    assert [s["song_title"] for s in songs] == ["Song B"]
+    assert songs[0]["position"] == 1
+
+
+@pytest.mark.asyncio
+async def test_clear_playlist_songs(cog):
+    playlist_id = cog.db.create_playlist(discord_id="user1", name="clear me")
+    cog.db.add_song_to_playlist(playlist_id, "Song A", "Song A")
+    cog.db.add_song_to_playlist(playlist_id, "Song B", "Song B")
+
+    assert cog.db.clear_playlist_songs(playlist_id) == 2
+    assert cog.db.get_playlist_songs(playlist_id) == []
+    # Playlist row survives a clear
+    assert cog.db.get_playlist_by_name(discord_id="user1", name="clear me") is not None
+
+
+@pytest.mark.asyncio
+async def test_reorder_playlist_song(cog):
+    playlist_id = cog.db.create_playlist(discord_id="user1", name="reorder")
+    cog.db.add_song_to_playlist(playlist_id, "Song A", "Song A")
+    cog.db.add_song_to_playlist(playlist_id, "Song B", "Song B")
+    cog.db.add_song_to_playlist(playlist_id, "Song C", "Song C")
+    songs = cog.db.get_playlist_songs(playlist_id)
+    song_c = songs[2]["id"]
+
+    assert cog.db.reorder_playlist_song(playlist_id, song_c, "up") is True
+    songs = cog.db.get_playlist_songs(playlist_id)
+    assert [s["song_title"] for s in songs] == ["Song A", "Song C", "Song B"]
+    assert [s["position"] for s in songs] == [1, 2, 3]
+
+    # Edges are no-ops
+    first = songs[0]["id"]
+    assert cog.db.reorder_playlist_song(playlist_id, first, "up") is False
+    last = songs[2]["id"]
+    assert cog.db.reorder_playlist_song(playlist_id, last, "down") is False
+
+
+@pytest.mark.asyncio
+async def test_playlist_edit_view_builds(cog):
+    """The edit panel lists songs as options and caps the menus at 25."""
+    playlist_id = cog.db.create_playlist(discord_id="user1", name="panel")
+    for i in range(30):
+        cog.db.add_song_to_playlist(playlist_id, f"Song {i}", f"Song {i}")
+    pl = cog.db.get_playlist_by_name(discord_id="user1", name="panel")
+    view = PlaylistEditView(cog, pl)
+
+    assert len(view.options) == 25
+    assert view.capped is True
+    selects = [c for c in view.children if isinstance(c, discord.ui.Select)]
+    assert len(selects) == 2
+
+
+@pytest.mark.asyncio
+async def test_playlist_edit_view_empty_playlist(cog):
+    """An empty playlist renders buttons but no selects."""
+    cog.db.create_playlist(discord_id="user1", name="empty pl")
+    pl = cog.db.get_playlist_by_name(discord_id="user1", name="empty pl")
+    view = PlaylistEditView(cog, pl)
+
+    assert view.options == []
+    selects = [c for c in view.children if isinstance(c, discord.ui.Select)]
+    assert selects == []
+    buttons = [c for c in view.children if isinstance(c, discord.ui.Button)]
+    labels = [b.label for b in buttons]
+    assert any("Remove selected" in l for l in labels)
+    assert any("Rename" in l for l in labels)
+    assert any("Clear" in l for l in labels)
+
+
+@pytest.mark.asyncio
+async def test_playlist_edit_panel_text(cog):
+    playlist_id = cog.db.create_playlist(discord_id="user1", name="text")
+    cog.db.add_song_to_playlist(playlist_id, "Song A", "Song A")
+    pl = cog.db.get_playlist_by_name(discord_id="user1", name="text")
+    view = PlaylistEditView(cog, pl)
+    text = view._panel_text()
+    assert "text" in text
+    assert "1. Song A" in text
+    assert view._panel_text(note="done").startswith("done\n")
 
 
 @pytest.mark.asyncio
