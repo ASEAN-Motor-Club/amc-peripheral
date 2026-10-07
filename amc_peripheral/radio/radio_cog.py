@@ -544,6 +544,205 @@ async def playlist_name_autocomplete(
     return [app_commands.Choice(name=n, value=n) for n in matches]
 
 
+EDIT_VIEW_TIMEOUT = 600.0  # seconds an ephemeral /playlist edit panel stays live
+
+
+class PlaylistRenameModal(discord.ui.Modal, title="Rename playlist"):
+    new_name = discord.ui.TextInput(
+        label="New playlist name", max_length=64, required=True
+    )
+
+    def __init__(self, parent: "PlaylistEditView"):
+        super().__init__()
+        self.parent = parent
+        self.new_name.default = parent.pl["name"]
+
+    async def on_submit(self, interaction: discord.Interaction):
+        err = self.parent.cog.db.rename_playlist(
+            discord_id=str(interaction.user.id),
+            old_name=self.parent.pl["name"],
+            new_name=str(self.new_name.value),
+        )
+        if err:
+            await interaction.response.send_message(f"⚠️ {err}", ephemeral=True)
+            return
+        await self.parent.refresh_and_edit(interaction, note=f"Renamed to **{self.new_name.value.strip().lower()}**.")
+
+
+class PlaylistEditView(discord.ui.View):
+    """Ephemeral editor panel for /playlist edit <name>.
+
+    All edits are owner-only: the command that spawns this view resolves the
+    playlist through the invoking user's discord_id.
+    """
+
+    MAX_OPTIONS = 25  # Discord select-menu hard limit
+
+    def __init__(self, cog, pl: dict):
+        super().__init__(timeout=EDIT_VIEW_TIMEOUT)
+        self.cog = cog
+        self.pl = dict(pl)
+        self.remove_ids: set[int] = set()
+        self.reorder_id: int | None = None
+        self.remove_select: discord.ui.Select | None = None
+        self.reorder_select: discord.ui.Select | None = None
+        self.clear_armed = False
+        self.rebuild()
+
+    # --- state helpers ---
+
+    def _refresh_songs(self) -> None:
+        self.songs = self.cog.db.get_playlist_songs(self.pl["id"])
+
+    def rebuild(self) -> None:
+        self._refresh_songs()
+        self.clear_items()
+        self.remove_select = None
+        self.reorder_select = None
+        self.remove_ids = set()
+        self.reorder_id = None
+        self.clear_armed = False
+
+        self.capped = len(self.songs) > self.MAX_OPTIONS
+        shown = self.songs[: self.MAX_OPTIONS]
+        self.options = [
+            discord.SelectOption(
+                label=f"{s['position']}. {s['song_title'][:90]}",
+                value=str(s["id"]),
+            )
+            for s in shown
+        ]
+
+        if self.options:
+            remove_select = discord.ui.Select(
+                placeholder="Select songs to remove…",
+                options=self.options,
+                max_values=len(self.options),
+            )
+            remove_select.callback = self._on_remove_select
+            remove_select.row = 0
+            self.add_item(remove_select)
+            self.remove_select = remove_select
+
+            reorder_select = discord.ui.Select(
+                placeholder="Pick a song to move…",
+                options=self.options,
+            )
+            reorder_select.callback = self._on_reorder_select
+            reorder_select.row = 1
+            self.add_item(reorder_select)
+            self.reorder_select = reorder_select
+
+        remove_btn = discord.ui.Button(
+            label=f"Remove selected ({len(self.remove_ids)})",
+            style=discord.ButtonStyle.danger,
+            disabled=not self.remove_ids,
+        )
+        remove_btn.callback = self._on_remove_confirm
+        remove_btn.row = 2
+        self.add_item(remove_btn)
+
+        rename_btn = discord.ui.Button(label="Rename", style=discord.ButtonStyle.secondary)
+        rename_btn.callback = self._on_rename
+        rename_btn.row = 2
+        self.add_item(rename_btn)
+
+        clear_label = "Confirm clear?" if self.clear_armed else "Clear all songs"
+        clear_btn = discord.ui.Button(label=clear_label, style=discord.ButtonStyle.danger)
+        clear_btn.callback = self._on_clear
+        clear_btn.row = 2
+        self.add_item(clear_btn)
+
+        if self.songs:
+            up_btn = discord.ui.Button(
+                label="▲ Move up", style=discord.ButtonStyle.secondary,
+                disabled=self.reorder_id is None,
+            )
+            up_btn.callback = self._on_move_up
+            up_btn.row = 3
+            self.add_item(up_btn)
+            down_btn = discord.ui.Button(
+                label="▼ Move down", style=discord.ButtonStyle.secondary,
+                disabled=self.reorder_id is None,
+            )
+            down_btn.callback = self._on_move_down
+            down_btn.row = 3
+            self.add_item(down_btn)
+
+    def _panel_text(self, note: str = "") -> str:
+        lines = [f"{s['position']}. {s['song_title']}" for s in self.songs]
+        head = f"✏️ Editing **{self.pl['name']}** ({len(self.songs)} songs)"
+        if self.capped:
+            head += f" — first {self.MAX_OPTIONS} shown in the menus"
+        body = head + "\n" + ("\n".join(lines) if lines else "_empty — add songs with `/playlist add`_")
+        if note:
+            body = f"{note}\n{body}"
+        return body[:2000]
+
+    async def refresh_and_edit(
+        self, interaction: discord.Interaction, note: str = ""
+    ) -> None:
+        fresh = PlaylistEditView(self.cog, self.pl)
+        await interaction.response.edit_message(
+            content=fresh._panel_text(note), view=fresh
+        )
+
+    # --- callbacks ---
+
+    async def _on_remove_select(self, interaction: discord.Interaction):
+        values = list(self.remove_select.values) if self.remove_select else []
+        self.remove_ids = {int(v) for v in values}
+        self.rebuild()
+        self.remove_ids = {int(v) for v in values}
+        for item in self.children:
+            if isinstance(item, discord.ui.Button) and "Remove selected" in (item.label or ""):
+                item.label = f"Remove selected ({len(self.remove_ids)})"
+                item.disabled = not self.remove_ids
+        await interaction.response.edit_message(view=self)
+
+    async def _on_reorder_select(self, interaction: discord.Interaction):
+        values = list(self.reorder_select.values) if self.reorder_select else []
+        self.reorder_id = int(values[0]) if values else None
+        self.rebuild()
+        self.reorder_id = int(values[0]) if values else None
+        await interaction.response.edit_message(view=self)
+
+    async def _on_remove_confirm(self, interaction: discord.Interaction):
+        if not self.remove_ids:
+            await interaction.response.defer()
+            return
+        removed = self.cog.db.remove_playlist_songs(self.pl["id"], list(self.remove_ids))
+        await self.refresh_and_edit(interaction, note=f"🗑️ Removed {removed} song(s).")
+
+    async def _on_rename(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(PlaylistRenameModal(self))
+
+    async def _on_clear(self, interaction: discord.Interaction):
+        if not self.clear_armed:
+            self.clear_armed = True
+            for item in self.children:
+                if isinstance(item, discord.ui.Button) and "Clear" in (item.label or ""):
+                    item.label = "Confirm clear?"
+            await interaction.response.edit_message(view=self)
+            return
+        removed = self.cog.db.clear_playlist_songs(self.pl["id"])
+        await self.refresh_and_edit(interaction, note=f"🗑️ Cleared {removed} song(s).")
+
+    async def _move(self, interaction: discord.Interaction, direction: str):
+        if self.reorder_id is None:
+            await interaction.response.defer()
+            return
+        moved = self.cog.db.reorder_playlist_song(self.pl["id"], self.reorder_id, direction)
+        note = f"Moved {'up' if direction == 'up' else 'down'}." if moved else "Already at that end — pick a song first."
+        await self.refresh_and_edit(interaction, note=note)
+
+    async def _on_move_up(self, interaction: discord.Interaction):
+        await self._move(interaction, "up")
+
+    async def _on_move_down(self, interaction: discord.Interaction):
+        await self._move(interaction, "down")
+
+
 class RadioCog(commands.Cog):
     playlist_group = app_commands.Group(
         name="playlist", description="Manage your playlists", guild_ids=[GUILD_ID]
@@ -4691,6 +4890,28 @@ Script:
                 f"Song '{song_title}' not found in playlist '{pl['name']}'.",
                 ephemeral=True,
             )
+
+    @playlist_group.command(
+        name="edit",
+        description="Edit one of your playlists — remove, reorder, rename, clear",
+    )
+    @app_commands.autocomplete(name=playlist_name_autocomplete)
+    async def playlist_edit_cmd(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=True)
+        pl = self.db.get_playlist_by_name(
+            discord_id=str(interaction.user.id), name=name
+        )
+        if not pl:
+            await interaction.followup.send(
+                f"Playlist '{name}' not found among your playlists "
+                "(`/playlist edit` edits your own playlists).",
+                ephemeral=True,
+            )
+            return
+        view = PlaylistEditView(self, pl)
+        await interaction.followup.send(
+            view._panel_text(), view=view, ephemeral=True
+        )
 
     async def _resolve_playlist(
         self, interaction: discord.Interaction, name: str

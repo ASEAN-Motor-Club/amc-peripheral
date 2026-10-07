@@ -439,6 +439,91 @@ class RadioDB:
             "playlist_id = ?", [playlist_id], order_by="position asc"
         ))
 
+    def rename_playlist(self, discord_id: str, old_name: str, new_name: str) -> str | None:
+        """Rename one of the user's playlists. Returns an error string, or None on success."""
+        normalized_old = old_name.strip().lower()
+        normalized_new = new_name.strip().lower()
+        rows = list(self.db["user_playlists"].rows_where(
+            "discord_id = ? AND name = ?", [str(discord_id), normalized_old]
+        ))
+        if not rows:
+            return f"Playlist '{old_name}' not found."
+        if normalized_new == normalized_old:
+            return None
+        # pyrefly: ignore [missing-attribute]
+        try:
+            with self.db.conn:
+                self.db.execute(
+                    "UPDATE user_playlists SET name = ? WHERE id = ?",
+                    [normalized_new, rows[0]["id"]],
+                )
+        except Exception:  # noqa: BLE001 - UNIQUE violation = name already exists
+            return f"Playlist '{normalized_new}' already exists."
+        return None
+
+    def clear_playlist_songs(self, playlist_id: int) -> int:
+        """Remove all songs from a playlist. Returns the number removed."""
+        rows = list(self.db["playlist_songs"].rows_where(
+            "playlist_id = ?", [playlist_id]
+        ))
+        if not rows:
+            return 0
+        with self.db.conn:
+            self.db.execute(
+                "DELETE FROM playlist_songs WHERE playlist_id = ?", [playlist_id]
+            )
+        return len(rows)
+
+    def remove_playlist_songs(self, playlist_id: int, song_ids: list[int]) -> int:
+        """Remove songs by row id, then renumber positions. Returns the count removed."""
+        if not song_ids:
+            return 0
+        placeholders = ",".join("?" for _ in song_ids)
+        with self.db.conn:
+            cur = self.db.execute(
+                f"DELETE FROM playlist_songs WHERE playlist_id = ? AND id IN ({placeholders})",
+                [playlist_id, *song_ids],
+            )
+            removed = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+            if removed:
+                self._renumber_playlist_positions(playlist_id)
+        return removed
+
+    def reorder_playlist_song(self, playlist_id: int, song_id: int, direction: str) -> bool:
+        """Swap one song one slot up/down in the playlist. Returns True on success."""
+        songs = self.get_playlist_songs(playlist_id)
+        idx = next((i for i, s in enumerate(songs) if s["id"] == song_id), None)
+        if idx is None:
+            return False
+        if direction == "up" and idx == 0:
+            return False
+        if direction == "down" and idx == len(songs) - 1:
+            return False
+        swap_idx = idx - 1 if direction == "up" else idx + 1
+        a, b = songs[idx], songs[swap_idx]
+        with self.db.conn:
+            self.db.execute(
+                "UPDATE playlist_songs SET position = ? WHERE id = ?",
+                [b["position"], a["id"]],
+            )
+            self.db.execute(
+                "UPDATE playlist_songs SET position = ? WHERE id = ?",
+                [a["position"], b["id"]],
+            )
+        return True
+
+    def _renumber_playlist_positions(self, playlist_id: int) -> None:
+        """Compact positions to 1..N in current order. Caller holds a with-conn txn."""
+        rows = list(self.db["playlist_songs"].rows_where(
+            "playlist_id = ?", [playlist_id], order_by="position asc"
+        ))
+        for new_pos, row in enumerate(rows, start=1):
+            if row["position"] != new_pos:
+                self.db.execute(
+                    "UPDATE playlist_songs SET position = ? WHERE id = ?",
+                    [new_pos, row["id"]],
+                )
+
     # --- Download Cache ---
 
     def get_cached_song(self, video_id: str) -> dict | None:
