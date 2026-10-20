@@ -116,3 +116,4 @@ ENV/
 
 # Local data (memory storage for dev)
 data/
+!docs-web/data/

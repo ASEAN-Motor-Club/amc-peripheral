@@ -1,0 +1,1318 @@
+{
+ "version": "0.7.5",
+ "game": "0.7.19",
+ "cargo_entries": [
+  {
+   "row_name": "Money",
+   "display_name": [
+    "Money",
+    "Stack"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 5,
+   "weight_max": 10,
+   "volume_size": 1,
+   "payment_per_km": 150,
+   "payment_multiplier": 2.0,
+   "base_payment": 500,
+   "spawn_probability": 0,
+   "mesh_path": "/Game/Models/PolygonHeist/Meshes/Props/SM_Prop_Money_Stack_01",
+   "mass_kg": 8,
+   "blueprint_name": "Money",
+   "blueprint_template": "out/CheeseBox.uasset",
+   "clone_old_name": "CheeseBox",
+   "cargo_flags": 11,
+   "allow_stacking": true,
+   "num_cargo_min": 10,
+   "num_cargo_max": 20
+  },
+  {
+   "row_name": "MoneyPallet",
+   "display_name": [
+    "Money",
+    "Pallet"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 15,
+   "weight_max": 30,
+   "volume_size": 1,
+   "payment_per_km": 900,
+   "payment_multiplier": 2.0,
+   "base_payment": 1500,
+   "spawn_probability": 0,
+   "mesh_path": "/Game/Models/PolygonConstruction/Meshes/Props/SM_Prop_CardboardBox_Stack_01",
+   "mass_kg": 25,
+   "blueprint_name": "MoneyPallet",
+   "blueprint_template": "out/CheeseBox.uasset",
+   "clone_old_name": "CheeseBox",
+   "cargo_flags": 11,
+   "allow_stacking": true,
+   "num_cargo_min": 5,
+   "num_cargo_max": 10
+  },
+  {
+   "row_name": "Moonshine",
+   "display_name": [
+    "Moonshine",
+    "Keg"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 80,
+   "weight_max": 100,
+   "volume_size": 1,
+   "payment_per_km": 200,
+   "payment_multiplier": 3.0,
+   "base_payment": 300,
+   "spawn_probability": 8,
+   "mesh_path": "/Game/Models/PolygonApocalypse/Meshes/Props/SM_Prop_Keg_01",
+   "mass_kg": 90,
+   "blueprint_name": "Moonshine",
+   "blueprint_template": "out/CheeseBox.uasset",
+   "clone_old_name": "CheeseBox",
+   "cargo_flags": 11,
+   "allow_stacking": false,
+   "num_cargo_min": 4,
+   "num_cargo_max": 10
+  },
+  {
+   "row_name": "Kerosene",
+   "display_name": [
+    "Kerosene"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Tanker"
+   ],
+   "weight_min": 800,
+   "weight_max": 800,
+   "volume_size": 1,
+   "payment_per_km": 300,
+   "payment_multiplier": 2.0,
+   "spawn_probability": 0,
+   "mass_kg": 800,
+   "blueprint_name": "Kerosene",
+   "blueprint_template": "out/VolumeTypeCargo_Sand.uasset",
+   "clone_old_name": "VolumeTypeCargo_Sand",
+   "cargo_flags": 10,
+   "allow_stacking": false,
+   "num_cargo_min": 0,
+   "num_cargo_max": 1
+  },
+  {
+   "row_name": "CocaPaste",
+   "display_name": [
+    "Coca",
+    "Paste"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Dump"
+   ],
+   "weight_min": 200,
+   "weight_max": 400,
+   "volume_size": 1,
+   "payment_per_km": 400,
+   "payment_multiplier": 2.0,
+   "base_payment": 200,
+   "spawn_probability": 0,
+   "mass_kg": 300,
+   "blueprint_name": "CocaPaste",
+   "blueprint_template": "out/VolumeTypeCargo_Coal.uasset",
+   "clone_old_name": "VolumeTypeCargo_Coal",
+   "dump_mesh_path": "/Game/Objects/Mission/Delivery/Mesh/Coal/Coal",
+   "dump_material_path": "/Game/Objects/Mission/Delivery/Mesh/Materials/M_Coal/M_Coal",
+   "cargo_flags": 11,
+   "allow_stacking": false,
+   "num_cargo_min": 4,
+   "num_cargo_max": 10
+  },
+  {
+   "row_name": "CocaineBase",
+   "display_name": [
+    "Uncut",
+    "Cocaine",
+    "Bricks"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 800,
+   "weight_max": 1000,
+   "volume_size": 1,
+   "payment_per_km": 600,
+   "payment_multiplier": 2.0,
+   "base_payment": 200,
+   "spawn_probability": 0,
+   "mass_kg": 900,
+   "blueprint_name": "CocaineBase",
+   "blueprint_template": "out/BoxPalletA.uasset",
+   "clone_old_name": "BoxPalletA",
+   "cargo_flags": 11,
+   "allow_stacking": false,
+   "num_cargo_min": 2,
+   "num_cargo_max": 6,
+   "is_deprecated": false,
+   "mesh_path": "/Game/Models/PolygonGangWarfare/Meshes/Props/SM_Prop_Packet_Stack_Large_01",
+   "remove_merged_meshes": true
+  },
+  {
+   "row_name": "CocaineBricks",
+   "display_name": [
+    "(Cut)",
+    "Cocaine",
+    "Bricks"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 800,
+   "weight_max": 1000,
+   "volume_size": 1,
+   "payment_per_km": 700,
+   "payment_multiplier": 2.0,
+   "base_payment": 500,
+   "spawn_probability": 0,
+   "mesh_path": "/Game/Models/PolygonGangWarfare/Meshes/Props/SM_Prop_Packet_Stack_Large_01",
+   "mass_kg": 900,
+   "blueprint_name": "CocaineBricks",
+   "blueprint_template": "out/BoxPalletA.uasset",
+   "clone_old_name": "BoxPalletA",
+   "cargo_flags": 11,
+   "num_cargo_min": 2,
+   "num_cargo_max": 6,
+   "remove_merged_meshes": true
+  },
+  {
+   "row_name": "CocainePackets",
+   "display_name": [
+    "Cocaine",
+    "Packets"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 20,
+   "weight_max": 40,
+   "volume_size": 1,
+   "payment_per_km": 500,
+   "payment_multiplier": 2.0,
+   "base_payment": 250,
+   "spawn_probability": 0,
+   "mass_kg": 30,
+   "blueprint_name": "CocainePackets",
+   "blueprint_template": "out/server/Toy_Boxes.uasset",
+   "clone_old_name": "Toy_Boxes",
+   "cargo_flags": 11,
+   "allow_stacking": false,
+   "num_cargo_min": 5,
+   "num_cargo_max": 15
+  },
+  {
+   "row_name": "CocaineBags",
+   "display_name": [
+    "Cocaine",
+    "Bags"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 5,
+   "weight_max": 15,
+   "volume_size": 1,
+   "payment_per_km": 5000,
+   "payment_multiplier": 1.0,
+   "base_payment": 500,
+   "spawn_probability": 0,
+   "mesh_path": "/Game/Models/PolygonGangWarfare/Meshes/Props/SM_Prop_Packet_02",
+   "mass_kg": 10,
+   "blueprint_name": "CocaineBags",
+   "blueprint_template": "out/CheeseBox.uasset",
+   "clone_old_name": "CheeseBox",
+   "cargo_flags": 11,
+   "allow_stacking": false,
+   "num_cargo_min": 2,
+   "num_cargo_max": 8,
+   "payment_sqrt_ratio": 0.0
+  },
+  {
+   "row_name": "HydrochloricAcid",
+   "display_name": [
+    "Hydrochloric",
+    "Acid"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 200,
+   "weight_max": 350,
+   "volume_size": 1,
+   "payment_per_km": 200,
+   "payment_multiplier": 2.0,
+   "spawn_probability": 0,
+   "mesh_path": "/Game/Env/Meshes/Refinery/SM_Refinery_OilBarrel_Pallet_01",
+   "mass_kg": 410,
+   "blueprint_name": "HydrochloricAcid",
+   "blueprint_template": "out/BoxPalleteC.uasset",
+   "clone_old_name": "BoxPalleteC",
+   "cargo_flags": 11,
+   "allow_stacking": false,
+   "num_cargo_min": 0,
+   "num_cargo_max": 1
+  },
+  {
+   "row_name": "Acetone",
+   "display_name": [
+    "Acetone"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Tanker"
+   ],
+   "weight_min": 800,
+   "weight_max": 800,
+   "volume_size": 1,
+   "payment_per_km": 200,
+   "payment_multiplier": 2.0,
+   "spawn_probability": 0,
+   "mass_kg": 800,
+   "blueprint_name": "Acetone",
+   "blueprint_template": "out/VolumeTypeCargo_Sand.uasset",
+   "clone_old_name": "VolumeTypeCargo_Sand",
+   "cargo_flags": 10,
+   "allow_stacking": false,
+   "num_cargo_min": 0,
+   "num_cargo_max": 1
+  },
+  {
+   "row_name": "MoonshineBottles",
+   "display_name": [
+    "Moonshine",
+    "Bottles"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 20,
+   "weight_max": 30,
+   "volume_size": 1,
+   "payment_per_km": 300,
+   "payment_multiplier": 2.0,
+   "base_payment": 150,
+   "spawn_probability": 0,
+   "mesh_path": "/Game/Models/PolygonWestern/Meshes/Props/SM_Prop_Bottle_05",
+   "mass_kg": 25,
+   "blueprint_name": "MoonshineBottles",
+   "blueprint_template": "out/CheeseBox.uasset",
+   "clone_old_name": "CheeseBox",
+   "cargo_flags": 11,
+   "allow_stacking": false,
+   "num_cargo_min": 4,
+   "num_cargo_max": 10
+  },
+  {
+   "row_name": "LiquidCocaine",
+   "display_name": [
+    "Liquid",
+    "Cocaine"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 200,
+   "weight_max": 400,
+   "volume_size": 1,
+   "payment_per_km": 200,
+   "payment_multiplier": 2.0,
+   "spawn_probability": 0,
+   "mesh_path": "/Game/Env/Meshes/Refinery/SM_Refinery_OilBarrel_Pallet_01",
+   "mass_kg": 800,
+   "blueprint_name": "LiquidCocaine",
+   "blueprint_template": "out/BoxPalleteC.uasset",
+   "clone_old_name": "BoxPalleteC",
+   "cargo_flags": 10,
+   "allow_stacking": false,
+   "num_cargo_min": 0,
+   "num_cargo_max": 1,
+   "base_payment": 0
+  },
+  {
+   "row_name": "Pseudoephedrine",
+   "display_name": [
+    "Pseudoephedrine"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 5,
+   "weight_max": 10,
+   "volume_size": 1,
+   "payment_per_km": 200,
+   "payment_multiplier": 1.0,
+   "base_payment": 300,
+   "spawn_probability": 0,
+   "mesh_path": "/Game/Models/PolygonApocalypse/Meshes/Props/SM_Prop_CardboardBox_01",
+   "mass_kg": 8,
+   "blueprint_name": "Pseudoephedrine",
+   "blueprint_template": "out/SmallBox.uasset",
+   "clone_old_name": "SmallBox",
+   "cargo_flags": 11,
+   "allow_stacking": false,
+   "num_cargo_min": 5,
+   "num_cargo_max": 15
+  },
+  {
+   "row_name": "Phosphorus",
+   "display_name": [
+    "Phosphorus"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 200,
+   "weight_max": 400,
+   "volume_size": 1,
+   "payment_per_km": 400,
+   "payment_multiplier": 2.0,
+   "base_payment": 400,
+   "spawn_probability": 0,
+   "mesh_path": "/Game/Env/Meshes/Refinery/SM_Refinery_OilBarrel_Pallet_03",
+   "mass_kg": 800,
+   "blueprint_name": "Phosphorus",
+   "blueprint_template": "out/BoxPalleteC.uasset",
+   "clone_old_name": "BoxPalleteC",
+   "cargo_flags": 10,
+   "allow_stacking": false,
+   "num_cargo_min": 5,
+   "num_cargo_max": 15
+  },
+  {
+   "row_name": "AnhydrousAmmonia",
+   "display_name": [
+    "Anhydrous",
+    "Ammonia"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Tanker"
+   ],
+   "weight_min": 200,
+   "weight_max": 400,
+   "volume_size": 1,
+   "payment_per_km": 400,
+   "payment_multiplier": 2.0,
+   "base_payment": 400,
+   "spawn_probability": 0,
+   "mass_kg": 500,
+   "blueprint_name": "AnhydrousAmmonia",
+   "blueprint_template": "out/VolumeTypeCargo_Sand.uasset",
+   "clone_old_name": "VolumeTypeCargo_Sand",
+   "cargo_flags": 10,
+   "allow_stacking": false,
+   "num_cargo_min": 1,
+   "num_cargo_max": 1
+  },
+  {
+   "row_name": "MethBase",
+   "display_name": [
+    "Meth",
+    "Base"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 200,
+   "weight_max": 400,
+   "volume_size": 1,
+   "payment_per_km": 2500,
+   "payment_multiplier": 1.0,
+   "base_payment": 1000,
+   "spawn_probability": 0,
+   "mesh_path": "/Game/Env/Meshes/Refinery/SM_Refinery_OilBarrel_Pallet_02",
+   "mass_kg": 800,
+   "blueprint_name": "MethBase",
+   "blueprint_template": "out/BoxPalleteC.uasset",
+   "clone_old_name": "BoxPalleteC",
+   "cargo_flags": 10,
+   "allow_stacking": false,
+   "num_cargo_min": 5,
+   "num_cargo_max": 15
+  },
+  {
+   "row_name": "CrystalMeth",
+   "display_name": [
+    "Crystal",
+    "Meth"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 5,
+   "weight_max": 15,
+   "volume_size": 1,
+   "payment_per_km": 4000,
+   "payment_multiplier": 1.0,
+   "base_payment": 1000,
+   "spawn_probability": 0,
+   "mesh_path": "/Game/Models/PolygonGangWarfare/Meshes/Props/SM_Prop_Packet_05",
+   "mass_kg": 10,
+   "blueprint_name": "CrystalMeth",
+   "blueprint_template": "out/CheeseBox.uasset",
+   "clone_old_name": "CheeseBox",
+   "cargo_flags": 11,
+   "allow_stacking": false,
+   "num_cargo_min": 10,
+   "num_cargo_max": 25
+  },
+  {
+   "row_name": "HiddenMethBed",
+   "display_name": [
+    "Bed",
+    "with hidden CrystalMeth"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 50,
+   "weight_max": 80,
+   "volume_size": 1,
+   "payment_per_km": 3000,
+   "payment_multiplier": 1.0,
+   "base_payment": 800,
+   "spawn_probability": 0,
+   "mass_kg": 60,
+   "blueprint_name": "HiddenMethBed",
+   "blueprint_template": "out/Bed_01.uasset",
+   "clone_old_name": "Bed_01",
+   "cargo_flags": 10,
+   "allow_stacking": false,
+   "num_cargo_min": 2,
+   "num_cargo_max": 6,
+   "mesh_path": "/Game/Models/PolygonMilitary/Meshes/Props/SM_Prop_Bed_Small_01"
+  },
+  {
+   "row_name": "HiddenMethSofa",
+   "display_name": [
+    "Sofa",
+    "with hidden CrystalMeth"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 60,
+   "weight_max": 100,
+   "volume_size": 1,
+   "payment_per_km": 3000,
+   "payment_multiplier": 1.0,
+   "base_payment": 800,
+   "spawn_probability": 0,
+   "mass_kg": 80,
+   "blueprint_name": "HiddenMethSofa",
+   "blueprint_template": "out/Sofa_01.uasset",
+   "clone_old_name": "Sofa_01",
+   "cargo_flags": 10,
+   "allow_stacking": false,
+   "num_cargo_min": 2,
+   "num_cargo_max": 6,
+   "mesh_path": "/Game/AssetsvilleTown/Meshes/InteriorProps/House/SM_Sofa_01"
+  },
+  {
+   "row_name": "HiddenMethArmchair",
+   "display_name": [
+    "Armchair",
+    "with hidden CrystalMeth"
+   ],
+   "cargo_type": "None",
+   "cargo_space_types": [
+    "Flatbed",
+    "Box"
+   ],
+   "weight_min": 30,
+   "weight_max": 50,
+   "volume_size": 1,
+   "payment_per_km": 3000,
+   "payment_multiplier": 1.0,
+   "base_payment": 800,
+   "spawn_probability": 0,
+   "mass_kg": 40,
+   "blueprint_name": "HiddenMethArmchair",
+   "blueprint_template": "out/Sofa_04.uasset",
+   "clone_old_name": "Sofa_04",
+   "cargo_flags": 10,
+   "allow_stacking": false,
+   "num_cargo_min": 2,
+   "num_cargo_max": 6,
+   "mesh_path": "/Game/AssetsvilleTown/Meshes/InteriorProps/House/SM_sofa_05"
+  }
+ ],
+ "sources": [
+  {
+   "delivery_point": "Factory_Bottle",
+   "recipes": [
+    {
+     "cargo": "HydrochloricAcid",
+     "production_time": 180,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "CrudeOil_Supplier",
+   "recipes": [
+    {
+     "cargo": "Kerosene",
+     "production_time": 120,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "Farm_Hemp",
+   "recipes": [
+    {
+     "cargo": "HempPallet",
+     "production_time": 300,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "Mine_LimestoneRockQuarry",
+   "recipes": [
+    {
+     "cargo": "Phosphorus",
+     "production_time": 120,
+     "hidden": false
+    }
+   ]
+  }
+ ],
+ "sinks": [
+  {
+   "delivery_point": "GasStation",
+   "recipes": [
+    {
+     "cargo": "Moonshine",
+     "production_time": 480,
+     "hidden": false
+    }
+   ]
+  }
+ ],
+ "transforms": [
+  {
+   "delivery_point": "CrudeOil_Supplier",
+   "recipes": [
+    {
+     "input_cargos": {
+      "Money": 1
+     },
+     "output_cargo": "Kerosene",
+     "output_count": 1,
+     "production_time": 30,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "Mine_CopperOre",
+   "recipes": [
+    {
+     "input_cargo": "CornPallet",
+     "input_count": 1,
+     "output_cargo": "Moonshine",
+     "output_count": 5,
+     "production_time": 180,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "Farm_Sunflower",
+   "recipes": [
+    {
+     "input_cargos": {
+      "CocaPaste": 1,
+      "HydrochloricAcid": 1
+     },
+     "output_cargo": "CocaineBase",
+     "output_count": 2,
+     "production_time": 600
+    },
+    {
+     "input_cargos": {
+      "CocaPaste": 1,
+      "Acetone": 1
+     },
+     "output_cargo": "LiquidCocaine",
+     "output_count": 2,
+     "production_time": 600
+    }
+   ]
+  },
+  {
+   "delivery_point": "Factory_Toy",
+   "recipes": [
+    {
+     "input_cargo": "CocaineBricks",
+     "input_count": 1,
+     "output_cargo": "Money",
+     "output_count": 3,
+     "production_time": 120,
+     "hidden": false
+    },
+    {
+     "input_cargo": "CocaineBricks",
+     "input_count": 1,
+     "output_cargo": "CocainePackets",
+     "output_count": 3,
+     "production_time": 180,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "CourierService",
+   "recipes": [
+    {
+     "input_cargo": "CocainePackets",
+     "input_count": 1,
+     "output_cargo": "CocaineBags",
+     "output_count": 1,
+     "production_time": 120,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "Refinery_Oil",
+   "recipes": [
+    {
+     "input_cargo": "CrudeOil",
+     "input_count": 1,
+     "output_cargo": "Acetone",
+     "output_count": 1,
+     "production_time": 180,
+     "hidden": false,
+     "output_cargos": {
+      "Acetone": 1,
+      "AnhydrousAmmonia": 1
+     }
+    }
+   ]
+  },
+  {
+   "delivery_point": "Factory_Quicklime",
+   "recipes": [
+    {
+     "input_cargos": {
+      "CocaineBase": 2
+     },
+     "output_cargo": "CocaineBricks",
+     "output_count": 3,
+     "production_time": 600
+    },
+    {
+     "input_cargos": {
+      "Pseudoephedrine": 1,
+      "Phosphorus": 1,
+      "AnhydrousAmmonia": 1
+     },
+     "output_cargo": "MethBase",
+     "output_count": 2,
+     "production_time": 900,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "Farm_Hemp",
+   "recipes": [
+    {
+     "input_cargos": {
+      "Kerosene": 1,
+      "QuicklimePallet": 1
+     },
+     "output_cargo": "CocaPaste",
+     "output_count": 2,
+     "production_time": 600,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "Export_Harbor",
+   "recipes": [
+    {
+     "input_cargos": {
+      "LiquidCocaine": 1
+     },
+     "output_cargo": "Money",
+     "output_count": 3,
+     "production_time": 300
+    }
+   ]
+  },
+  {
+   "delivery_point": "Factory_Limestone_Drop",
+   "recipes": [
+    {
+     "input_cargo": "Moonshine",
+     "input_count": 1,
+     "output_cargo": "Moonshine",
+     "output_count": 1,
+     "production_time": 1,
+     "hidden": false
+    },
+    {
+     "input_cargo": "Moonshine",
+     "input_count": 1,
+     "output_cargo": "Money",
+     "output_count": 1,
+     "production_time": 120,
+     "hidden": false
+    }
+   ],
+   "storage": []
+  },
+  {
+   "delivery_point": "Supermarket",
+   "recipes": [
+    {
+     "input_cargo": "Moonshine",
+     "input_count": 1,
+     "output_cargo": "MoonshineBottles",
+     "output_count": 5,
+     "production_time": 300,
+     "hidden": false
+    },
+    {
+     "input_cargo": "Money",
+     "input_count": 1,
+     "output_cargo": "Pseudoephedrine",
+     "output_count": 1,
+     "production_time": 60,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "Factory_Furniture",
+   "recipes": [
+    {
+     "input_cargo": "MethBase",
+     "input_count": 1,
+     "output_cargo": "HiddenMethBed",
+     "output_count": 2,
+     "production_time": 300,
+     "hidden": false
+    },
+    {
+     "input_cargo": "MethBase",
+     "input_count": 1,
+     "output_cargo": "HiddenMethSofa",
+     "output_count": 2,
+     "production_time": 300,
+     "hidden": false
+    },
+    {
+     "input_cargo": "MethBase",
+     "input_count": 1,
+     "output_cargo": "HiddenMethArmchair",
+     "output_count": 2,
+     "production_time": 300,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "Store_Furniture",
+   "recipes": [
+    {
+     "input_cargo": "HiddenMethBed",
+     "input_count": 1,
+     "production_time": 120,
+     "hidden": false,
+     "output_cargos": {
+      "CrystalMeth": 2,
+      "Money": 2
+     }
+    },
+    {
+     "input_cargo": "HiddenMethSofa",
+     "input_count": 1,
+     "production_time": 120,
+     "hidden": false,
+     "output_cargos": {
+      "CrystalMeth": 2,
+      "Money": 2
+     }
+    },
+    {
+     "input_cargo": "HiddenMethArmchair",
+     "input_count": 1,
+     "production_time": 120,
+     "hidden": false,
+     "output_cargos": {
+      "CrystalMeth": 2,
+      "Money": 2
+     }
+    }
+   ]
+  }
+ ],
+ "catalysts": [
+  {
+   "delivery_point": "Farm_Sunflower",
+   "recipes": [
+    {
+     "cargo": "Money",
+     "count": 1,
+     "production_time": 600,
+     "speed_multiplier": 2,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "Factory_Toy",
+   "recipes": [
+    {
+     "cargo": "Money",
+     "count": 1,
+     "production_time": 600,
+     "speed_multiplier": 2,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "Factory_Quicklime",
+   "recipes": [
+    {
+     "cargo": "Money",
+     "count": 1,
+     "production_time": 600,
+     "speed_multiplier": 2,
+     "hidden": false
+    }
+   ]
+  },
+  {
+   "delivery_point": "Farm_Hemp",
+   "recipes": [
+    {
+     "cargo": "Money",
+     "count": 1,
+     "production_time": 600,
+     "speed_multiplier": 2,
+     "hidden": false
+    }
+   ]
+  }
+ ],
+ "storage": [
+  {
+   "delivery_point": "CrudeOil_Supplier",
+   "entries": [
+    {
+     "cargo_key": "Kerosene",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "Money",
+     "max_storage": 50
+    }
+   ]
+  },
+  {
+   "delivery_point": "Mine_CopperOre",
+   "entries": [
+    {
+     "cargo_key": "CornPallet",
+     "max_storage": 40
+    },
+    {
+     "cargo_key": "Moonshine",
+     "max_storage": 100
+    }
+   ]
+  },
+  {
+   "delivery_point": "Farm_Hemp",
+   "entries": [
+    {
+     "cargo_key": "Kerosene",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "QuicklimePallet",
+     "max_storage": 30
+    },
+    {
+     "cargo_key": "CocaPaste",
+     "max_storage": 40
+    },
+    {
+     "cargo_key": "Money",
+     "max_storage": 10
+    }
+   ]
+  },
+  {
+   "delivery_point": "Farm_Sunflower",
+   "entries": [
+    {
+     "cargo_key": "CocaPaste",
+     "max_storage": 40
+    },
+    {
+     "cargo_key": "Acetone",
+     "max_storage": 100
+    },
+    {
+     "cargo_key": "HydrochloricAcid",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "CocaineBase",
+     "max_storage": 30
+    },
+    {
+     "cargo_key": "CocaineBricks",
+     "max_storage": 30
+    },
+    {
+     "cargo_key": "Money",
+     "max_storage": 25
+    },
+    {
+     "cargo_key": "LiquidCocaine",
+     "max_storage": 40
+    }
+   ]
+  },
+  {
+   "delivery_point": "Factory_Toy",
+   "entries": [
+    {
+     "cargo_key": "CocaineBricks",
+     "max_storage": 30
+    },
+    {
+     "cargo_key": "CocainePackets",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "Money",
+     "max_storage": 50
+    }
+   ]
+  },
+  {
+   "delivery_point": "CourierService",
+   "entries": [
+    {
+     "cargo_key": "CocainePackets",
+     "max_storage": 10
+    },
+    {
+     "cargo_key": "CocaineBags",
+     "max_storage": 20
+    }
+   ]
+  },
+  {
+   "delivery_point": "Refinery_Oil",
+   "entries": [
+    {
+     "cargo_key": "CrudeOil",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "Acetone",
+     "max_storage": 100
+    },
+    {
+     "cargo_key": "AnhydrousAmmonia",
+     "max_storage": 50
+    }
+   ]
+  },
+  {
+   "delivery_point": "Factory_Bottle",
+   "entries": [
+    {
+     "cargo_key": "HydrochloricAcid",
+     "max_storage": 20
+    }
+   ]
+  },
+  {
+   "delivery_point": "Supermarket",
+   "entries": [
+    {
+     "cargo_key": "MoonshineBottles",
+     "max_storage": 30
+    },
+    {
+     "cargo_key": "Money",
+     "max_storage": 10
+    },
+    {
+     "cargo_key": "Pseudoephedrine",
+     "max_storage": 10
+    }
+   ]
+  },
+  {
+   "delivery_point": "Factory_Quicklime",
+   "entries": [
+    {
+     "cargo_key": "CocaineBase",
+     "max_storage": 30
+    },
+    {
+     "cargo_key": "CocaineBricks",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "CocainePackets",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "Money",
+     "max_storage": 40
+    },
+    {
+     "cargo_key": "Pseudoephedrine",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "Phosphorus",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "AnhydrousAmmonia",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "MethBase",
+     "max_storage": 50
+    }
+   ],
+   "storage": []
+  },
+  {
+   "delivery_point": "Factory_Limestone_Drop",
+   "entries": [
+    {
+     "cargo_key": "Moonshine",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "Money",
+     "max_storage": 50
+    }
+   ],
+   "recipes": [],
+   "storage": []
+  },
+  {
+   "delivery_point": "Factory_Furniture",
+   "entries": [
+    {
+     "cargo_key": "MethBase",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "HiddenMethBed",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "HiddenMethSofa",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "HiddenMethArmchair",
+     "max_storage": 50
+    }
+   ]
+  },
+  {
+   "delivery_point": "Store_Furniture",
+   "entries": [
+    {
+     "cargo_key": "HiddenMethBed",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "HiddenMethSofa",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "HiddenMethArmchair",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "CrystalMeth",
+     "max_storage": 50
+    },
+    {
+     "cargo_key": "Money",
+     "max_storage": 50
+    }
+   ]
+  }
+ ],
+ "demand_configs": [
+  {
+   "delivery_point": "Mine_CopperOre",
+   "entries": [
+    {
+     "cargo_type": "None",
+     "cargo_key": "CornPallet",
+     "payment_multiplier": 1,
+     "max_storage": 20
+    }
+   ]
+  },
+  {
+   "delivery_point": "Supermarket",
+   "entries": [
+    {
+     "cargo_type": "None",
+     "cargo_key": "Moonshine",
+     "payment_multiplier": 1.5,
+     "max_storage": 5
+    }
+   ]
+  },
+  {
+   "delivery_point": "GasStation",
+   "entries": [
+    {
+     "cargo_type": "None",
+     "cargo_key": "Moonshine",
+     "payment_multiplier": 1.2,
+     "max_storage": 5
+    }
+   ]
+  },
+  {
+   "delivery_point": "Export_Harbor",
+   "entries": [
+    {
+     "cargo_type": "None",
+     "cargo_key": "LiquidCocaine",
+     "payment_multiplier": 2.0,
+     "max_storage": 10
+    }
+   ]
+  },
+  {
+   "delivery_point": "Farm_Hemp",
+   "entries": [
+    {
+     "cargo_type": "None",
+     "cargo_key": "Money",
+     "payment_multiplier": 1.0,
+     "max_storage": 10
+    }
+   ]
+  },
+  {
+   "delivery_point": "Farm_Sunflower",
+   "entries": [
+    {
+     "cargo_type": "None",
+     "cargo_key": "Money",
+     "payment_multiplier": 1.0,
+     "max_storage": 25
+    }
+   ]
+  },
+  {
+   "delivery_point": "Resident",
+   "entries": [
+    {
+     "cargo_type": "None",
+     "cargo_key": "CocaineBags",
+     "payment_multiplier": 2.0,
+     "max_storage": 2
+    },
+    {
+     "cargo_type": "None",
+     "cargo_key": "MoonshineBottles",
+     "payment_multiplier": 1.2,
+     "max_storage": 3
+    },
+    {
+     "cargo_type": "None",
+     "cargo_key": "CrystalMeth",
+     "payment_multiplier": 2.0,
+     "max_storage": 2
+    }
+   ]
+  },
+  {
+   "delivery_point": "Factory_Toy",
+   "entries": [
+    {
+     "cargo_type": "None",
+     "cargo_key": "Money",
+     "payment_multiplier": 1.0,
+     "max_storage": 25
+    }
+   ]
+  },
+  {
+   "delivery_point": "Factory_Quicklime",
+   "entries": [
+    {
+     "cargo_type": "None",
+     "cargo_key": "CocaineBase",
+     "payment_multiplier": 1.0,
+     "max_storage": 30
+    }
+   ]
+  }
+ ]
+}

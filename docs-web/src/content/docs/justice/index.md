@@ -8,7 +8,7 @@ sidebar:
 
 The club runs a **native law-enforcement system**: there is no game mod
 involved - the whole loop runs inside the club's backend and talks to
-the game server directly. It replaced the third-party *Schedule I* pak.
+the game server directly. It layers the criminal score, wanted chases and the boss tax on top of the [Schedule I](/schedule-i/) cargo economy.
 
 ## The loop
 
