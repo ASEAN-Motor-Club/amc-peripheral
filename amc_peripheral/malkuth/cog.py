@@ -11,6 +11,7 @@ from .settings import (
     BAN_TRAP_CHANNEL_ID,
     BAN_TRAP_CLEANUP_WINDOW_SECONDS,
     BAN_TRAP_DELETE_DELAY_SECONDS,
+    BAN_TRAP_WHITELISTED_BOT_IDS,
     GUILD_ID,
 )
 
@@ -50,11 +51,9 @@ class BanTrapCog(commands.Cog):
         # Webhook messages have no banable author — ignore them.
         if message.webhook_id:
             return
-        # Bots / applications are never ban targets — they post via webhooks,
-        # slash commands, or automated events and shouldn't be punished for
-        # appearing in the trap. Exempt all bot users structurally so no app
-        # in the guild needs to be manually whitelisted.
-        if message.author.bot:
+        # Only our own fleet is exempt; any other bot account that posts here
+        # (e.g. a spam bot) is a ban target like everyone else.
+        if message.author.bot and message.author.id in BAN_TRAP_WHITELISTED_BOT_IDS:
             return
 
         guild = message.guild

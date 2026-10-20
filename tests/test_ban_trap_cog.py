@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 os.environ.setdefault(
     "BAN_TRAP_ALLOWED_ROLE_IDS", "1395460420189421713,1496482029892669500"
 )
+os.environ.setdefault("BAN_TRAP_WHITELISTED_BOT_IDS", "123,456")
 os.environ.setdefault("BAN_TRAP_CHANNEL_ID", "1529987241278177352")
 os.environ.setdefault("BAN_TRAP_ANNOUNCEMENT", "My apologies, but they had to go.")
 os.environ.setdefault("BAN_TRAP_AUTO_DELETE_ANNOUNCEMENT", "0")
@@ -260,8 +261,7 @@ async def test_webhook_message_is_ignored(cog):
 async def test_bot_user_message_is_ignored(cog):
     message = MagicMock()
     message.author = MagicMock()
-    message.author.id = 7
-    message.author.bot = True  # bots/applications are never ban targets
+    message.author.id = 123  # whitelisted fleet bot (see env at top)
     message.webhook_id = None
     message.guild = MagicMock()
     message.guild.id = 1341775494026231859
@@ -277,6 +277,28 @@ async def test_bot_user_message_is_ignored(cog):
     message.guild.get_member.assert_not_called()
     message.guild.ban.assert_not_called()
     message.channel.send.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_non_fleet_bot_user_is_banned(cog):
+    """A bot account outside the AMC fleet whitelist IS a ban target."""
+    message = MagicMock()
+    message.author = MagicMock()
+    message.author.id = 999999999999999999
+    message.author.bot = True
+    message.webhook_id = None
+    message.guild = MagicMock()
+    message.guild.id = 1341775494026231859
+    message.channel = AsyncMock()
+    message.channel.id = 1529987241278177352
+
+    message.guild.ban = AsyncMock()
+    message.guild.get_member.return_value = None
+    message.guild.fetch_member.side_effect = Exception("not cached")
+    message.channel.send.return_value = MagicMock()
+
+    await cog.on_message(message)
+    message.guild.ban.assert_called_once()
 
 
 @pytest.mark.asyncio

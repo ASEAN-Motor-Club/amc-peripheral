@@ -27,6 +27,14 @@ BAN_TRAP_ALLOWED_ROLE_IDS = {
     for x in os.environ.get("BAN_TRAP_ALLOWED_ROLE_IDS", "").split(",")
     if x.strip()
 }
+# Bot users are banned like anyone else EXCEPT our own fleet, listed by
+# application/user ID. Never exempt all bots structurally: a spam bot account
+# posting in the trap channel must be a ban target (2026-09-19 escape).
+BAN_TRAP_WHITELISTED_BOT_IDS = {
+    int(x)
+    for x in os.environ.get("BAN_TRAP_WHITELISTED_BOT_IDS", "").split(",")
+    if x.strip()
+}
 BAN_TRAP_ANNOUNCEMENT = os.environ.get(
     "BAN_TRAP_ANNOUNCEMENT", "My apologies, but they had to go."
 )
