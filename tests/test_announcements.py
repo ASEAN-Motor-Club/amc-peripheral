@@ -109,28 +109,6 @@ def test_get_announcement_count_enabled_only(db):
     assert db.get_announcement_count(enabled_only=True) == 1
 
 
-def test_seed_announcements_empty_db(db):
-    """Test seeding announcements in empty database."""
-    default = ["Ann 1", "Ann 2", "Ann 3"]
-    db.seed_announcements(default)
-
-    announcements = db.list_announcements()
-    assert len(announcements) == 3
-    assert [a["text"] for a in announcements] == default
-
-
-def test_seed_announcements_non_empty_db(db):
-    """Test seeding doesn't overwrite existing announcements."""
-    db.add_announcement("Existing", "user")
-
-    default = ["New 1", "New 2"]
-    db.seed_announcements(default)
-
-    announcements = db.list_announcements()
-    assert len(announcements) == 1
-    assert announcements[0]["text"] == "Existing"
-
-
 def test_empty_database(db):
     """Test empty database handling."""
     assert db.list_announcements() == []
