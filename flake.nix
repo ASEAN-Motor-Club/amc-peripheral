@@ -626,9 +626,12 @@
                 for f in radio.db radio.db-wal radio.db-shm; do
                   copy_once "/var/lib/radio/$f" "/var/lib/amc-bots/radio/$f"
                 done
-                for f in player_memories.db player_memories.db-wal player_memories.db-shm annie_wiki.db annie_wiki.db-wal annie_wiki.db-shm announcements.db; do
+                for f in player_memories.db player_memories.db-wal player_memories.db-shm annie_wiki.db annie_wiki.db-wal annie_wiki.db-shm; do
                   copy_once "/var/lib/data/amc-memory/$f" "/var/lib/amc-bots/radio/$f"
                 done
+                # announcements.db is deliberately NOT migrated: there is exactly
+                # one list, amc-bot's store (see ANNOUNCEMENTS_DB_PATH above).
+                # Copying a legacy file back could resurrect a months-old list.
               '';
               restartIfChanged = false;
               serviceConfig = {
@@ -666,9 +669,11 @@
                 copy_once() {
                   if [ -e "$1" ] && [ ! -e "$2" ]; then cp -a "$1" "$2"; fi
                 }
-                for f in player_memories.db player_memories.db-wal player_memories.db-shm annie_wiki.db annie_wiki.db-wal annie_wiki.db-shm announcements.db; do
+                for f in player_memories.db player_memories.db-wal player_memories.db-shm annie_wiki.db annie_wiki.db-wal annie_wiki.db-shm; do
                   copy_once "/var/lib/data/amc-memory-bot/$f" "/var/lib/amc-bots/bot/$f"
                 done
+                # announcements.db is NOT restored from the legacy location — the
+                # live list is the authoritative one and nothing may re-seed it.
               '';
               restartIfChanged = false;
               serviceConfig = {
