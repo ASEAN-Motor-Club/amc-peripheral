@@ -56,7 +56,6 @@ class UtilsCog(commands.Cog):
             "Use the website (aseanmotorclub.com) to see the live map, live storage amounts, jobs, and more!",
             "Help new players! Encourage them to join Discord (aseanmotorclub.com) & ask questions.",
             "The new Championship season is starting on Saturday 25 October. Register your team now!",
-            "Corporation owners: No AI drivers! They block roads when you are offline.",
             "DJ Annie says: Turn on Radio ASEAN! Your long haul routes will thank you (and so will she!).",
             "Did you know trailers have their own Control Panel, usually on its left side. Use it to respawn the trailer if stuck.",
             "ARWRS and DOT is here to help! Use /rescue to alert them if you need a rescue operation.",
