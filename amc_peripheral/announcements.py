@@ -80,9 +80,3 @@ class AnnouncementsDB:
                 "SELECT COUNT(*) FROM announcements WHERE enabled = 1"
             ).fetchone()[0]
         return self.db.execute("SELECT COUNT(*) FROM announcements").fetchone()[0]
-
-    def seed_announcements(self, announcements: list[str], created_by: str = "system"):
-        """Seed the database with initial announcements if empty."""
-        if self.get_announcement_count() == 0:
-            for text in announcements:
-                self.add_announcement(text, created_by)

@@ -28,41 +28,10 @@ class UtilsCog(commands.Cog):
 
         # State for announcements
         self.announcement_index = random.randint(0, 100)
+        # The announcement list lives ONLY in the DB — it is maintained through the
+        # list/add/remove/toggle commands. No defaults ship in code and nothing is
+        # ever seeded, so a restart cannot resurrect retired announcements.
         self.announcements_db = AnnouncementsDB()
-        
-        # Seed database with default announcements if empty
-        default_announcements = [
-            "Please despawn unused vehicles! Ask /bot if you do not know how.",
-            "Did you know? The parking lots opposite the ASEAN HQ is the Showcase Spot, where you can showcase your liveries and car customisation",
-            "Tune into Radio ASEAN! You can listen to music and news surrounding the community, and even submit song requests.",
-            "Please despawn unused vehicles! Ask /bot if you do not know how.",
-            "Participate in the AMC Championship Cup! Each event pays up to 3 million in prizes. Check /events for more.",
-            "Plan your next haul with the website (aseanmotorclub.com), where you can check live storage information.",
-            "The AMC Championship season has begun! Find a team or compete solo, each race comes with prize money.",
-            "Want to know where to buy a vehicle and how much it costs? Use the /bot followed by your question.",
-            "Did you know? Autopilot gives you 50% of the exp you would get by driving manually.",
-            "Remember to renew your land plot rent! You will receive a reminder on discord if you're verified.",
-            "Regular server restarts improve FPS! Next one: Mon 8:30 AM GMT+7.",
-            "Tune in to Radio ASEAN at aseanmotorclub.com/radio for pro tips!",
-            "Check out Meehoi's house in the sky at Gapa, try entering the small room in the depot underneath.",
-            "Our server runs a subsidy scheme. Find out jobs with bonus pay using the /jobs command!",
-            "Game chat is synced with Discord. Keep in touch with the community!",
-            "Depots auto-repair company vehicles. Help the community by delivering supplies to restock them! 10,000 coins subsidy.",
-            "/rp_mode gives a 50% boost to all your payments and subsidies!",
-            "Did you know Alt+Z hides your HUD for cinematic views? Try it!",
-            "Please despawn your unused vehicles to help keep our server running smooth!",
-            "Need a cheaper rental? Borrow from other players! Check Discord's rental channel.",
-            "Admins can despawn stuck tow requests. Ping them on Discord!",
-            "Use the website (aseanmotorclub.com) to see the live map, live storage amounts, jobs, and more!",
-            "Help new players! Encourage them to join Discord (aseanmotorclub.com) & ask questions.",
-            "The new Championship season is starting on Saturday 25 October. Register your team now!",
-            "DJ Annie says: Turn on Radio ASEAN! Your long haul routes will thank you (and so will she!).",
-            "Did you know trailers have their own Control Panel, usually on its left side. Use it to respawn the trailer if stuck.",
-            "ARWRS and DOT is here to help! Use /rescue to alert them if you need a rescue operation.",
-            "Find out the jobs in demand on the server with /jobs. Do them solo or together and share the rewards.",
-            "Check out the Cat Altar at Ryumi's house near Pyosun Fishing Village",
-        ]
-        self.announcements_db.seed_announcements(default_announcements)
 
         # Timezone state
         self.last_timezone_embed_message = None
