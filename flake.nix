@@ -638,7 +638,6 @@
                 Type = "simple";
                 Restart = "on-failure";
                 RestartSec = "10";
-                RuntimeMaxSec = "26400";
                 EnvironmentFile = "${cfg.environmentFile}";
               };
               script = ''
