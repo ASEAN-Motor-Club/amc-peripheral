@@ -101,6 +101,33 @@ def page_store(tmp_path, monkeypatch):
         encoding="utf-8",
     )
 
+    # Root-level concept pages (no namespace): game MECHANICS. These were
+    # invisible to search before the 2026-11-05 fix, which is why "what is a
+    # company building" came back as invention instead of depot/houses_guide.
+    (pages / "depot.txt").write_text(
+        "====== Depots ======\n\n"
+        "Depots are a significant feature designed to streamline vehicle "
+        "maintenance and enhance company management.\n\n"
+        "===== Integration with Company System =====\n"
+        "Depots are constructible buildings available to company owners that "
+        "automatically repair company and corporation AI vehicles as they visit.\n",
+        encoding="utf-8",
+    )
+    (pages / "houses_guide.txt").write_text(
+        "====== Housing & Plots ======\n\n"
+        "In Motor Town, owning a house or plot of land allows you to establish "
+        "a personal base.\n\n"
+        "===== Buildings =====\n"
+        "To construct a building on a rented plot, first buy blueprints from the "
+        "architect's office in south-west Jeju.\n",
+        encoding="utf-8",
+    )
+    # Navigation page: must NOT become searchable knowledge.
+    (pages / "start.txt").write_text(
+        "====== Welcome to the wiki ======\n\nNavigation for the ASEAN wiki.\n",
+        encoding="utf-8",
+    )
+
     monkeypatch.setattr(wiki_kb, "WIKI_PAGES_PATH", str(pages))
     # reset the module-level index + search caches
     monkeypatch.setattr(wiki_kb, "_INDEX", None)
@@ -228,3 +255,43 @@ def test_search_wiki_cross_category(page_store):
     assert "error" not in r
     assert r["results"][0]["category"] == "cargo"
     assert r["results"][0]["slug"] == "steelcoil_10t"
+
+
+def test_search_wiki_finds_concept_page_by_word_overlap(page_store):
+    """'company building' must reach the depot concept page.
+
+    Regression for 2026-11-05: no page contained that full phrase, so the old
+    substring-only search returned nothing and the bot invented a "Buy
+    Buildings" menu. Depot's real text has both words, so the token fallback
+    must surface it.
+    """
+    r = wiki_kb.search_wiki("company building")
+    assert "error" not in r
+    assert r["results"], "expected a match for 'company building'"
+    top = r["results"][0]
+    assert top["category"] == "concept"
+    assert top["slug"] == "depot"
+
+
+def test_search_wiki_finds_plot_mechanic(page_store):
+    """A mechanics term only present in a root page ('blueprint') is reachable."""
+    r = wiki_kb.search_wiki("blueprint")
+    assert "error" not in r
+    slugs = {hit["slug"] for hit in r["results"]}
+    assert "houses_guide" in slugs, f"expected houses_guide, got {slugs}"
+
+
+def test_concept_page_readable(page_store):
+    """Concept pages load through the normal page reader (category 'concept')."""
+    page = wiki_kb._load_page("concept", "depot")
+    assert page is not None
+    assert page["name"] == "Depots"
+    assert "repair company and corporation AI vehicles" in page["body"]
+
+
+def test_root_navigation_page_excluded(page_store):
+    """start.txt is navigation, not game knowledge — it must not be indexed."""
+    index = wiki_kb._build_index()
+    assert "start" not in index.get("concept", {})
+    r = wiki_kb.search_wiki("welcome to the wiki")
+    assert all(hit["slug"] != "start" for hit in r["results"])

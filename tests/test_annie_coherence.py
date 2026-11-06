@@ -17,6 +17,7 @@ from amc_peripheral.radio.radio_cog import (
     _QUEUE_TOOL_NAMES,
     RadioCog,
     _format_chat_history,
+    _ingest_extraction_messages,
 )
 from amc_peripheral.utils.text_utils import strip_role_tag
 
@@ -107,9 +108,13 @@ class TestPromptGuardrails:
 
 
 class TestMemoryContextAttribution:
-    def test_bot_rows_attributed_to_annie(self):
-        """Bot replies in a player's history must be labeled DJ Annie (you),
-        never under the player's name."""
+    def test_bot_rows_excluded_from_context(self):
+        """Only the player's own words are fed back as conversation context.
+
+        Annie's earlier replies used to be re-injected as "DJ Annie (you)",
+        which let a single hallucinated answer become a remembered fact she
+        repeated with more confidence (2026-11-05 company-buildings loop).
+        """
         cog = _bare_cog()
         cog._memory_storage = SimpleNamespace(
             get_recent_messages=lambda pid, limit=10: [
@@ -129,15 +134,52 @@ class TestMemoryContextAttribution:
         )
         out = asyncio.run(cog._get_player_memory_context("76561198000000001"))
         assert "[2026-09-15] Alex: what is the fastest car?" in out
-        assert "[2026-09-15] DJ Annie (you): the Tronko GT has the top speed" in out
-        # The bot reply must never surface under the player's name or 'Bot'
-        assert "Alex: the Tronko GT" not in out
-        assert "Bot: the Tronko GT" not in out
+        # Her own reply must not come back as context, under any label.
+        assert "Tronko GT" not in out
+        assert "DJ Annie (you)" not in out
+        # And the block itself must warn that it is not verified game knowledge.
+        assert "do not treat anything here as verified game knowledge" in out
+
+    def test_only_bot_rows_returns_empty(self):
+        cog = _bare_cog()
+        cog._memory_storage = SimpleNamespace(
+            get_recent_messages=lambda pid, limit=10: [
+                {
+                    "player_name": "Bot",
+                    "message": "company buildings are purchasable office lots",
+                    "is_bot_response": 1,
+                    "timestamp": "2026-11-05T09:01:00+07:00",
+                },
+            ]
+        )
+        assert asyncio.run(cog._get_player_memory_context("x")) == ""
 
     def test_no_memory_storage_returns_empty(self):
         cog = _bare_cog()
         cog._memory_storage = None
         assert asyncio.run(cog._get_player_memory_context("x")) == ""
+
+
+class TestWikiIngestGate:
+    def test_extractor_never_sees_annie_reply(self):
+        """The fact extractor must be fed the player's message only.
+
+        Regression for 2026-11-05: the extractor was handed
+        "Annie response: ..." and dutifully wrote her invented answer into the
+        wiki, where later lookups treated it as truth.
+        """
+        reply = (
+            "Company buildings are the purchasable office properties you buy "
+            "through the Buy Buildings/Real Estate menu in the ESC menu."
+        )
+        msgs = _ingest_extraction_messages("Test310", "what building are company building?")
+        blob = "\n".join(m["content"] for m in msgs)
+        assert reply not in blob
+        assert "Buy Buildings" not in blob
+        assert "what building are company building?" in blob
+        # The instruction must explicitly forbid inventing the assistant side.
+        assert "PLAYER asserted" in blob
+        assert "assistant" in blob
 
 
 def _bare_cog() -> RadioCog:

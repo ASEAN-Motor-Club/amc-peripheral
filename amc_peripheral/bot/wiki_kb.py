@@ -48,7 +48,17 @@ CATEGORIES = {
     # amc-backend's `amcm export_commands_to_wiki`). Lets Annie answer
     # "how does /tp2marker work" from the wiki instead of guessing.
     "command": "commands",
+    # Game MECHANICS pages live at the page-store root with no namespace:
+    # depot, houses_guide, the_game_world, jobs, faq, town_bonus, aseanbank...
+    # The structured namespaces above only cover entities, so questions like
+    # "what is a company building" or "how do I get a plot" had NO reachable
+    # page and the bot answered from invention (2026-11-05 company-buildings
+    # hallucination). Root pages are the authoritative source for mechanics.
+    "concept": "",
 }
+
+# Root pages that are navigation/meta rather than game knowledge.
+CONCEPT_EXCLUDE_SLUGS = {"start", "sidebar", "playground", "dot", "wiki"}
 
 # Cache built once per process: category -> {lower_display_key: slug}
 _INDEX: Optional[dict[str, dict[str, str]]] = None
@@ -114,6 +124,8 @@ def _build_index() -> dict[str, dict[str, str]]:
             if not entry.endswith(".txt"):
                 continue
             slug = entry[: -len(".txt")]
+            if namespace == CATEGORIES["concept"] and slug in CONCEPT_EXCLUDE_SLUGS:
+                continue
             main_path = os.path.join(dirpath, entry)
 
             infobox: dict = {}
@@ -150,12 +162,13 @@ def _build_search_corpus() -> dict[str, dict[str, tuple[str, str, str]]]:
     """Lazily build a cross-category search corpus once per process.
 
     Returns ``{category: {slug: (name, title, body)}}`` where ``name`` is the
-    best display name, ``title`` the main page heading, and ``body`` the first
-    non-directive paragraph. Reading every page's *details* sub-pages for a
-    search would be needlessly heavy, so this only scans the main ``<slug>.txt``
-    for the title + intro paragraph plus the infobox for the display name —
-    enough for lexical keyword matching, and cheap enough to hold every page in
-    memory once.
+    best display name, ``title`` the main page heading, and ``body`` the full
+    main page text. Carrying the whole page (not just the intro paragraph) is
+    what makes mechanics reachable: concept pages bury the actual mechanic
+    below a summary paragraph (``depot`` → "Depots are constructible buildings
+    available to company owners..."), and an intro-only window made every such
+    question a miss. The page body is a few KB at most and is held once per
+    process — details sub-pages stay out of the corpus so it stays cheap.
     """
     global _SEARCH_CORPUS
     if _SEARCH_CORPUS is not None:
@@ -171,6 +184,8 @@ def _build_search_corpus() -> dict[str, dict[str, tuple[str, str, str]]]:
             if not entry.endswith(".txt"):
                 continue
             slug = entry[: -len(".txt")]
+            if namespace == CATEGORIES["concept"] and slug in CONCEPT_EXCLUDE_SLUGS:
+                continue
             main_path = os.path.join(dirpath, entry)
             try:
                 text = _read_text(main_path)
@@ -180,13 +195,8 @@ def _build_search_corpus() -> dict[str, dict[str, tuple[str, str, str]]]:
             m = re.search(r"^======\s*(.+?)\s*======\s*$", text, re.MULTILINE)
             if m:
                 main_title = m.group(1)
-            # First paragraph (not an infobox/page directive) is the intro body.
-            body = ""
-            for para in text.split("\n\n"):
-                p = para.strip()
-                if p and not p.startswith("{{") and not p.startswith("="):
-                    body = p
-                    break
+            # Full main page text — see the docstring for why not just the intro.
+            body = text
             # Infobox display name for the canonical name.
             infobox: dict = {}
             infobox_path = os.path.join(dirpath, slug, "auto_infobox.txt")
@@ -424,12 +434,22 @@ def _load_page(category: str, slug: str) -> Optional[dict[str, Any]]:
     m = re.search(r"^======\s*(.+?)\s*======\s*$", text, re.MULTILINE)
     if m:
         main_title = m.group(1)
-    # The first paragraph (the "X is a Y in Motor Town" blurb) is body.
-    for para in text.split("\n\n"):
-        p = para.strip()
-        if p and not p.startswith("{{") and not p.startswith("="):
-            body = p
-            break
+    if category == "concept":
+        # Mechanics pages are prose — the answer is usually in the SECOND
+        # paragraph or under a heading (depot: "constructible buildings ...
+        # repair company vehicles"; houses_guide: blueprints, build costs).
+        # Return the whole page so a read never stops at the blurb. These pages
+        # have no auto_details sub-page, so nothing is duplicated.
+        body = "\n".join(
+            line for line in text.splitlines() if not line.strip().startswith("{{page>")
+        ).strip()
+    else:
+        # The first paragraph (the "X is a Y in Motor Town" blurb) is body.
+        for para in text.split("\n\n"):
+            p = para.strip()
+            if p and not p.startswith("{{") and not p.startswith("="):
+                body = p
+                break
 
     ns = CATEGORIES.get(category, category)
     for sub, attr in (("auto_infobox", "infobox"), ("auto_details", "details")):
@@ -531,11 +551,14 @@ def search_wiki(query: str, limit: int = 8) -> dict:
     Identifies what an unknown term refers to when the caller doesn't yet know
     the right category (e.g. ``search_wiki('air city')`` → the ``vehicle`` Air
     City bus). The FULL sanitized term is matched as a substring against each
-    page's name, then title, then slug, then description, in that priority
-    order — there is no synonym/stem/embedding step. Any recall gap is the
-    caller's to close by retrying a different phrasing (the model is coached to
-    do this via the tool description). Returns matches across every category so
-    the caller can then use the targeted ``lookup_*`` verb for full details.
+    page's name, then title, then slug, then body; when the phrase misses
+    entirely, its individual words must ALL appear in the name/title or in the
+    body, so multi-word queries like "company building" still find the page
+    that says "constructible buildings available to company owners". There is
+    no synonym/stem/embedding step. Any recall gap is the caller's to close by
+    retrying a different phrasing (the model is coached to do this via the tool
+    description). Returns matches across every category so the caller can then
+    use the targeted ``lookup_*`` verb for full details.
 
     Returns:
         dict with ``results: [{category, slug, name, title}]`` or
@@ -544,6 +567,7 @@ def search_wiki(query: str, limit: int = 8) -> dict:
     q = _sanitize_query(query)
     if not q:
         return {"error": "Search query required."}
+    token_hits = [t for t in re.split(r"[^a-z0-9]+", q) if t]
     corpus = _build_search_corpus()
 
     hits: list[tuple[int, str, str, str, str]] = []  # (priority, cat, slug, name, title)
@@ -557,10 +581,14 @@ def search_wiki(query: str, limit: int = 8) -> dict:
                 prio = 1
             elif q in n_title:
                 prio = 2
-            elif q in n_slug:
+            elif token_hits and all(t in n_name for t in token_hits):
                 prio = 3
-            elif q in n_body:
+            elif q in n_slug:
                 prio = 4
+            elif token_hits and all(t in n_name or t in n_title for t in token_hits):
+                prio = 5
+            elif token_hits and all(t in n_body for t in token_hits):
+                prio = 6
             else:
                 continue
             hits.append((prio, category, slug, name, title))
@@ -586,7 +614,9 @@ def get_index(limit_chars: int = 4000) -> str:
     """
     index = _build_index()
     lines = ["## Game Wiki Knowledge", "Game data is served from the wiki. Use the "
-             "`run` tool's vehicle/cargo/part/deliverypoint/cargospace/cargotype/command verbs."]
+             "`run` tool's vehicle/cargo/part/deliverypoint/cargospace/cargotype/command "
+             "verbs, and `search_game_wiki` for game mechanics (concept pages: plots, "
+             "buildings, depots, jobs, economy)."]
     total = 0
     used = len("\n".join(lines))
     for category, cat_index in index.items():

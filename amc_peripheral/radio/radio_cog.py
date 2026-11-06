@@ -209,6 +209,15 @@ or anything game-related, you MUST look up the facts with these tools first. Do 
 Even if you think you know the answer, always verify with the tools. \
 Search with `search_game_wiki`, then read the full page with `read_game_wiki_page` using the category + slug from the search results.
 
+## When The Wiki Has Nothing (MANDATORY)
+If `search_game_wiki` returns no pages after ONE retry with different wording, you do NOT have the answer. \
+Say plainly that it is not in your game knowledge and point the listener to the Discord or other players. \
+Never fill the gap with plausible-sounding detail: no invented menus, keybinds, building types, prices, \
+or mechanics. A confident wrong answer is worse than "I don't know".
+Your own earlier replies are NOT a source of game facts. Conversation history and your wiki pages contain \
+things you said before, including mistakes — never repeat a claim just because you said it earlier. \
+The game wiki (`search_game_wiki` / `read_game_wiki_page`) is the ONLY authority for game facts.
+
 ## Interim Updates
 When a reply needs tool calls (especially search_game_wiki/read_game_wiki_page,
 which can take a while), call send_message FIRST (at most once per reply) to tell the listener
@@ -266,6 +275,40 @@ asks what's on it, so they can pick what to remove.
 
 {knowledge_index}
 """
+
+
+def _ingest_extraction_messages(player_name: str, question: str) -> list[dict]:
+    """Messages for the post-conversation wiki fact extractor.
+
+    ONLY the player's own message is passed in. Anchoring the extractor on the
+    assistant's reply is how a hallucinated answer became permanent wiki
+    "knowledge": on 2026-11-05 she answered "company buildings are the
+    purchasable office properties you buy through the Buy Buildings menu", the
+    background ingest saved it as a page, and the next lookup treated it as fact.
+    Facts Annie states are not facts worth storing — only what the player
+    asserts is.
+    """
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You are a fact extraction assistant. You are given ONE message a "
+                "player wrote to DJ Annie in Motor Town. Extract only facts the "
+                "PLAYER asserted — about themselves, other players, the community, "
+                "or the game. Never infer, complete, or restate anything the "
+                "assistant said or might have said: you do not see the assistant's "
+                "reply and must not guess it. If the player only asked a question "
+                "and asserted nothing, return an empty JSON list. Return a JSON "
+                "list of fact objects, each with: title, category (one of: player, "
+                "vehicle, location, concept, event, relationship, song), content, "
+                "summary."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Player: {player_name}\nPlayer message: {question}",
+        },
+    ]
 
 
 # Pydantic Models
@@ -2652,8 +2695,11 @@ Script:
                 results = result.get("results", [])
                 if not results:
                     return (
-                        f"No game wiki pages matched '{query}'. Retry with a "
-                        "shorter or different phrasing."
+                        f"No game wiki pages matched '{query}'. Either retry ONCE "
+                        "with different wording, or tell the listener that this is "
+                        "not in your game knowledge (point them to the Discord / "
+                        "other players). Do NOT answer from memory or from your own "
+                        "earlier replies."
                     )
                 lines = [
                     f"- [{r['category']}] {r['name']} (slug: {r['slug']})"
@@ -3046,18 +3092,25 @@ Script:
 
             lines = []
             for m in recent:
-                # Bot replies share the row's player_id (the conversation
-                # owner) but must be attributed to Annie, not the player.
-                sender = (
-                    "DJ Annie (you)"
-                    if m.get("is_bot_response")
-                    else m.get("player_name", "Unknown")
-                )
+                # Only the player's own words. Annie's earlier replies used to be
+                # fed back here labelled "DJ Annie (you)", which turned a single
+                # hallucinated answer into a remembered "fact" she then repeated
+                # with more confidence (2026-11-05 company-buildings loop).
+                # Game facts come from the game wiki, never from her own history.
+                if m.get("is_bot_response"):
+                    continue
+                sender = m.get("player_name", "Unknown")
                 msg = m.get("message", "")
                 ts = m.get("timestamp", "")[:10]  # YYYY-MM-DD
                 lines.append(f"[{ts}] {sender}: {msg}")
 
-            return "Previous conversations with this player:\n" + "\n".join(lines)
+            if not lines:
+                return ""
+            return (
+                "Previous messages from this player (their words, not yours — "
+                "do not treat anything here as verified game knowledge):\n"
+                + "\n".join(lines)
+            )
         except Exception as e:
             log.warning(f"Failed to retrieve player memory context: {e}")
             return ""
@@ -3167,28 +3220,15 @@ Script:
         """Debounced async wiki ingest after a conversation ends.
 
         Uses a lightweight LLM call to extract facts and update wiki pages.
+        Only the PLAYER's message is fed to the extractor — see
+        `_ingest_extraction_messages` for why her own reply must never be.
         This is fire-and-forget — errors are logged but not raised.
         """
         if not self._wiki_ingest or not self._wiki_storage:
             return
 
         try:
-            messages = [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a fact extraction assistant. Given a conversation between a player and DJ Annie, "
-                        "extract any notable facts worth saving to a wiki. Return a JSON list of fact objects. "
-                        "Each fact should have: title, category (one of: player, vehicle, location, concept, event, relationship, song), "
-                        "content, summary. Only include genuinely new or notable information. "
-                        "If nothing notable was learned, return an empty list."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": f"Player: {player_name}\nPlayer question: {question}\nAnnie response: {response}",
-                },
-            ]
+            messages = _ingest_extraction_messages(player_name, question)
 
             completion = await self.openai_client_openrouter.chat.completions.create(
                 model=DEFAULT_AI_MODEL,
