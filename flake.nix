@@ -593,11 +593,11 @@
 
             # UE4SS dev bridge hub.
             #
-            # The mod cannot send headers (UE4SS's `fetch` is GET-only), so its
-            # token rides in the URL path. That means /api/dev/ MUST NOT be
-            # access-logged: a poll every second would write a live credential
-            # into a log file that operators read casually. Access logging is off
-            # for that subtree; the hub keeps its own audit table instead.
+            # The mod sends its token in an X-AMC-Token header, so it never
+            # appears in a URL. The path form is still accepted for older
+            # clients, which is why /api/dev/ keeps access logging off: logging
+            # it would put a live credential in a file that operators read
+            # casually. The hub keeps its own audit table either way.
             services.nginx.virtualHosts.${cfg.nginx.domains.bridge} = {
               enableACME = true;
               forceSSL = true;

@@ -284,6 +284,36 @@ async def test_oversized_result_is_rejected(store):
 
 
 @pytest.mark.asyncio
+async def test_token_in_a_header_works_and_keeps_it_out_of_the_url(store):
+    token = store.enroll(FP, "DESKTOP-X", "0.3.0", auto_approve=True)["token"]
+    client = await start(make_app(store))
+    try:
+        r = await client.post("/api/admin/exec", json={"member": "desktop-x", "code": "return 7"},
+                              headers={"X-AMC-Admin": ADMIN})
+        assert (await r.json())["id"] == 1
+        # no token anywhere in the path
+        r = await client.get("/api/dev/poll?after=0", headers={"X-AMC-Token": token})
+        assert (await r.json())["code"] == "return 7"
+        # result post over the bare path too
+        r = await client.post("/api/dev/result", json={"id": 1, "ok": True, "result": 7},
+                              headers={"X-AMC-Token": token})
+        assert (await r.json())["ok"] is True
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_legacy_token_in_path_still_works(store):
+    token = store.enroll(FP, "DESKTOP-X", "0.3.0", auto_approve=True)["token"]
+    client = await start(make_app(store))
+    try:
+        r = await client.get(f"/api/dev/{token}/poll?after=0")
+        assert await r.json() == {}
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_unknown_token_poll_says_revoked(store):
     client = await start(make_app(store))
     try:

@@ -47,9 +47,14 @@ def create_app(
         got = request.headers.get("X-AMC-Admin", "")
         return bool(admin_token) and hmac.compare_digest(got, admin_token)
 
+    def request_token(request: web.Request) -> str:
+        """Header first, path second. The mods send a header, so the token never
+        appears in a URL (and therefore never in an access log); the path form
+        stays for anything older or hand-rolled."""
+        return request.headers.get("X-AMC-Token") or request.match_info.get("token") or ""
+
     def authed_member(request: web.Request):
-        member = store.member_by_token(token=request.match_info["token"])
-        return member
+        return store.member_by_token(token=request_token(request))
 
     # -- mod ------------------------------------------------------------
     async def enroll(request: web.Request) -> web.Response:
@@ -202,6 +207,8 @@ def create_app(
         web.get("/healthz", healthz),
         web.post("/api/enroll", enroll),
         web.get("/api/enroll/{secret}", enrollment),
+        web.get("/api/dev/poll", poll),
+        web.post("/api/dev/result", result),
         web.get("/api/dev/{token}/poll", poll),
         web.post("/api/dev/{token}/result", result),
         web.post("/api/admin/approve", admin_approve),
