@@ -108,10 +108,18 @@ def _code() -> str:
 
 
 class BridgeStore:
-    def __init__(self, path: str | Path, *, queue_cap: int = 8, command_ttl: int = 600):
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        queue_cap: int = 8,
+        command_ttl: int = 600,
+        sent_ttl: float = 90.0,
+    ):
         self.path = Path(path)
         self.queue_cap = queue_cap
         self.command_ttl = command_ttl
+        self.sent_ttl = sent_ttl
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._conn() as c:
             c.executescript(SCHEMA)
@@ -398,6 +406,8 @@ class BridgeStore:
 
     # -- commands ---------------------------------------------------------
     def queue_command(self, member_id: int, code: str) -> int:
+        # stale "sent" rows would otherwise fill the queue cap forever
+        self.expire_stale(member_id)
         with self._conn() as c:
             inflight = c.execute(
                 "SELECT COUNT(*) FROM commands WHERE member_id=? AND status IN ('queued','sent')",
@@ -411,8 +421,30 @@ class BridgeStore:
             )
             return int(cur.lastrowid or 0)
 
+    def expire_stale(self, member_id: int | None = None) -> int:
+        """Mark handed-out commands that never came back as expired.
+
+        A machine can die between "sent" and the result: game crash, killed
+        process, pulled cable. Without this the row stays "sent" forever, so
+        every read reports work in flight that nobody is doing, and the CLI
+        waits on a result that cannot arrive.
+        """
+        now = time.time()
+        sql = (
+            "UPDATE commands SET status='expired', result_at=?, error=?"
+            " WHERE status='sent' AND sent_at IS NOT NULL AND sent_at < ?"
+        )
+        args: list = [now, "no result before the timeout", now - self.sent_ttl]
+        if member_id is not None:
+            sql += " AND member_id=?"
+            args.append(member_id)
+        with self._conn() as c:
+            cur = c.execute(sql, args)
+            return cur.rowcount or 0
+
     def next_command(self, member_id: int, after: int = 0) -> dict | None:
         """Next queued command for this member, marked as sent."""
+        self.expire_stale(member_id)
         with self._conn() as c:
             now = time.time()
             c.execute(
@@ -459,6 +491,8 @@ class BridgeStore:
             return True
 
     def results(self, member_id: int | None, after: int = 0) -> list[dict]:
+        # a machine that died mid-command must not leave the row "sent" forever
+        self.expire_stale(member_id)
         with self._conn() as c:
             if member_id is None:
                 rows = c.execute(
@@ -488,6 +522,7 @@ class BridgeStore:
             ]
 
     def pending(self, member_id: int) -> int:
+        self.expire_stale(member_id)
         with self._conn() as c:
             return int(
                 c.execute(
