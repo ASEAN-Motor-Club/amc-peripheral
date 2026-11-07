@@ -20,6 +20,9 @@ import urllib.request
 from pathlib import Path
 
 DEFAULT_URL = "https://bridge.aseanmotorclub.com"
+# Cloudflare sits in front of the hub and rejects urllib's default user-agent
+# with "error code: 1010", so the CLI identifies itself.
+USER_AGENT = "amcb/1.0 (+https://bridge.aseanmotorclub.com)"
 
 
 def _token(args) -> str:
@@ -41,6 +44,7 @@ def _call(args, method: str, path: str, body: dict | None = None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("X-AMC-Admin", _token(args))
+    req.add_header("User-Agent", USER_AGENT)
     if data:
         req.add_header("Content-Type", "application/json")
     try:

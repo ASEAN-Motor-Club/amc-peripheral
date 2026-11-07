@@ -792,6 +792,15 @@
               '';
             };
 
+            # Operator CLI for the dev bridge. Only this binary goes on PATH,
+            # not the whole python env: operators run `amcb exec <member>` from
+            # an ssh session and nothing else needs to be reachable.
+            environment.systemPackages = [
+              (pkgs.writeShellScriptBin "amcb" ''
+                exec ${self.packages.${pkgs.system}.default}/bin/amcb "$@"
+              '')
+            ];
+
             # Malkuth Ban Trap Bot
             systemd.services.amc-ban-trap = {
               wantedBy = ["multi-user.target"];
