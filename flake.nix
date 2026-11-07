@@ -765,7 +765,13 @@
               wantedBy = ["multi-user.target"];
               after = ["network.target"];
               description = "AMC UE4SS Dev Bridge Hub";
-              restartIfChanged = false;
+              # Restart on change. It used to be false, which meant a deploy
+              # rebuilt the package and left the old process running: the new
+              # code was in the store and never executed, so a fix looked
+              # shipped while behaviour did not change. The hub is stateless
+              # beyond SQLite and reconnecting is invisible (members poll every
+              # 2 s and retry on error), so a 1 s restart on deploy is cheap.
+              restartIfChanged = true;
               environment = {
                 AMC_BRIDGE_DB = "/var/lib/amc-bridge/bridge.db";
                 AMC_BRIDGE_PORT = "7010";
