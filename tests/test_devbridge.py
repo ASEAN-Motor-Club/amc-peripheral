@@ -78,6 +78,75 @@ def test_revoked_member_is_refused_and_cannot_re_enrol(store):
     assert store.approve(e3["code"], "x", actor=APPROVER) is not None
 
 
+def _approved(store):
+    e = store.enroll(FP, "DESKTOP-X", "0.4.2")
+    store.approve(e["code"], "freeman", actor=APPROVER)
+    return int(store.member("freeman")["id"])
+
+
+def _age_command(store, cmd_id, seconds):
+    import sqlite3
+
+    with sqlite3.connect(store.path) as c:
+        c.execute(
+            "UPDATE commands SET sent_at = ? WHERE id = ?",
+            (time.time() - seconds, cmd_id),
+        )
+
+
+def test_a_command_that_never_came_back_is_expired(store):
+    """A crash between "sent" and the result must not strand the row forever."""
+    mid = _approved(store)
+    cmd_id = store.queue_command(mid, "return 1")
+    cmd = store.next_command(mid, 0)
+    assert cmd["id"] == cmd_id  # now "sent"
+
+    # still inside the window: untouched
+    assert store.expire_stale(mid) == 0
+    assert store.pending(mid) == 1
+
+    _age_command(store, cmd_id, store.sent_ttl + 5)
+    assert store.expire_stale(mid) == 1
+    assert store.pending(mid) == 0
+
+    rows = store.results(mid, after=0)
+    assert [r["id"] for r in rows] == [cmd_id]
+    assert rows[0]["status"] == "expired"
+    assert "timeout" in (rows[0]["error"] or "")
+
+
+def test_expiry_frees_the_queue_cap(store):
+    """Stale "sent" rows must not wedge the queue permanently."""
+    mid = _approved(store)
+    for _ in range(store.queue_cap):
+        store.queue_command(mid, "return 1")
+    with pytest.raises(ValueError):
+        store.queue_command(mid, "return 1")
+
+    # drain them one at a time, as the mod would, then let them go stale
+    ids = []
+    while True:
+        cmd = store.next_command(mid, 0)
+        if not cmd:
+            break
+        ids.append(cmd["id"])
+    for i in ids:
+        _age_command(store, i, store.sent_ttl + 5)
+
+    store.queue_command(mid, "return 2")  # would raise without expiry
+
+
+def test_results_reads_expire_before_reporting(store):
+    """Reading results is enough to clean up; no background job needed."""
+    mid = _approved(store)
+    cmd_id = store.queue_command(mid, "return 1")
+    store.next_command(mid, 0)
+    _age_command(store, cmd_id, store.sent_ttl + 5)
+
+    rows = store.results(mid, after=0)  # no explicit expire_stale call
+    assert rows[0]["status"] == "expired"
+
+
 def test_queue_cap_and_expiry(store):
     e = store.enroll(FP, "DESKTOP-X", "0.3.0")
     store.approve(e["code"], "freeman", actor=APPROVER)
