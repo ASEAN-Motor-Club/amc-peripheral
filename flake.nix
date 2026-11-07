@@ -240,6 +240,11 @@
                 default = "docs.aseanmotorclub.com";
                 description = "Domain for the documentation site (Starlight).";
               };
+              bridge = lib.mkOption {
+                type = lib.types.str;
+                default = "bridge.aseanmotorclub.com";
+                description = "Domain for the UE4SS dev bridge hub.";
+              };
             };
 
             # Radio web UI package
@@ -586,6 +591,39 @@
               };
             };
 
+            # UE4SS dev bridge hub.
+            #
+            # The mod sends its token in an X-AMC-Token header, so it never
+            # appears in a URL. The path form is still accepted for older
+            # clients, which is why /api/dev/ keeps access logging off: logging
+            # it would put a live credential in a file that operators read
+            # casually. The hub keeps its own audit table either way.
+            services.nginx.virtualHosts.${cfg.nginx.domains.bridge} = {
+              enableACME = true;
+              forceSSL = true;
+              locations."/api/dev/" = {
+                proxyPass = "http://127.0.0.1:7010/api/dev/";
+                extraConfig = ''
+                  access_log off;
+                  proxy_set_header Host $host;
+                  proxy_read_timeout 60s;
+                  client_max_body_size 1M;
+                '';
+              };
+              locations."/" = {
+                proxyPass = "http://127.0.0.1:7010";
+                extraConfig = ''
+                  access_log off;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_read_timeout 60s;
+                  client_max_body_size 1M;
+                '';
+              };
+            };
+
             systemd.services.amc-radio = {
               wantedBy = ["multi-user.target"];
               after = ["network.target" "motortown-server.service"];
@@ -717,6 +755,40 @@
               };
               script = ''
                 ${self.packages.${pkgs.system}.default}/bin/amc_mods
+              '';
+            };
+
+            # UE4SS dev bridge hub. Relay only: it stores enrolments, issues
+            # one token per approved machine, forwards code an operator wrote,
+            # and keeps the audit trail. It never executes anything itself.
+            systemd.services.amc-bridge = {
+              wantedBy = ["multi-user.target"];
+              after = ["network.target"];
+              description = "AMC UE4SS Dev Bridge Hub";
+              restartIfChanged = false;
+              environment = {
+                AMC_BRIDGE_DB = "/var/lib/amc-bridge/bridge.db";
+                AMC_BRIDGE_PORT = "7010";
+                AMC_BRIDGE_MAX_RESULT = "524288";
+                # Members expose their own machines; no claim-code approval step.
+                AMC_BRIDGE_AUTO_APPROVE = "1";
+              };
+              serviceConfig = {
+                Type = "simple";
+                Restart = "on-failure";
+                RestartSec = "5";
+                DynamicUser = true;
+                StateDirectory = "amc-bridge";
+                PrivateTmp = true;
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                NoNewPrivileges = true;
+                # Provides AMC_BRIDGE_ADMIN_TOKEN and AMC_BRIDGE_APPROVERS.
+                # Approvals fail CLOSED when the approver allowlist is empty.
+                EnvironmentFile = "${cfg.environmentFile}";
+              };
+              script = ''
+                ${self.packages.${pkgs.system}.default}/bin/amc_bridge
               '';
             };
 

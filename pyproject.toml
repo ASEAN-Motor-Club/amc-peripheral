@@ -43,6 +43,8 @@ amc_radio = "amc_peripheral.radio.radio:main"
 amc_jarvis = "amc_peripheral.devbot.devbot:main"
 amc_mods = "amc_peripheral.mods.server:main"
 amc_ban_trap = "amc_peripheral.malkuth.bot:main"
+amc_bridge = "amc_peripheral.devbridge.server:main"
+amcb = "amc_peripheral.devbridge.cli:main"
 
 [build-system]
 requires = ["hatchling", "editables"]
