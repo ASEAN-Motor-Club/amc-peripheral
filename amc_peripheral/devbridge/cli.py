@@ -31,7 +31,9 @@ def _token(args) -> str:
     p = Path.home() / ".config" / "amcb" / "token"
     if p.exists():
         return p.read_text().strip()
-    raise SystemExit("no admin token: set AMC_BRIDGE_ADMIN_TOKEN or write ~/.config/amcb/token")
+    raise SystemExit(
+        "no admin token: set AMC_BRIDGE_ADMIN_TOKEN or write ~/.config/amcb/token"
+    )
 
 
 def _call(args, method: str, path: str, body: dict | None = None):
@@ -56,7 +58,9 @@ def _call(args, method: str, path: str, body: dict | None = None):
 def _wait(args, member: str, cmd_id: int, timeout: float = 60.0) -> dict:
     deadline = time.time() + timeout
     while time.time() < deadline:
-        out = _call(args, "GET", f"/api/admin/results?member={member}&after={cmd_id - 1}")
+        out = _call(
+            args, "GET", f"/api/admin/results?member={member}&after={cmd_id - 1}"
+        )
         for r in out.get("results", []):
             if r["id"] == cmd_id:
                 return r
@@ -76,17 +80,30 @@ def _print_result(r: dict) -> None:
 def cmd_members(args):
     out = _call(args, "GET", "/api/admin/members")
     for m in out.get("members", []):
-        seen = time.strftime("%Y-%m-%d %H:%M", time.localtime(m["last_seen_at"])) if m.get("last_seen_at") else "never"
-        print(f"{m['label']:<16} {'REVOKED' if m['revoked'] else 'ok':<6} "
-              f"{(m.get('mod') or '-'):<9} pending={m.get('pending', 0)} "
-              f"last_seen={seen}  {m.get('host') or '-'}")
+        seen = (
+            time.strftime("%Y-%m-%d %H:%M", time.localtime(m["last_seen_at"]))
+            if m.get("last_seen_at")
+            else "never"
+        )
+        print(
+            f"{m['label']:<16} {'REVOKED' if m['revoked'] else 'ok':<6} "
+            f"{(m.get('mod') or '-'):<9} pending={m.get('pending', 0)} "
+            f"last_seen={seen}  {m.get('host') or '-'}"
+        )
 
 
 def cmd_approve(args):
-    out = _call(args, "POST", "/api/admin/approve", {
-        "code": args.code, "member": args.member, "approver": args.approver,
-        "discord_id": args.discord_id,
-    })
+    out = _call(
+        args,
+        "POST",
+        "/api/admin/approve",
+        {
+            "code": args.code,
+            "member": args.member,
+            "approver": args.approver,
+            "discord_id": args.discord_id,
+        },
+    )
     print("approved {} (fingerprint {})".format(out["label"], out["fingerprint"]))
     print("token is only delivered to the machine itself; nothing to copy.")
 
@@ -125,7 +142,12 @@ def cmd_shell(args):
             code = "\n".join(buf)
             buf = []
             try:
-                out = _call(args, "POST", "/api/admin/exec", {"member": args.member, "code": code})
+                out = _call(
+                    args,
+                    "POST",
+                    "/api/admin/exec",
+                    {"member": args.member, "code": code},
+                )
                 _print_result(_wait(args, args.member, out["id"], args.timeout))
             except SystemExit as e:
                 print(e, file=sys.stderr)
@@ -136,14 +158,22 @@ def cmd_shell(args):
 
 
 def cmd_rename(args):
-    out = _call(args, "POST", "/api/admin/rename",
-                {"member": args.member, "to": args.to, "approver": args.approver})
+    out = _call(
+        args,
+        "POST",
+        "/api/admin/rename",
+        {"member": args.member, "to": args.to, "approver": args.approver},
+    )
     print("ok" if out.get("ok") else "no such member")
 
 
 def cmd_revoke(args):
-    out = _call(args, "POST", "/api/admin/revoke" if not args.undo else "/api/admin/unrevoke",
-                {"member": args.member, "approver": args.approver})
+    out = _call(
+        args,
+        "POST",
+        "/api/admin/revoke" if not args.undo else "/api/admin/unrevoke",
+        {"member": args.member, "approver": args.approver},
+    )
     print("ok" if out.get("ok") else "no change")
 
 
@@ -152,8 +182,11 @@ def main(argv=None) -> None:
     p.add_argument("--url", default=os.environ.get("AMC_BRIDGE_URL", DEFAULT_URL))
     p.add_argument("--token-file")
     p.add_argument("--timeout", type=float, default=60.0)
-    p.add_argument("--approver", default=os.environ.get("AMC_BRIDGE_APPROVER", ""),
-                   help="your Discord user ID (must be in the hub allowlist)")
+    p.add_argument(
+        "--approver",
+        default=os.environ.get("AMC_BRIDGE_APPROVER", ""),
+        help="your Discord user ID (must be in the hub allowlist)",
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("members", help="list machines").set_defaults(func=cmd_members)

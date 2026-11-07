@@ -53,8 +53,8 @@ def test_token_plaintext_is_cleared_after_first_use(store):
     e = store.enroll(FP, "DESKTOP-X", "0.3.0")
     token = store.approve(e["code"], "freeman", actor=APPROVER)["token"]
     assert store.enrollment(e["secret"])["token"] == token  # still claimable
-    store.member_by_token(token)                             # mod used it
-    assert "token" not in store.enrollment(e["secret"])      # now gone
+    store.member_by_token(token)  # mod used it
+    assert "token" not in store.enrollment(e["secret"])  # now gone
 
 
 def test_lost_state_after_approval_needs_a_human(store):
@@ -91,7 +91,9 @@ def test_queue_cap_and_expiry(store):
     import sqlite3
 
     with sqlite3.connect(store.path) as c:
-        c.execute("UPDATE commands SET created_at = ?", (time.time() - store.command_ttl - 5,))
+        c.execute(
+            "UPDATE commands SET created_at = ?", (time.time() - store.command_ttl - 5,)
+        )
     assert store.next_command(int(m["id"]), 0) is None
 
 
@@ -116,9 +118,9 @@ def test_auto_approve_re_enrol_rotates_the_token(store):
     first = store.enroll(FP, "DESKTOP-X", "0.3.0", auto_approve=True)["token"]
     second = store.enroll(FP, "DESKTOP-X", "0.3.1", auto_approve=True)
     assert second["token"] != first
-    assert store.member_by_token(first) is None      # old credential dead
+    assert store.member_by_token(first) is None  # old credential dead
     assert store.member_by_token(second["token"]) is not None
-    assert len(store.members()) == 1                 # same machine, one row
+    assert len(store.members()) == 1  # same machine, one row
 
 
 def test_auto_approve_never_resurrects_a_revoked_machine(store):
@@ -151,18 +153,20 @@ def test_rename(store):
 async def test_full_mod_lifecycle(store):
     client = await start(make_app(store))
     try:
-        r = await client.post("/api/enroll", json={"fingerprint": FP, "host": "DESKTOP-X",
-                                                   "mod": "0.3.0"})
+        r = await client.post(
+            "/api/enroll", json={"fingerprint": FP, "host": "DESKTOP-X", "mod": "0.3.0"}
+        )
         e = await r.json()
         assert e["status"] == "pending"
 
         r = await client.get("/api/enroll/{}".format(e["secret"]))
         assert (await r.json())["status"] == "pending"
 
-        r = await client.post("/api/admin/approve",
-                              json={"code": e["code"], "member": "freeman",
-                                    "approver": APPROVER},
-                              headers={"X-AMC-Admin": ADMIN})
+        r = await client.post(
+            "/api/admin/approve",
+            json={"code": e["code"], "member": "freeman", "approver": APPROVER},
+            headers={"X-AMC-Admin": ADMIN},
+        )
         out = await r.json()
         token = out["token"]
 
@@ -170,20 +174,26 @@ async def test_full_mod_lifecycle(store):
         got = await r.json()
         assert got["status"] == "approved" and got["token"] == token
 
-        r = await client.post("/api/admin/exec", json={"member": "freeman", "code": "return 42"},
-                              headers={"X-AMC-Admin": ADMIN})
+        r = await client.post(
+            "/api/admin/exec",
+            json={"member": "freeman", "code": "return 42"},
+            headers={"X-AMC-Admin": ADMIN},
+        )
         cmd_id = (await r.json())["id"]
 
         r = await client.get(f"/api/dev/{token}/poll?after=0")
         cmd = await r.json()
         assert cmd == {"id": cmd_id, "code": "return 42"}
 
-        r = await client.post(f"/api/dev/{token}/result",
-                              json={"id": cmd_id, "ok": True, "result": 42, "output": []})
+        r = await client.post(
+            f"/api/dev/{token}/result",
+            json={"id": cmd_id, "ok": True, "result": 42, "output": []},
+        )
         assert (await r.json())["ok"] is True
 
-        r = await client.get("/api/admin/results?member=freeman",
-                             headers={"X-AMC-Admin": ADMIN})
+        r = await client.get(
+            "/api/admin/results?member=freeman", headers={"X-AMC-Admin": ADMIN}
+        )
         res = (await r.json())["results"]
         assert res[0]["result"] == 42 and res[0]["status"] == "done"
     finally:
@@ -194,15 +204,19 @@ async def test_full_mod_lifecycle(store):
 async def test_auto_approve_needs_no_operator_at_all(store):
     client = await start(make_app(store, auto_approve=True))
     try:
-        r = await client.post("/api/enroll", json={"fingerprint": FP, "host": "DESKTOP-X",
-                                                   "mod": "0.3.0"})
+        r = await client.post(
+            "/api/enroll", json={"fingerprint": FP, "host": "DESKTOP-X", "mod": "0.3.0"}
+        )
         e = await r.json()
         assert e["status"] == "approved"
         token = e["token"]
 
         # straight to work: no approve call, no admin token
-        r = await client.post("/api/admin/exec", json={"member": "desktop-x", "code": "return 1"},
-                              headers={"X-AMC-Admin": ADMIN})
+        r = await client.post(
+            "/api/admin/exec",
+            json={"member": "desktop-x", "code": "return 1"},
+            headers={"X-AMC-Admin": ADMIN},
+        )
         assert (await r.json())["id"] == 1
         r = await client.get(f"/api/dev/{token}/poll?after=0")
         assert (await r.json())["code"] == "return 1"
@@ -216,7 +230,9 @@ async def test_auto_approve_enrol_returns_revoked_for_a_revoked_machine(store):
     store.revoke("desktop-x", actor="self")
     client = await start(make_app(store, auto_approve=True))
     try:
-        r = await client.post("/api/enroll", json={"fingerprint": FP, "host": "DESKTOP-X"})
+        r = await client.post(
+            "/api/enroll", json={"fingerprint": FP, "host": "DESKTOP-X"}
+        )
         assert (await r.json()) == {"status": "revoked"}
     finally:
         await client.close()
@@ -226,8 +242,13 @@ async def test_auto_approve_enrol_returns_revoked_for_a_revoked_machine(store):
 async def _enrol(store, fp):
     client = await start(make_app(store, auto_approve=True))
     try:
-        return (await (await client.post("/api/enroll", json={"fingerprint": fp,
-                                                              "host": "DESKTOP-X"})).json())["token"]
+        return (
+            await (
+                await client.post(
+                    "/api/enroll", json={"fingerprint": fp, "host": "DESKTOP-X"}
+                )
+            ).json()
+        )["token"]
     finally:
         await client.close()
 
@@ -251,13 +272,17 @@ async def test_admin_endpoints_require_the_token_and_the_allowlist(store):
     e = store.enroll(FP, "DESKTOP-X", "0.3.0")
     client = await start(make_app(store))
     try:
-        r = await client.post("/api/admin/approve",
-                              json={"code": e["code"], "member": "freeman", "approver": APPROVER})
+        r = await client.post(
+            "/api/admin/approve",
+            json={"code": e["code"], "member": "freeman", "approver": APPROVER},
+        )
         assert r.status == 403
 
-        r = await client.post("/api/admin/approve",
-                              json={"code": e["code"], "member": "freeman", "approver": "999"},
-                              headers={"X-AMC-Admin": ADMIN})
+        r = await client.post(
+            "/api/admin/approve",
+            json={"code": e["code"], "member": "freeman", "approver": "999"},
+            headers={"X-AMC-Admin": ADMIN},
+        )
         assert r.status == 403  # not an approver
 
         r = await client.get("/api/admin/members")
@@ -271,13 +296,18 @@ async def test_oversized_result_is_rejected(store):
     client = await start(make_app(store, max_result_bytes=1024))
     try:
         e = await (await client.post("/api/enroll", json={"fingerprint": FP})).json()
-        token = (await (await client.post(
-            "/api/admin/approve",
-            json={"code": e["code"], "member": "freeman", "approver": APPROVER},
-            headers={"X-AMC-Admin": ADMIN},
-        )).json())["token"]
-        r = await client.post(f"/api/dev/{token}/result",
-                              json={"id": 1, "ok": True, "result": "x" * 4096})
+        token = (
+            await (
+                await client.post(
+                    "/api/admin/approve",
+                    json={"code": e["code"], "member": "freeman", "approver": APPROVER},
+                    headers={"X-AMC-Admin": ADMIN},
+                )
+            ).json()
+        )["token"]
+        r = await client.post(
+            f"/api/dev/{token}/result", json={"id": 1, "ok": True, "result": "x" * 4096}
+        )
         assert r.status == 413
     finally:
         await client.close()
@@ -288,15 +318,21 @@ async def test_token_in_a_header_works_and_keeps_it_out_of_the_url(store):
     token = store.enroll(FP, "DESKTOP-X", "0.3.0", auto_approve=True)["token"]
     client = await start(make_app(store))
     try:
-        r = await client.post("/api/admin/exec", json={"member": "desktop-x", "code": "return 7"},
-                              headers={"X-AMC-Admin": ADMIN})
+        r = await client.post(
+            "/api/admin/exec",
+            json={"member": "desktop-x", "code": "return 7"},
+            headers={"X-AMC-Admin": ADMIN},
+        )
         assert (await r.json())["id"] == 1
         # no token anywhere in the path
         r = await client.get("/api/dev/poll?after=0", headers={"X-AMC-Token": token})
         assert (await r.json())["code"] == "return 7"
         # result post over the bare path too
-        r = await client.post("/api/dev/result", json={"id": 1, "ok": True, "result": 7},
-                              headers={"X-AMC-Token": token})
+        r = await client.post(
+            "/api/dev/result",
+            json={"id": 1, "ok": True, "result": 7},
+            headers={"X-AMC-Token": token},
+        )
         assert (await r.json())["ok"] is True
     finally:
         await client.close()

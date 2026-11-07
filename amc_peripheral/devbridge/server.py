@@ -51,7 +51,9 @@ def create_app(
         """Header first, path second. The mods send a header, so the token never
         appears in a URL (and therefore never in an access log); the path form
         stays for anything older or hand-rolled."""
-        return request.headers.get("X-AMC-Token") or request.match_info.get("token") or ""
+        return (
+            request.headers.get("X-AMC-Token") or request.match_info.get("token") or ""
+        )
 
     def authed_member(request: web.Request):
         return store.member_by_token(token=request_token(request))
@@ -124,7 +126,9 @@ def create_app(
         if not admin_ok(request):
             return _err("forbidden", 403)
         body = await request.json()
-        ok = store.deny(str(body.get("code") or ""), actor=str(body.get("approver") or "admin"))
+        ok = store.deny(
+            str(body.get("code") or ""), actor=str(body.get("approver") or "admin")
+        )
         return _json({"ok": ok})
 
     async def admin_exec(request: web.Request) -> web.Response:
@@ -188,14 +192,18 @@ def create_app(
         if not admin_ok(request):
             return _err("forbidden", 403)
         body = await request.json()
-        ok = store.revoke(str(body.get("member") or ""), actor=str(body.get("approver") or "admin"))
+        ok = store.revoke(
+            str(body.get("member") or ""), actor=str(body.get("approver") or "admin")
+        )
         return _json({"ok": ok})
 
     async def admin_unrevoke(request: web.Request) -> web.Response:
         if not admin_ok(request):
             return _err("forbidden", 403)
         body = await request.json()
-        ok = store.unrevoke(str(body.get("member") or ""), actor=str(body.get("approver") or "admin"))
+        ok = store.unrevoke(
+            str(body.get("member") or ""), actor=str(body.get("approver") or "admin")
+        )
         return _json({"ok": ok})
 
     async def healthz(request: web.Request) -> web.Response:
@@ -203,23 +211,25 @@ def create_app(
 
     app = web.Application(client_max_size=max_result_bytes * 2)
     app[STORE_KEY] = store
-    app.add_routes([
-        web.get("/healthz", healthz),
-        web.post("/api/enroll", enroll),
-        web.get("/api/enroll/{secret}", enrollment),
-        web.get("/api/dev/poll", poll),
-        web.post("/api/dev/result", result),
-        web.get("/api/dev/{token}/poll", poll),
-        web.post("/api/dev/{token}/result", result),
-        web.post("/api/admin/approve", admin_approve),
-        web.post("/api/admin/deny", admin_deny),
-        web.post("/api/admin/exec", admin_exec),
-        web.get("/api/admin/results", admin_results),
-        web.get("/api/admin/members", admin_members),
-        web.post("/api/admin/rename", admin_rename),
-        web.post("/api/admin/revoke", admin_revoke),
-        web.post("/api/admin/unrevoke", admin_unrevoke),
-    ])
+    app.add_routes(
+        [
+            web.get("/healthz", healthz),
+            web.post("/api/enroll", enroll),
+            web.get("/api/enroll/{secret}", enrollment),
+            web.get("/api/dev/poll", poll),
+            web.post("/api/dev/result", result),
+            web.get("/api/dev/{token}/poll", poll),
+            web.post("/api/dev/{token}/result", result),
+            web.post("/api/admin/approve", admin_approve),
+            web.post("/api/admin/deny", admin_deny),
+            web.post("/api/admin/exec", admin_exec),
+            web.get("/api/admin/results", admin_results),
+            web.get("/api/admin/members", admin_members),
+            web.post("/api/admin/rename", admin_rename),
+            web.post("/api/admin/revoke", admin_revoke),
+            web.post("/api/admin/unrevoke", admin_unrevoke),
+        ]
+    )
     return app
 
 

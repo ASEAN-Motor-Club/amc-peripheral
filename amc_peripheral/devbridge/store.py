@@ -90,7 +90,11 @@ def _hash_token(token: str) -> str:
 def _slug(host: str | None) -> str:
     """Readable, unique-ish label from a machine name."""
     raw = (host or "machine").strip()
-    out = "".join(ch if (ch.isalnum() or ch in "-_") else "-" for ch in raw).strip("-").lower()
+    out = (
+        "".join(ch if (ch.isalnum() or ch in "-_") else "-" for ch in raw)
+        .strip("-")
+        .lower()
+    )
     return (out or "machine")[:40]
 
 
@@ -147,7 +151,11 @@ class BridgeStore:
                 "SELECT * FROM enrollments WHERE fingerprint = ?", (fingerprint,)
             ).fetchone()
             if row:
-                out = {"code": row["code"], "secret": row["secret"], "status": row["status"]}
+                out = {
+                    "code": row["code"],
+                    "secret": row["secret"],
+                    "status": row["status"],
+                }
                 if auto_approve:
                     member = c.execute(
                         "SELECT * FROM members WHERE fingerprint = ?", (fingerprint,)
@@ -166,11 +174,15 @@ class BridgeStore:
                             (_hash_token(token), token, row["secret"]),
                         )
                         out.update({"status": "approved", "token": token})
-                        self._audit(c, "member.rotate", actor="self", subject=member["label"])
+                        self._audit(
+                            c, "member.rotate", actor="self", subject=member["label"]
+                        )
                 return out
             secret = secrets.token_urlsafe(24)
             code = _code()
-            while c.execute("SELECT 1 FROM enrollments WHERE code = ?", (code,)).fetchone():
+            while c.execute(
+                "SELECT 1 FROM enrollments WHERE code = ?", (code,)
+            ).fetchone():
                 code = _code()
             c.execute(
                 "INSERT INTO enrollments (secret, code, fingerprint, host, mod, created_at)"
@@ -193,8 +205,15 @@ class BridgeStore:
                 " VALUES (?,?,?,?,?,?,?)",
                 (name, None, _hash_token(token), fingerprint, host, mod, time.time()),
             )
-            self._audit(c, "enroll.auto", actor="self", subject=name, detail=fingerprint)
-            return {"code": code, "secret": secret, "status": "approved", "token": token}
+            self._audit(
+                c, "enroll.auto", actor="self", subject=name, detail=fingerprint
+            )
+            return {
+                "code": code,
+                "secret": secret,
+                "status": "approved",
+                "token": token,
+            }
 
     @staticmethod
     def _unique_label(c, base: str) -> str:
@@ -207,7 +226,9 @@ class BridgeStore:
     def enrollment(self, secret: str) -> dict | None:
         """What the mod polls. Carries the token only while it is unclaimed."""
         with self._conn() as c:
-            row = c.execute("SELECT * FROM enrollments WHERE secret = ?", (secret,)).fetchone()
+            row = c.execute(
+                "SELECT * FROM enrollments WHERE secret = ?", (secret,)
+            ).fetchone()
             if not row:
                 return None
             out = {"status": row["status"]}
@@ -215,11 +236,15 @@ class BridgeStore:
                 out["token"] = row["token_plain"]
             return out
 
-    def approve(self, code: str, label: str, actor: str, discord_id: str | None = None) -> dict | None:
+    def approve(
+        self, code: str, label: str, actor: str, discord_id: str | None = None
+    ) -> dict | None:
         """Approve a claim code. Creates or re-keys the member; returns the token ONCE."""
         code = (code or "").strip().upper()
         with self._conn() as c:
-            row = c.execute("SELECT * FROM enrollments WHERE code = ?", (code,)).fetchone()
+            row = c.execute(
+                "SELECT * FROM enrollments WHERE code = ?", (code,)
+            ).fetchone()
             if not row or row["status"] != "pending":
                 return None
 
@@ -242,21 +267,40 @@ class BridgeStore:
                 c.execute(
                     "UPDATE members SET token_hash=?, host=?, mod=?, discord_id=?"
                     " WHERE id=?",
-                    (_hash_token(token), row["host"], row["mod"], discord_id or existing["discord_id"],
-                     existing["id"]),
+                    (
+                        _hash_token(token),
+                        row["host"],
+                        row["mod"],
+                        discord_id or existing["discord_id"],
+                        existing["id"],
+                    ),
                 )
                 self._audit(c, "member.rekey", actor=actor, subject=label)
             else:
-                if c.execute("SELECT 1 FROM members WHERE label = ?", (label,)).fetchone():
+                if c.execute(
+                    "SELECT 1 FROM members WHERE label = ?", (label,)
+                ).fetchone():
                     raise ValueError("member label already exists")
                 c.execute(
                     "INSERT INTO members (label, discord_id, token_hash, fingerprint, host, mod, created_at)"
                     " VALUES (?,?,?,?,?,?,?)",
-                    (label, discord_id, _hash_token(token), row["fingerprint"],
-                     row["host"], row["mod"], now),
+                    (
+                        label,
+                        discord_id,
+                        _hash_token(token),
+                        row["fingerprint"],
+                        row["host"],
+                        row["mod"],
+                        now,
+                    ),
                 )
-                self._audit(c, "enroll.approve", actor=actor, subject=label,
-                            detail=row["fingerprint"])
+                self._audit(
+                    c,
+                    "enroll.approve",
+                    actor=actor,
+                    subject=label,
+                    detail=row["fingerprint"],
+                )
             return {"label": label, "token": token, "fingerprint": row["fingerprint"]}
 
     def deny(self, code: str, actor: str) -> bool:
@@ -279,18 +323,26 @@ class BridgeStore:
         h = _hash_token(token)
         with self._conn() as c:
             row = c.execute(
-                "SELECT * FROM members WHERE token_hash = ? AND revoked_at IS NULL", (h,)
+                "SELECT * FROM members WHERE token_hash = ? AND revoked_at IS NULL",
+                (h,),
             ).fetchone()
             if not row:
                 return None
-            c.execute("UPDATE members SET last_seen_at = ? WHERE id = ?", (time.time(), row["id"]))
+            c.execute(
+                "UPDATE members SET last_seen_at = ? WHERE id = ?",
+                (time.time(), row["id"]),
+            )
             if claim:
-                c.execute("UPDATE enrollments SET token_plain=NULL WHERE token_hash=?", (h,))
+                c.execute(
+                    "UPDATE enrollments SET token_plain=NULL WHERE token_hash=?", (h,)
+                )
             return row
 
     def member(self, label: str) -> sqlite3.Row | None:
         with self._conn() as c:
-            return c.execute("SELECT * FROM members WHERE label = ?", (label,)).fetchone()
+            return c.execute(
+                "SELECT * FROM members WHERE label = ?", (label,)
+            ).fetchone()
 
     def members(self) -> list[dict]:
         with self._conn() as c:
@@ -324,7 +376,9 @@ class BridgeStore:
         if not new:
             raise ValueError("empty name")
         with self._conn() as c:
-            if not c.execute("SELECT 1 FROM members WHERE label = ?", (label,)).fetchone():
+            if not c.execute(
+                "SELECT 1 FROM members WHERE label = ?", (label,)
+            ).fetchone():
                 return False
             if c.execute("SELECT 1 FROM members WHERE label = ?", (new,)).fetchone():
                 raise ValueError("name already in use")
@@ -373,7 +427,10 @@ class BridgeStore:
             ).fetchone()
             if not row:
                 return None
-            c.execute("UPDATE commands SET status='sent', sent_at=? WHERE id=?", (now, row["id"]))
+            c.execute(
+                "UPDATE commands SET status='sent', sent_at=? WHERE id=?",
+                (now, row["id"]),
+            )
             return {"id": row["id"], "code": row["code"]}
 
     def save_result(self, member_id: int, payload: dict) -> bool:
@@ -382,7 +439,8 @@ class BridgeStore:
             return False
         with self._conn() as c:
             row = c.execute(
-                "SELECT id FROM commands WHERE id=? AND member_id=?", (cmd_id, member_id)
+                "SELECT id FROM commands WHERE id=? AND member_id=?",
+                (cmd_id, member_id),
             ).fetchone()
             if not row:
                 return False
@@ -419,7 +477,9 @@ class BridgeStore:
                     "id": r["id"],
                     "member_id": r["member_id"],
                     "status": r["status"],
-                    "code": (r["code"] or "").splitlines()[0][:120] if r["code"] else "",
+                    "code": (r["code"] or "").splitlines()[0][:120]
+                    if r["code"]
+                    else "",
                     "result": json.loads(r["result"]) if r["result"] else None,
                     "output": json.loads(r["output"]) if r["output"] else [],
                     "error": r["error"],
@@ -429,7 +489,9 @@ class BridgeStore:
 
     def pending(self, member_id: int) -> int:
         with self._conn() as c:
-            return int(c.execute(
-                "SELECT COUNT(*) FROM commands WHERE member_id=? AND status IN ('queued','sent')",
-                (member_id,),
-            ).fetchone()[0])
+            return int(
+                c.execute(
+                    "SELECT COUNT(*) FROM commands WHERE member_id=? AND status IN ('queued','sent')",
+                    (member_id,),
+                ).fetchone()[0]
+            )
