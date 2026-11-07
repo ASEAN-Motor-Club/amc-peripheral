@@ -770,6 +770,8 @@
                 AMC_BRIDGE_DB = "/var/lib/amc-bridge/bridge.db";
                 AMC_BRIDGE_PORT = "7010";
                 AMC_BRIDGE_MAX_RESULT = "524288";
+                # Members expose their own machines; no claim-code approval step.
+                AMC_BRIDGE_AUTO_APPROVE = "1";
               };
               serviceConfig = {
                 Type = "simple";

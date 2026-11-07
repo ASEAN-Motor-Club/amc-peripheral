@@ -105,6 +105,47 @@ def test_one_in_flight_command_is_delivered_once(store):
     assert store.next_command(int(m["id"]), 0) is None  # not re-sent
 
 
+# ------------------------------------------------------------ auto-open ----
+def test_auto_approve_issues_a_token_immediately(store):
+    out = store.enroll(FP, "DESKTOP-X", "0.3.0", auto_approve=True)
+    assert out["status"] == "approved"
+    assert store.member_by_token(out["token"])["label"] == "desktop-x"
+
+
+def test_auto_approve_re_enrol_rotates_the_token(store):
+    first = store.enroll(FP, "DESKTOP-X", "0.3.0", auto_approve=True)["token"]
+    second = store.enroll(FP, "DESKTOP-X", "0.3.1", auto_approve=True)
+    assert second["token"] != first
+    assert store.member_by_token(first) is None      # old credential dead
+    assert store.member_by_token(second["token"]) is not None
+    assert len(store.members()) == 1                 # same machine, one row
+
+
+def test_auto_approve_never_resurrects_a_revoked_machine(store):
+    token = store.enroll(FP, "DESKTOP-X", "0.3.0", auto_approve=True)["token"]
+    store.revoke("desktop-x", actor="self")
+    assert store.member_by_token(token) is None
+    out = store.enroll(FP, "DESKTOP-X", "0.3.0", auto_approve=True)
+    assert out == {"status": "revoked"}
+    assert "token" not in out
+
+
+def test_auto_approve_labels_are_unique_per_machine(store):
+    a = store.enroll("m1111111111111111", "GAMING-PC", "0.3.0", auto_approve=True)
+    b = store.enroll("m2222222222222222", "GAMING-PC", "0.3.0", auto_approve=True)
+    labels = sorted(m["label"] for m in store.members())
+    assert labels == ["gaming-pc", "gaming-pc-2"]
+    assert a["token"] and b["token"]
+
+
+def test_rename(store):
+    store.enroll(FP, "desktop-x", "0.3.0", auto_approve=True)
+    assert store.rename("desktop-x", "Freeman Desktop", actor="admin") is True
+    assert [m["label"] for m in store.members()] == ["freeman-desktop"]
+    with pytest.raises(ValueError):
+        store.rename("freeman-desktop", "freeman-desktop", actor="admin")
+
+
 # --------------------------------------------------------------- server ----
 @pytest.mark.asyncio
 async def test_full_mod_lifecycle(store):
@@ -145,6 +186,48 @@ async def test_full_mod_lifecycle(store):
                              headers={"X-AMC-Admin": ADMIN})
         res = (await r.json())["results"]
         assert res[0]["result"] == 42 and res[0]["status"] == "done"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_auto_approve_needs_no_operator_at_all(store):
+    client = await start(make_app(store, auto_approve=True))
+    try:
+        r = await client.post("/api/enroll", json={"fingerprint": FP, "host": "DESKTOP-X",
+                                                   "mod": "0.3.0"})
+        e = await r.json()
+        assert e["status"] == "approved"
+        token = e["token"]
+
+        # straight to work: no approve call, no admin token
+        r = await client.post("/api/admin/exec", json={"member": "desktop-x", "code": "return 1"},
+                              headers={"X-AMC-Admin": ADMIN})
+        assert (await r.json())["id"] == 1
+        r = await client.get(f"/api/dev/{token}/poll?after=0")
+        assert (await r.json())["code"] == "return 1"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_auto_approve_enrol_returns_revoked_for_a_revoked_machine(store):
+    first = await _enrol(store, FP)
+    store.revoke("desktop-x", actor="self")
+    client = await start(make_app(store, auto_approve=True))
+    try:
+        r = await client.post("/api/enroll", json={"fingerprint": FP, "host": "DESKTOP-X"})
+        assert (await r.json()) == {"status": "revoked"}
+    finally:
+        await client.close()
+        assert first
+
+
+async def _enrol(store, fp):
+    client = await start(make_app(store, auto_approve=True))
+    try:
+        return (await (await client.post("/api/enroll", json={"fingerprint": fp,
+                                                              "host": "DESKTOP-X"})).json())["token"]
     finally:
         await client.close()
 

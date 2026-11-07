@@ -135,6 +135,12 @@ def cmd_shell(args):
         buf.append(line)
 
 
+def cmd_rename(args):
+    out = _call(args, "POST", "/api/admin/rename",
+                {"member": args.member, "to": args.to, "approver": args.approver})
+    print("ok" if out.get("ok") else "no such member")
+
+
 def cmd_revoke(args):
     out = _call(args, "POST", "/api/admin/revoke" if not args.undo else "/api/admin/unrevoke",
                 {"member": args.member, "approver": args.approver})
@@ -162,6 +168,11 @@ def main(argv=None) -> None:
         r = sub.add_parser(name)
         r.add_argument("member")
         r.set_defaults(func=fn, undo=(name == "unrevoke"))
+
+    rn = sub.add_parser("rename", help="give a machine a human name")
+    rn.add_argument("member")
+    rn.add_argument("to")
+    rn.set_defaults(func=cmd_rename)
 
     e = sub.add_parser("exec", help="run Lua on a machine")
     e.add_argument("member")

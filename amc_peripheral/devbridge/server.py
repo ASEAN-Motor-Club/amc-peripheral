@@ -39,6 +39,7 @@ def create_app(
     admin_token: str,
     approvers: Iterable[str] = (),
     max_result_bytes: int = 512 * 1024,
+    auto_approve: bool = False,
 ) -> web.Application:
     approvers = {str(a) for a in approvers if str(a).strip()}
 
@@ -58,6 +59,8 @@ def create_app(
                 str(body.get("fingerprint") or ""),
                 body.get("host"),
                 body.get("mod"),
+                auto_approve=auto_approve,
+                label=body.get("name"),
             )
         except ValueError as e:
             return _err(str(e))
@@ -162,6 +165,20 @@ def create_app(
             out.append(m)
         return _json({"members": out})
 
+    async def admin_rename(request: web.Request) -> web.Response:
+        if not admin_ok(request):
+            return _err("forbidden", 403)
+        body = await request.json()
+        try:
+            ok = store.rename(
+                str(body.get("member") or ""),
+                str(body.get("to") or ""),
+                actor=str(body.get("approver") or "admin"),
+            )
+        except ValueError as e:
+            return _err(str(e), 409)
+        return _json({"ok": ok})
+
     async def admin_revoke(request: web.Request) -> web.Response:
         if not admin_ok(request):
             return _err("forbidden", 403)
@@ -192,6 +209,7 @@ def create_app(
         web.post("/api/admin/exec", admin_exec),
         web.get("/api/admin/results", admin_results),
         web.get("/api/admin/members", admin_members),
+        web.post("/api/admin/rename", admin_rename),
         web.post("/api/admin/revoke", admin_revoke),
         web.post("/api/admin/unrevoke", admin_unrevoke),
     ])
@@ -221,6 +239,7 @@ def main() -> None:  # pragma: no cover - exercised by the systemd unit
         admin_token=admin,
         approvers=load_approvers(os.environ.get("AMC_BRIDGE_APPROVERS")),
         max_result_bytes=int(os.environ.get("AMC_BRIDGE_MAX_RESULT", "524288")),
+        auto_approve=os.environ.get("AMC_BRIDGE_AUTO_APPROVE", "0") == "1",
     )
     _web.run_app(app, host="127.0.0.1", port=port, print=lambda *a, **k: None)
 

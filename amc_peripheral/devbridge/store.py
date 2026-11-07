@@ -9,6 +9,12 @@ Design notes that matter:
 * Enrolment is idempotent per device fingerprint: a restarted game, or a machine
   that lost its state BEFORE approval, gets the SAME claim code back instead of
   creating a second pending request.
+* `auto_approve` skips the human entirely: the device gets a token the moment it
+  enrols, and a device that re-enrols (lost state) gets its credential rotated
+  instead of being stranded. Revocation still wins -- a revoked fingerprint is
+  never reissued. In that mode the fingerprint is a self-asserted identity, not
+  a vetted one, which is the whole point: the member is exposing their own
+  machine, so they are the one granting access.
 * One in-flight command per member, a bounded queue, and an expiry, so a dead
   client cannot accumulate a backlog.
 """
@@ -81,6 +87,13 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _slug(host: str | None) -> str:
+    """Readable, unique-ish label from a machine name."""
+    raw = (host or "machine").strip()
+    out = "".join(ch if (ch.isalnum() or ch in "-_") else "-" for ch in raw).strip("-").lower()
+    return (out or "machine")[:40]
+
+
 def _code() -> str:
     """Short, unambiguous claim code: XXXX-XXXX, no vowels, no 0/1."""
     alphabet = "BCDFGHJKLMNPQRSTVWXZ23456789"
@@ -113,8 +126,20 @@ class BridgeStore:
         )
 
     # -- enrolment --------------------------------------------------------
-    def enroll(self, fingerprint: str, host: str | None, mod: str | None) -> dict:
-        """Register a device. Idempotent: same fingerprint -> same code/secret."""
+    def enroll(
+        self,
+        fingerprint: str,
+        host: str | None,
+        mod: str | None,
+        *,
+        auto_approve: bool = False,
+        label: str | None = None,
+    ) -> dict:
+        """Register a device. Idempotent: same fingerprint -> same code/secret.
+
+        With `auto_approve`, the device is issued a token immediately and no
+        human is involved. A revoked fingerprint is still refused.
+        """
         if not fingerprint:
             raise ValueError("fingerprint required")
         with self._conn() as c:
@@ -122,7 +147,27 @@ class BridgeStore:
                 "SELECT * FROM enrollments WHERE fingerprint = ?", (fingerprint,)
             ).fetchone()
             if row:
-                return {"code": row["code"], "secret": row["secret"], "status": row["status"]}
+                out = {"code": row["code"], "secret": row["secret"], "status": row["status"]}
+                if auto_approve:
+                    member = c.execute(
+                        "SELECT * FROM members WHERE fingerprint = ?", (fingerprint,)
+                    ).fetchone()
+                    if member is not None and member["revoked_at"] is not None:
+                        return {"status": "revoked"}
+                    if member is not None:
+                        token = secrets.token_urlsafe(32)
+                        c.execute(
+                            "UPDATE members SET token_hash=?, host=?, mod=? WHERE id=?",
+                            (_hash_token(token), host, mod, member["id"]),
+                        )
+                        c.execute(
+                            "UPDATE enrollments SET status='approved', token_hash=?, token_plain=?"
+                            " WHERE secret=?",
+                            (_hash_token(token), token, row["secret"]),
+                        )
+                        out.update({"status": "approved", "token": token})
+                        self._audit(c, "member.rotate", actor="self", subject=member["label"])
+                return out
             secret = secrets.token_urlsafe(24)
             code = _code()
             while c.execute("SELECT 1 FROM enrollments WHERE code = ?", (code,)).fetchone():
@@ -133,7 +178,31 @@ class BridgeStore:
                 (secret, code, fingerprint, host, mod, time.time()),
             )
             self._audit(c, "enroll.request", subject=fingerprint, detail=host)
-            return {"code": code, "secret": secret, "status": "pending"}
+            if not auto_approve:
+                return {"code": code, "secret": secret, "status": "pending"}
+
+            token = secrets.token_urlsafe(32)
+            name = label or self._unique_label(c, _slug(host))
+            c.execute(
+                "UPDATE enrollments SET status='approved', token_hash=?, token_plain=?,"
+                " decided_at=?, decided_by='self' WHERE secret=?",
+                (_hash_token(token), token, time.time(), secret),
+            )
+            c.execute(
+                "INSERT INTO members (label, discord_id, token_hash, fingerprint, host, mod, created_at)"
+                " VALUES (?,?,?,?,?,?,?)",
+                (name, None, _hash_token(token), fingerprint, host, mod, time.time()),
+            )
+            self._audit(c, "enroll.auto", actor="self", subject=name, detail=fingerprint)
+            return {"code": code, "secret": secret, "status": "approved", "token": token}
+
+    @staticmethod
+    def _unique_label(c, base: str) -> str:
+        name, n = base, 2
+        while c.execute("SELECT 1 FROM members WHERE label = ?", (name,)).fetchone():
+            name = f"{base}-{n}"
+            n += 1
+        return name
 
     def enrollment(self, secret: str) -> dict | None:
         """What the mod polls. Carries the token only while it is unclaimed."""
@@ -248,6 +317,20 @@ class BridgeStore:
             if cur.rowcount:
                 self._audit(c, "member.revoke", actor=actor, subject=label)
             return bool(cur.rowcount)
+
+    def rename(self, label: str, new: str, actor: str) -> bool:
+        """Give an auto-labelled machine a human name."""
+        new = _slug(new)
+        if not new:
+            raise ValueError("empty name")
+        with self._conn() as c:
+            if not c.execute("SELECT 1 FROM members WHERE label = ?", (label,)).fetchone():
+                return False
+            if c.execute("SELECT 1 FROM members WHERE label = ?", (new,)).fetchone():
+                raise ValueError("name already in use")
+            c.execute("UPDATE members SET label = ? WHERE label = ?", (new, label))
+            self._audit(c, "member.rename", actor=actor, subject=label, detail=new)
+            return True
 
     def unrevoke(self, label: str, actor: str) -> bool:
         with self._conn() as c:
