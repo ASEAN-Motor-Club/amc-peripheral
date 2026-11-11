@@ -1,0 +1,14 @@
+{
+  "_comment": [
+    "Blueprint StaticMesh paths that do not exist in the pak, mapped to the asset that",
+    "actually holds the geometry. Each entry was verified by exporting the candidate and",
+    "checking the exporter printed 'OK <name> <- <path>': guessing from naming patterns",
+    "is not reliable (Goliath uses Body4 and Body_6 but there is no Body_10 at all).",
+    "Key is '<VehicleBlueprint>|<path the blueprint asks for>'."
+  ],
+  "Brcuda|MotorTown/Content/Cars/Models/Brcuda/Body/Body": "MotorTown/Content/Cars/Models/Muscle_01/Body",
+  "Edit1|MotorTown/Content/Cars/Models/Brcuda/Body/Body": "MotorTown/Content/Cars/Models/Muscle_01/Body",
+  "Goliath6|MotorTown/Content/Cars/Models/Goliath/Body/Body": "MotorTown/Content/Cars/Models/Goliath/Body_6",
+  "Cotra_20_3S|MotorTown/Content/Cars/Models/Trailer_Cotra/20/20": "MotorTown/Content/Cars/Models/Trailer_Cotra/20_3",
+  "Cotra_40_3|MotorTown/Content/Cars/Models/Trailer_Cotra/40/40": "MotorTown/Content/Cars/Models/Trailer_Cotra/40_3"
+}

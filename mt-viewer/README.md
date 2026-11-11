@@ -62,6 +62,28 @@ Two passes are therefore needed:
 baseColor / metalness / roughness / opacity / alphaMode / map / roughnessMap /
 metalnessMap / normalMap. The viewer builds one `MeshStandardMaterial` per name.
 
+### Broken blueprint mesh paths
+
+Some blueprints name a mesh that isn't in the pak — variants point at the base
+model's folder, and a few names simply don't exist. Exports silently produced no
+file, so those vehicles rendered with a missing body. Handled in two places:
+
+- `tools/mesh_overrides.json` — verified `Vehicle|blueprintPath` → real asset path.
+  Every entry was confirmed by exporting the candidate and reading the exporter's
+  `OK <name> <- <path>` line. Do not add entries by guessing: Goliath ships
+  `Body4` and `Body_6` and has **no** `Body_10` at all, so the pattern lies.
+- `mk_manifest.mesh_alts()` — heuristic fallbacks (vehicle-name suffix, sibling
+  model folders) emitted as `alt` paths that `mtglb`/`mtmats` try in order.
+
+Two consequences worth remembering: the exporter must rename its output to the
+**part** name (CUE4Parse writes `Body_6.glb` when it resolved a fallback asset, and
+every consumer looks for `Body.glb`), and `mtmats` must resolve the same fallback
+paths or the mesh ends up with geometry but no materials.
+
+`tools/verify_site.py` is the regression check: it walks every staged vehicle and
+fails a slug when a part's GLB is missing/empty, a texture is missing, or a GLB
+primitive carries a material name that isn't a known slot.
+
 ### Paints: ColorSlots, BodyColors, and how a body gets its colour
 
 Paint is **not** in the material. It is on the vehicle CDO, and `mk_manifest.py`
@@ -141,6 +163,20 @@ RGB over model pixels — enough to prove a material change reached the GPU:
 
 ## Status / known limitations
 
+- Catalogue: **174 of 175 staged vehicles pass `tools/verify_site.py`** (every
+  part has geometry, every texture is on disk, every GLB primitive carries a known
+  slot name). 1794 parts, 2355 material slots, 639 textured.
+- **`goliath10` has no body asset in the pak.** Its blueprint points at
+  `Models/Goliath/Body/Body`, which does not exist, and no `Body*` sibling matches
+  a 10-wheel variant — the other Goliath models ship `Body4` and `Body_6` only.
+  Its 25 wheels/fifth-wheel parts stage fine, the body is absent. Treat as cut or
+  unfinished content, not an extraction bug.
+- `brcuda`/`edit1` render from `Models/Muscle_01/Body` (their blueprint names a
+  `Brcuda` folder that doesn't exist) — the shell is complete but the **door panel
+  is missing** in the render; the door isn't a separate component in the blueprint
+  and isn't in the body mesh's sections.
+- `goliath6` stages as a lowboy deck + gooseneck with **no cab**; the Goliath
+  family appears to be trailer-side models whose tractor isn't referenced.
 - Verified end to end on Boxy (van), Panther (roadster), Atlas_6x4_Semi
   (tractor), Atlas_6x2_Tanker (two-tone: cab `Body_01`, tank `Body_02`),
   Atlas_6x2_Dryvan (blue cab, charcoal box), Bongo_Bus (variant, geometry and

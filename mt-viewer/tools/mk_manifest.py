@@ -20,9 +20,11 @@ is Y-up), so the viewer places parts without any further conversion:
 Rotator values are degrees (Pitch, Yaw, Roll) — they only resolve because
 UAssetTool::ExtractPropertyValue now has a RotatorPropertyData case.
 """
+import functools
 import json
 import math
 import os
+import re
 import sys
 
 PAK_ROOT = "MotorTown/Content"
@@ -153,14 +155,79 @@ def merge_base(exports, base_exports):
 
 
 def find_base(name, parsed_dir):
-    """Progressive '_'-suffix stripping until a sibling blueprint with meshes exists."""
+    """Progressive suffix stripping until a sibling blueprint with meshes exists.
+
+    Handles both `X_Y` splits (Bongo_Bus -> Bongo) and PascalCase reskins that use
+    no separator at all (NukeTaxi -> Nuke, BrutusFireEngine -> Brutus).
+    """
+    cands = []
     parts = name.split("_")
     for i in range(len(parts) - 1, 0, -1):
-        cand = "_".join(parts[:i])
+        cands.append("_".join(parts[:i]))
+    # PascalCase / trailing-digit peel: NukeTaxi -> Nuke, Elisa2Police -> Elisa2
+    stem = name
+    m = re.match(r"^(.*?)([A-Z][a-z]+|\d+)$", stem)
+    while m and m.group(1):
+        stem = m.group(1)
+        cands.append(stem)
+        m = re.match(r"^(.*?)([A-Z][a-z]+|\d+)$", stem)
+    for cand in cands:
+        if cand == name:
+            continue
         path = os.path.join(parsed_dir, cand + "_parsed.json")
-        if os.path.exists(path) and cand != name:
+        if os.path.exists(path):
             return cand, path
     return None, None
+
+
+def load_overrides():
+    """Verified blueprint-path -> real-asset-path fixes (see the JSON's _comment)."""
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mesh_overrides.json")
+    if not os.path.exists(p):
+        return {}
+    raw = json.load(open(p))
+    return {k: v for k, v in raw.items() if not k.startswith("_")}
+
+
+@functools.lru_cache(maxsize=1)
+def overrides():
+    return load_overrides()
+
+
+def mesh_alts(mesh_name, mesh_path, vehicle, model_dirs):
+    """Candidate pak paths when a blueprint names a mesh that isn't where it says.
+
+    Variants live in the base model's folder and carry the variant's suffix in the
+    mesh name, so `Goliath10 -> Models/Goliath/Body/Body` is really
+    `Models/Goliath/Body10/Body10`, `Cotra_20_3S -> .../Trailer_Cotra/20/20` is
+    `.../20_3S/20_3S`, and `Brcuda -> Models/Brcuda/Body/Body` is
+    `Models/Muscle_01/Body/Body` (which is where its mirrors come from).
+    """
+    folder = "/".join(mesh_path.split("/")[:-2])
+    alts = []
+
+    # 1. same folder, mesh name suffixed with the part of the vehicle name that
+    #    follows the mesh name (Goliath10 -> Body10, Cotra_20_3S -> 20_3S).
+    vparts = vehicle.split("_")
+    for i, tok in enumerate(vparts):
+        if mesh_name and (tok == mesh_name or tok.startswith(mesh_name)):
+            suffix = "_" + "_".join(vparts[i + 1:]) if len(vparts) > i + 1 else ""
+            if suffix:
+                alts.append(f"{folder}/{mesh_name}{suffix}/{mesh_name}{suffix}")
+    tail = re.search(r"(\d+)$", vehicle)
+    if tail and mesh_name and not mesh_name.endswith(tail.group(1)):
+        alts.append(f"{folder}/{mesh_name}{tail.group(1)}/{mesh_name}{tail.group(1)}")
+
+    # 2. another model folder this same blueprint uses, with the same leaf name.
+    for d in model_dirs:
+        if d != folder:
+            alts.append(f"{d}/{mesh_name}/{mesh_name}")
+
+    out = []
+    for a in alts:
+        if a != mesh_path and a not in out:
+            out.append(a)
+    return out
 
 
 def _cdo_colours(exports, vehicle=""):
@@ -295,6 +362,21 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
             "rotation": [round(v, 6) for v in q_gltf],
             "scale": [round(scl[0], 5), round(scl[2], 5), round(scl[1], 5)],
         })
+
+    # Blueprint mesh paths lie for variants; give the exporter fallbacks. Model
+    # folders are every distinct `Cars/Models/<X>` the blueprint touches.
+    model_dirs = []
+    for m in meshes:
+        seg = m["path"].split("/")
+        if "Models" in seg:
+            i = seg.index("Models")
+            d = "/".join(seg[:i + 2])
+            if d not in model_dirs:
+                model_dirs.append(d)
+    for m in meshes:
+        fixed = overrides().get(f"{vehicle}|{m['path']}")
+        alts = ([fixed] if fixed else []) + mesh_alts(m["name"], m["path"], vehicle, model_dirs)
+        m["alt"] = alts
 
     os.makedirs(out_dir, exist_ok=True)
     manifest = {

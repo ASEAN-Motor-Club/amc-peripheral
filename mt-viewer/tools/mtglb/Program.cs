@@ -21,6 +21,37 @@ using System.Text.Json;
 using System.IO;
 
 var argv = Environment.GetCommandLineArgs().Skip(1).ToArray();
+if (argv.Length >= 3 && argv[0] == "--find")
+{
+    // Diagnostic: list pak keys for an asset leaf, e.g. --find <pakDir> Body
+    var dp = new DefaultFileProvider(argv[1], SearchOption.AllDirectories, false,
+        new VersionContainer(EGame.GAME_UE5_5));
+    dp.Initialize();
+    if (argv.Length >= 4 && argv[3].Length >= 32)
+        dp.SubmitKey(new FGuid(), new FAesKey(argv[3]));
+    var needle = argv[2].Trim('/');
+    if (needle.StartsWith("try:"))
+    {
+        // Existence probe: --find <pakDir> try:<path>[,<path>...]
+        foreach (var cand in needle.Substring(4).Split(','))
+            Console.WriteLine($"{(dp.TryGetGameFile(cand, out _) ? "YES" : "no ")} {cand}");
+        return 0;
+    }
+    if (needle == "*")
+    {
+        foreach (var k in dp.Files.Keys.Take(15)) Console.WriteLine(k);
+        Console.WriteLine($"total keys: {dp.Files.Count}");
+        return 0;
+    }
+    foreach (var k in dp.Files.Keys
+                 .Where(k => k.EndsWith("/" + needle + ".uasset", StringComparison.OrdinalIgnoreCase)
+                          || k.EndsWith("/" + needle + "/" + needle + ".uasset", StringComparison.OrdinalIgnoreCase))
+                 .Select(DeRepeatStatic)
+                 .Distinct()
+                 .OrderBy(k => k))
+        Console.WriteLine(k);
+    return 0;
+}
 if (argv.Length < 5) { Console.WriteLine("usage: mtglb <pakDir> <usmapPath> <aesKey0x> <outDir> <meshesJson> [--materials]"); return 2; }
 var pakDir = argv[0];
 var usmapPath = argv[1];
@@ -37,7 +68,9 @@ provider.Initialize();
 provider.SubmitKey(new FGuid(), new FAesKey(aesKey));
 try { provider.LoadLocalization(); } catch (Exception) { Console.WriteLine("no localization, continuing"); }
 
-string DeRepeat(string p)
+string DeRepeat(string p) => DeRepeatStatic(p);
+
+static string DeRepeatStatic(string p)
 {
     var parts = p.Split('/');
     if (parts.Length >= 2 && parts[^1] == parts[^2])
@@ -74,7 +107,13 @@ int ok = 0, fail = 0;
 foreach (var item in items)
 {
     var resolved = Resolve(item.Path);
-    if (resolved == null) { Console.WriteLine($"  SKIP notfound: {item.Path}"); fail++; continue; }
+    if (resolved == null)
+        foreach (var alt in item.Alt)
+        {
+            resolved = Resolve(alt);
+            if (resolved != null) { Console.WriteLine($"  ALT {item.Name} <- {alt}"); break; }
+        }
+    if (resolved == null) { Console.WriteLine($"  SKIP notfound: {item.Path} (+{item.Alt.Count} alts)"); fail++; continue; }
     try
     {
         var uobj = await provider.LoadPackageObjectAsync(resolved);
@@ -87,6 +126,16 @@ foreach (var item in items)
         var sub = Directory.CreateDirectory(Path.Combine(outDir, safe));
         if (exporter.TryWriteToDir(sub, out var label, out var savedPath))
         {
+            // The conversion names the file after the asset it loaded, which differs
+            // from the part name when we resolved a fallback path (CUE4Parse would
+            // write Body_6.glb where the part is Body). Pin it to the part name.
+            var want = Path.Combine(sub.FullName, safe + ".glb");
+            if (!string.Equals(savedPath, want, StringComparison.Ordinal))
+            {
+                if (File.Exists(want)) File.Delete(want);
+                File.Move(savedPath, want);
+                savedPath = want;
+            }
             var size = new FileInfo(savedPath).Length / 1024;
             Console.WriteLine($"  OK {item.Name} <- {resolved} -> {Path.GetFileName(savedPath)} ({size} KB)");
             ok++;
@@ -102,4 +151,8 @@ class MeshItem
 {
     public string Name { get; set; } = "";
     public string Path { get; set; } = "";
+    // Fallback pak paths when the blueprint names a mesh that doesn't exist: variants
+    // are stored in the base model's folder under a suffixed mesh name (Goliath10 ->
+    // Models/Goliath/Body10/Body10, Brcuda -> Models/Muscle_01/Body/Body).
+    public List<string> Alt { get; set; } = new();
 }

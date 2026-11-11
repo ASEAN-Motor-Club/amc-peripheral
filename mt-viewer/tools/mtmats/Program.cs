@@ -76,7 +76,7 @@ var seenMat = new HashSet<string>();
 
 foreach (var it in items)
 {
-    var meshPath = Resolve(it.Path);
+    var meshPath = Resolve(it.Path) ?? it.Alt.Select(Resolve).FirstOrDefault(x => x != null);
     if (meshPath == null) { Console.WriteLine($"=== {it.Name}: NOT FOUND"); continue; }
     var obj = await provider.LoadPackageObjectAsync(meshPath);
     if (obj is not UStaticMesh sm) { Console.WriteLine($"=== {it.Name}: not a StaticMesh"); continue; }
@@ -163,4 +163,4 @@ File.WriteAllText(Path.Combine(outDir, "mesh_materials.json"),
 Console.WriteLine($"WROTE {Path.Combine(outDir, "mesh_materials.json")}");
 return 0;
 
-class Item { public string Name { get; set; } = ""; public string Path { get; set; } = ""; }
+class Item { public string Name { get; set; } = ""; public string Path { get; set; } = ""; public List<string> Alt { get; set; } = new(); }
