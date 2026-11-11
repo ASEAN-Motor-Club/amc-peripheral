@@ -142,9 +142,20 @@ RGB over model pixels — enough to prove a material change reached the GPU:
 ## Status / known limitations
 
 - Verified end to end on Boxy (van), Panther (roadster), Atlas_6x4_Semi
-  (tractor), Bongo_Bus (variant, geometry inherited from `Bongo`).
+  (tractor), Atlas_6x2_Tanker (two-tone: cab `Body_01`, tank `Body_02`),
+  Atlas_6x2_Dryvan (blue cab, charcoal box), Bongo_Bus (variant, geometry and
+  paints inherited from `Bongo`).
+- **35 of 175 vehicle blueprints ship no paint data at all.** Their parsed
+  blueprint has no `Default__<Vehicle>_C` export, so there is no `ColorSlots`
+  and no `BodyColors` to read: `brcuda, cheetahmk1, conter_*, dinky_*, edit1,
+  elisataxi, formulascm, fox, gunthoo*, kart_01, liliput, nuketaxi, panther,
+  police, policeinterceptor1, raven, savannah, scm_kart_one, scooty, spider,
+  tavan, tavan_ambulance, terra, trailer_30ft_tanker_01, trailer_small_cage_01,
+  vista, vulcan, zero` (plus `mtvehiclebasebp`, which is a base class, not a
+  vehicle). These render with the material default — Panther comes out white —
+  and the colour picker still works. Do not invent a table for them.
 - Trailer/attachment-only blueprints and aircraft-style parts are unverified.
 - Assets are version-locked: the pak, usmap and key move together. A GLB built
   for the wrong game version does not error, it renders wrong.
-- The catalogue run is sequential (one pak mount per vehicle, ~60-90 s each);
+- The catalogue run is sequential, ~20 s per vehicle after the pak is warm;
   run it as a background job, not in a foreground session.

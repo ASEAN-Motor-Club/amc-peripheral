@@ -163,15 +163,7 @@ def find_base(name, parsed_dir):
     return None, None
 
 
-def colour_data(exports, vehicle=""):
-    """Default paints live on the vehicle CDO, not on the materials.
-
-    ColorSlots  -- the paint regions the vehicle exposes (Body_01, Body_02, Window,
-                   Seat_01 ...) with their default colour/metallic/roughness.
-    BodyColors  -- the paint variants the game picks from at random on spawn. Each
-                   entry maps slot key -> RGBA; alpha 0 means "slot not painted", so
-                   the ColorSlot default applies.
-    """
+def _cdo_colours(exports, vehicle=""):
     cdo = next((e for e in exports
                 if str(e.get("ExportName", "")).startswith("Default__" + vehicle + "_")), None)
     if cdo is None:
@@ -203,10 +195,33 @@ def colour_data(exports, vehicle=""):
     return {"colorSlots": slots, "paints": paints}
 
 
+def colour_data(exports, vehicle="", base_exports=None, base_vehicle=""):
+    """Default paints live on the vehicle CDO, not on the materials.
+
+    ColorSlots  -- the paint regions the vehicle exposes (Body_01, Body_02, Window,
+                   Seat_01 ...) with their default colour/metallic/roughness.
+    BodyColors  -- the paint variants the game picks from at random on spawn. Each
+                   entry maps slot key -> RGBA; the alpha channel is only meaningful
+                   for slots flagged bUseColorAlpha (glass) and must NOT be read as
+                   "not painted" -- most default paints carry alpha 0.
+    Variants (Bongo_Bus, Townie_Bus, the police/taxi reskins) ship a CDO with no
+    paint properties at all, so fall back to the base blueprint's CDO.
+    """
+    cd = _cdo_colours(exports, vehicle)
+    if not cd["paints"] and base_exports:
+        b = _cdo_colours(base_exports, base_vehicle)
+        if not cd["colorSlots"]:
+            cd["colorSlots"] = b["colorSlots"]
+        cd["paints"] = b["paints"]
+    return cd
+
+
 def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
     data = json.load(open(parsed_json_path))
     exports = data["Data"]["Exports"]
     inherited_from = None
+    base_exports = None
+    base_name = None
     if inherit and not any(
         isinstance((e.get("Properties") or {}).get("StaticMesh"), dict)
         and (e["Properties"]["StaticMesh"] or {}).get("Path")
@@ -215,9 +230,18 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
         base, base_path = find_base(vehicle, parsed_dir or os.path.dirname(parsed_json_path))
         if base:
             base_exports = json.load(open(base_path))["Data"]["Exports"]
+            base_name = base
             exports = merge_base(exports, base_exports)
             inherited_from = base
             print(f"  {vehicle}: no meshes of its own -> inheriting geometry from {base}")
+
+    if base_exports is None:
+        # Variants keep their own meshes but often ship no paint properties, so the
+        # base CDO is still worth loading for colourSlots/paints.
+        base, base_path = find_base(vehicle, parsed_dir or os.path.dirname(parsed_json_path))
+        if base:
+            base_exports = json.load(open(base_path))["Data"]["Exports"]
+            base_name = base
 
     by_name = {}
     for e in exports:
@@ -280,7 +304,7 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
         "source": os.path.basename(parsed_json_path),
         "units": "metres",
         "parts": parts,
-        **colour_data(exports, vehicle),
+        **colour_data(exports, vehicle, base_exports, base_name or ""),
     }
     with open(os.path.join(out_dir, vehicle + ".json"), "w") as f:
         json.dump(manifest, f, indent=1)
