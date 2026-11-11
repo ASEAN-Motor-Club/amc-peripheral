@@ -333,6 +333,9 @@
                 "L+ /var/www/nix-static/code-web - - - - ${cfg.codeWeb.package}"
                 "L+ /var/www/nix-static/docs-web - - - - ${cfg.docsWeb.package}"
                 "L+ /var/www/nix-static/mt-viewer - - - - ${cfg.mtViewer.package}"
+                "d /var/lib/mt-viewer 0755 root root -"
+                "L+ /var/lib/mt-viewer/index.html - - - - ${cfg.mtViewer.package}/index.html"
+                "L+ /var/lib/mt-viewer/README.md - - - - ${cfg.mtViewer.package}/README.md"
               ]
               ++ lib.optionals cfg.sharry.enable [
                 "d /var/lib/sharry 0750 sharry sharry -"
@@ -585,7 +588,7 @@
               enableACME = true;
               forceSSL = true;
               locations."/" = {
-                root = "/var/www/nix-static/mt-viewer";
+                root = "/var/lib/mt-viewer";
                 tryFiles = "$uri $uri/index.html /index.html";
                 extraConfig = ''
                   add_header Cache-Control "public, max-age=3600";
