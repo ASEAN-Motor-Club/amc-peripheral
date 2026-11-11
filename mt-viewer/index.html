@@ -46,7 +46,9 @@
   <button data-look="side">Side</button>
   <button data-look="rear">Rear</button>
   <button data-look="top">Top</button>
-  <label title="Body paint">paint <input type="color" id="paint" value="#c9302c"></label>
+  <label title="Default paint variant (as the game picks on spawn)">paint
+    <select id="scheme"></select></label>
+  <label title="Custom body colour">custom <input type="color" id="paint" value="#c9302c"></label>
   <button id="togglePlain">plain</button>
 </div>
 <script type="importmap">
@@ -120,7 +122,9 @@ let bodyTint = params.has("paint") ? paintColor.clone() : null;
 
 function buildMaterial(name, def, plain) {
   if (plain || !def) {
-    return new THREE.MeshStandardMaterial({ color: 0xc9cdd4, roughness: 0.55, metalness: 0.2 });
+    const p = new THREE.MeshStandardMaterial({ color: 0xc9cdd4, roughness: 0.55, metalness: 0.2 });
+    p.name = name;
+    return p;
   }
   const m = new THREE.MeshStandardMaterial({
     color: new THREE.Color().setRGB(def.baseColor[0], def.baseColor[1], def.baseColor[2], THREE.LinearSRGBColorSpace),
@@ -133,6 +137,8 @@ function buildMaterial(name, def, plain) {
   if (def.metalnessMap) m.metalnessMap = loadTexture(def.metalnessMap, true);
   if (def.normalMap) m.normalMap = loadTexture(def.normalMap, true);
   if (name === "M_Body" && bodyTint) m.color.copy(bodyTint);
+  if (def.slot) m.name = name;
+  if (params.has("redtest") && name === params.get("redtest")) m.color.setRGB(1, 0, 0);
   if (def.emissive) {
     m.emissive = new THREE.Color().setRGB(def.emissive[0], def.emissive[1], def.emissive[2], THREE.LinearSRGBColorSpace);
     m.emissiveIntensity = def.emissiveIntensity ?? 1;
@@ -156,6 +162,51 @@ function materialFor(name, def, plain) {
 }
 
 const stats = { meshes: 0, materials: new Set(), textured: 0 };
+let slotDefs = {};        // slot name -> material def (materials.json, keyed by SLOT)
+let slotMesh = {};        // mesh -> ordered slot names
+let colorSlots = {};      // slot -> {defaultColor, metallic, roughness, useAlpha}
+let paints = [];          // [{slot: [r,g,b,a]}] the game's default paint variants
+let paintIndex = -1;      // -1 = as authored on the material
+const assign = [];        // debug: part.mesh === "Body" primitive -> slot mapping
+
+// UE FColor is sRGB 0-255; THREE.Colour with colour management converts to linear.
+function srgb(r, g, b) {
+  const c = new THREE.Color();
+  c.setStyle(`rgb(${r},${g},${b})`);
+  return c;
+}
+
+// Resolve the colour a slot should show for the active paint scheme.
+// A BodyColors entry lists the RGB per slot; the alpha channel is only meaningful
+// for slots marked bUseColorAlpha (glass), so it must NOT be read as "unset" —
+// Boxy's four default paints are blue / charcoal / light grey / white and three of
+// them carry alpha 0. A slot the scheme doesn't mention keeps its ColorSlot default.
+function slotColour(key) {
+  const scheme = paintIndex >= 0 ? paints[paintIndex] : null;
+  const cs = colorSlots[key] || null;
+  if (scheme) {
+    const hit = scheme[key] || scheme[key.replace(/_\d+$/, "")] ||
+                scheme[key.replace(/(_\d+)$/, "_01")];
+    if (hit) return hit;
+  }
+  if (cs && cs.defaultColor) return cs.defaultColor;
+  return null;
+}
+
+function applyPaint() {
+  for (const [key, m] of matCache) {
+    const slot = key.split("|")[0];
+    const c = slotColour(slot);
+    if (c && !key.endsWith("|true")) {
+      m.color.copy(srgb(c[0], c[1], c[2]));
+    }
+  }
+  for (const [slot, cs] of Object.entries(colorSlots)) {
+    if (cs.metallic != null) for (const [k, m] of matCache) if (k.split("|")[0] === slot) m.metalness = cs.metallic;
+    if (cs.roughness != null) for (const [k, m] of matCache) if (k.split("|")[0] === slot) m.roughness = cs.roughness;
+  }
+}
+
 
 async function load() {
   const [manifest, table] = await Promise.all([
@@ -163,21 +214,37 @@ async function load() {
     fetch(`${vehicle}/materials.json`).then(r => r.json()).catch(() => ({ materials: {} })),
   ]);
   const defs = table.materials || {};
+  slotDefs = defs;
+  slotMesh = table.slotsByMesh || {};
+  colorSlots = manifest.colorSlots || {};
+  paints = manifest.paints || [];
+  paintIndex = params.has("scheme") ? parseInt(params.get("scheme"), 10) : -1;
   let done = 0;
   for (const part of manifest.parts) {
     try {
       const g = await loader.loadAsync(`${vehicle}/glb/${part.glb}`);
       const model = g.scene;
-      model.traverse(o => {
-        if (!o.isMesh) return;
-        const slotNames = Array.isArray(o.material) ? o.material.map(m => m.name) : [o.material.name];
-        const resolved = slotNames.map(n => {
-          stats.materials.add(n);
-          const d = defs[n];
-          if (d && d.map) stats.textured++;
-          return materialFor(n, d, plainMode);
-        });
-        o.material = resolved.length === 1 ? resolved[0] : resolved;
+      // GLB primitives come out in material-slot order, so index into the mesh's
+      // ordered slot list and give each primitive its own material instance. This
+      // is what keeps Body_01 / Body_02 (same M_Body asset, different paint) apart.
+      const order = slotMesh[part.mesh] || [];
+      const prims = [];
+      model.traverse(o => { if (o.isMesh) prims.push(o); });
+      prims.forEach((o, i) => {
+        const fallback = Array.isArray(o.material) ? o.material[0]?.name : o.material?.name;
+        // The GLB is rewritten by bake_materials so each primitive's material is
+        // named after its UE slot; fall back to slot order if that didn't happen.
+        const name = (fallback && defs[fallback]) ? fallback : (order[i] || fallback);
+        const d = defs[name] || defs[fallback];
+        if (part.mesh === "Body") {
+          o.geometry.computeBoundingBox();
+          const bb = o.geometry.boundingBox.getSize(new THREE.Vector3());
+          assign.push(`${i}:${name}:v${o.geometry.attributes.position.count}:` +
+                      `${bb.x.toFixed(1)}x${bb.y.toFixed(1)}x${bb.z.toFixed(1)}`);
+        }
+        stats.materials.add(name);
+        if (d && d.map) stats.textured++;
+        o.material = materialFor(name, d, plainMode);
         stats.meshes++;
       });
       model.position.fromArray(part.position);
@@ -234,24 +301,70 @@ async function load() {
     b.addEventListener("click", () => setCam(b.dataset.look));
   });
 
+  // --- paint: the vehicle CDO's own default variants, plus a free colour ---
+  const schemeSel = document.getElementById("scheme");
+  const lab = idx => {
+    if (idx < 0) return "material default";
+    const sc = paints[idx] || {};
+    const keys = Object.keys(sc).filter(k => sc[k][3] > 0);
+    return `paint ${idx + 1}` + (keys.length ? "" : " (none)");
+  };
+  schemeSel.innerHTML = ["-1", ...paints.map((_, i) => String(i))]
+    .map(v => `<option value="${v}"${+v === paintIndex ? " selected" : ""}>${lab(+v)}</option>`)
+    .join("");
+  schemeSel.addEventListener("change", () => {
+    paintIndex = parseInt(schemeSel.value, 10);
+    bodyTint = null;                     // a scheme overrides the free colour
+    applyPaint();
+    if (syncMode) render();
+  });
+
   const paint = document.getElementById("paint");
   paint.value = "#" + paintColor.getHexString();
   paint.addEventListener("input", () => {
     paintColor.set(paint.value);
     bodyTint = paintColor.clone();
+    // custom colour paints every body slot, leaving seats/glass/lamps alone
     for (const [k, m] of matCache) {
-      if (k.startsWith("M_Body|")) m.color.copy(paintColor);
+      const slot = k.split("|")[0];
+      if (/^Body/i.test(slot) && /Body/i.test(slotDefs[slot]?.materialName || "M_Body")) {
+        m.color.copy(paintColor);
+      }
     }
+    if (syncMode) render();
   });
+
+  applyPaint();
+
+  if (params.has("debug")) {
+    document.title = JSON.stringify({
+      paintIndex, paints: paints.length, colorSlots: Object.keys(colorSlots),
+      slotKeys: Object.keys(defs), meshes: Object.keys(slotMesh),
+      cache: [...matCache.keys()],
+      assigned: assign,
+      big: (() => {
+        const out = [];
+        root.traverse(o => {
+          if (!o.isMesh) return;
+          const n = o.geometry.attributes.position.count;
+          if (n < 800) return;
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          out.push(`${o.parent?.name || "?"}:${n}:${mats.map(m => m.name + "=" + m.color.getHexString() + (m.transparent ? "T" : "")).join(",")}`);
+        });
+        return out;
+      })(),
+      body: (() => { const m = matCache.get("Body_01|false"); return m ? m.color.getHexString() : null; })(),
+    });
+  }
 
   const tp = document.getElementById("togglePlain");
   tp.addEventListener("click", () => {
     const on = tp.classList.toggle("active");
     root.traverse(o => {
       if (!o.isMesh) return;
-      const names = Array.isArray(o.material) ? o.material.map(m => m.name) : [o.material.name];
-      const resolved = names.map(n => materialFor(n, defs[n], on));
-      o.material = resolved.length === 1 ? resolved[0] : resolved;
+      const cur = Array.isArray(o.material) ? o.material[0] : o.material;
+      const slot = cur.name || "unknown";
+      o.material = materialFor(slot, defs[slot], on);
     });
   });
 
@@ -273,7 +386,24 @@ addEventListener("resize", () => {
 await load();
 // give textures a beat to decode before the single frame in sync mode
 await new Promise(r => setTimeout(r, 350));
-if (syncMode) { render(); } else { anim(); }
+if (syncMode) {
+  render();
+  if (params.has("debug")) {
+    // Ground truth: average the pixels that are actually on screen, so we can tell
+    // "the material is blue" apart from "the mesh is drawn with something else".
+    const gl = renderer.getContext();
+    const w = renderer.domElement.width, h = renderer.domElement.height;
+    const buf = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    let n = 0, r = 0, g2 = 0, b = 0;
+    for (let i = 0; i < buf.length; i += 4) {
+      const lum = 0.2126 * buf[i] + 0.7152 * buf[i + 1] + 0.0722 * buf[i + 2];
+      if (lum < 45) continue;                    // background / grid
+      n++; r += buf[i]; g2 += buf[i + 1]; b += buf[i + 2];
+    }
+    document.title += `|px=${n} mean=${n ? [r / n, g2 / n, b / n].map(v => v.toFixed(0)).join(",") : "-"}`;
+  }
+} else { anim(); }
 </script>
 </body>
 </html>

@@ -11,6 +11,7 @@ tools/mk_manifest.py     vehicle blueprint -> reassembly manifest (world transfo
 tools/mtglb/             CUE4Parse exporter: mesh -> GLB per part
 tools/mtmats/            CUE4Parse material-graph params -> per-slot textures/colours
 tools/bake_materials.py  extractor output -> materials.json + deduped textures
+tools/glb_slots.py       rewrite GLB materials so each primitive carries its slot name
 tools/stage_vehicle.sh   one vehicle: manifest -> GLB -> materials -> site/<slug>/
 tools/stage_all.sh       every vehicle blueprint, resumable
 tools/make_index.py      site/vehicles.json (the viewer's vehicle picker)
@@ -61,19 +62,52 @@ Two passes are therefore needed:
 baseColor / metalness / roughness / opacity / alphaMode / map / roughnessMap /
 metalnessMap / normalMap. The viewer builds one `MeshStandardMaterial` per name.
 
+### Paints: ColorSlots, BodyColors, and how a body gets its colour
+
+Paint is **not** in the material. It is on the vehicle CDO, and `mk_manifest.py`
+copies it into the manifest:
+
+- `colorSlots` — the regions the vehicle exposes (`Body_01`, `Body_02`, `Window`,
+  `Seat_01`, …) with their default colour, metallic and roughness. These keys are
+  the same strings as the mesh's **material slot names**, which is why the GLB is
+  rewritten to name each primitive after its slot.
+- `paints` — the `BodyColors` array: the handful of default paint schemes the game
+  picks from at random on spawn. One slot = whole-vehicle colour; several slots =
+  two-tone (the Atlas tanker paints its cab `Body_01` and its tank `Body_02`).
+
+**The alpha channel is not an "unset" flag.** Boxy's four default paints are navy,
+charcoal, light grey and white; three of them carry alpha 0. Reading alpha 0 as
+"no colour" silently discards three quarters of every vehicle's default paints.
+Alpha is only meaningful for slots flagged `bUseColorAlpha` (glass). A slot the
+scheme doesn't mention keeps its `ColorSlot` default.
+
+The viewer exposes both: a dropdown over the vehicle's own default variants
+(`?scheme=N`) and a free colour picker that paints `Body_*` only (`?paint=%23c9302c`).
+
 ### Data facts that are NOT bugs
 
-- **Stock bodies are white.** `M_Body` is `Color #FFFFFF`, Metallic 0.3,
-  Roughness 0.5, no texture — the game applies paint at the paint shop. The
-  viewer ships a paint picker for this (`?paint=%23c9302c` also works).
+- **Stock bodies default to a paint, not to white.** `M_Body` is `Color #FFFFFF`
+  because the colour is supplied at runtime; the manifest supplies it.
 - **`M_Palette` is the livery atlas** (`Palette_PolygonCity_Texture_01_A`,
-  1024², shared by every vehicle).
+  1024², shared by every vehicle) and covers the whole shell as its own primitive.
 - **Lamps** expose only runtime scalars (`HeadLight`/`BrakeLight` = 0), so their
   emissive colour is a deliberate choice, flagged `"synthetic": "lamp"`.
 - **`M_Mirror`'s only texture is `UE4_LOGO_CARD`** — a placeholder standing in
   for an in-game render target. Mirrors get a metal finish, `"synthetic":"mirror"`.
 - A material that resolves to nothing is rendered neutral dark and flagged
   `"synthetic": "no-data"` rather than blowing out to white.
+
+### The GLB trap: section order is not slot order
+
+CUE4Parse emits primitives in **section order** with a correct material reference,
+which is not the UE material-slot order and not the order of the glTF material
+array. Boxy's `Body.glb` emits the `M_Palette` section first (8405 verts, the whole
+shell) and `M_Body` second (2500) — so mapping primitive *index* to slot *index*
+paints the wrong surface and the van ignores every colour change. `tools/glb_slots.py`
+rewrites each GLB so every primitive carries its slot name, matching on the
+primitive's original material name and taking the next unused slot that owns it.
+That rewrite is also what lets `Body_01` and `Body_02` (same `M_Body` asset) hold
+different colours.
 
 ## Build
 
@@ -100,6 +134,10 @@ RGB over model pixels — enough to prove a material change reached the GPU:
 - textured vs `?plain` (flat clay): 37% of body-band pixels change, |diff| 46/765
 - `?paint=#c9302c` vs default: body band mean (143,143,145) → (106,21,34)
 - tyres: lit pixels in the lower band drop 17.6k → 8.7k when rubber replaces clay
+- default paints, mean RGB over model pixels: navy `?scheme=0` (85,109,146),
+  charcoal `?scheme=1` (85,103,133), white `?scheme=3` (161,159,161) — three
+  different renders from the same vehicle, which is the check that proves the
+  CDO paint is reaching the surface rather than a material default
 
 ## Status / known limitations
 

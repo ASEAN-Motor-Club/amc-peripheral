@@ -24,7 +24,7 @@ n=0; done_n=0
 for V in "${VEHICLES[@]}"; do
   echo "$V" | grep -qiE "$FILTER" || continue
   SLUG=$(echo "$V" | tr '[:upper:]' '[:lower:]')
-  if [ -f "$ROOT/site/$SLUG/$SLUG.json" ]; then
+  if [ -f "$ROOT/site/$SLUG/$SLUG.json" ] && [ "${FORCE:-0}" != "1" ]; then
     done_n=$((done_n+1)); continue
   fi
   n=$((n+1))

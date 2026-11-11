@@ -163,6 +163,46 @@ def find_base(name, parsed_dir):
     return None, None
 
 
+def colour_data(exports, vehicle=""):
+    """Default paints live on the vehicle CDO, not on the materials.
+
+    ColorSlots  -- the paint regions the vehicle exposes (Body_01, Body_02, Window,
+                   Seat_01 ...) with their default colour/metallic/roughness.
+    BodyColors  -- the paint variants the game picks from at random on spawn. Each
+                   entry maps slot key -> RGBA; alpha 0 means "slot not painted", so
+                   the ColorSlot default applies.
+    """
+    cdo = next((e for e in exports
+                if str(e.get("ExportName", "")).startswith("Default__" + vehicle + "_")), None)
+    if cdo is None:
+        cdo = next((e for e in exports if str(e.get("ExportName", "")).startswith("Default__")), None)
+    if not cdo:
+        return {"colorSlots": {}, "paints": []}
+    pr = cdo.get("Properties") or {}
+
+    slots = {}
+    for ent in (pr.get("ColorSlots") or {}).get("Entries", []) or []:
+        v = ent.get("Value") or {}
+        dc = ((v.get("DefaultColor") or {}).get("DefaultColor") or {})
+        slots[ent.get("Key")] = {
+            "name": v.get("DisplayName"),
+            "defaultColor": [dc.get("R", 255), dc.get("G", 255), dc.get("B", 255), dc.get("A", 255)],
+            "metallic": v.get("DefaultMetallic"),
+            "roughness": v.get("DefaultRoughness"),
+            "useAlpha": bool(v.get("bUseColorAlpha")),
+        }
+
+    paints = []
+    for pc in pr.get("BodyColors") or []:
+        scheme = {}
+        for ent in ((pc.get("Colors") or {}).get("Entries") or []):
+            c = ((ent.get("Value") or {}).get("Colors") or {})
+            scheme[ent.get("Key")] = [c.get("R", 0), c.get("G", 0), c.get("B", 0), c.get("A", 0)]
+        if scheme:
+            paints.append(scheme)
+    return {"colorSlots": slots, "paints": paints}
+
+
 def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
     data = json.load(open(parsed_json_path))
     exports = data["Data"]["Exports"]
@@ -240,6 +280,7 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
         "source": os.path.basename(parsed_json_path),
         "units": "metres",
         "parts": parts,
+        **colour_data(exports, vehicle),
     }
     with open(os.path.join(out_dir, vehicle + ".json"), "w") as f:
         json.dump(manifest, f, indent=1)

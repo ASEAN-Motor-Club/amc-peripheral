@@ -34,6 +34,9 @@ import os
 import shutil
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import glb_slots
+
 LAMPS = {
     "M_HeadLight": ([1.0, 0.96, 0.86], 1.1),
     "M_TailLight": ([1.0, 0.12, 0.10], 0.9),
@@ -86,6 +89,7 @@ def main(build_dir, out_dir):
         return by_sha[sha][0]
 
     mats, conflicts = {}, []
+    slots_by_mesh = {}
     for mesh, slots in mm.items():
         for slot in slots:
             full = slot.get("material", "")
@@ -142,23 +146,49 @@ def main(build_dir, out_dir):
                 entry.update({"baseColor": [0.30, 0.30, 0.32], "roughness": 0.65,
                               "metalness": 0.0, "synthetic": "no-data"})
 
-            if name in mats and {k: v for k, v in mats[name].items() if k != "material"} != \
+            # Key by the mesh's material SLOT name, not the material asset name: the
+            # slot name is what ColorSlots use (Body_01 / Body_02 / Window / Seat_01),
+            # and a two-tone vehicle runs the SAME material asset in two slots with
+            # different paint. Keying by asset collapse those into one colour.
+            key = slot.get("slot") or name
+            entry["materialName"] = name
+            entry["slot"] = key
+
+            if key in mats and {k: v for k, v in mats[key].items() if k != "material"} != \
                                {k: v for k, v in entry.items() if k != "material"}:
-                conflicts.append(name)
-            mats[name] = entry
+                conflicts.append(key)
+            mats[key] = entry
+
+            # Primitive order inside a GLB follows the material slot order, so the
+            # viewer needs the ordered slot list per mesh to patch materials in place.
+            slots_by_mesh.setdefault(mesh, [])
+            if key not in slots_by_mesh[mesh]:
+                slots_by_mesh[mesh].append(key)
 
     for part in sorted(os.listdir(build_dir)):
         pdir = os.path.join(build_dir, part)
         if not os.path.isdir(pdir):
             continue
+        slots = slots_by_mesh.get(part)
+        pairs = [(k, (mats.get(k) or {}).get("materialName")) for k in (slots or [])]
         for root, _, files in os.walk(pdir):
             for f in files:
                 if f.lower().endswith(".glb"):
-                    shutil.copy2(os.path.join(root, f), os.path.join(glb_dir, f))
+                    src = os.path.join(root, f)
+                    dst = os.path.join(glb_dir, f)
+                    if slots:
+                        try:
+                            glb_slots.rewrite(src, dst, pairs)
+                        except Exception as e:
+                            print(f"  glb rewrite failed for {f}: {e}")
+                            shutil.copy2(src, dst)
+                    else:
+                        shutil.copy2(src, dst)
 
     table = {
-        "format": 2,
+        "format": 3,
         "materials": mats,
+        "slotsByMesh": slots_by_mesh,
         "textures": {sha: {"uri": rel, "bytes": size} for sha, (rel, size) in sorted(by_sha.items())},
     }
     json.dump(table, open(os.path.join(out_dir, "materials.json"), "w"), indent=1)
