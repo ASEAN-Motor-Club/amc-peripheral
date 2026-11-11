@@ -1,28 +1,53 @@
+<!-- Motor Town vehicle viewer — materials edition.
+     Serves one vehicle per directory: <vehicle>/<vehicle>.json (manifest, metres),
+     <vehicle>/glb/*.glb, <vehicle>/materials.json, <vehicle>/textures/*.png
+
+     URL params:
+       ?vehicle=boxy      which directory to load (default: boxy)
+       ?sync              one-shot render (headless capture, no rAF loop)
+       ?cam=front|side|rear|top|iso    camera preset
+       ?ui=0              hide HUD/buttons (clean screenshots)
+       ?plain             force the old flat grey material (A/B comparison)
+     Materials come from the extractor's UE param sidecars (see tools/bake_materials.py):
+     the GLBs carry material *names* only, so we rebuild MeshStandardMaterial per name.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Motor Town — Boxy 3D viewer</title>
+<title>Motor Town vehicle viewer</title>
 <style>
-  body { margin:0; background:#17171a; color:#eee; font-family:system-ui,sans-serif; overflow:hidden; }
-  #hud { position:fixed; top:12px; left:12px; z-index:10; background:rgba(0,0,0,.65); padding:8px 14px; border-radius:8px; font-size:13px; pointer-events:none; line-height:1.6; }
+  :root { color-scheme: dark; }
+  body { margin:0; background:#15161a; color:#eee; font-family:system-ui,sans-serif; overflow:hidden; }
+  #hud { position:fixed; top:12px; left:12px; z-index:10; background:rgba(0,0,0,.62); padding:10px 14px; border-radius:8px; font-size:13px; line-height:1.55; }
   #hud b { color:#6cf; }
-  #status { position:fixed; top:12px; right:12px; z-index:10; background:rgba(0,0,0,.65); padding:6px 12px; border-radius:8px; font-size:12px; color:#9f9; pointer-events:none; }
-  #controls { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:10; display:flex; gap:8px; }
-  #controls button { background:#2a2a30; color:#eee; border:1px solid #444; border-radius:6px; padding:6px 14px; font-size:13px; cursor:pointer; }
-  #controls button:hover { background:#3a3a44; }
+  #hud .k { color:#8b93a7; }
+  #status { position:fixed; top:12px; right:12px; z-index:10; background:rgba(0,0,0,.62); padding:8px 12px; border-radius:8px; font-size:12px; color:#9f9; white-space:pre; }
+  #controls { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:10; display:flex; gap:8px; align-items:center; }
+  #controls button, #controls label { background:#26272e; color:#eee; border:1px solid #3d3f49; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }
+  #controls button:hover { background:#33353f; }
   #controls button.active { background:#1d6fd1; border-color:#1d6fd1; }
+  #controls input[type=color] { width:34px; height:30px; padding:0; border:1px solid #3d3f49; border-radius:6px; background:#26272e; }
+  body.nohud #hud, body.nohud #controls, body.nohud #status { display:none; }
 </style>
 </head>
 <body>
-<div id="hud"><b>Motor Town — Boxy</b><br>drag to orbit · scroll to zoom · right-drag to pan</div>
+<div id="hud">
+  <b>Motor Town — vehicle</b><br>
+  <span class="k">drag</span> orbit · <span class="k">scroll</span> zoom · <span class="k">right-drag</span> pan<br>
+  <span id="meta">loading…</span>
+</div>
 <div id="status">loading…</div>
 <div id="controls">
+  <select id="vehicle"></select>
+  <button data-look="iso">Iso</button>
   <button data-look="front">Front</button>
   <button data-look="side">Side</button>
   <button data-look="rear">Rear</button>
   <button data-look="top">Top</button>
+  <label title="Body paint">paint <input type="color" id="paint" value="#c9302c"></label>
+  <button id="togglePlain">plain</button>
 </div>
 <script type="importmap">
 { "imports": {
@@ -35,84 +60,220 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-const manifest = await (await fetch("boxy.json")).json();
+const params = new URLSearchParams(location.search);
+const vehicle = params.get("vehicle") || "boxy";
+const syncMode = params.has("sync");
+const plainMode = params.has("plain");
+if (params.get("ui") === "0") document.body.classList.add("nohud");
+
 const statusEl = document.getElementById("status");
+const metaEl = document.getElementById("meta");
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x17171a);
-const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.01, 20000);
-const renderer = new THREE.WebGLRenderer({ antialias:true });
+scene.background = new THREE.Color(0x15161a);
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.01, 500);
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.85;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 1.2, 0);
+controls.enableDamping = !syncMode;
 
-// Lighting
-scene.add(new THREE.HemisphereLight(0xffffff, 0x283040, 1.3));
-const key = new THREE.DirectionalLight(0xffffff, 2.2);
-key.position.set(4, 6, 3); scene.add(key);
-const fill = new THREE.DirectionalLight(0x7799ff, 0.5);
-fill.position.set(-4, 2, -3); scene.add(fill);
+// Physically sane exposure: the game's albedos are already mid-grey, so piling on
+// lights turned tyres into white plastic. Keep the key light dominant and modest.
+scene.add(new THREE.HemisphereLight(0xc9d8ff, 0x1f232c, 0.55));
+const key = new THREE.DirectionalLight(0xfff4e6, 1.9); key.position.set(4, 7, 5); scene.add(key);
+const rim = new THREE.DirectionalLight(0x9fc0ff, 0.55); rim.position.set(-5, 3, -6); scene.add(rim);
+const fill = new THREE.DirectionalLight(0xffffff, 0.18); fill.position.set(-2, 1.5, 5); scene.add(fill);
 
-// Ground + axes
-const grid = new THREE.GridHelper(20, 30, 0x3366aa, 0x1f2f4f);
+// neutral studio floor so the car reads against something
+const grid = new THREE.GridHelper(24, 24, 0x39415a, 0x242a3a);
+grid.position.y = -0.001;
 scene.add(grid);
-scene.add(new THREE.AxesHelper(2));
 
 const loader = new GLTFLoader();
 const root = new THREE.Group();
 scene.add(root);
 
-let done = 0, total = manifest.parts.length;
-for (const part of manifest.parts) {
-  try {
-    const g = await loader.loadAsync("glb/" + part.glb);
-    const model = g.scene;
-    // GLBs were exported with ExportMaterials=false -> no usable material; force a lit one.
-    model.traverse(o => { if (o.isMesh) o.material = new THREE.MeshStandardMaterial({ color: 0xc9cdd4, roughness: 0.55, metalness: 0.2 }); });
-    // UE uses cm; CUE4Parse exports geometry in metres. Blueprint positions are in cm -> divide by 100.
-    model.position.set(part.position.x / 100, part.position.z / 100, -part.position.y / 100);
-    model.scale.set(part.scale.x, part.scale.z, part.scale.y);
-    root.add(model);
-  } catch(e) { console.warn("fail", part.id, e.message); }
-  done++; statusEl.textContent = `loaded ${done}/${total}`;
+const texLoader = new THREE.TextureLoader();
+const texCache = new Map();
+function loadTexture(uri, dataTexture = false) {
+  const key = uri + (dataTexture ? "|data" : "");
+  if (texCache.has(key)) return texCache.get(key);
+  const t = texLoader.load(uri);
+  if (!dataTexture) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  t.flipY = false;               // glTF convention
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  texCache.set(key, t);
+  return t;
 }
 
-// frame car
-const box = new THREE.Box3().setFromObject(root);
-const c = box.getCenter(new THREE.Vector3());
-const s = box.getSize(new THREE.Vector3());
-const r = Math.max(s.x, s.y, s.z) * 1.8 + 0.5;
-camera.position.copy(c).add(new THREE.Vector3(r*0.7, r*0.6, r*0.9));
-controls.target.copy(c);
-statusEl.textContent = `loaded ${total}/${total} · ${s.x.toFixed(2)}×${s.y.toFixed(2)}×${s.z.toFixed(2)} m`;
+// material name -> THREE material
+const matCache = new Map();
+let paintColor = new THREE.Color(params.get("paint") || "#c9302c");
+let bodyTint = params.has("paint") ? paintColor.clone() : null;
 
-function setView(look){
-  const dist = camera.position.distanceTo(controls.target);
-  const p = { front:[0,1,1], side:[1,0,1], rear:[0,1,-1], top:[0,1,0] }[look];
-  camera.position.copy(controls.target).add(new THREE.Vector3(p[0]*dist, p[2]*dist, p[1]*dist ? p[1]*dist : 1)*0); // placeholder
-}
-document.querySelectorAll("#controls button").forEach(b => {
-  b.addEventListener("click", () => {
-    const look = b.dataset.look;
-    const dist = camera.position.distanceTo(controls.target);
-    const dirs = {
-      front: new THREE.Vector3(0.2, 0.15, 1),
-      side:  new THREE.Vector3(1, 0.1, 0.2),
-      rear:  new THREE.Vector3(-0.2, 0.15, -1),
-      top:   new THREE.Vector3(0, 1, 0.001)
-    };
-    camera.position.copy(controls.target).add(dirs[look].multiplyScalar(dist));
-    controls.update();
+function buildMaterial(name, def, plain) {
+  if (plain || !def) {
+    return new THREE.MeshStandardMaterial({ color: 0xc9cdd4, roughness: 0.55, metalness: 0.2 });
+  }
+  const m = new THREE.MeshStandardMaterial({
+    color: new THREE.Color().setRGB(def.baseColor[0], def.baseColor[1], def.baseColor[2], THREE.LinearSRGBColorSpace),
+    metalness: def.metalness ?? 0.0,
+    roughness: def.roughness ?? 0.55,
+    side: def.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
   });
+  if (def.map) m.map = loadTexture(def.map);
+  if (def.roughnessMap) m.roughnessMap = loadTexture(def.roughnessMap, true);
+  if (def.metalnessMap) m.metalnessMap = loadTexture(def.metalnessMap, true);
+  if (def.normalMap) m.normalMap = loadTexture(def.normalMap, true);
+  if (name === "M_Body" && bodyTint) m.color.copy(bodyTint);
+  if (def.emissive) {
+    m.emissive = new THREE.Color().setRGB(def.emissive[0], def.emissive[1], def.emissive[2], THREE.LinearSRGBColorSpace);
+    m.emissiveIntensity = def.emissiveIntensity ?? 1;
+  }
+  if (def.alphaMode === "BLEND") {
+    m.transparent = true;
+    m.opacity = def.opacity ?? 0.5;
+    m.depthWrite = def.depthWrite ?? false;
+  } else if (def.alphaMode === "MASK") {
+    m.alphaTest = 0.5;
+  }
+  return m;
+}
+
+function materialFor(name, def, plain) {
+  const key = name + "|" + plain;
+  if (matCache.has(key)) return matCache.get(key);
+  const m = buildMaterial(name, def, plain);
+  matCache.set(key, m);
+  return m;
+}
+
+const stats = { meshes: 0, materials: new Set(), textured: 0 };
+
+async function load() {
+  const [manifest, table] = await Promise.all([
+    fetch(`${vehicle}/${vehicle}.json`).then(r => r.json()),
+    fetch(`${vehicle}/materials.json`).then(r => r.json()).catch(() => ({ materials: {} })),
+  ]);
+  const defs = table.materials || {};
+  let done = 0;
+  for (const part of manifest.parts) {
+    try {
+      const g = await loader.loadAsync(`${vehicle}/glb/${part.glb}`);
+      const model = g.scene;
+      model.traverse(o => {
+        if (!o.isMesh) return;
+        const slotNames = Array.isArray(o.material) ? o.material.map(m => m.name) : [o.material.name];
+        const resolved = slotNames.map(n => {
+          stats.materials.add(n);
+          const d = defs[n];
+          if (d && d.map) stats.textured++;
+          return materialFor(n, d, plainMode);
+        });
+        o.material = resolved.length === 1 ? resolved[0] : resolved;
+        stats.meshes++;
+      });
+      model.position.fromArray(part.position);
+      model.quaternion.fromArray(part.rotation);
+      model.scale.fromArray(part.scale);
+      root.add(model);
+    } catch (e) { console.warn("part failed", part.id, e.message); }
+    done++;
+    statusEl.textContent = `loaded ${done}/${manifest.parts.length}`;
+  }
+
+  const sel = document.getElementById("vehicle");
+  try {
+    const list = await fetch("vehicles.json").then(r => r.json());
+    sel.innerHTML = list.map(v =>
+      `<option value="${v.slug}"${v.slug === vehicle ? " selected" : ""}>` +
+      `${v.vehicle}${v.inheritedFrom ? " (from " + v.inheritedFrom + ")" : ""}</option>`).join("");
+    sel.addEventListener("change", () => {
+      location.search = "?vehicle=" + sel.value + (syncMode ? "&sync" : "");
+    });
+  } catch (e) { sel.remove(); }
+
+  const box = new THREE.Box3().setFromObject(root);
+  const c = box.getCenter(new THREE.Vector3());
+  const s = box.getSize(new THREE.Vector3());
+  const r = Math.max(s.x, s.y, s.z);
+
+  // Motor Town forward is +X: the car's nose points along +X in this scene.
+  const dirs = {
+    iso: new THREE.Vector3(0.95, 0.5, 1.15),
+    front: new THREE.Vector3(1.0, 0.22, 0.15),
+    side: new THREE.Vector3(0.15, 0.14, 1.0),
+    rear: new THREE.Vector3(-1.0, 0.22, 0.12),
+    top: new THREE.Vector3(0.02, 1.0, 0.02),
+  };
+  function setCam(look) {
+    const d = dirs[look] || dirs.iso;
+    const dist = r * 1.9;
+    camera.position.copy(c).add(d.clone().normalize().multiplyScalar(dist));
+    controls.target.copy(c);
+    controls.update();
+  }
+  window.__setCam = setCam;
+  setCam(params.get("cam") || "iso");
+
+  metaEl.textContent =
+    `${manifest.vehicle} · ${s.x.toFixed(2)}×${s.y.toFixed(2)}×${s.z.toFixed(2)} m · ` +
+    `${stats.meshes} meshes · ${stats.materials.size} materials · ${table.__textures ?? ""}`;
+  statusEl.textContent = `loaded ${manifest.parts.length}/${manifest.parts.length}`;
+
+  window.__viewer = { scene, root, camera, renderer, manifest, defs, stats, setCam };
+
+  document.querySelectorAll("#controls button[data-look]").forEach(b => {
+    b.addEventListener("click", () => setCam(b.dataset.look));
+  });
+
+  const paint = document.getElementById("paint");
+  paint.value = "#" + paintColor.getHexString();
+  paint.addEventListener("input", () => {
+    paintColor.set(paint.value);
+    bodyTint = paintColor.clone();
+    for (const [k, m] of matCache) {
+      if (k.startsWith("M_Body|")) m.color.copy(paintColor);
+    }
+  });
+
+  const tp = document.getElementById("togglePlain");
+  tp.addEventListener("click", () => {
+    const on = tp.classList.toggle("active");
+    root.traverse(o => {
+      if (!o.isMesh) return;
+      const names = Array.isArray(o.material) ? o.material.map(m => m.name) : [o.material.name];
+      const resolved = names.map(n => materialFor(n, defs[n], on));
+      o.material = resolved.length === 1 ? resolved[0] : resolved;
+    });
+  });
+
+  render();
+}
+
+function render() {
+  controls.update();
+  renderer.render(scene, camera);
+}
+function anim() { requestAnimationFrame(anim); render(); }
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  if (syncMode) render();
 });
 
-function anim(){ requestAnimationFrame(anim); controls.update(); renderer.render(scene, camera); }
-if (location.search.includes("sync")) { controls.update(); renderer.render(scene, camera); }
-else anim();
-addEventListener("resize", () => { camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+await load();
+// give textures a beat to decode before the single frame in sync mode
+await new Promise(r => setTimeout(r, 350));
+if (syncMode) { render(); } else { anim(); }
 </script>
 </body>
 </html>
