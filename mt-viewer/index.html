@@ -223,6 +223,8 @@ let slotDefs = {};        // slot name -> material def (materials.json, keyed by
 let slotMesh = {};        // mesh -> ordered slot names
 let colorSlots = {};      // slot -> {defaultColor, metallic, roughness, useAlpha}
 let paints = [];          // [{slot: [r,g,b,a]}] the game's default paint variants
+let extraPaintSlot = {};  // paintable material slot -> index into the colour-slot order
+let colourKeys = [];      // ColorSlots keys, in slot order (duplicates suffixed __N)
 let bodyVariants = [];    // BodyMaterialList: livery/decal materials on the CDO
 let liveryIndex = -1;     // -1 = the material the mesh slot actually names
 let paintIndex = -1;      // -1 = as authored on the material
@@ -244,12 +246,51 @@ function slotColour(key) {
   const scheme = paintIndex >= 0 ? paints[paintIndex] : null;
   const cs = colorSlots[key] || null;
   if (scheme) {
-    const hit = scheme[key] || scheme[key.replace(/_\d+$/, "")] ||
+    // Exact slot name first, then a secondary paint region: the Stinger's racing
+    // stripe is a second ColorSlots entry under the same "Body" key, living on its
+    // own material section (Body_1) that no colour names directly. Only after that
+    // the loose Body_1 -> Body fallback, which would otherwise hand the stripe the
+    // body colour and hide it.
+    const exact = scheme[key];
+    if (exact) return exact;
+    const i = extraPaintSlot[key];
+    if (i != null) {
+      const src = colourKeys[i];
+      if (src && scheme[src]) return scheme[src];
+    }
+    const hit = scheme[key.replace(/_\d+$/, "")] ||
                 scheme[key.replace(/(_\d+)$/, "_01")];
     if (hit) return hit;
   }
   if (cs && cs.defaultColor) return cs.defaultColor;
   return null;
+}
+
+// Which material sections are paintable but not named by a ColorSlots key.
+// Ordered by triangle count so the dominant section takes the first colour slot.
+function indexPaintSlots() {
+  const tris = {};
+  root.traverse(o => {
+    if (!o.isMesh || !o.material) return;
+    const n = o.material.name;
+    const g = o.geometry;
+    tris[n] = (tris[n] || 0) + (g.index ? g.index.count : g.attributes.position.count) / 3;
+  });
+  colourKeys = Object.keys(colorSlots);
+  // Only the body mesh's own sections count: the dashboard also uses M_Palette, and
+  // letting it into the ordering pushed the stripe out of the colour list.
+  // The painted shell, not the first mesh that happens to carry a body slot: the
+  // doors reuse "Body" too, and picking a door left the stripe section out.
+  const bodyMesh = slotMesh["Body"] ? "Body"
+    : Object.keys(slotMesh).reduce((a, b) => ((slotMesh[a] || []).length >= (slotMesh[b] || []).length ? a : b));
+  const pool = bodyMesh ? slotMesh[bodyMesh] : Object.keys(slotDefs);
+  const cand = pool.filter(s => {
+    const d = slotDefs[s] || {};
+    return /M_Body|M_Palette/i.test(d.materialName || "") && !d.map && !colourKeys.includes(s);
+  });
+  cand.sort((a, b) => (tris[b] || 0) - (tris[a] || 0));
+  extraPaintSlot = {};
+  cand.forEach((s, i) => { extraPaintSlot[s] = i; });
 }
 
 function applyPaint() {
@@ -591,6 +632,7 @@ async function load() {
     if (syncMode) render();
   });
 
+  indexPaintSlots();     // needs the finished model to know each section's size
   applyPaint();
   applyLivery();
 

@@ -268,10 +268,19 @@ def _cdo_colours(exports, vehicle=""):
     pr = cdo.get("Properties") or {}
 
     slots = {}
+    # ColorSlots can hold several entries under one key: the Stinger has two "Body"
+    # slots, the second displayed as "RacingStripe". A plain dict kept only the last,
+    # which dropped the paint slot entirely. Later duplicates get a __N suffix.
     for ent in (pr.get("ColorSlots") or {}).get("Entries", []) or []:
         v = ent.get("Value") or {}
         dc = ((v.get("DefaultColor") or {}).get("DefaultColor") or {})
-        slots[ent.get("Key")] = {
+        key = ent.get("Key")
+        if key in slots:
+            n = 2
+            while f"{key}__{n}" in slots:
+                n += 1
+            key = f"{key}__{n}"
+        slots[key] = {
             "name": v.get("DisplayName"),
             "defaultColor": [dc.get("R", 255), dc.get("G", 255), dc.get("B", 255), dc.get("A", 255)],
             "metallic": v.get("DefaultMetallic"),
@@ -291,9 +300,9 @@ def _cdo_colours(exports, vehicle=""):
             key = ent.get("Key")
             if key in scheme:
                 n = 2
-                while f"{key}_{n}" in scheme:
+                while f"{key}__{n}" in scheme:
                     n += 1
-                key = f"{key}_{n}"
+                key = f"{key}__{n}"
             scheme[key] = [c.get("R", 0), c.get("G", 0), c.get("B", 0), c.get("A", 0)]
         if scheme:
             paints.append(scheme)
