@@ -658,15 +658,20 @@ async function load() {
     atlasTex.generateMipmaps = false;
 
     // ---- layer uniforms ----------------------------------------------------
-    // Axis assignment is the one unknown left: Position is 2-D in the vehicle's own
-    // units and both candidate pairs fit the body bounds, so it stays a URL switch
-    // (?daxes=xy|xyup|xz|zy) until a render is confirmed against the game.
+    // Position is in millimetres in the vehicle's local frame: X along the body, Y up.
     const axes = (params.get("daxes") || "xy").toLowerCase();
-    const AXIS = { xy: [0, 1], xz: [0, 2], zy: [2, 1], yx: [1, 0] }[axes] || [0, 2];
-    const BASE = parseFloat(params.get("dbase") || "2.0");   // metres per scale unit
-    // Position units are unknown: millimetres, half-centimetres and centimetres all fit
-    // the body bounds for some vehicle, so it stays a URL switch too.
+    const AXIS = { xy: [0, 1], xz: [0, 2], zy: [2, 1], yx: [1, 0] }[axes] || [0, 1];
     const UNIT = parseFloat(params.get("dunit") || "1000");   // position units per metre
+
+    // Stamp size: calibrate from the data instead of a constant. The design's own
+    // extent divided by its largest scale reproduces the layer proportions on every
+    // vehicle; a fixed base produced an 8.7 m roundel from a 28 cm design.
+    const xs = rec.layers.map(l => l.pos[0]), ys = rec.layers.map(l => l.pos[1]);
+    const spanU = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+    const maxScale = Math.max(...rec.layers.map(l => Math.abs(l.scale)), 0.001);
+    const autoBase = spanU / UNIT / maxScale;
+    const BASE = params.get("dbase") ? parseFloat(params.get("dbase")) : autoBase;
+
     const posArr = [], sizeArr = [], rotArr = [], flagArr = [];
     const v3 = new THREE.Vector3();
     for (let i = 0; i < 32; i++) {
@@ -677,7 +682,7 @@ async function load() {
       // EMTDecalLayerFlags: Flip=1, Mirror=2, DrawOnWheel=0x100
       const w = (f & 1) ? s * Math.abs(L.stretch) : s;
       const h = (f & 1) ? s : s * Math.abs(L.stretch);
-      // Position is in the vehicle's centimetres; the shader works in metres
+      // metres for the shader
       posArr.push(new THREE.Vector4(L.pos[0] / UNIT, L.pos[1] / UNIT, 0, 0));
       sizeArr.push(new THREE.Vector2(w, h));
       rotArr.push(THREE.MathUtils.degToRad(L.rot[2]));
@@ -686,7 +691,7 @@ async function load() {
 
     // root position so the shader works in vehicle space
     const rootPos = new THREE.Vector3();
-    new THREE.Box3().setFromObject(root).getCenter(rootPos);
+    root.getWorldPosition(rootPos);
 
     let patched = 0;
     const wholeBox = new THREE.Box3().setFromObject(root);
