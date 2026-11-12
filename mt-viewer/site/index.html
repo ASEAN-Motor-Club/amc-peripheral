@@ -593,10 +593,15 @@ async function load() {
   // Highlighted=0x80, DrawOnWheel=0x100}.
   async function applyVehicleDecals() {
     const info = (window.__decalInfo = { step: "start" });
-    if (!params.has("decals")) { info.step = "off"; return; }
+    // Placement is calibrated against a rendered composition: Position is in
+    // millimetres in the vehicle's local frame (X along the body, Y up), and
+    // DecalScale is a fraction of a 2 m stamp -- that is what makes 30 separate layers
+    // resolve into one emblem instead of a pile of fragments. ?decals=0 disables.
+    if (params.get("decals") === "0") { info.step = "off"; return; }
+    // Manifests whose decalable slot list lives on a base class were never expanded,
+    // so fall back to the paint materials by name rather than declaring "no decals".
     const slots = manifest.decalSlots || [];
-    info.slots = slots;
-    if (!slots.length) { info.step = "no-slots"; return; }
+    info.slots = slots.length ? slots : "fallback";
 
     let idx, cat;
     try {
@@ -658,20 +663,23 @@ async function load() {
     // (?daxes=xy|xyup|xz|zy) until a render is confirmed against the game.
     const axes = (params.get("daxes") || "xy").toLowerCase();
     const AXIS = { xy: [0, 1], xz: [0, 2], zy: [2, 1], yx: [1, 0] }[axes] || [0, 2];
-    const BASE = parseFloat(params.get("dbase") || "200");   // centimetres per scale unit
+    const BASE = parseFloat(params.get("dbase") || "2.0");   // metres per scale unit
+    // Position units are unknown: millimetres, half-centimetres and centimetres all fit
+    // the body bounds for some vehicle, so it stays a URL switch too.
+    const UNIT = parseFloat(params.get("dunit") || "1000");   // position units per metre
     const posArr = [], sizeArr = [], rotArr = [], flagArr = [];
     const v3 = new THREE.Vector3();
     for (let i = 0; i < 32; i++) {
       const L = layers[i];
       if (!L) { posArr.push(new THREE.Vector4(0, 0, 0, 0)); sizeArr.push(new THREE.Vector2(0, 0)); rotArr.push(0); flagArr.push(0); continue; }
-      const s = Math.abs(L.scale) * BASE;
+      const s = Math.abs(L.scale) * BASE;   // metres
       const f = L.flags | 0;
       // EMTDecalLayerFlags: Flip=1, Mirror=2, DrawOnWheel=0x100
       const w = (f & 1) ? s * Math.abs(L.stretch) : s;
       const h = (f & 1) ? s : s * Math.abs(L.stretch);
       // Position is in the vehicle's centimetres; the shader works in metres
-      posArr.push(new THREE.Vector4(L.pos[0] / 100, L.pos[1] / 100, 0, 0));
-      sizeArr.push(new THREE.Vector2(w / 100, h / 100));
+      posArr.push(new THREE.Vector4(L.pos[0] / UNIT, L.pos[1] / UNIT, 0, 0));
+      sizeArr.push(new THREE.Vector2(w, h));
       rotArr.push(THREE.MathUtils.degToRad(L.rot[2]));
       flagArr.push(f);
     }
@@ -705,10 +713,11 @@ async function load() {
           sh.uniforms.uDecalRot = { value: rotArr };
           sh.uniforms.uDecalFlags = { value: flagArr };
           sh.uniforms.uDecalAxis = { value: new THREE.Vector2(AXIS[0], AXIS[1]) };
+          sh.uniforms.uNormalAxis = { value: 3 - AXIS[0] - AXIS[1] };
           sh.uniforms.uRootPos = { value: rootPos };
           sh.uniforms.uDecalDebug = { value: params.has("dbg") ? 1 : 0 };
-          sh.vertexShader = "varying vec3 vDecalLocal;\n" + sh.vertexShader
-            .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvDecalLocal = (modelMatrix * vec4(position, 1.0)).xyz;");
+          sh.vertexShader = "varying vec3 vDecalLocal;\n varying vec3 vDecalNrm;\n" + sh.vertexShader
+            .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvDecalLocal = (modelMatrix * vec4(position, 1.0)).xyz;\n\tvDecalNrm = normalize(mat3(modelMatrix) * normal);");
           sh.fragmentShader = `
             uniform sampler2D decalAtlas;
             uniform int uDecalCount;
@@ -719,14 +728,20 @@ async function load() {
             uniform vec2 uDecalAxis;
             uniform vec3 uRootPos;
             uniform float uDecalDebug;
+            uniform float uNormalAxis;
             varying vec3 vDecalLocal;
+            varying vec3 vDecalNrm;
           ` + sh.fragmentShader.replace("#include <map_fragment>", `#include <map_fragment>
             if (uDecalDebug > 0.5) { diffuseColor.rgb = vec3(1.0, 0.0, 1.0); }
             else {
+              // a decal box only paints what its projection axis sees; without this the
+              // emblem runs over the shoulder and onto the roof
+              float nrm = abs(uNormalAxis < 0.5 ? vDecalNrm.x : (uNormalAxis < 1.5 ? vDecalNrm.y : vDecalNrm.z));
               vec3 rel = vDecalLocal - uRootPos;
               vec2 p = vec2(uDecalAxis.x < 0.5 ? rel.x : (uDecalAxis.x < 1.5 ? rel.y : rel.z),
                             uDecalAxis.y < 0.5 ? rel.x : (uDecalAxis.y < 1.5 ? rel.y : rel.z));
               for (int i = 0; i < 32; i++) {
+                if (nrm < 0.45) break;
                 if (i >= uDecalCount) break;
                 vec2 sz = uDecalSize[i];
                 if (sz.x <= 0.0001 || sz.y <= 0.0001) continue;
