@@ -7,7 +7,7 @@ W=$(/run/current-system/sw/bin/readlink -f /opt/data/workspace/amc-peripheral-wt
 NIX=/run/current-system/sw/bin/nix
 cd "$W" || exit 2
 
-echo "--- nginx vhosts + the viewer location:"
+echo "--- nginx vhosts + the viewer locations:"
 $NIX eval --impure --json --expr '
 let
   f = builtins.getFlake ("git+file://" + toString '"$W"');
@@ -22,10 +22,10 @@ let
                   services.amc-peripheral.cookiesPath = "/dev/null"; } ];
   };
   vh = sys.config.services.nginx.virtualHosts;
+  www = vh."www.aseanmotorclub.com" or { locations = {}; };
 in {
   hosts = builtins.attrNames vh;
-  viewer = builtins.filter (n: n == "vehicles.aseanmotorclub.com") (builtins.attrNames vh);
-  locations = builtins.filter (p: builtins.match ".*vehicles.*" p != null)
-                (builtins.concatLists (map (h: map (l: h + " " + l)
-                  (builtins.attrNames vh.${h}.locations or {})) (builtins.attrNames vh)));
+  vehiclesSubdomain = builtins.filter (n: n == "vehicles.aseanmotorclub.com") (builtins.attrNames vh);
+  wwwLocations = builtins.attrNames www.locations;
+  wwwRoots = map (l: www.locations.${l}.root or "") (builtins.attrNames www.locations);
 }' 2>&1 | tail -4

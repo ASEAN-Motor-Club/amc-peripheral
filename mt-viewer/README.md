@@ -1,9 +1,9 @@
 # Motor Town Vehicle 3D Viewer
 
 Interactive three.js viewer for Motor Town vehicles, served as a static site at
-**`https://mods.aseanmotorclub.com/vehicles/`** — a path on the mods host, not its
-own subdomain (no extra ACME cert, no DNS record; easy to promote to a subdomain
-later by adding one vhost).
+**`https://www.aseanmotorclub.com/vehicles/`** — served exactly like `map_tiles`:
+plain files under the main site's web root, rsynced in, no subdomain and no nix
+store involvement for the assets.
 
 Geometry **and materials** come from the game's client PAK; nothing is hand-made.
 
@@ -11,9 +11,17 @@ Everything the page fetches is **relative** (`vehicles.json`, `<slug>/<slug>.jso
 `<slug>/glb/*.glb`), so it works under any path prefix — `tools/mt-shot-path.sh`
 renders it through `/vehicles/` to keep that true.
 
-Asset root on the host is `/var/lib/vehicles` (nginx `root /var/lib` + the
-`vehicles` directory name keeps `try_files` honest; an `alias` with `try_files`
-resolves against the request URI and silently 404s).
+Deploy (the whole of `site/` is the deployable tree; `index.html` is in it):
+
+```
+rsync -a --delete site/ root@amc-peripheral:/var/www/www.aseanmotorclub.com/vehicles/
+```
+
+nginx serves `/var/www/www.aseanmotorclub.com` for the www vhost (declared in
+`machines/amc-peripheral/configuration.nix`); the amc-peripheral module contributes
+the `/vehicles/` location plus a `~ ^/vehicles/.+/(glb|textures)/` location for
+long-lived binaries. Note the location uses `root`, not `alias`: `alias` together
+with `try_files` resolves against the request URI and silently 404s.
 
 ## What is in here
 
