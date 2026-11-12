@@ -593,10 +593,6 @@ async function load() {
   // Highlighted=0x80, DrawOnWheel=0x100}.
   async function applyVehicleDecals() {
     const info = (window.__decalInfo = { step: "start" });
-    // Placement is not calibrated yet: the positions are in the vehicle's own units and
-    // the panel only occupies a slice of the decal UV layout, so until the mapping is
-    // confirmed against an in-game reference the pass stays behind ?decals=1 rather
-    // than painting approximations onto the live catalogue.
     if (!params.has("decals")) { info.step = "off"; return; }
     const slots = manifest.decalSlots || [];
     info.slots = slots;
@@ -613,158 +609,148 @@ async function load() {
     info.rec = rec ? rec.layers.length : 0;
     if (!rec || !rec.layers.length) { info.step = "no-record"; return; }
 
+    // ---- how the game actually does it -------------------------------------
+    // FMTDecalTargetMesh keeps a DecalRT per body mesh and MTDecalBaker renders the mesh
+    // into it with a brush material: every fragment samples the decal texture by its own
+    // position in decal space, and the mesh's decal UV decides where the result lands.
+    // That is why the stored Position/Rotation are the vehicle's own units and why
+    // stamping them straight into UV space could never line up. So evaluate the layer
+    // stack per fragment from the surface position and let uv1 place the result.
     const byKey = new Map(cat.decals.map(d => [d.key, d]));
-    // uv1 runs roughly [-0.5, 1.5]; the canvas covers DECAL_SPAN uv units either side of
-    // DECAL_ORIGIN so a stamp outside the body's own island still has somewhere to land.
-    const ORIGIN = parseFloat(params.get("do") || "-1");
-    const SPAN = parseFloat(params.get("ds") || "3");
-    const K = parseFloat(params.get("dk") || "1024");       // position units per uv unit
-    // DecalScale is a multiplier on the catalogue's base stamp size, not a uv fraction:
-    // 0.011..10 across the saved vehicles, with 0.5 the common value.
-    const SC = parseFloat(params.get("dsc") || "0.25");      // uv units per scale unit
-    const N = 2048;
+    const layers = rec.layers.filter(L => byKey.get(L.key)).slice(0, 32);
+    if (!layers.length) { info.step = "no-known-keys"; return; }
 
-    const cv = document.createElement("canvas");
-    cv.width = cv.height = N;
-    const ctx = cv.getContext("2d");
-    const toPx = (u, v) => [ (u - ORIGIN) / SPAN * N, (1 - (v - ORIGIN) / SPAN) * N ];
+    // one atlas so the shader needs a single sampler
+    const TILE = 256, GRID = 8;
+    const atlas = document.createElement("canvas");
+    atlas.width = atlas.height = TILE * GRID;
+    const actx = atlas.getContext("2d");
+    let packed = 0;
+    for (let i = 0; i < layers.length; i++) {
+      const d = byKey.get(layers[i].key);
+      let img;
+      try { img = await loadImage(`decals/tex/${d.category}/${d.name}.png`); } catch { continue; }
+      const t = document.createElement("canvas");
+      t.width = t.height = TILE;
+      const tc = t.getContext("2d");
+      tc.drawImage(img, 0, 0, TILE, TILE);
+      tc.globalCompositeOperation = "source-in";
+      const c = layers[i].color;
+      tc.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+      tc.fillRect(0, 0, TILE, TILE);
+      actx.drawImage(t, (i % GRID) * TILE, Math.floor(i / GRID) * TILE);
+      packed++;
+    }
+    info.packed = packed;
+    if (!packed) { info.step = "no-textures"; return; }
+    const atlasTex = new THREE.CanvasTexture(atlas);
+    atlasTex.colorSpace = THREE.SRGBColorSpace;
+    atlasTex.flipY = true;
+    // nearest keeps neighbouring atlas tiles from bleeding into each other, which
+    // showed up as brown/purple scraps of the wrong decal on the panel
+    atlasTex.magFilter = THREE.NearestFilter;
+    atlasTex.minFilter = THREE.NearestFilter;
+    atlasTex.generateMipmaps = false;
 
-    const decalTex = new THREE.CanvasTexture(cv);
-    decalTex.colorSpace = THREE.SRGBColorSpace;
-    decalTex.flipY = false;
-    decalTex.anisotropy = 8;
+    // ---- layer uniforms ----------------------------------------------------
+    // Axis assignment is the one unknown left: Position is 2-D in the vehicle's own
+    // units and both candidate pairs fit the body bounds, so it stays a URL switch
+    // (?daxes=xy|xyup|xz|zy) until a render is confirmed against the game.
+    const axes = (params.get("daxes") || "xz").toLowerCase();
+    const AXIS = { xz: [0, 1], xy: [0, 1], zy: [2, 1], xyup: [0, 1] }[axes] || [0, 2];
+    const BASE = parseFloat(params.get("dbase") || "200");   // centimetres per scale unit
+    const posArr = [], sizeArr = [], rotArr = [], flagArr = [];
+    const v3 = new THREE.Vector3();
+    for (let i = 0; i < 32; i++) {
+      const L = layers[i];
+      if (!L) { posArr.push(new THREE.Vector4(0, 0, 0, 0)); sizeArr.push(new THREE.Vector2(0, 0)); rotArr.push(0); flagArr.push(0); continue; }
+      const s = Math.abs(L.scale) * BASE;
+      const f = L.flags | 0;
+      // EMTDecalLayerFlags: Flip=1, Mirror=2, DrawOnWheel=0x100
+      const w = (f & 1) ? s * Math.abs(L.stretch) : s;
+      const h = (f & 1) ? s : s * Math.abs(L.stretch);
+      // Position is in the vehicle's centimetres; the shader works in metres
+      posArr.push(new THREE.Vector4(L.pos[0] / 100, L.pos[1] / 100, 0, 0));
+      sizeArr.push(new THREE.Vector2(w / 100, h / 100));
+      rotArr.push(THREE.MathUtils.degToRad(L.rot[2]));
+      flagArr.push(f);
+    }
 
-    // patch first, draw second: ?sync captures one frame and the fetch/decode of 30
-    // layer textures must not race it
+    // root position so the shader works in vehicle space
+    const rootPos = new THREE.Vector3();
+    new THREE.Box3().setFromObject(root).getCenter(rootPos);
+
     let patched = 0;
-    const shellName = (n) => slots.includes(n) || /^(Palette|Shell)/i.test(n || "")
-      || slots.some(sl => (n || "").startsWith(sl));
-
-    // Clone the material per mesh instead of patching the shared instance: the wheels
-    // and landing gear point at the same Palette material as the panels, so patching
-    // in place drew decals on tyres and the jack foot.
-    // wheels and the landing-gear foot share the body's Palette material, so name
-    // alone can't separate them; the panels are metres across and those parts are not
     const wholeBox = new THREE.Box3().setFromObject(root);
     const wholeSize = wholeBox.getSize(new THREE.Vector3());
     const minSpan = Math.max(wholeSize.x, wholeSize.z) * 0.25;
+    const shellName = (n) => slots.includes(n) || /^(Palette|Shell)/i.test(n || "")
+      || slots.some(sl => (n || "").startsWith(sl));
 
     root.traverse(o => {
       if (!o.isMesh || !o.material || !o.geometry.attributes.uv1) return;
       const bb = new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3());
-      if (Math.max(bb.x, bb.y, bb.z) < minSpan) return;
+      if (Math.max(bb.x, bb.y, bb.z) < minSpan) return;      // skip wheels / jack feet
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       const swap = mats.map((m) => {
         if (!shellName(m.name)) return m;
         const c = m.clone();
-        c.userData.decalTex = decalTex;
         c.customProgramCacheKey = () => "mt-decal";
         c.onBeforeCompile = (sh) => {
           window.__shaderRuns = (window.__shaderRuns || 0) + 1;
-          sh.uniforms.decalTex = { value: decalTex };
+          sh.uniforms.decalAtlas = { value: atlasTex };
+          sh.uniforms.uDecalCount = { value: packed };
+          sh.uniforms.uDecalPos = { value: posArr };
+          sh.uniforms.uDecalSize = { value: sizeArr };
+          sh.uniforms.uDecalRot = { value: rotArr };
+          sh.uniforms.uDecalFlags = { value: flagArr };
+          sh.uniforms.uDecalAxis = { value: new THREE.Vector2(AXIS[0], AXIS[1]) };
+          sh.uniforms.uRootPos = { value: rootPos };
           sh.uniforms.uDecalDebug = { value: params.has("dbg") ? 1 : 0 };
-          // three already declares `attribute vec2 uv1`, so only the varying is ours
-          sh.vertexShader = "varying vec2 vDecalUv;\n" + sh.vertexShader
-            .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvDecalUv = uv1;");
-          sh.fragmentShader = "uniform sampler2D decalTex;\nuniform float uDecalDebug;\nvarying vec2 vDecalUv;\n" + sh.fragmentShader
-            .replace("#include <map_fragment>", `#include <map_fragment>
-              vec4 dec = texture2D(decalTex, vDecalUv);
-              if (uDecalDebug > 0.5) diffuseColor.rgb = vec3(1.0, 0.0, 1.0);
-              else if (dec.a > 0.004) diffuseColor.rgb = mix(diffuseColor.rgb, dec.rgb * 1.6, dec.a);`);
+          sh.vertexShader = "varying vec3 vDecalLocal;\n" + sh.vertexShader
+            .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvDecalLocal = (modelMatrix * vec4(position, 1.0)).xyz;");
+          sh.fragmentShader = `
+            uniform sampler2D decalAtlas;
+            uniform int uDecalCount;
+            uniform vec4 uDecalPos[32];
+            uniform vec2 uDecalSize[32];
+            uniform float uDecalRot[32];
+            uniform int uDecalFlags[32];
+            uniform vec2 uDecalAxis;
+            uniform vec3 uRootPos;
+            uniform float uDecalDebug;
+            varying vec3 vDecalLocal;
+          ` + sh.fragmentShader.replace("#include <map_fragment>", `#include <map_fragment>
+            if (uDecalDebug > 0.5) { diffuseColor.rgb = vec3(1.0, 0.0, 1.0); }
+            else {
+              vec3 rel = vDecalLocal - uRootPos;
+              vec2 p = vec2(uDecalAxis.x < 0.5 ? rel.x : (uDecalAxis.x < 1.5 ? rel.y : rel.z),
+                            uDecalAxis.y < 0.5 ? rel.x : (uDecalAxis.y < 1.5 ? rel.y : rel.z));
+              for (int i = 0; i < 32; i++) {
+                if (i >= uDecalCount) break;
+                vec2 sz = uDecalSize[i];
+                if (sz.x <= 0.0001 || sz.y <= 0.0001) continue;
+                vec2 d = p - uDecalPos[i].xy;
+                float ca = cos(-uDecalRot[i]), sa = sin(-uDecalRot[i]);
+                vec2 q = vec2(d.x * ca - d.y * sa, d.x * sa + d.y * ca) / sz + 0.5;
+                if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0) continue;
+                float col = mod(float(i), 8.0), row = floor(float(i) / 8.0);
+                vec2 auv = vec2((col + q.x) / 8.0, ((7.0 - row) + q.y) / 8.0);
+                vec4 dec = texture2D(decalAtlas, auv);
+                if (dec.a > 0.004) diffuseColor.rgb = mix(diffuseColor.rgb, dec.rgb * 1.6, dec.a);
+              }
+            }`);
           if (!sh.fragmentShader.includes("uDecalDebug")) window.__patchMiss = (window.__patchMiss || 0) + 1;
         };
         c.needsUpdate = true;
         patched++;
         return c;
       });
-      if (swap.some((m, i) => m !== mats[i])) {
-        o.material = Array.isArray(o.material) ? swap : swap[0];
-      }
+      if (swap.some((m, i) => m !== mats[i])) o.material = Array.isArray(o.material) ? swap : swap[0];
     });
-    // The saved positions are in the vehicle's own units and the panel occupies only a
-    // slice of the decal UV layout, so a fixed divisor can't line them up. Fit the
-    // layer positions onto the shell's uv1 bounding box instead: that keeps the
-    // arrangement between stamps and only has to get the panel right once.
-    const uvBox = { u0: Infinity, u1: -Infinity, v0: Infinity, v1: -Infinity };
-    root.traverse(o => {
-      if (!o.isMesh || !o.material) return;
-      const m0 = Array.isArray(o.material) ? o.material[0] : o.material;
-      if (!m0 || !m0.userData || !m0.userData.decalTex) return;
-      const a = o.geometry.attributes.uv1;
-      if (!a) return;
-      for (let i = 0; i < a.count; i++) {
-        const u = a.getX(i), v = a.getY(i);
-        if (u < uvBox.u0) uvBox.u0 = u;
-        if (u > uvBox.u1) uvBox.u1 = u;
-        if (v < uvBox.v0) uvBox.v0 = v;
-        if (v > uvBox.v1) uvBox.v1 = v;
-      }
-    });
-    const posX = rec.layers.map(l => l.pos[0]), posY = rec.layers.map(l => l.pos[1]);
-    const pBox = { x0: Math.min(...posX), x1: Math.max(...posX), y0: Math.min(...posY), y1: Math.max(...posY) };
-    info.uvBox = [uvBox.u0, uvBox.v0, uvBox.u1, uvBox.v1];
-    info.posBox = [pBox.x0, pBox.y0, pBox.x1, pBox.y1];
-    const fitU = (x) => uvBox.u0 + (pBox.x1 === pBox.x0 ? 0.5 : (x - pBox.x0) / (pBox.x1 - pBox.x0)) * (uvBox.u1 - uvBox.u0);
-    const fitV = (y) => uvBox.v0 + (pBox.y1 === pBox.y0 ? 0.5 : (y - pBox.y0) / (pBox.y1 - pBox.y0)) * (uvBox.v1 - uvBox.v0);
-    const fitScale = (uvBox.u1 - uvBox.u0) / Math.max(1e-6, pBox.x1 - pBox.x0);
-
-    info.patchedEarly = patched;
-    try { render(); } catch (e) { try { renderer.render(scene, camera); } catch (e2) {} }
-
-    let drawn = 0;
-    for (const L of rec.layers) {
-      const d = byKey.get(L.key);
-      if (!d) continue;
-      let img;
-      try { img = await loadImage(`decals/tex/${d.category}/${d.name}.png`); } catch { continue; }
-      const flags = L.flags | 0;
-      const colour = `rgb(${L.color[0]},${L.color[1]},${L.color[2]})`;
-      const [cx, cy] = toPx(fitU(L.pos[0]), fitV(L.pos[1]));
-      // stamp size in uv units, converted from the layer's own units with the same fit
-      const size = Math.abs(L.scale) * SC / SPAN * N;
-      const w = size * (flags & 1 ? Math.abs(L.stretch) : 1);
-      const h = size * (flags & 1 ? 1 : Math.abs(L.stretch));
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(-THREE.MathUtils.degToRad(L.rot[2]));
-      if (flags & 2) ctx.scale(-1, 1);
-      ctx.globalAlpha = Math.max(0, Math.min(1, L.coverage));
-      // tint: draw the shape, then flood it with the layer colour inside its alpha
-      const t = document.createElement("canvas");
-      t.width = t.height = Math.max(2, Math.ceil(Math.max(w, h)));
-      const tc = t.getContext("2d");
-      tc.drawImage(img, 0, 0, t.width, t.height);
-      tc.globalCompositeOperation = "source-in";
-      tc.fillStyle = colour;
-      tc.fillRect(0, 0, t.width, t.height);
-      ctx.drawImage(t, -w / 2, -h / 2, w, h);
-      ctx.restore();
-      drawn++;
-    }
-    info.drawn = drawn;
-    if (!drawn) { info.step = "no-layers-drawn"; return; }
-
-    decalTex.needsUpdate = true;          // layers are drawn now; upload the canvas
-    // how much of the canvas actually got ink -- 0 means the layers landed outside the
-    // uv1 range entirely (i.e. the position scale is wrong), not that the blend failed
-    try {
-      const px = ctx.getImageData(0, 0, N, N).data;
-      let hits = 0, minx = N, maxx = 0, miny = N, maxy = 0;
-      for (let i = 3, p2 = 0; i < px.length; i += 4, p2++) {
-        if (px[i] > 8) {
-          hits++;
-          const x = p2 % N, y = (p2 / N) | 0;
-          if (x < minx) minx = x; if (x > maxx) maxx = x;
-          if (y < miny) miny = y; if (y > maxy) maxy = y;
-        }
-      }
-      info.ink = hits; info.inkBox = [minx, miny, maxx, maxy];
-    } catch (e) { info.ink = -1; }
-    info.patched = info.patchedEarly || 0;
+    info.patched = patched;
     info.step = "done";
-    stats.decals = drawn;
-    // ?sync renders exactly one frame, which happens before these fetches finish, so
-    // the decal pass has to ask for another one or it never reaches the screen.
+    info.axes = axes;
     try { render(); } catch (e) { try { renderer.render(scene, camera); } catch (e2) {} }
   }
   applyVehicleDecals().catch(e => { console.warn("decals:", e); window.__decalInfo = { step: "error:" + e.message }; });
