@@ -19,14 +19,19 @@ import sys
 
 
 def rotator_quat(pitch, yaw, roll):
-    """UE FRotator (degrees) -> (x, y, z, w) quaternion in UE space."""
+    """UE FRotator (degrees) -> (x, y, z, w) quaternion in UE space.
+
+    This is UE's own FRotator::Quaternion order (roll, then pitch about Y, then yaw).
+    An earlier variant put the pitch term on X, which produced a mirrored tilt -- the
+    wheel reclined away from the driver instead of toward them.
+    """
     p, y, r = (math.radians(v) / 2.0 for v in (pitch, yaw, roll))
     sp, cp = math.sin(p), math.cos(p)
     sy, cy = math.sin(y), math.cos(y)
     sr, cr = math.sin(r), math.cos(r)
     return (
-        sr * cp * cy - cr * sp * sy,
-        cr * sp * cy + sr * cp * sy,
+        cr * sp * sy - sr * cp * cy,
+        -cr * sp * cy - sr * cp * sy,
         cr * cp * sy - sr * sp * cy,
         cr * cp * cy + sr * sp * sy,
     )
@@ -57,9 +62,10 @@ def main():
         sock = sockets.get(key)
         if not sock:
             continue
+        already_mounted = str(part.get("mountedOn") or "").startswith("socket:")
         at_origin = all(abs(v) < 1e-6 for v in part.get("position", [0, 0, 0]))
-        if not at_origin:
-            continue  # the blueprint already places it; trust that
+        if not (at_origin or already_mounted):
+            continue  # the blueprint places it itself; trust that
         lx, ly, lz = sock["loc"]
         part["position"] = [round(lx / 100.0, 5), round(lz / 100.0, 5), round(-ly / 100.0, 5)]
         rx, ry, rz, rw = ue_to_gltf_quat(rotator_quat(*sock["rot"]))
