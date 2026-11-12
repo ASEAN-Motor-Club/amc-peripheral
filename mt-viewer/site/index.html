@@ -656,8 +656,8 @@ async function load() {
     // Axis assignment is the one unknown left: Position is 2-D in the vehicle's own
     // units and both candidate pairs fit the body bounds, so it stays a URL switch
     // (?daxes=xy|xyup|xz|zy) until a render is confirmed against the game.
-    const axes = (params.get("daxes") || "xz").toLowerCase();
-    const AXIS = { xz: [0, 1], xy: [0, 1], zy: [2, 1], xyup: [0, 1] }[axes] || [0, 2];
+    const axes = (params.get("daxes") || "xy").toLowerCase();
+    const AXIS = { xy: [0, 1], xz: [0, 2], zy: [2, 1], yx: [1, 0] }[axes] || [0, 2];
     const BASE = parseFloat(params.get("dbase") || "200");   // centimetres per scale unit
     const posArr = [], sizeArr = [], rotArr = [], flagArr = [];
     const v3 = new THREE.Vector3();
