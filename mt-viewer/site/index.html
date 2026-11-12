@@ -105,6 +105,14 @@
     "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
 } }
 </script>
+<script>
+  // capture shader/log failures for the headless probes: a broken injected program
+  // otherwise just leaves meshes undrawn with the reason buried in devtools
+  window.__errs = [];
+  window.addEventListener("error", e => window.__errs.push("error: " + e.message));
+  const _ce = console.error.bind(console);
+  console.error = (...a) => { window.__errs.push("console: " + a.map(String).join(" ").slice(0, 300)); _ce(...a); };
+</script>
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -150,6 +158,9 @@ grid.position.y = -0.001;
 scene.add(grid);
 
 const loader = new GLTFLoader();
+function loadImage(uri) {
+  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = uri; });
+}
 const root = new THREE.Group();
 scene.add(root);
 
@@ -570,17 +581,22 @@ async function load() {
   statusEl.textContent = `loaded ${manifest.parts.length}/${manifest.parts.length}`;
 
   // --- decals -------------------------------------------------------------
-  // MTVehicleDecalLayer is DecalKey (a row in the game's Decals table), Color,
-  // Position/Rotation, DecalScale, Stretch and Coverage. The game bakes them into a
-  // render target at spawn: each layer is projected onto the body from a direction
-  // given by Yaw (≈270 leaves the left flank, ≈90 the right, ≈0/180 nose/tail), with
-  // Pitch tilting the ray and Roll spinning the stamp. Positions are in the vehicle's
-  // own centimetre space, so they are matched against the part bounds, not UVs.
+  // The game does not project decals in world space. FMTDecalTargetMesh keeps a
+  // UTextureRenderTarget2D per body mesh and M_DecalDistribution paints layers into it,
+  // i.e. decals are stamped in a UV space that MTGenerateVehicleDecalUVCommandlet builds
+  // for each vehicle -- the extra UV channel our GLBs carry as TEXCOORD_1 (it runs
+  // outside [0,1], unlike TEXCOORD_0). So the honest viewer equivalent is a decal
+  // texture sampled through uv1 and blended over the paint.
+  //
+  // A layer is DecalKey + Color + Position/Rotation + DecalScale/Stretch/Coverage, with
+  // EMTDecalLayerFlags = {Flip=1, Mirror=2, OppositeCull=4, BackFaceCull=8,
+  // Highlighted=0x80, DrawOnWheel=0x100}.
   async function applyVehicleDecals() {
-    const info = window.__decalInfo = { step: "start" };
+    const info = (window.__decalInfo = { step: "start" });
     const slots = manifest.decalSlots || [];
     info.slots = slots;
     if (!slots.length) { info.step = "no-slots"; return; }
+
     let idx, cat;
     try {
       [idx, cat] = await Promise.all([
@@ -591,81 +607,120 @@ async function load() {
     const rec = idx.vehicles[vehicle] || Object.values(idx.vehicles).find(v => v.slug === vehicle);
     info.rec = rec ? rec.layers.length : 0;
     if (!rec || !rec.layers.length) { info.step = "no-record"; return; }
+
     const byKey = new Map(cat.decals.map(d => [d.key, d]));
+    // uv1 runs roughly [-0.5, 1.5]; the canvas covers DECAL_SPAN uv units either side of
+    // DECAL_ORIGIN so a stamp outside the body's own island still has somewhere to land.
+    const ORIGIN = parseFloat(params.get("do") || "-1");
+    const SPAN = parseFloat(params.get("ds") || "3");
+    const K = parseFloat(params.get("dk") || "1024");       // position units per uv unit
+    // DecalScale is a multiplier on the catalogue's base stamp size, not a uv fraction:
+    // 0.011..10 across the saved vehicles, with 0.5 the common value.
+    const SC = parseFloat(params.get("dsc") || "0.6");       // uv units per scale unit
+    const N = 2048;
 
-    // the body mesh: whichever mesh carries a decalable slot material, largest wins
-    const target = (() => {
-      let best = null;
-      root.traverse(o => {
-        if (!o.isMesh) return;
-        const n = o.material && o.material.name;
-        if (!slots.includes(n)) return;
-        const c = o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count;
-        if (!best || c > best.c) best = { mesh: o, c };
-      });
-      return best && best.mesh;
-    })();
-    info.materialNames = [...new Set([...stats.materials.keys()])].slice(0, 12);
-    info.target = target ? target.name : null;
-    if (!target) { info.step = "no-target"; return; }
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = N;
+    const ctx = cv.getContext("2d");
+    const toPx = (u, v) => [ (u - ORIGIN) / SPAN * N, (1 - (v - ORIGIN) / SPAN) * N ];
 
-    const group = new THREE.Group();
-    group.name = "decals";
-    root.add(group);
-    const size = new THREE.Box3().setFromObject(target).getSize(new THREE.Vector3());
-    const unit = Math.max(size.x, size.z);            // vehicle length as the scale basis
-    const texCache = new Map();
-    const texFor = (d) => {
-      const k = d.key;
-      if (texCache.has(k)) return texCache.get(k);
-      const t = texLoader.load(`decals/tex/${d.category}/${d.name}.png`);
-      t.colorSpace = THREE.SRGBColorSpace;
-      t.anisotropy = 8;
-      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-      texCache.set(k, t);
-      return t;
-    };
+    const decalTex = new THREE.CanvasTexture(cv);
+    decalTex.colorSpace = THREE.SRGBColorSpace;
+    decalTex.flipY = false;
+    decalTex.anisotropy = 8;
 
-    const { DecalGeometry } = await import("three/addons/geometries/DecalGeometry.js");
+    // patch first, draw second: ?sync captures one frame and the fetch/decode of 30
+    // layer textures must not race it
+    let patched = 0;
+    const seen = new Set();
+    root.traverse(o => {
+      if (!o.isMesh || !o.material) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) {
+        // any mesh carrying the decal UV channel can take stamps; the game targets the
+        // paint shell, but slot names vary (Palette / PolygonCityPallete / Body_0N)
+        const isShell = !!o.geometry.attributes.uv1;
+        if (!isShell || seen.has(m)) continue;
+        seen.add(m);
+        m.userData.decalTex = decalTex;
+        m.customProgramCacheKey = () => "mt-decal";
+        m.onBeforeCompile = (sh) => {
+          window.__shaderRuns = (window.__shaderRuns || 0) + 1;
+          sh.uniforms.decalTex = { value: decalTex };
+          sh.uniforms.uDecalDebug = { value: params.has("dbg") ? 1 : 0 };
+          // three already declares `attribute vec2 uv1`, so only the varying is ours
+          sh.vertexShader = "varying vec2 vDecalUv;\n" + sh.vertexShader
+            .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvDecalUv = uv1;");
+          sh.fragmentShader = "uniform sampler2D decalTex;\nuniform float uDecalDebug;\nvarying vec2 vDecalUv;\n" + sh.fragmentShader
+            .replace("#include <map_fragment>", `#include <map_fragment>
+              vec4 dec = texture2D(decalTex, vDecalUv);
+              if (uDecalDebug > 0.5) diffuseColor.rgb = vec3(1.0, 0.0, 1.0);
+              else if (dec.a > 0.004) diffuseColor.rgb = mix(diffuseColor.rgb, dec.rgb * 1.6, dec.a);`);
+          if (!sh.fragmentShader.includes("uDecalDebug")) window.__patchMiss = (window.__patchMiss || 0) + 1;
+        };
+        m.needsUpdate = true;
+        patched++;
+      }
+    });
+    info.patchedEarly = patched;
+    try { render(); } catch (e) { try { renderer.render(scene, camera); } catch (e2) {} }
+
+    let drawn = 0;
     for (const L of rec.layers) {
       const d = byKey.get(L.key);
       if (!d) continue;
-      const yaw = THREE.MathUtils.degToRad(L.rot[0]);
-      const pitch = THREE.MathUtils.degToRad(L.rot[1]);
-      const roll = THREE.MathUtils.degToRad(L.rot[2]);
-      // projection ray: which way the stamp is pushed into the body
-      const dir = new THREE.Vector3(Math.cos(yaw), Math.sin(pitch), Math.sin(yaw)).normalize();
-      // stamp centre: Position is centimetres in vehicle space, Y up
-      const world = target.localToWorld(new THREE.Vector3(L.pos[0] / 100, L.pos[1] / 100, 0));
-      const from = world.clone().addScaledVector(dir, unit * 1.5);
-      const ray = new THREE.Raycaster(from, dir.clone().negate(), 0, unit * 4);
-      const hit = ray.intersectObject(target, false)[0];
-      if (!hit) continue;
-      const centre = hit.point.clone().addScaledVector(hit.face.normal, -0.002);
-      const w = Math.max(0.05, Math.abs(L.scale) * unit * 0.25);
-      const h = Math.max(0.05, Math.abs(L.scale * L.stretch) * unit * 0.25);
-      const euler = new THREE.Euler(0, yaw + Math.PI / 2, roll, "YXZ");
-      const geo = new DecalGeometry(target, centre, euler, new THREE.Vector3(w, h, unit));
-      if (!geo.attributes.position) continue;
-      const c = L.color;
-      const m = new THREE.MeshStandardMaterial({
-        map: texFor(d),
-        transparent: L.coverage < 1 || true,
-        opacity: Math.min(1, L.coverage),
-        color: new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255),
-        depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -4,
-      });
-      const mesh = new THREE.Mesh(geo, m);
-      mesh.name = "decal:" + L.key;
-      group.add(mesh);
+      let img;
+      try { img = await loadImage(`decals/tex/${d.category}/${d.name}.png`); } catch { continue; }
+      const flags = L.flags | 0;
+      const colour = `rgb(${L.color[0]},${L.color[1]},${L.color[2]})`;
+      const [cx, cy] = toPx(L.pos[0] / K, L.pos[1] / K);
+      const size = Math.abs(L.scale) * SC / SPAN * N;
+      const w = size * (flags & 1 ? Math.abs(L.stretch) : 1);
+      const h = size * (flags & 1 ? 1 : Math.abs(L.stretch));
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(-THREE.MathUtils.degToRad(L.rot[2]));
+      if (flags & 2) ctx.scale(-1, 1);
+      ctx.globalAlpha = Math.max(0, Math.min(1, L.coverage));
+      // tint: draw the shape, then flood it with the layer colour inside its alpha
+      const t = document.createElement("canvas");
+      t.width = t.height = Math.max(2, Math.ceil(Math.max(w, h)));
+      const tc = t.getContext("2d");
+      tc.drawImage(img, 0, 0, t.width, t.height);
+      tc.globalCompositeOperation = "source-in";
+      tc.fillStyle = colour;
+      tc.fillRect(0, 0, t.width, t.height);
+      ctx.drawImage(t, -w / 2, -h / 2, w, h);
+      ctx.restore();
+      drawn++;
     }
-    stats.decals = group.children.length;
-    info.step = "done"; info.placed = group.children.length;
-    if (params.has("decaldbg")) console.log("decals", stats.decals, rec.layers.length);
+    info.drawn = drawn;
+    if (!drawn) { info.step = "no-layers-drawn"; return; }
+
+    decalTex.needsUpdate = true;          // layers are drawn now; upload the canvas
+    // how much of the canvas actually got ink -- 0 means the layers landed outside the
+    // uv1 range entirely (i.e. the position scale is wrong), not that the blend failed
+    try {
+      const px = ctx.getImageData(0, 0, N, N).data;
+      let hits = 0, minx = N, maxx = 0, miny = N, maxy = 0;
+      for (let i = 3, p2 = 0; i < px.length; i += 4, p2++) {
+        if (px[i] > 8) {
+          hits++;
+          const x = p2 % N, y = (p2 / N) | 0;
+          if (x < minx) minx = x; if (x > maxx) maxx = x;
+          if (y < miny) miny = y; if (y > maxy) maxy = y;
+        }
+      }
+      info.ink = hits; info.inkBox = [minx, miny, maxx, maxy];
+    } catch (e) { info.ink = -1; }
+    info.patched = info.patchedEarly || 0;
+    info.step = "done";
+    stats.decals = drawn;
+    // ?sync renders exactly one frame, which happens before these fetches finish, so
+    // the decal pass has to ask for another one or it never reaches the screen.
+    try { render(); } catch (e) { try { renderer.render(scene, camera); } catch (e2) {} }
   }
-  applyVehicleDecals().catch(e => console.warn("decals:", e));
+  applyVehicleDecals().catch(e => { console.warn("decals:", e); window.__decalInfo = { step: "error:" + e.message }; });
 
   window.__viewer = { scene, root, camera, renderer, manifest, defs, stats, setCam };
   // exposed for headless probes (ray casts, section visibility) that need the three.js namespace
