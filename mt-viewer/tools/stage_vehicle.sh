@@ -27,6 +27,8 @@ cp "$ROOT/staged/$V.json" "$SITE/$SLUG.json"
 # parts the game mounts on a mesh socket (the steering wheel) carry no blueprint
 # offset -- snap them onto the socket the extractor wrote next to the GLBs
 python3 "$ROOT/tools/apply_sockets.py" "$SITE/$SLUG.json" "$BUILD" || true
+# wheel meshes hang off the inner sidewall; centre them on the hub the blueprint gives
+python3 "$ROOT/tools/fit_wheels.py" "$SITE/$SLUG.json" "$SITE/glb" || true
 # rewrite the manifest so part glb filenames match the flat glb/ dir
 python3 - "$SITE/$SLUG.json" <<'PY'
 import json, sys
