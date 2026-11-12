@@ -1,0 +1,3301 @@
+{
+"format": 1,
+"decals": [
+{
+"key": "GeomShape_01_001-circle",
+"category": "GeomShape_01",
+"name": "001-circle",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/001-circle",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_002-rectangle",
+"category": "GeomShape_01",
+"name": "002-rectangle",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/002-rectangle",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_003-star",
+"category": "GeomShape_01",
+"name": "003-star",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/003-star",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_004-plus",
+"category": "GeomShape_01",
+"name": "004-plus",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/004-plus",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_005-trapezium",
+"category": "GeomShape_01",
+"name": "005-trapezium",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/005-trapezium",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_006-plus",
+"category": "GeomShape_01",
+"name": "006-plus",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/006-plus",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_007-ring",
+"category": "GeomShape_01",
+"name": "007-ring",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/007-ring",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_008-ellipse",
+"category": "GeomShape_01",
+"name": "008-ellipse",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/008-ellipse",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_009-star",
+"category": "GeomShape_01",
+"name": "009-star",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/009-star",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_010-pic",
+"category": "GeomShape_01",
+"name": "010-pic",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/010-pic",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_011-square",
+"category": "GeomShape_01",
+"name": "011-square",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/011-square",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_012-triangle",
+"category": "GeomShape_01",
+"name": "012-triangle",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/012-triangle",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_013-triangle",
+"category": "GeomShape_01",
+"name": "013-triangle",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/013-triangle",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_014-kite",
+"category": "GeomShape_01",
+"name": "014-kite",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/014-kite",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_015-trefoil",
+"category": "GeomShape_01",
+"name": "015-trefoil",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/015-trefoil",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_016-triangle",
+"category": "GeomShape_01",
+"name": "016-triangle",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/016-triangle",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_017-semicircle",
+"category": "GeomShape_01",
+"name": "017-semicircle",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/017-semicircle",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_018-rhomb",
+"category": "GeomShape_01",
+"name": "018-rhomb",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/018-rhomb",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_019-pentagon",
+"category": "GeomShape_01",
+"name": "019-pentagon",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/019-pentagon",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_020-hexagon",
+"category": "GeomShape_01",
+"name": "020-hexagon",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/020-hexagon",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_021-star",
+"category": "GeomShape_01",
+"name": "021-star",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/021-star",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_022-parallelogram",
+"category": "GeomShape_01",
+"name": "022-parallelogram",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/022-parallelogram",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_023-ring",
+"category": "GeomShape_01",
+"name": "023-ring",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/023-ring",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_024-arrow",
+"category": "GeomShape_01",
+"name": "024-arrow",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/024-arrow",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_01_025-heart",
+"category": "GeomShape_01",
+"name": "025-heart",
+"texture": "Materials/Decal/DecalTextures/GeomShape_01/025-heart",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "KoreanArt_01_character_DID",
+"category": "KoreanArt_01",
+"name": "character_DID",
+"texture": "Materials/Decal/DecalTextures/KoreanArt_01/character_DID",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "KoreanArt_01_geometry_DID",
+"category": "KoreanArt_01",
+"name": "geometry_DID",
+"texture": "Materials/Decal/DecalTextures/KoreanArt_01/geometry_DID",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "KoreanArt_01_human_DID",
+"category": "KoreanArt_01",
+"name": "human_DID",
+"texture": "Materials/Decal/DecalTextures/KoreanArt_01/human_DID",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "KoreanArt_01_plant_DID",
+"category": "KoreanArt_01",
+"name": "plant_DID",
+"texture": "Materials/Decal/DecalTextures/KoreanArt_01/plant_DID",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_001-fire",
+"category": "RPG_01",
+"name": "001-fire",
+"texture": "Materials/Decal/DecalTextures/RPG_01/001-fire",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_002-zombie",
+"category": "RPG_01",
+"name": "002-zombie",
+"texture": "Materials/Decal/DecalTextures/RPG_01/002-zombie",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_003-skeleton",
+"category": "RPG_01",
+"name": "003-skeleton",
+"texture": "Materials/Decal/DecalTextures/RPG_01/003-skeleton",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_004-chain",
+"category": "RPG_01",
+"name": "004-chain",
+"texture": "Materials/Decal/DecalTextures/RPG_01/004-chain",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_005-mind_control",
+"category": "RPG_01",
+"name": "005-mind_control",
+"texture": "Materials/Decal/DecalTextures/RPG_01/005-mind_control",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_006-dna",
+"category": "RPG_01",
+"name": "006-dna",
+"texture": "Materials/Decal/DecalTextures/RPG_01/006-dna",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_007-hourglass",
+"category": "RPG_01",
+"name": "007-hourglass",
+"texture": "Materials/Decal/DecalTextures/RPG_01/007-hourglass",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_009-yin_yang",
+"category": "RPG_01",
+"name": "009-yin_yang",
+"texture": "Materials/Decal/DecalTextures/RPG_01/009-yin_yang",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_010-vision",
+"category": "RPG_01",
+"name": "010-vision",
+"texture": "Materials/Decal/DecalTextures/RPG_01/010-vision",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_012-eagle",
+"category": "RPG_01",
+"name": "012-eagle",
+"texture": "Materials/Decal/DecalTextures/RPG_01/012-eagle",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_015-hand",
+"category": "RPG_01",
+"name": "015-hand",
+"texture": "Materials/Decal/DecalTextures/RPG_01/015-hand",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_020-holy",
+"category": "RPG_01",
+"name": "020-holy",
+"texture": "Materials/Decal/DecalTextures/RPG_01/020-holy",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_023-anger",
+"category": "RPG_01",
+"name": "023-anger",
+"texture": "Materials/Decal/DecalTextures/RPG_01/023-anger",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_025-ghost",
+"category": "RPG_01",
+"name": "025-ghost",
+"texture": "Materials/Decal/DecalTextures/RPG_01/025-ghost",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_026-fist",
+"category": "RPG_01",
+"name": "026-fist",
+"texture": "Materials/Decal/DecalTextures/RPG_01/026-fist",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_029-fire",
+"category": "RPG_01",
+"name": "029-fire",
+"texture": "Materials/Decal/DecalTextures/RPG_01/029-fire",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_030-fire",
+"category": "RPG_01",
+"name": "030-fire",
+"texture": "Materials/Decal/DecalTextures/RPG_01/030-fire",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_031-blast",
+"category": "RPG_01",
+"name": "031-blast",
+"texture": "Materials/Decal/DecalTextures/RPG_01/031-blast",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_032-fire",
+"category": "RPG_01",
+"name": "032-fire",
+"texture": "Materials/Decal/DecalTextures/RPG_01/032-fire",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_033-engineer",
+"category": "RPG_01",
+"name": "033-engineer",
+"texture": "Materials/Decal/DecalTextures/RPG_01/033-engineer",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_034-fire",
+"category": "RPG_01",
+"name": "034-fire",
+"texture": "Materials/Decal/DecalTextures/RPG_01/034-fire",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_035-ice",
+"category": "RPG_01",
+"name": "035-ice",
+"texture": "Materials/Decal/DecalTextures/RPG_01/035-ice",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_038-cold",
+"category": "RPG_01",
+"name": "038-cold",
+"texture": "Materials/Decal/DecalTextures/RPG_01/038-cold",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_039-ice",
+"category": "RPG_01",
+"name": "039-ice",
+"texture": "Materials/Decal/DecalTextures/RPG_01/039-ice",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_040-lightning",
+"category": "RPG_01",
+"name": "040-lightning",
+"texture": "Materials/Decal/DecalTextures/RPG_01/040-lightning",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_041-lightning",
+"category": "RPG_01",
+"name": "041-lightning",
+"texture": "Materials/Decal/DecalTextures/RPG_01/041-lightning",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_042-thunderbolt",
+"category": "RPG_01",
+"name": "042-thunderbolt",
+"texture": "Materials/Decal/DecalTextures/RPG_01/042-thunderbolt",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_043-lightning",
+"category": "RPG_01",
+"name": "043-lightning",
+"texture": "Materials/Decal/DecalTextures/RPG_01/043-lightning",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_044-druid",
+"category": "RPG_01",
+"name": "044-druid",
+"texture": "Materials/Decal/DecalTextures/RPG_01/044-druid",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_045-lightning",
+"category": "RPG_01",
+"name": "045-lightning",
+"texture": "Materials/Decal/DecalTextures/RPG_01/045-lightning",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_046-wind",
+"category": "RPG_01",
+"name": "046-wind",
+"texture": "Materials/Decal/DecalTextures/RPG_01/046-wind",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_047-storm",
+"category": "RPG_01",
+"name": "047-storm",
+"texture": "Materials/Decal/DecalTextures/RPG_01/047-storm",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_048-tornado",
+"category": "RPG_01",
+"name": "048-tornado",
+"texture": "Materials/Decal/DecalTextures/RPG_01/048-tornado",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_049-wind",
+"category": "RPG_01",
+"name": "049-wind",
+"texture": "Materials/Decal/DecalTextures/RPG_01/049-wind",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_050-storm",
+"category": "RPG_01",
+"name": "050-storm",
+"texture": "Materials/Decal/DecalTextures/RPG_01/050-storm",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_053-dragon",
+"category": "RPG_01",
+"name": "053-dragon",
+"texture": "Materials/Decal/DecalTextures/RPG_01/053-dragon",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_054-fire",
+"category": "RPG_01",
+"name": "054-fire",
+"texture": "Materials/Decal/DecalTextures/RPG_01/054-fire",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_056-light",
+"category": "RPG_01",
+"name": "056-light",
+"texture": "Materials/Decal/DecalTextures/RPG_01/056-light",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_057-barbarian",
+"category": "RPG_01",
+"name": "057-barbarian",
+"texture": "Materials/Decal/DecalTextures/RPG_01/057-barbarian",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_063-wizard",
+"category": "RPG_01",
+"name": "063-wizard",
+"texture": "Materials/Decal/DecalTextures/RPG_01/063-wizard",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_064-snack",
+"category": "RPG_01",
+"name": "064-snack",
+"texture": "Materials/Decal/DecalTextures/RPG_01/064-snack",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_065-wolf",
+"category": "RPG_01",
+"name": "065-wolf",
+"texture": "Materials/Decal/DecalTextures/RPG_01/065-wolf",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_071-knight",
+"category": "RPG_01",
+"name": "071-knight",
+"texture": "Materials/Decal/DecalTextures/RPG_01/071-knight",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_073-magician",
+"category": "RPG_01",
+"name": "073-magician",
+"texture": "Materials/Decal/DecalTextures/RPG_01/073-magician",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_079-shield",
+"category": "RPG_01",
+"name": "079-shield",
+"texture": "Materials/Decal/DecalTextures/RPG_01/079-shield",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_080-warlock",
+"category": "RPG_01",
+"name": "080-warlock",
+"texture": "Materials/Decal/DecalTextures/RPG_01/080-warlock",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_081-heal",
+"category": "RPG_01",
+"name": "081-heal",
+"texture": "Materials/Decal/DecalTextures/RPG_01/081-heal",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_082-gladiator",
+"category": "RPG_01",
+"name": "082-gladiator",
+"texture": "Materials/Decal/DecalTextures/RPG_01/082-gladiator",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_096-sword",
+"category": "RPG_01",
+"name": "096-sword",
+"texture": "Materials/Decal/DecalTextures/RPG_01/096-sword",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_106-ninja",
+"category": "RPG_01",
+"name": "106-ninja",
+"texture": "Materials/Decal/DecalTextures/RPG_01/106-ninja",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_116-shield",
+"category": "RPG_01",
+"name": "116-shield",
+"texture": "Materials/Decal/DecalTextures/RPG_01/116-shield",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_117-pirate",
+"category": "RPG_01",
+"name": "117-pirate",
+"texture": "Materials/Decal/DecalTextures/RPG_01/117-pirate",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_127-gun",
+"category": "RPG_01",
+"name": "127-gun",
+"texture": "Materials/Decal/DecalTextures/RPG_01/127-gun",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_130-target",
+"category": "RPG_01",
+"name": "130-target",
+"texture": "Materials/Decal/DecalTextures/RPG_01/130-target",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_131-bullet",
+"category": "RPG_01",
+"name": "131-bullet",
+"texture": "Materials/Decal/DecalTextures/RPG_01/131-bullet",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_141-flag",
+"category": "RPG_01",
+"name": "141-flag",
+"texture": "Materials/Decal/DecalTextures/RPG_01/141-flag",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_142-bomb",
+"category": "RPG_01",
+"name": "142-bomb",
+"texture": "Materials/Decal/DecalTextures/RPG_01/142-bomb",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_143-pirate",
+"category": "RPG_01",
+"name": "143-pirate",
+"texture": "Materials/Decal/DecalTextures/RPG_01/143-pirate",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_144-bear",
+"category": "RPG_01",
+"name": "144-bear",
+"texture": "Materials/Decal/DecalTextures/RPG_01/144-bear",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_145-falcon",
+"category": "RPG_01",
+"name": "145-falcon",
+"texture": "Materials/Decal/DecalTextures/RPG_01/145-falcon",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_146-wolf",
+"category": "RPG_01",
+"name": "146-wolf",
+"texture": "Materials/Decal/DecalTextures/RPG_01/146-wolf",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_147-deer",
+"category": "RPG_01",
+"name": "147-deer",
+"texture": "Materials/Decal/DecalTextures/RPG_01/147-deer",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_149-poison",
+"category": "RPG_01",
+"name": "149-poison",
+"texture": "Materials/Decal/DecalTextures/RPG_01/149-poison",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "RPG_01_150-bullet",
+"category": "RPG_01",
+"name": "150-bullet",
+"texture": "Materials/Decal/DecalTextures/RPG_01/150-bullet",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_001-ornament",
+"category": "Ornament_01",
+"name": "001-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/001-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_002-ornament",
+"category": "Ornament_01",
+"name": "002-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/002-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_003-ornament",
+"category": "Ornament_01",
+"name": "003-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/003-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_004-ornament",
+"category": "Ornament_01",
+"name": "004-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/004-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_005-ornament",
+"category": "Ornament_01",
+"name": "005-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/005-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_006-ornament",
+"category": "Ornament_01",
+"name": "006-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/006-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_007-ornament",
+"category": "Ornament_01",
+"name": "007-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/007-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_008-ornament",
+"category": "Ornament_01",
+"name": "008-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/008-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_009-ornament",
+"category": "Ornament_01",
+"name": "009-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/009-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_010-ornament",
+"category": "Ornament_01",
+"name": "010-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/010-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_011-ornament",
+"category": "Ornament_01",
+"name": "011-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/011-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_012-ornament",
+"category": "Ornament_01",
+"name": "012-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/012-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_013-ornament",
+"category": "Ornament_01",
+"name": "013-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/013-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_014-ornament",
+"category": "Ornament_01",
+"name": "014-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/014-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_015-ornament",
+"category": "Ornament_01",
+"name": "015-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/015-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_016-ornament",
+"category": "Ornament_01",
+"name": "016-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/016-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_017-ornament",
+"category": "Ornament_01",
+"name": "017-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/017-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_018-ornament",
+"category": "Ornament_01",
+"name": "018-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/018-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_019-ornament",
+"category": "Ornament_01",
+"name": "019-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/019-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_01_020-ornament",
+"category": "Ornament_01",
+"name": "020-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_01/020-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_001-ornament",
+"category": "Ornament_02",
+"name": "001-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/001-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_002-ornament",
+"category": "Ornament_02",
+"name": "002-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/002-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_003-ornament",
+"category": "Ornament_02",
+"name": "003-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/003-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_004-ornament",
+"category": "Ornament_02",
+"name": "004-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/004-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_005-ornament",
+"category": "Ornament_02",
+"name": "005-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/005-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_006-ornament",
+"category": "Ornament_02",
+"name": "006-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/006-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_007-ornament",
+"category": "Ornament_02",
+"name": "007-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/007-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_008-ornament",
+"category": "Ornament_02",
+"name": "008-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/008-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_009-ornament",
+"category": "Ornament_02",
+"name": "009-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/009-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_010-ornament",
+"category": "Ornament_02",
+"name": "010-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/010-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_011-ornament",
+"category": "Ornament_02",
+"name": "011-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/011-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_012-ornament",
+"category": "Ornament_02",
+"name": "012-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/012-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_013-ornament",
+"category": "Ornament_02",
+"name": "013-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/013-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_014-ornament",
+"category": "Ornament_02",
+"name": "014-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/014-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_015-ornament",
+"category": "Ornament_02",
+"name": "015-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/015-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_016-ornament",
+"category": "Ornament_02",
+"name": "016-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/016-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_017-ornament",
+"category": "Ornament_02",
+"name": "017-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/017-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_018-ornament",
+"category": "Ornament_02",
+"name": "018-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/018-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_019-ornament",
+"category": "Ornament_02",
+"name": "019-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/019-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_02_020-ornament",
+"category": "Ornament_02",
+"name": "020-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_02/020-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_001-ornament",
+"category": "Ornament_03",
+"name": "001-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/001-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_002-ornament",
+"category": "Ornament_03",
+"name": "002-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/002-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_003-ornament",
+"category": "Ornament_03",
+"name": "003-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/003-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_004-ornament",
+"category": "Ornament_03",
+"name": "004-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/004-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_005-ornament",
+"category": "Ornament_03",
+"name": "005-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/005-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_006-ornament",
+"category": "Ornament_03",
+"name": "006-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/006-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_007-ornament",
+"category": "Ornament_03",
+"name": "007-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/007-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_008-ornament",
+"category": "Ornament_03",
+"name": "008-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/008-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_009-ornament",
+"category": "Ornament_03",
+"name": "009-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/009-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_010-ornament",
+"category": "Ornament_03",
+"name": "010-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/010-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_011-ornament",
+"category": "Ornament_03",
+"name": "011-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/011-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_012-ornament",
+"category": "Ornament_03",
+"name": "012-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/012-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_013-ornament",
+"category": "Ornament_03",
+"name": "013-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/013-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_014-ornament",
+"category": "Ornament_03",
+"name": "014-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/014-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_015-ornament",
+"category": "Ornament_03",
+"name": "015-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/015-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_016-ornament",
+"category": "Ornament_03",
+"name": "016-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/016-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_017-ornament",
+"category": "Ornament_03",
+"name": "017-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/017-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_018-ornament",
+"category": "Ornament_03",
+"name": "018-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/018-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_019-ornament",
+"category": "Ornament_03",
+"name": "019-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/019-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_03_020-ornament",
+"category": "Ornament_03",
+"name": "020-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_03/020-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_001-ornament",
+"category": "Ornament_04",
+"name": "001-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/001-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_002-ornament",
+"category": "Ornament_04",
+"name": "002-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/002-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_003-ornament",
+"category": "Ornament_04",
+"name": "003-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/003-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_004-ornament",
+"category": "Ornament_04",
+"name": "004-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/004-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_005-ornament",
+"category": "Ornament_04",
+"name": "005-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/005-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_006-ornament",
+"category": "Ornament_04",
+"name": "006-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/006-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_007-ornament",
+"category": "Ornament_04",
+"name": "007-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/007-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_008-ornament",
+"category": "Ornament_04",
+"name": "008-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/008-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_009-ornament",
+"category": "Ornament_04",
+"name": "009-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/009-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_010-ornament",
+"category": "Ornament_04",
+"name": "010-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/010-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_011-ornament",
+"category": "Ornament_04",
+"name": "011-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/011-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_012-ornament",
+"category": "Ornament_04",
+"name": "012-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/012-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_013-ornament",
+"category": "Ornament_04",
+"name": "013-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/013-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_014-ornament",
+"category": "Ornament_04",
+"name": "014-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/014-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_015-ornament",
+"category": "Ornament_04",
+"name": "015-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/015-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_016-ornament",
+"category": "Ornament_04",
+"name": "016-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/016-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_017-ornament",
+"category": "Ornament_04",
+"name": "017-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/017-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_018-ornament",
+"category": "Ornament_04",
+"name": "018-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/018-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_019-ornament",
+"category": "Ornament_04",
+"name": "019-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/019-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ornament_04_020-ornament",
+"category": "Ornament_04",
+"name": "020-ornament",
+"texture": "Materials/Decal/DecalTextures/Ornament_04/020-ornament",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame01",
+"category": "Flame_01",
+"name": "Flame01",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame01",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame02",
+"category": "Flame_01",
+"name": "Flame02",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame02",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame03",
+"category": "Flame_01",
+"name": "Flame03",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame03",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame04",
+"category": "Flame_01",
+"name": "Flame04",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame04",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame05",
+"category": "Flame_01",
+"name": "Flame05",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame05",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame06",
+"category": "Flame_01",
+"name": "Flame06",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame06",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame07",
+"category": "Flame_01",
+"name": "Flame07",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame07",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame08",
+"category": "Flame_01",
+"name": "Flame08",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame08",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame09",
+"category": "Flame_01",
+"name": "Flame09",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame09",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame10",
+"category": "Flame_01",
+"name": "Flame10",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame10",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame11",
+"category": "Flame_01",
+"name": "Flame11",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame11",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame12",
+"category": "Flame_01",
+"name": "Flame12",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame12",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame13",
+"category": "Flame_01",
+"name": "Flame13",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame13",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame14",
+"category": "Flame_01",
+"name": "Flame14",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame14",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame15",
+"category": "Flame_01",
+"name": "Flame15",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame15",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame16",
+"category": "Flame_01",
+"name": "Flame16",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame16",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame17",
+"category": "Flame_01",
+"name": "Flame17",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame17",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame18",
+"category": "Flame_01",
+"name": "Flame18",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame18",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame19",
+"category": "Flame_01",
+"name": "Flame19",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame19",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame20",
+"category": "Flame_01",
+"name": "Flame20",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame20",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame21",
+"category": "Flame_01",
+"name": "Flame21",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame21",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame22",
+"category": "Flame_01",
+"name": "Flame22",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame22",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame23",
+"category": "Flame_01",
+"name": "Flame23",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame23",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame24",
+"category": "Flame_01",
+"name": "Flame24",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame24",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame25",
+"category": "Flame_01",
+"name": "Flame25",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame25",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame26",
+"category": "Flame_01",
+"name": "Flame26",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame26",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame27",
+"category": "Flame_01",
+"name": "Flame27",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame27",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame28",
+"category": "Flame_01",
+"name": "Flame28",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame28",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame29",
+"category": "Flame_01",
+"name": "Flame29",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame29",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame30",
+"category": "Flame_01",
+"name": "Flame30",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame30",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame31",
+"category": "Flame_01",
+"name": "Flame31",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame31",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame32",
+"category": "Flame_01",
+"name": "Flame32",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame32",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame33",
+"category": "Flame_01",
+"name": "Flame33",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame33",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame34",
+"category": "Flame_01",
+"name": "Flame34",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame34",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame35",
+"category": "Flame_01",
+"name": "Flame35",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame35",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame36",
+"category": "Flame_01",
+"name": "Flame36",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame36",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame37",
+"category": "Flame_01",
+"name": "Flame37",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame37",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame38",
+"category": "Flame_01",
+"name": "Flame38",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame38",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame39",
+"category": "Flame_01",
+"name": "Flame39",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame39",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame40",
+"category": "Flame_01",
+"name": "Flame40",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame40",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame41",
+"category": "Flame_01",
+"name": "Flame41",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame41",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame42",
+"category": "Flame_01",
+"name": "Flame42",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame42",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame43",
+"category": "Flame_01",
+"name": "Flame43",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame43",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame44",
+"category": "Flame_01",
+"name": "Flame44",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame44",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame45",
+"category": "Flame_01",
+"name": "Flame45",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame45",
+"cost": 100,
+"flags": 2
+},
+{
+"key": "Flame_01_Flame46",
+"category": "Flame_01",
+"name": "Flame46",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame46",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame47",
+"category": "Flame_01",
+"name": "Flame47",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame47",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame48",
+"category": "Flame_01",
+"name": "Flame48",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame48",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame49",
+"category": "Flame_01",
+"name": "Flame49",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame49",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame50",
+"category": "Flame_01",
+"name": "Flame50",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame50",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame51",
+"category": "Flame_01",
+"name": "Flame51",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame51",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame52",
+"category": "Flame_01",
+"name": "Flame52",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame52",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame53",
+"category": "Flame_01",
+"name": "Flame53",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame53",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame54",
+"category": "Flame_01",
+"name": "Flame54",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame54",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame55",
+"category": "Flame_01",
+"name": "Flame55",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame55",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame56",
+"category": "Flame_01",
+"name": "Flame56",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame56",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame57",
+"category": "Flame_01",
+"name": "Flame57",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame57",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame58",
+"category": "Flame_01",
+"name": "Flame58",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame58",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame59",
+"category": "Flame_01",
+"name": "Flame59",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame59",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame60",
+"category": "Flame_01",
+"name": "Flame60",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame60",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame61",
+"category": "Flame_01",
+"name": "Flame61",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame61",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame62",
+"category": "Flame_01",
+"name": "Flame62",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame62",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame63",
+"category": "Flame_01",
+"name": "Flame63",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame63",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame64",
+"category": "Flame_01",
+"name": "Flame64",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame64",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Flame_01_Flame65",
+"category": "Flame_01",
+"name": "Flame65",
+"texture": "Materials/Decal/DecalTextures/Flame_01/Flame65",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer01",
+"category": "Pointer_01",
+"name": "Pointer01",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer01",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer02",
+"category": "Pointer_01",
+"name": "Pointer02",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer02",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer03",
+"category": "Pointer_01",
+"name": "Pointer03",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer03",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer04",
+"category": "Pointer_01",
+"name": "Pointer04",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer04",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer05",
+"category": "Pointer_01",
+"name": "Pointer05",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer05",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer06",
+"category": "Pointer_01",
+"name": "Pointer06",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer06",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer07",
+"category": "Pointer_01",
+"name": "Pointer07",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer07",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer08",
+"category": "Pointer_01",
+"name": "Pointer08",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer08",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer09",
+"category": "Pointer_01",
+"name": "Pointer09",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer09",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer10",
+"category": "Pointer_01",
+"name": "Pointer10",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer10",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer11",
+"category": "Pointer_01",
+"name": "Pointer11",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer11",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer12",
+"category": "Pointer_01",
+"name": "Pointer12",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer12",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer13",
+"category": "Pointer_01",
+"name": "Pointer13",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer13",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer14",
+"category": "Pointer_01",
+"name": "Pointer14",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer14",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer15",
+"category": "Pointer_01",
+"name": "Pointer15",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer15",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer16",
+"category": "Pointer_01",
+"name": "Pointer16",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer16",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer17",
+"category": "Pointer_01",
+"name": "Pointer17",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer17",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer18",
+"category": "Pointer_01",
+"name": "Pointer18",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer18",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer19",
+"category": "Pointer_01",
+"name": "Pointer19",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer19",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer20",
+"category": "Pointer_01",
+"name": "Pointer20",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer20",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer21",
+"category": "Pointer_01",
+"name": "Pointer21",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer21",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer22",
+"category": "Pointer_01",
+"name": "Pointer22",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer22",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer23",
+"category": "Pointer_01",
+"name": "Pointer23",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer23",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer24",
+"category": "Pointer_01",
+"name": "Pointer24",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer24",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer25",
+"category": "Pointer_01",
+"name": "Pointer25",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer25",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer26",
+"category": "Pointer_01",
+"name": "Pointer26",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer26",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer27",
+"category": "Pointer_01",
+"name": "Pointer27",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer27",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer28",
+"category": "Pointer_01",
+"name": "Pointer28",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer28",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer29",
+"category": "Pointer_01",
+"name": "Pointer29",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer29",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer30",
+"category": "Pointer_01",
+"name": "Pointer30",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer30",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer31",
+"category": "Pointer_01",
+"name": "Pointer31",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer31",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer32",
+"category": "Pointer_01",
+"name": "Pointer32",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer32",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer33",
+"category": "Pointer_01",
+"name": "Pointer33",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer33",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer34",
+"category": "Pointer_01",
+"name": "Pointer34",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer34",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer35",
+"category": "Pointer_01",
+"name": "Pointer35",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer35",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer36",
+"category": "Pointer_01",
+"name": "Pointer36",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer36",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer37",
+"category": "Pointer_01",
+"name": "Pointer37",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer37",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer38",
+"category": "Pointer_01",
+"name": "Pointer38",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer38",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Pointer_01_Pointer39",
+"category": "Pointer_01",
+"name": "Pointer39",
+"texture": "Materials/Decal/DecalTextures/Pointer_01/Pointer39",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Arrows_Arrow_01",
+"category": "Arrows",
+"name": "Arrow_01",
+"texture": "Materials/Decal/DecalTextures/Arrows/Arrow_01",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Arrows_Arrow_02",
+"category": "Arrows",
+"name": "Arrow_02",
+"texture": "Materials/Decal/DecalTextures/Arrows/Arrow_02",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Arrows_Chevron_01",
+"category": "Arrows",
+"name": "Chevron_01",
+"texture": "Materials/Decal/DecalTextures/Arrows/Chevron_01",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Transport_Bus",
+"category": "Transport",
+"name": "Bus",
+"texture": "Materials/Decal/Transport/Bus",
+"cost": 200,
+"flags": 0
+},
+{
+"key": "Transport_Taxi",
+"category": "Transport",
+"name": "Taxi",
+"texture": "Materials/Decal/Transport/Taxi",
+"cost": 200,
+"flags": 0
+},
+{
+"key": "GeomShape_02_Shape01",
+"category": "GeomShape_02",
+"name": "Shape01",
+"texture": "Materials/Decal/DecalTextures/GeomShape_02/Shape01",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_02_Shape02",
+"category": "GeomShape_02",
+"name": "Shape02",
+"texture": "Materials/Decal/DecalTextures/GeomShape_02/Shape02",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_02_Shape03",
+"category": "GeomShape_02",
+"name": "Shape03",
+"texture": "Materials/Decal/DecalTextures/GeomShape_02/Shape03",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_02_Shape04",
+"category": "GeomShape_02",
+"name": "Shape04",
+"texture": "Materials/Decal/DecalTextures/GeomShape_02/Shape04",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_02_Shape05",
+"category": "GeomShape_02",
+"name": "Shape05",
+"texture": "Materials/Decal/DecalTextures/GeomShape_02/Shape05",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_02_Shape06",
+"category": "GeomShape_02",
+"name": "Shape06",
+"texture": "Materials/Decal/DecalTextures/GeomShape_02/Shape06",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_02_Shape07",
+"category": "GeomShape_02",
+"name": "Shape07",
+"texture": "Materials/Decal/DecalTextures/GeomShape_02/Shape07",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "GeomShape_02_Shape08",
+"category": "GeomShape_02",
+"name": "Shape08",
+"texture": "Materials/Decal/DecalTextures/GeomShape_02/Shape08",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_001-zero",
+"category": "Numbers_01",
+"name": "001-zero",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/001-zero",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_014-number",
+"category": "Numbers_01",
+"name": "014-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/014-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_025-number",
+"category": "Numbers_01",
+"name": "025-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/025-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_036-number",
+"category": "Numbers_01",
+"name": "036-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/036-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_047-number",
+"category": "Numbers_01",
+"name": "047-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/047-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_058-number",
+"category": "Numbers_01",
+"name": "058-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/058-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_069-number",
+"category": "Numbers_01",
+"name": "069-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/069-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_080-number",
+"category": "Numbers_01",
+"name": "080-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/080-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_091-number",
+"category": "Numbers_01",
+"name": "091-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/091-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_002-number",
+"category": "Numbers_01",
+"name": "002-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/002-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_005-number",
+"category": "Numbers_01",
+"name": "005-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/005-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_006-number",
+"category": "Numbers_01",
+"name": "006-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/006-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_007-number",
+"category": "Numbers_01",
+"name": "007-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/007-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_008-number",
+"category": "Numbers_01",
+"name": "008-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/008-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_009-number",
+"category": "Numbers_01",
+"name": "009-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/009-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_010-number",
+"category": "Numbers_01",
+"name": "010-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/010-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_011-number",
+"category": "Numbers_01",
+"name": "011-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/011-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_012-number",
+"category": "Numbers_01",
+"name": "012-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/012-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_013-number",
+"category": "Numbers_01",
+"name": "013-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/013-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_015-number",
+"category": "Numbers_01",
+"name": "015-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/015-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_016-number",
+"category": "Numbers_01",
+"name": "016-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/016-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_017-number",
+"category": "Numbers_01",
+"name": "017-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/017-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_018-number",
+"category": "Numbers_01",
+"name": "018-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/018-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_019-number",
+"category": "Numbers_01",
+"name": "019-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/019-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_020-number",
+"category": "Numbers_01",
+"name": "020-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/020-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_021-number",
+"category": "Numbers_01",
+"name": "021-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/021-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_022-twenty_six",
+"category": "Numbers_01",
+"name": "022-twenty_six",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/022-twenty_six",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_023-twenty_seven",
+"category": "Numbers_01",
+"name": "023-twenty_seven",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/023-twenty_seven",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_024-twenty_eight",
+"category": "Numbers_01",
+"name": "024-twenty_eight",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/024-twenty_eight",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_026-twenty_nine",
+"category": "Numbers_01",
+"name": "026-twenty_nine",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/026-twenty_nine",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_027-number",
+"category": "Numbers_01",
+"name": "027-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/027-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_028-thirty_one",
+"category": "Numbers_01",
+"name": "028-thirty_one",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/028-thirty_one",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_029-thirty_two",
+"category": "Numbers_01",
+"name": "029-thirty_two",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/029-thirty_two",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_030-thirty_three",
+"category": "Numbers_01",
+"name": "030-thirty_three",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/030-thirty_three",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_031-thirty_four",
+"category": "Numbers_01",
+"name": "031-thirty_four",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/031-thirty_four",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_032-thirty_five",
+"category": "Numbers_01",
+"name": "032-thirty_five",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/032-thirty_five",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_033-thirty_six",
+"category": "Numbers_01",
+"name": "033-thirty_six",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/033-thirty_six",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_034-thirty_seven",
+"category": "Numbers_01",
+"name": "034-thirty_seven",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/034-thirty_seven",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_035-thirty_eight",
+"category": "Numbers_01",
+"name": "035-thirty_eight",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/035-thirty_eight",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_037-thirty_nine",
+"category": "Numbers_01",
+"name": "037-thirty_nine",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/037-thirty_nine",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_038-forty",
+"category": "Numbers_01",
+"name": "038-forty",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/038-forty",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_039-forty_one",
+"category": "Numbers_01",
+"name": "039-forty_one",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/039-forty_one",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_040-forty_two",
+"category": "Numbers_01",
+"name": "040-forty_two",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/040-forty_two",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_041-forty_three",
+"category": "Numbers_01",
+"name": "041-forty_three",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/041-forty_three",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_042-forty_four",
+"category": "Numbers_01",
+"name": "042-forty_four",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/042-forty_four",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_043-Forty_five",
+"category": "Numbers_01",
+"name": "043-Forty_five",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/043-Forty_five",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_044-forty_six",
+"category": "Numbers_01",
+"name": "044-forty_six",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/044-forty_six",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_045-forty_seven",
+"category": "Numbers_01",
+"name": "045-forty_seven",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/045-forty_seven",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_046-forty_eight",
+"category": "Numbers_01",
+"name": "046-forty_eight",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/046-forty_eight",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_048-forty_nine",
+"category": "Numbers_01",
+"name": "048-forty_nine",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/048-forty_nine",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_049-fifty",
+"category": "Numbers_01",
+"name": "049-fifty",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/049-fifty",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_050-fifty_one",
+"category": "Numbers_01",
+"name": "050-fifty_one",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/050-fifty_one",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_051-fifty_two",
+"category": "Numbers_01",
+"name": "051-fifty_two",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/051-fifty_two",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_052-fifty_three",
+"category": "Numbers_01",
+"name": "052-fifty_three",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/052-fifty_three",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_053-fifty_four",
+"category": "Numbers_01",
+"name": "053-fifty_four",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/053-fifty_four",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_054-fifty_five",
+"category": "Numbers_01",
+"name": "054-fifty_five",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/054-fifty_five",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_055-fifty_six",
+"category": "Numbers_01",
+"name": "055-fifty_six",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/055-fifty_six",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_056-fifty_seven",
+"category": "Numbers_01",
+"name": "056-fifty_seven",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/056-fifty_seven",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_057-fifty_eight",
+"category": "Numbers_01",
+"name": "057-fifty_eight",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/057-fifty_eight",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_059-fifty_nine",
+"category": "Numbers_01",
+"name": "059-fifty_nine",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/059-fifty_nine",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_060-sixty",
+"category": "Numbers_01",
+"name": "060-sixty",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/060-sixty",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_061-61",
+"category": "Numbers_01",
+"name": "061-61",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/061-61",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_062-62",
+"category": "Numbers_01",
+"name": "062-62",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/062-62",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_063-63",
+"category": "Numbers_01",
+"name": "063-63",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/063-63",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_064-64",
+"category": "Numbers_01",
+"name": "064-64",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/064-64",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_065-65",
+"category": "Numbers_01",
+"name": "065-65",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/065-65",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_066-66",
+"category": "Numbers_01",
+"name": "066-66",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/066-66",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_067-67",
+"category": "Numbers_01",
+"name": "067-67",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/067-67",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_068-68",
+"category": "Numbers_01",
+"name": "068-68",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/068-68",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_070-69",
+"category": "Numbers_01",
+"name": "070-69",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/070-69",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_071-seventy",
+"category": "Numbers_01",
+"name": "071-seventy",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/071-seventy",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_072-71",
+"category": "Numbers_01",
+"name": "072-71",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/072-71",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_073-72",
+"category": "Numbers_01",
+"name": "073-72",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/073-72",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_074-73",
+"category": "Numbers_01",
+"name": "074-73",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/074-73",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_075-74",
+"category": "Numbers_01",
+"name": "075-74",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/075-74",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_076-75",
+"category": "Numbers_01",
+"name": "076-75",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/076-75",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_077-76",
+"category": "Numbers_01",
+"name": "077-76",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/077-76",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_078-77",
+"category": "Numbers_01",
+"name": "078-77",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/078-77",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_079-78",
+"category": "Numbers_01",
+"name": "079-78",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/079-78",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_081-79",
+"category": "Numbers_01",
+"name": "081-79",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/081-79",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_082-eighty",
+"category": "Numbers_01",
+"name": "082-eighty",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/082-eighty",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_083-81",
+"category": "Numbers_01",
+"name": "083-81",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/083-81",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_084-82",
+"category": "Numbers_01",
+"name": "084-82",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/084-82",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_085-number",
+"category": "Numbers_01",
+"name": "085-number",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/085-number",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_086-84",
+"category": "Numbers_01",
+"name": "086-84",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/086-84",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_087-85",
+"category": "Numbers_01",
+"name": "087-85",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/087-85",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_088-86",
+"category": "Numbers_01",
+"name": "088-86",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/088-86",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_089-87",
+"category": "Numbers_01",
+"name": "089-87",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/089-87",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_090-88",
+"category": "Numbers_01",
+"name": "090-88",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/090-88",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_092-89",
+"category": "Numbers_01",
+"name": "092-89",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/092-89",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_093-ninety",
+"category": "Numbers_01",
+"name": "093-ninety",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/093-ninety",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_094-91",
+"category": "Numbers_01",
+"name": "094-91",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/094-91",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_095-92",
+"category": "Numbers_01",
+"name": "095-92",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/095-92",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_096-93",
+"category": "Numbers_01",
+"name": "096-93",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/096-93",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_097-94",
+"category": "Numbers_01",
+"name": "097-94",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/097-94",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_098-95",
+"category": "Numbers_01",
+"name": "098-95",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/098-95",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_099-96",
+"category": "Numbers_01",
+"name": "099-96",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/099-96",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_100-97",
+"category": "Numbers_01",
+"name": "100-97",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/100-97",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_101-98",
+"category": "Numbers_01",
+"name": "101-98",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/101-98",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_003-99",
+"category": "Numbers_01",
+"name": "003-99",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/003-99",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Numbers_01_004-one_hundred",
+"category": "Numbers_01",
+"name": "004-one_hundred",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/004-one_hundred",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Animals_01_Llama",
+"category": "Animals_01",
+"name": "Llama",
+"texture": "Materials/Decal/DecalTextures/Animals_01/Llama",
+"cost": 1000,
+"flags": 0
+},
+{
+"key": "Animals_01_Mammoth01",
+"category": "Animals_01",
+"name": "Mammoth01",
+"texture": "Materials/Decal/DecalTextures/Animals_01/Mammoth01",
+"cost": 1000,
+"flags": 0
+},
+{
+"key": "Animals_01_Mammoth02",
+"category": "Animals_01",
+"name": "Mammoth02",
+"texture": "Materials/Decal/DecalTextures/Animals_01/Mammoth02",
+"cost": 1000,
+"flags": 0
+},
+{
+"key": "Ambulance_01_Ambulance_cross",
+"category": "Ambulance_01",
+"name": "Ambulance_cross",
+"texture": "Materials/Decal/DecalTextures/Ambulance_01/Ambulance_cross",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ambulance_01_Ambulance_decal",
+"category": "Ambulance_01",
+"name": "Ambulance_decal",
+"texture": "Materials/Decal/DecalTextures/Ambulance_01/Ambulance_decal",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ambulance_01_Ambulance_life_line",
+"category": "Ambulance_01",
+"name": "Ambulance_life_line",
+"texture": "Materials/Decal/DecalTextures/Ambulance_01/Ambulance_life_line",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ambulance_01_Ambulance_lines",
+"category": "Ambulance_01",
+"name": "Ambulance_lines",
+"texture": "Materials/Decal/DecalTextures/Ambulance_01/Ambulance_lines",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ambulance_01_Ambulance_Lines",
+"category": "Ambulance_01",
+"name": "Ambulance_Lines",
+"texture": "Materials/Decal/DecalTextures/Ambulance_01/Ambulance_Lines",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ambulance_01_Ambulance_sign",
+"category": "Ambulance_01",
+"name": "Ambulance_sign",
+"texture": "Materials/Decal/DecalTextures/Ambulance_01/Ambulance_sign",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Ambulance_01_Ambulance_Snake",
+"category": "Ambulance_01",
+"name": "Ambulance_Snake",
+"texture": "Materials/Decal/DecalTextures/Ambulance_01/Ambulance_Snake",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Recycling_0t",
+"category": "Recycling",
+"name": "0t",
+"texture": "Materials/Decal/Recycling/0t",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Recycling_1t",
+"category": "Recycling",
+"name": "1t",
+"texture": "Materials/Decal/Recycling/1t",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Recycling_2t",
+"category": "Recycling",
+"name": "2t",
+"texture": "Materials/Decal/Recycling/2t",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Recycling_3t",
+"category": "Recycling",
+"name": "3t",
+"texture": "Materials/Decal/Recycling/3t",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Recycling_4t",
+"category": "Recycling",
+"name": "4t",
+"texture": "Materials/Decal/Recycling/4t",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Recycling_5t",
+"category": "Recycling",
+"name": "5t",
+"texture": "Materials/Decal/Recycling/5t",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Recycling_6t",
+"category": "Recycling",
+"name": "6t",
+"texture": "Materials/Decal/Recycling/6t",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Recycling_7t",
+"category": "Recycling",
+"name": "7t",
+"texture": "Materials/Decal/Recycling/7t",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Recycling_8t",
+"category": "Recycling",
+"name": "8t",
+"texture": "Materials/Decal/Recycling/8t",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Recycling_9t",
+"category": "Recycling",
+"name": "9t",
+"texture": "Materials/Decal/Recycling/9t",
+"cost": 100,
+"flags": 0
+},
+{
+"key": "Recycling_Recycle",
+"category": "Recycling",
+"name": "Recycle",
+"texture": "Materials/Decal/Recycling/Recycle",
+"cost": 100,
+"flags": 0
+}
+]
+}

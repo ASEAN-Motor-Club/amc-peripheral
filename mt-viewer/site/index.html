@@ -1,0 +1,951 @@
+<!-- Motor Town vehicle viewer — materials edition.
+     Serves one vehicle per directory: <vehicle>/<vehicle>.json (manifest, metres),
+     <vehicle>/glb/*.glb, <vehicle>/materials.json, <vehicle>/textures/*.png
+
+     URL params:
+       ?vehicle=boxy      which directory to load (default: boxy)
+       ?sync              one-shot render (headless capture, no rAF loop)
+       ?cam=front|side|rear|top|iso    camera preset
+       ?ui=0              hide HUD/buttons (clean screenshots)
+       ?plain             force the old flat grey material (A/B comparison)
+     Materials come from the extractor's UE param sidecars (see tools/bake_materials.py):
+     the GLBs carry material *names* only, so we rebuild MeshStandardMaterial per name.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#15161a">
+<title>Motor Town vehicle viewer</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { height: 100%; }
+  body { margin:0; background:#15161a; color:#eee; font-family:system-ui,sans-serif;
+         overflow:hidden; overscroll-behavior:none; -webkit-tap-highlight-color:transparent;
+         height:100dvh; }
+  /* touch-action:none is what stops the browser stealing the pinch/drag gesture
+     from OrbitControls on Android; without it the page pans/zooms instead. */
+  canvas { display:block; touch-action:none; }
+  #hud { position:fixed; top:12px; left:12px; z-index:10; background:rgba(0,0,0,.62); padding:10px 14px; border-radius:8px; font-size:13px; line-height:1.55; }
+  #hud b { color:#6cf; }
+  #hud .k { color:#8b93a7; }
+  #hud .touch-hint { display:none; }
+  #status { position:fixed; top:12px; right:12px; z-index:10; background:rgba(0,0,0,.62); padding:8px 12px; border-radius:8px; font-size:12px; color:#9f9; white-space:pre; }
+  #controls { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:10; display:flex; gap:8px; align-items:center; transition:opacity .2s; }
+  /* Before the model exists the controls are inert: dim them rather than hide them,
+     so the page reads as "loading", not "broken". */
+  #controls.pending { opacity:.45; pointer-events:none; }
+  #status.pending { color:#ffd479; }
+  #controls button, #controls label { background:#26272e; color:#eee; border:1px solid #3d3f49; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }
+  #controls button:hover { background:#33353f; }
+  #controls button.active { background:#1d6fd1; border-color:#1d6fd1; }
+  #controls input[type=color] { width:34px; height:30px; padding:0; border:1px solid #3d3f49; border-radius:6px; background:#26272e; }
+  body.nohud #hud, body.nohud #controls, body.nohud #status { display:none; }
+
+  /* ---- touch / small screens ------------------------------------------------
+     A phone in portrait has ~390 CSS px of width: the desktop control bar is a
+     single unwrappable row that overflowed the viewport, and the HUD sat on top
+     of the model. Give the controls the full width as a wrapped bar pinned to the
+     safe area, shrink the text, and swap mouse hints for touch ones. */
+  @media (max-width: 760px), (pointer: coarse) {
+    #hud { top:8px; left:8px; padding:7px 10px; font-size:11.5px; line-height:1.4;
+           max-width:60vw; border-radius:7px; }
+    #hud .mouse-hint { display:none; }
+    #hud .touch-hint { display:inline; }
+    #status { top:8px; right:8px; padding:5px 8px; font-size:10.5px;
+              max-width:34vw; white-space:normal; border-radius:7px; }
+    #controls { left:0; right:0; bottom:0; transform:none; width:auto;
+                justify-content:center; flex-wrap:wrap; gap:6px;
+                padding:8px 8px calc(8px + env(safe-area-inset-bottom));
+                background:linear-gradient(to top, rgba(21,22,26,.92), rgba(21,22,26,.55));
+                backdrop-filter:blur(6px); }
+    #controls button, #controls label { padding:9px 11px; font-size:12.5px; min-height:42px;
+                                       display:inline-flex; align-items:center; gap:6px; }
+    #controls input[type=color] { width:30px; height:26px; }
+    #controls select { max-width:42vw; }
+    /* the camera presets are the least useful thing on a tiny screen — pinch does it */
+    @media (max-width: 430px) {
+      #controls button[data-look="rear"], #controls button[data-look="top"] { display:none; }
+    }
+  }
+  /* iPhone SE-class: the control bar would eat a third of the screen */
+  @media (max-height: 520px) {
+    #hud { display:none; }
+    #controls { padding:6px 8px calc(6px + env(safe-area-inset-bottom)); }
+    #controls button, #controls label { min-height:36px; padding:6px 9px; font-size:12px; }
+  }
+</style>
+</head>
+<body>
+<div id="hud">
+  <b>Motor Town — vehicle</b><br>
+  <span class="mouse-hint"><span class="k">drag</span> orbit · <span class="k">scroll</span> zoom · <span class="k">right-drag</span> pan</span>
+  <span class="touch-hint"><span class="k">1 finger</span> orbit · <span class="k">2 fingers</span> zoom / pan</span><br>
+  <span id="meta">loading…</span>
+</div>
+<div id="status">loading…</div>
+<div id="controls">
+  <select id="vehicle"></select>
+  <button data-look="iso">Iso</button>
+  <button data-look="front">Front</button>
+  <button data-look="side">Side</button>
+  <button data-look="rear">Rear</button>
+  <button data-look="top">Top</button>
+  <label title="Body material variant (livery/decal), as listed on the vehicle CDO">livery
+    <select id="livery"></select></label>
+  <label title="Default paint variant (as the game picks on spawn)">paint
+    <select id="scheme"></select></label>
+  <label title="Custom body colour">custom <input type="color" id="paint" value="#c9302c"></label>
+  <button id="togglePlain">plain</button>
+</div>
+<script type="importmap">
+{ "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script>
+  // capture shader/log failures for the headless probes: a broken injected program
+  // otherwise just leaves meshes undrawn with the reason buried in devtools
+  window.__errs = [];
+  window.addEventListener("error", e => window.__errs.push("error: " + e.message));
+  const _ce = console.error.bind(console);
+  console.error = (...a) => { window.__errs.push("console: " + a.map(String).join(" ").slice(0, 300)); _ce(...a); };
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+const params = new URLSearchParams(location.search);
+const vehicle = params.get("vehicle") || "boxy";
+const syncMode = params.has("sync");
+const plainMode = params.has("plain");
+if (params.get("ui") === "0") document.body.classList.add("nohud");
+
+const statusEl = document.getElementById("status");
+const metaEl = document.getElementById("meta");
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x15161a);
+// A phone renders the same scene with a third of the pixels: cap the device pixel
+// ratio harder on coarse pointers, otherwise a 3x DPR screen draws 9x the pixels.
+const COARSE = matchMedia("(pointer: coarse)").matches;
+const DPR_CAP = COARSE ? 1.5 : 2;
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.01, 500);
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: syncMode });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, DPR_CAP));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.85;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = !syncMode;
+
+// Physically sane exposure: the game's albedos are already mid-grey, so piling on
+// lights turned tyres into white plastic. Keep the key light dominant and modest.
+scene.add(new THREE.HemisphereLight(0xc9d8ff, 0x1f232c, 0.55));
+const key = new THREE.DirectionalLight(0xfff4e6, 1.9); key.position.set(4, 7, 5); scene.add(key);
+const rim = new THREE.DirectionalLight(0x9fc0ff, 0.55); rim.position.set(-5, 3, -6); scene.add(rim);
+const fill = new THREE.DirectionalLight(0xffffff, 0.18); fill.position.set(-2, 1.5, 5); scene.add(fill);
+
+// neutral studio floor so the car reads against something
+const grid = new THREE.GridHelper(24, 24, 0x39415a, 0x242a3a);
+grid.position.y = -0.001;
+scene.add(grid);
+
+const loader = new GLTFLoader();
+function loadImage(uri) {
+  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = uri; });
+}
+const root = new THREE.Group();
+scene.add(root);
+
+const texLoader = new THREE.TextureLoader();
+const texCache = new Map();
+function loadTexture(uri, dataTexture = false) {
+  const key = uri + (dataTexture ? "|data" : "");
+  if (texCache.has(key)) return texCache.get(key);
+  // materials.json stores textures as "textures/<sha>.png", i.e. relative to the
+  // VEHICLE directory — the GLBs embed no images (0 in the glTF "images" array), so
+  // this is the only source of maps. Resolving them against the page instead of the
+  // vehicle dir 404s every texture and leaves every body flat-coloured.
+  const url = /^(?:https?:|\/|data:|\.\.?\/)/.test(uri) ? uri : `${vehicle}/${uri}`;
+  const t = texLoader.load(url);
+  if (!dataTexture) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  t.flipY = false;               // glTF convention
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  texCache.set(key, t);
+  return t;
+}
+
+// material name -> THREE material
+const matCache = new Map();
+let paintColor = new THREE.Color(params.get("paint") || "#c9302c");
+let bodyTint = params.has("paint") ? paintColor.clone() : null;
+
+function buildMaterial(name, def, plain) {
+  if (plain || !def) {
+    const p = new THREE.MeshStandardMaterial({ color: 0xc9cdd4, roughness: 0.55, metalness: 0.2 });
+    p.name = name;
+    return p;
+  }
+  const m = new THREE.MeshStandardMaterial({
+    color: new THREE.Color().setRGB(def.baseColor[0], def.baseColor[1], def.baseColor[2], THREE.LinearSRGBColorSpace),
+    metalness: def.metalness ?? 0.0,
+    roughness: def.roughness ?? 0.55,
+    side: def.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+  });
+  if (def.map) m.map = loadTexture(def.map);
+  if (def.roughnessMap) m.roughnessMap = loadTexture(def.roughnessMap, true);
+  if (def.metalnessMap) m.metalnessMap = loadTexture(def.metalnessMap, true);
+  if (def.normalMap) m.normalMap = loadTexture(def.normalMap, true);
+  if (name === "M_Body" && bodyTint) m.color.copy(bodyTint);
+  if (def.slot) m.name = name;
+  if (params.has("redtest") && name === params.get("redtest")) m.color.setRGB(1, 0, 0);
+  if (def.emissive) {
+    m.emissive = new THREE.Color().setRGB(def.emissive[0], def.emissive[1], def.emissive[2], THREE.LinearSRGBColorSpace);
+    m.emissiveIntensity = def.emissiveIntensity ?? 1;
+  }
+  if (def.alphaMode === "BLEND") {
+    m.transparent = true;
+    m.opacity = def.opacity ?? 0.5;
+    m.depthWrite = def.depthWrite ?? false;
+  } else if (def.alphaMode === "MASK") {
+    m.alphaTest = 0.5;
+  }
+  return m;
+}
+
+function materialFor(name, def, plain) {
+  const key = name + "|" + plain;
+  if (matCache.has(key)) return matCache.get(key);
+  const m = buildMaterial(name, def, plain);
+  matCache.set(key, m);
+  return m;
+}
+
+const stats = { meshes: 0, materials: new Set(), textured: 0 };
+let slotDefs = {};        // slot name -> material def (materials.json, keyed by SLOT)
+let slotMesh = {};        // mesh -> ordered slot names
+let colorSlots = {};      // slot -> {defaultColor, metallic, roughness, useAlpha}
+let paints = [];          // [{slot: [r,g,b,a]}] the game's default paint variants
+let extraPaintSlot = {};  // paintable material slot -> index into the colour-slot order
+let colourKeys = [];      // ColorSlots keys, in slot order (duplicates suffixed __N)
+let bodyVariants = [];    // BodyMaterialList: livery/decal materials on the CDO
+let liveryIndex = -1;     // -1 = the material the mesh slot actually names
+let paintIndex = -1;      // -1 = as authored on the material
+const assign = [];        // debug: part.mesh === "Body" primitive -> slot mapping
+
+// UE FColor is sRGB 0-255; THREE.Colour with colour management converts to linear.
+function srgb(r, g, b) {
+  const c = new THREE.Color();
+  c.setStyle(`rgb(${r},${g},${b})`);
+  return c;
+}
+
+// Resolve the colour a slot should show for the active paint scheme.
+// A BodyColors entry lists the RGB per slot; the alpha channel is only meaningful
+// for slots marked bUseColorAlpha (glass), so it must NOT be read as "unset" —
+// Boxy's four default paints are blue / charcoal / light grey / white and three of
+// them carry alpha 0. A slot the scheme doesn't mention keeps its ColorSlot default.
+function slotColour(key) {
+  const scheme = paintIndex >= 0 ? paints[paintIndex] : null;
+  const cs = colorSlots[key] || null;
+  if (scheme) {
+    // Exact slot name first, then a secondary paint region: the Stinger's racing
+    // stripe is a second ColorSlots entry under the same "Body" key, living on its
+    // own material section (Body_1) that no colour names directly. Only after that
+    // the loose Body_1 -> Body fallback, which would otherwise hand the stripe the
+    // body colour and hide it.
+    const exact = scheme[key];
+    if (exact) return exact;
+    const i = extraPaintSlot[key];
+    if (i != null) {
+      const src = colourKeys[i];
+      if (src && scheme[src]) return scheme[src];
+    }
+    const hit = scheme[key.replace(/_\d+$/, "")] ||
+                scheme[key.replace(/(_\d+)$/, "_01")];
+    if (hit) return hit;
+  }
+  if (cs && cs.defaultColor) return cs.defaultColor;
+  return null;
+}
+
+// Which material sections are paintable but not named by a ColorSlots key.
+// Ordered by triangle count so the dominant section takes the first colour slot.
+function indexPaintSlots() {
+  const tris = {};
+  root.traverse(o => {
+    if (!o.isMesh || !o.material) return;
+    const n = o.material.name;
+    const g = o.geometry;
+    tris[n] = (tris[n] || 0) + (g.index ? g.index.count : g.attributes.position.count) / 3;
+  });
+  colourKeys = Object.keys(colorSlots);
+  // Only the body mesh's own sections count: the dashboard also uses M_Palette, and
+  // letting it into the ordering pushed the stripe out of the colour list.
+  // The painted shell, not the first mesh that happens to carry a body slot: the
+  // doors reuse "Body" too, and picking a door left the stripe section out.
+  const bodyMesh = slotMesh["Body"] ? "Body"
+    : Object.keys(slotMesh).reduce((a, b) => ((slotMesh[a] || []).length >= (slotMesh[b] || []).length ? a : b));
+  const pool = bodyMesh ? slotMesh[bodyMesh] : Object.keys(slotDefs);
+  const cand = pool.filter(s => {
+    const d = slotDefs[s] || {};
+    return /M_Body|M_Palette/i.test(d.materialName || "") && !d.map && !colourKeys.includes(s);
+  });
+  cand.sort((a, b) => (tris[b] || 0) - (tris[a] || 0));
+  extraPaintSlot = {};
+  cand.forEach((s, i) => { extraPaintSlot[s] = i; });
+}
+
+function applyPaint() {
+  for (const [key, m] of matCache) {
+    const slot = key.split("|")[0];
+    const c = slotColour(slot);
+    if (c && !key.endsWith("|true")) {
+      m.color.copy(srgb(c[0], c[1], c[2]));
+    }
+  }
+  for (const [slot, cs] of Object.entries(colorSlots)) {
+    if (cs.metallic != null) for (const [k, m] of matCache) if (k.split("|")[0] === slot) m.metalness = cs.metallic;
+    if (cs.roughness != null) for (const [k, m] of matCache) if (k.split("|")[0] === slot) m.roughness = cs.roughness;
+  }
+}
+
+// Apply a BodyMaterialList entry to the body slots. These are the game's livery /
+// decal materials: the texture carries the stripes or logo, and the paint colour
+// sits on top of it, so the colour is left alone unless a paint variant is active.
+function applyLivery() {
+  const v = liveryIndex >= 0 ? bodyVariants[liveryIndex] : null;
+  for (const [key, m] of matCache) {
+    const slot = key.split("|")[0];
+    const def = slotDefs[slot] || {};
+    // The visible shell is not always a Body_ slot: on the muscle cars it is the
+    // Palette section (12,690 of 15,543 triangles on the Tuscan), so a livery that
+    // only repainted Body_01 changed nothing on screen.
+    const isBody = /^(Body|Palette|Shell)/i.test(slot) || /M_Body|Body_|M_Palette/i.test(def.materialName || "");
+    if (!isBody) continue;
+    if (!v) {                        // back to the authored material
+      m.map = def.map ? loadTexture(def.map) : null;
+      m.metalness = def.metalness ?? 0.0;
+      m.roughness = def.roughness ?? 0.55;
+      if (def.baseColor) m.color.setRGB(def.baseColor[0], def.baseColor[1], def.baseColor[2], THREE.LinearSRGBColorSpace);
+      m.needsUpdate = true;
+      continue;
+    }
+    m.map = v.map ? loadTexture(v.map) : null;
+    m.metalness = v.metalness ?? 0.3;
+    m.roughness = v.roughness ?? 0.5;
+    if (v.map) {
+      // A livery texture already carries the paint (NukeTaxi's is pure yellow,
+      // 245,182,51) — multiplying it by the slot's dark default colour renders it
+      // black. Only a colour the user explicitly chose tints a livery.
+      m.color.setRGB(1, 1, 1);
+    } else if (v.baseColor) {
+      m.color.setRGB(v.baseColor[0], v.baseColor[1], v.baseColor[2], THREE.LinearSRGBColorSpace);
+    }
+    m.needsUpdate = true;
+  }
+  if (paintIndex >= 0) applyPaint();
+}
+
+
+async function load() {
+  // The controls are in the DOM before any data arrives, so make the page usable
+  // immediately: the vehicle list is a separate, tiny request that lands first, so
+  // you can switch models before this one has even finished streaming.
+  const ctl = document.getElementById("controls");
+  ctl.classList.add("pending");
+  statusEl.classList.add("pending");
+  statusEl.textContent = "loading…";
+  const sel = document.getElementById("vehicle");
+  fetch("vehicles.json").then(r => r.json()).then(list => {
+    sel.innerHTML = list.map(v =>
+      `<option value="${v.slug}"${v.slug === vehicle ? " selected" : ""}>` +
+      `${v.vehicle}${v.inheritedFrom ? " (from " + v.inheritedFrom + ")" : ""}</option>`).join("");
+    sel.addEventListener("change", () => {
+      location.search = "?vehicle=" + sel.value + (syncMode ? "&sync" : "");
+    });
+  }).catch(() => sel.remove());
+
+  const [manifest, table] = await Promise.all([
+    fetch(`${vehicle}/${vehicle}.json`).then(r => r.json()),
+    fetch(`${vehicle}/materials.json`).then(r => r.json()).catch(() => ({ materials: {} })),
+  ]);
+  frameBox(estimateBox());   // something framed before the first byte arrives
+  statusEl.textContent = `geometry 0/${manifest.parts.length}`;
+  const defs = table.materials || {};
+  slotDefs = defs;
+  slotMesh = table.slotsByMesh || {};
+  colorSlots = manifest.colorSlots || {};
+  paints = manifest.paints || [];
+  bodyVariants = table.bodyVariants || [];
+  liveryIndex = params.has("livery") ? parseInt(params.get("livery"), 10) : -1;
+  paintIndex = params.has("scheme") ? parseInt(params.get("scheme"), 10) : -1;
+  // --- stream the geometry: silhouette first ----------------------------------
+  // Each part is added the moment its GLB lands and drawn with one shared wireframe
+  // material, so the shape appears while the rest is still downloading. Shading is
+  // a single pass after every part is present: swapping materials part-by-part made
+  // the model flicker between flat and textured as each texture decoded.
+  const wire = new THREE.MeshBasicMaterial({ color: 0x9fb4d0, wireframe: true, transparent: true, opacity: 0.5 });
+  const streamed = [];
+  // Framing during streaming. The manifest only carries part PIVOTS, which
+  // under-state the real extents (a chassis pivot does not know the cab is 2 m
+  // tall), so the box is the union of the estimated one and what has actually
+  // arrived — and it may only GROW. Fitting to arrived geometry alone zoomed onto
+  // the first wheel; shrinking the frame mid-load lurches. The exact fit runs once
+  // at the end, when every part is present.
+  let lastDiag = 0;
+  function estimateBox() {
+    const b = new THREE.Box3();
+    for (const part of manifest.parts) b.expandByPoint(new THREE.Vector3().fromArray(part.position));
+    return b.isEmpty() ? b : b.expandByScalar(1.6);
+  }
+  function frameBox(b) {
+    if (!b || b.isEmpty()) return;
+    const pv = b.getCenter(new THREE.Vector3());
+    const ps = b.getSize(new THREE.Vector3());
+    const rr = Math.max(ps.x, ps.y, ps.z) || 1;
+    const dist = (rr / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) * 1.05;
+    camera.position.copy(pv).add(new THREE.Vector3(0.95, 0.5, 1.15).normalize().multiplyScalar(dist));
+    camera.lookAt(pv);
+    controls.target.copy(pv);
+    controls.update();
+  }
+  function growFrame() {
+    const b = estimateBox().union(new THREE.Box3().setFromObject(root).expandByScalar(1.0));
+    const d = b.getSize(new THREE.Vector3()).length();
+    if (d <= lastDiag * 1.15) return;      // only re-frame on real growth
+    lastDiag = d;
+    frameBox(b);
+  }
+  // Load the biggest GLBs first, three at a time. Manifest order is blueprint
+  // order — a wheel can easily be part 1 — so sequential loading shows you a
+  // steering wheel for two seconds and nothing else. Body/chassis are the largest
+  // files, so sorting by Content-Length puts the silhouette on screen almost
+  // immediately and the trim fills in around it.
+  const parts = manifest.parts.slice();
+  const sizes = await Promise.all(parts.map(p =>
+    fetch(`${vehicle}/glb/${p.glb}`, { method: "HEAD" })
+      .then(r => +(r.headers.get("content-length") || 0)).catch(() => 0)));
+  parts.forEach((p, i) => { p.bytes = sizes[i]; });
+  parts.sort((a, b) => (b.bytes || 0) - (a.bytes || 0));
+  window.__order = parts.map(p => p.mesh + "=" + p.bytes);
+
+  let done = 0;
+  async function streamPart(part) {
+    try {
+      const g = await loader.loadAsync(`${vehicle}/glb/${part.glb}`);
+      const model = g.scene;
+      // GLB primitives come out in material-slot order, so index into the mesh's
+      // ordered slot list and give each primitive its own material instance. This
+      // is what keeps Body_01 / Body_02 (same M_Body asset, different paint) apart.
+      const order = slotMesh[part.mesh] || [];
+      const prims = [];
+      model.traverse(o => { if (o.isMesh) prims.push(o); });
+      prims.forEach((o, i) => {
+        const fallback = Array.isArray(o.material) ? o.material[0]?.name : o.material?.name;
+        // The GLB is rewritten by bake_materials so each primitive's material is
+        // named after its UE slot; fall back to slot order if that didn't happen.
+        const name = (fallback && defs[fallback]) ? fallback : (order[i] || fallback);
+        const d = defs[name] || defs[fallback];
+        if (part.mesh === "Body") {
+          o.geometry.computeBoundingBox();
+          const bb = o.geometry.boundingBox.getSize(new THREE.Vector3());
+          assign.push(`${i}:${name}:v${o.geometry.attributes.position.count}:` +
+                      `${bb.x.toFixed(1)}x${bb.y.toFixed(1)}x${bb.z.toFixed(1)}`);
+        }
+        stats.materials.add(name);
+        if (d && d.map) stats.textured++;
+        stats.meshes++;
+        o.userData.slot = name;                  // remembered for the shading pass
+        o.userData.def = d;
+        o.material = wire;
+      });
+      model.position.fromArray(part.position);
+      model.quaternion.fromArray(part.rotation);
+      model.scale.fromArray(part.scale);
+      root.add(model);
+      streamed.push(model);
+      growFrame();
+      render();
+    } catch (e) { console.warn("part failed", part.id, e.message); }
+    done++;
+    statusEl.textContent = `wireframe ${done}/${parts.length}`;
+  }
+  // three workers, so the network is busy without 13 sockets fighting
+  let next = 0;
+  await Promise.all([0, 1, 2].map(async () => {
+    while (next < parts.length) await streamPart(parts[next++]);
+  }));
+
+  // --- everything is here: shade it -------------------------------------------
+  statusEl.textContent = `materials ${streamed.length}/${manifest.parts.length}`;
+  for (const model of streamed) model.traverse(o => {
+    if (!o.isMesh) return;
+    o.material = materialFor(o.userData.slot, o.userData.def, plainMode);
+  });
+  render();
+
+  // (the vehicle list was fetched and wired at the top of load(), so the selector
+  // is already live while this vehicle streams in)
+
+  const box = new THREE.Box3().setFromObject(root);
+  const c = box.getCenter(new THREE.Vector3());
+  const s = box.getSize(new THREE.Vector3());
+  const r = Math.max(s.x, s.y, s.z);
+
+  // Motor Town forward is +X: the car's nose points along +X in this scene.
+  const dirs = {
+    iso: new THREE.Vector3(0.95, 0.5, 1.15),
+    front: new THREE.Vector3(1.0, 0.22, 0.15),
+    side: new THREE.Vector3(0.15, 0.14, 1.0),
+    rear: new THREE.Vector3(-1.0, 0.22, 0.12),
+    top: new THREE.Vector3(0.02, 1.0, 0.02),
+  };
+  // Fit by projecting the model's 8 bounding-box corners and shrinking the distance
+  // until every one lands inside the frustum. An analytic guess from `aspect` alone
+  // is wrong the moment the shape is long, the view is top-down, or the FOV changes;
+  // this measures what actually lands on screen.
+  const corners = [];
+  for (const x of [box.min.x, box.max.x])
+    for (const y of [box.min.y, box.max.y])
+      for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+  let lastNdc = 0;
+  function ndcExtent(dist, dir) {
+    camera.position.copy(c).add(dir.clone().normalize().multiplyScalar(dist));
+    camera.lookAt(c);
+    camera.updateMatrixWorld();
+    let m = 0;
+    for (const p of corners) {
+      const v = p.clone().project(camera);
+      m = Math.max(m, Math.abs(v.x), Math.abs(v.y));
+    }
+    return m;
+  }
+  function fitDist(dir) {
+    // target 0.90 => ~10% margin; ndc extent is ~1/dist for a fixed direction
+    let lo = r * 0.8, hi = r * 12;
+    if (ndcExtent(hi, dir) > 0.9) return hi;         // pathological, refuse to loop
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (ndcExtent(mid, dir) > 0.9) lo = mid; else hi = mid;
+    }
+    lastNdc = ndcExtent(hi, dir);
+    return hi;
+  }
+  let currentLook = params.get("cam") || "iso";
+  let lastAspect = camera.aspect;
+  let lastDist = 0;
+  function setCam(look) {
+    if (look) currentLook = look;
+    const d = dirs[currentLook] || dirs.iso;
+    lastDist = fitDist(d);
+    camera.position.copy(c).add(d.clone().normalize().multiplyScalar(lastDist));
+    camera.lookAt(c);
+    controls.target.copy(c);
+    controls.update();
+    // exposed for the headless fit check (the debug block below is outside this scope)
+    window.__fit = { ndc: lastNdc, dist: lastDist, look: currentLook };
+  }
+  window.__setCam = setCam;
+  setCam(currentLook);
+
+  // rotate / address-bar changes: keep the model framed, but don't stomp on a zoom
+  // the user did themselves unless the aspect really moved.
+  function refitIfAspectChanged() {
+    if (!camera.aspect) return;
+    if (Math.abs(camera.aspect - lastAspect) / lastAspect < 0.12) return;
+    lastAspect = camera.aspect;
+    setCam(currentLook);
+  }
+  addEventListener("orientationchange", refitIfAspectChanged);
+  addEventListener("resize", refitIfAspectChanged);
+  if (window.visualViewport) visualViewport.addEventListener("resize", refitIfAspectChanged);
+
+  // Build the caption from parts so a missing texture count can't leave a dangling
+  // separator ("… 14 materials · " was showing up on phones).
+  metaEl.textContent = [
+    manifest.vehicle,
+    `${s.x.toFixed(2)}×${s.y.toFixed(2)}×${s.z.toFixed(2)} m`,
+    `${stats.meshes} meshes`,
+    `${stats.materials.size} materials`,
+    table.__textures ? String(table.__textures) : "",
+  ].filter(Boolean).join(" · ");
+  statusEl.textContent = `loaded ${manifest.parts.length}/${manifest.parts.length}`;
+
+  // --- decals -------------------------------------------------------------
+  // The game does not project decals in world space. FMTDecalTargetMesh keeps a
+  // UTextureRenderTarget2D per body mesh and M_DecalDistribution paints layers into it,
+  // i.e. decals are stamped in a UV space that MTGenerateVehicleDecalUVCommandlet builds
+  // for each vehicle -- the extra UV channel our GLBs carry as TEXCOORD_1 (it runs
+  // outside [0,1], unlike TEXCOORD_0). So the honest viewer equivalent is a decal
+  // texture sampled through uv1 and blended over the paint.
+  //
+  // A layer is DecalKey + Color + Position/Rotation + DecalScale/Stretch/Coverage, with
+  // EMTDecalLayerFlags = {Flip=1, Mirror=2, OppositeCull=4, BackFaceCull=8,
+  // Highlighted=0x80, DrawOnWheel=0x100}.
+  async function applyVehicleDecals() {
+    const info = (window.__decalInfo = { step: "start" });
+    // Placement is calibrated against a rendered composition: Position is in
+    // millimetres in the vehicle's local frame (X along the body, Y up), and
+    // DecalScale is a fraction of a 2 m stamp -- that is what makes 30 separate layers
+    // resolve into one emblem instead of a pile of fragments. ?decals=0 disables.
+    if (params.get("decals") === "0") { info.step = "off"; return; }
+    // Manifests whose decalable slot list lives on a base class were never expanded,
+    // so fall back to the paint materials by name rather than declaring "no decals".
+    const slots = manifest.decalSlots || [];
+    info.slots = slots.length ? slots : "fallback";
+
+    let idx, cat;
+    try {
+      [idx, cat] = await Promise.all([
+        fetch("decals/vehicles.json").then(r => r.json()),
+        fetch("decals/decals.json").then(r => r.json()),
+      ]);
+    } catch (e) { info.step = "fetch-failed:" + e.message; return; }
+    const rec = idx.vehicles[vehicle] || Object.values(idx.vehicles).find(v => v.slug === vehicle);
+    info.rec = rec ? rec.layers.length : 0;
+    if (!rec || !rec.layers.length) { info.step = "no-record"; return; }
+
+    // ---- how the game actually does it -------------------------------------
+    // FMTDecalTargetMesh keeps a DecalRT per body mesh and MTDecalBaker renders the mesh
+    // into it with a brush material: every fragment samples the decal texture by its own
+    // position in decal space, and the mesh's decal UV decides where the result lands.
+    // That is why the stored Position/Rotation are the vehicle's own units and why
+    // stamping them straight into UV space could never line up. So evaluate the layer
+    // stack per fragment from the surface position and let uv1 place the result.
+    const byKey = new Map(cat.decals.map(d => [d.key, d]));
+    const layers = rec.layers.filter(L => byKey.get(L.key)).slice(0, 32);
+    if (!layers.length) { info.step = "no-known-keys"; return; }
+
+    // one atlas so the shader needs a single sampler
+    const TILE = 256, GRID = 8;
+    const atlas = document.createElement("canvas");
+    atlas.width = atlas.height = TILE * GRID;
+    const actx = atlas.getContext("2d");
+    let packed = 0;
+    for (let i = 0; i < layers.length; i++) {
+      const d = byKey.get(layers[i].key);
+      let img;
+      try { img = await loadImage(`decals/tex/${d.category}/${d.name}.png`); } catch { continue; }
+      const t = document.createElement("canvas");
+      t.width = t.height = TILE;
+      const tc = t.getContext("2d");
+      tc.drawImage(img, 0, 0, TILE, TILE);
+      tc.globalCompositeOperation = "source-in";
+      const c = layers[i].color;
+      tc.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+      tc.fillRect(0, 0, TILE, TILE);
+      actx.drawImage(t, (i % GRID) * TILE, Math.floor(i / GRID) * TILE);
+      packed++;
+    }
+    info.packed = packed;
+    if (!packed) { info.step = "no-textures"; return; }
+    const atlasTex = new THREE.CanvasTexture(atlas);
+    atlasTex.colorSpace = THREE.SRGBColorSpace;
+    atlasTex.flipY = true;
+    // nearest keeps neighbouring atlas tiles from bleeding into each other, which
+    // showed up as brown/purple scraps of the wrong decal on the panel
+    atlasTex.magFilter = THREE.NearestFilter;
+    atlasTex.minFilter = THREE.NearestFilter;
+    atlasTex.generateMipmaps = false;
+
+    // ---- layer uniforms ----------------------------------------------------
+    // Position is in millimetres in the vehicle's local frame: X along the body, Y up.
+    const axes = (params.get("daxes") || "xy").toLowerCase();
+    const AXIS = { xy: [0, 1], xz: [0, 2], zy: [2, 1], yx: [1, 0] }[axes] || [0, 1];
+    const UNIT = parseFloat(params.get("dunit") || "1000");   // position units per metre
+
+    // Stamp size is a fraction of the bounds too: DecalScale is read against the mesh's
+    // own extent, which is why it needs no unit conversion at all.
+    const BASE = parseFloat(params.get("dbase") || "0.25");
+
+    const posArr = [], sizeArr = [], rotArr = [], flagArr = [];
+    const v3 = new THREE.Vector3();
+    for (let i = 0; i < 32; i++) {
+      const L = layers[i];
+      if (!L) { posArr.push(new THREE.Vector4(0, 0, 0, 0)); sizeArr.push(new THREE.Vector2(0, 0)); rotArr.push(0); flagArr.push(0); continue; }
+      const s = Math.abs(L.scale) * BASE;   // fraction of the bounds
+      const f = L.flags | 0;
+      // EMTDecalLayerFlags: Flip=1, Mirror=2, DrawOnWheel=0x100
+      const w = (f & 1) ? s * Math.abs(L.stretch) : s;
+      const h = (f & 1) ? s : s * Math.abs(L.stretch);
+      // metres for the shader
+      posArr.push(new THREE.Vector4(L.pos[0] / UNIT, L.pos[1] / UNIT, 0, 0));
+      sizeArr.push(new THREE.Vector2(w, h));
+      rotArr.push(THREE.MathUtils.degToRad(L.rot[2]));
+      flagArr.push(f);
+    }
+
+    // root position so the shader works in vehicle space
+    // positions are in the target mesh's local space, so no world offset applies
+    const rootPos = new THREE.Vector3();
+
+    let patched = 0;
+    const wholeBox = new THREE.Box3().setFromObject(root);
+    const wholeSize = wholeBox.getSize(new THREE.Vector3());
+    const minSpan = Math.max(wholeSize.x, wholeSize.z) * 0.25;
+    const shellName = (n) => slots.includes(n) || /^(Palette|Shell)/i.test(n || "")
+      || slots.some(sl => (n || "").startsWith(sl));
+
+    root.traverse(o => {
+      if (!o.isMesh || !o.material || !o.geometry.attributes.uv1) return;
+      const bb = new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3());
+      if (Math.max(bb.x, bb.y, bb.z) < minSpan) return;      // skip wheels / jack feet
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      const swap = mats.map((m) => {
+        if (!shellName(m.name)) return m;
+        const c = m.clone();
+        c.customProgramCacheKey = () => "mt-decal";
+        c.onBeforeCompile = (sh) => {
+          window.__shaderRuns = (window.__shaderRuns || 0) + 1;
+          sh.uniforms.decalAtlas = { value: atlasTex };
+          sh.uniforms.uDecalCount = { value: packed };
+          sh.uniforms.uDecalPos = { value: posArr };
+          sh.uniforms.uDecalSize = { value: sizeArr };
+          sh.uniforms.uDecalRot = { value: rotArr };
+          sh.uniforms.uDecalFlags = { value: flagArr };
+          sh.uniforms.uDecalAxis = { value: new THREE.Vector2(AXIS[0], AXIS[1]) };
+          sh.uniforms.uNormalAxis = { value: 3 - AXIS[0] - AXIS[1] };
+          const lbox = new THREE.Box3().setFromBufferAttribute(o.geometry.attributes.position);
+          sh.uniforms.uBMin = { value: lbox.min.clone() };
+          sh.uniforms.uBMax = { value: lbox.max.clone() };
+          sh.uniforms.uRootPos = { value: rootPos };
+          sh.uniforms.uDecalDebug = { value: params.has("dbg") ? 1 : 0 };
+          sh.vertexShader = "varying vec3 vDecalLocal;\n varying vec3 vDecalNrm;\n" + sh.vertexShader
+            .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvDecalLocal = position;\n\tvDecalNrm = normal;");
+          sh.fragmentShader = `
+            uniform sampler2D decalAtlas;
+            uniform int uDecalCount;
+            uniform vec4 uDecalPos[32];
+            uniform vec2 uDecalSize[32];
+            uniform float uDecalRot[32];
+            uniform int uDecalFlags[32];
+            uniform vec2 uDecalAxis;
+            uniform vec3 uRootPos;
+            uniform vec3 uBMin;
+            uniform vec3 uBMax;
+            uniform float uDecalDebug;
+            uniform float uNormalAxis;
+            varying vec3 vDecalLocal;
+            varying vec3 vDecalNrm;
+          ` + sh.fragmentShader.replace("#include <map_fragment>", `#include <map_fragment>
+            if (uDecalDebug > 0.5) { diffuseColor.rgb = vec3(1.0, 0.0, 1.0); }
+            else {
+              // a decal box only paints what its projection axis sees; without this the
+              // emblem runs over the shoulder and onto the roof
+              float nrm = abs(uNormalAxis < 0.5 ? vDecalNrm.x : (uNormalAxis < 1.5 ? vDecalNrm.y : vDecalNrm.z));
+              // Position is per-mille of the mesh's local bounds, zero at their centre --
+              // which is why the brush takes LocalBounds as an input at all. 1171/1171
+              // saved layers sit inside +/-1000, so the space is normalised, not metric.
+              vec3 bc = (uBMin + uBMax) * 0.5;
+              vec3 be = (uBMax - uBMin);
+              vec3 rel = vDecalLocal - bc;
+              vec2 p = vec2(uDecalAxis.x < 0.5 ? rel.x : (uDecalAxis.x < 1.5 ? rel.y : rel.z),
+                            uDecalAxis.y < 0.5 ? rel.x : (uDecalAxis.y < 1.5 ? rel.y : rel.z));
+              vec2 bnd = vec2(uDecalAxis.x < 0.5 ? be.x : (uDecalAxis.x < 1.5 ? be.y : be.z),
+                              uDecalAxis.y < 0.5 ? be.x : (uDecalAxis.y < 1.5 ? be.y : be.z));
+              for (int i = 0; i < 32; i++) {
+                if (nrm < 0.45) break;
+                if (i >= uDecalCount) break;
+                vec2 sz = uDecalSize[i] * bnd;
+                if (sz.x <= 0.0001 || sz.y <= 0.0001) continue;
+                // pos is per-mille of half the bounds; size is a fraction of the bounds
+                vec2 d = p - (uDecalPos[i].xy / 1000.0) * bnd * 0.5;
+                float ca = cos(-uDecalRot[i]), sa = sin(-uDecalRot[i]);
+                vec2 q = vec2(d.x * ca - d.y * sa, d.x * sa + d.y * ca) / sz + 0.5;
+                if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0) continue;
+                float col = mod(float(i), 8.0), row = floor(float(i) / 8.0);
+                vec2 auv = vec2((col + q.x) / 8.0, ((7.0 - row) + q.y) / 8.0);
+                vec4 dec = texture2D(decalAtlas, auv);
+                if (dec.a > 0.004) diffuseColor.rgb = mix(diffuseColor.rgb, dec.rgb * 1.6, dec.a);
+              }
+            }`);
+          if (!sh.fragmentShader.includes("uDecalDebug")) window.__patchMiss = (window.__patchMiss || 0) + 1;
+        };
+        c.needsUpdate = true;
+        patched++;
+        return c;
+      });
+      if (swap.some((m, i) => m !== mats[i])) o.material = Array.isArray(o.material) ? swap : swap[0];
+    });
+    info.patched = patched;
+    info.step = "done";
+    info.axes = axes;
+    try { render(); } catch (e) { try { renderer.render(scene, camera); } catch (e2) {} }
+  }
+  applyVehicleDecals().catch(e => { console.warn("decals:", e); window.__decalInfo = { step: "error:" + e.message }; });
+
+  window.__viewer = { scene, root, camera, renderer, manifest, defs, stats, setCam };
+  // exposed for headless probes (ray casts, section visibility) that need the three.js namespace
+  window.__THREE = THREE;
+
+  document.querySelectorAll("#controls button[data-look]").forEach(b => {
+    b.addEventListener("click", () => setCam(b.dataset.look));
+  });
+
+  // --- paint: the vehicle CDO's own default variants, plus a free colour ---
+  const liverySel = document.getElementById("livery");
+  if (!bodyVariants.length) {
+    liverySel.closest("label").remove();          // most vehicles have no list
+  } else {
+    liverySel.innerHTML = ["-1", ...bodyVariants.map((_, i) => String(i))]
+      .map(v => `<option value="${v}"${+v === liveryIndex ? " selected" : ""}>${
+        +v < 0 ? "as authored" : (bodyVariants[+v].materialName + (bodyVariants[+v].map ? "" : " (no texture)"))}</option>`)
+      .join("");
+    liverySel.addEventListener("change", () => {
+      liveryIndex = parseInt(liverySel.value, 10);
+      applyLivery();
+      if (syncMode) render();
+    });
+  }
+
+  const schemeSel = document.getElementById("scheme");
+  const lab = idx => {
+    if (idx < 0) return "material default";
+    const sc = paints[idx] || {};
+    const keys = Object.keys(sc);
+    if (!keys.length) return `paint ${idx + 1} (none)`;
+    // Label by the paint colour, not by alpha: body slots carry alpha 0 (it is only
+    // meaningful for glass slots flagged bUseColorAlpha), so testing alpha labelled
+    // every paint on cars like the Stinger as "(none)" when the RGB was right there.
+    const k = keys.find(x => /^(Body|Palette|Shell)/i.test(x)) || keys[0];
+    const c = sc[k] || [255, 255, 255, 0];
+    const hex = "#" + c.slice(0, 3).map(v => v.toString(16).padStart(2, "0")).join("");
+    return `paint ${idx + 1} (${hex})`;
+  };
+  schemeSel.innerHTML = ["-1", ...paints.map((_, i) => String(i))]
+    .map(v => `<option value="${v}"${+v === paintIndex ? " selected" : ""}>${lab(+v)}</option>`)
+    .join("");
+  schemeSel.addEventListener("change", () => {
+    paintIndex = parseInt(schemeSel.value, 10);
+    bodyTint = null;                     // a scheme overrides the free colour
+    applyPaint();
+    if (syncMode) render();
+  });
+
+  const paint = document.getElementById("paint");
+  paint.value = "#" + paintColor.getHexString();
+  paint.addEventListener("input", () => {
+    paintColor.set(paint.value);
+    bodyTint = paintColor.clone();
+    // custom colour paints every body slot, leaving seats/glass/lamps alone
+    for (const [k, m] of matCache) {
+      const slot = k.split("|")[0];
+      if (/^Body/i.test(slot) && /Body/i.test(slotDefs[slot]?.materialName || "M_Body")) {
+        m.color.copy(paintColor);
+      }
+    }
+    if (syncMode) render();
+  });
+
+  indexPaintSlots();     // needs the finished model to know each section's size
+  applyPaint();
+  applyLivery();
+
+  // Everything is wired and shaded: hand the controls over.
+  ctl.classList.remove("pending");
+  statusEl.classList.remove("pending");
+  statusEl.textContent = `loaded ${manifest.parts.length}/${manifest.parts.length}`;
+  render();
+
+  if (params.has("debug")) {
+    document.title = JSON.stringify({
+      paintIndex, paints: paints.length, colorSlots: Object.keys(colorSlots),
+      liveryIndex, bodyVariants: bodyVariants.map(v => v.materialName + (v.map ? "*" : "")),
+      maps: [...matCache].filter(([k]) => /^Body/i.test(k.split("|")[0]))
+        .map(([k, m]) => k.split("|")[0] + "=" + (m.map ? (m.map.image ? (m.map.image.src || "").split("/").pop() : "pending") : "none")),
+      slotKeys: Object.keys(defs), meshes: Object.keys(slotMesh),
+      cache: [...matCache.keys()],
+      assigned: assign,
+      big: (() => {
+        const out = [];
+        root.traverse(o => {
+          if (!o.isMesh) return;
+          const n = o.geometry.attributes.position.count;
+          if (n < 800) return;
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          out.push(`${o.parent?.name || "?"}:${n}:${mats.map(m => m.name + "=" + m.color.getHexString() + (m.transparent ? "T" : "")).join(",")}`);
+        });
+        return out;
+      })(),
+      body: (() => { const m = matCache.get("Body_01|false"); return m ? m.color.getHexString() : null; })(),
+    });
+  }
+
+  const tp = document.getElementById("togglePlain");
+  tp.addEventListener("click", () => {
+    const on = tp.classList.toggle("active");
+    root.traverse(o => {
+      if (!o.isMesh) return;
+      const cur = Array.isArray(o.material) ? o.material[0] : o.material;
+      const slot = cur.name || "unknown";
+      o.material = materialFor(slot, defs[slot], on);
+    });
+  });
+
+  render();
+}
+
+function render() {
+  controls.update();
+  renderer.render(scene, camera);
+}
+function anim() { requestAnimationFrame(anim); render(); }
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  if (syncMode) render();
+});
+
+await load();
+// give textures a beat to decode before the single frame in sync mode
+await new Promise(r => setTimeout(r, 350));
+if (syncMode) {
+  render();
+  if (params.has("debug")) {
+    // Ground truth: average the pixels that are actually on screen, so we can tell
+    // "the material is blue" apart from "the mesh is drawn with something else".
+    const gl = renderer.getContext();
+    const w = renderer.domElement.width, h = renderer.domElement.height;
+    const buf = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    let n = 0, r = 0, g2 = 0, b = 0;
+    for (let i = 0; i < buf.length; i += 4) {
+      const lum = 0.2126 * buf[i] + 0.7152 * buf[i + 1] + 0.0722 * buf[i + 2];
+      if (lum < 45) continue;                    // background / grid
+      n++; r += buf[i]; g2 += buf[i + 1]; b += buf[i + 2];
+    }
+    document.title += `|px=${n} mean=${n ? [r / n, g2 / n, b / n].map(v => v.toFixed(0)).join(",") : "-"}`;
+    document.title += `|vp=${innerWidth}x${innerHeight} dpr=${devicePixelRatio} coarse=${COARSE ? 1 : 0} aspect=${camera.aspect.toFixed(3)}`;
+    if (params.has("layout")) {
+      const ctl = document.getElementById("controls");
+      const r2 = ctl.getBoundingClientRect();
+      const kids = [...ctl.children].map(e => {
+        const b = e.getBoundingClientRect();
+        return { tag: e.tagName.toLowerCase(), id: e.id || e.dataset.look || "", x: Math.round(b.left), r: Math.round(b.right), w: Math.round(b.width) };
+      });
+      const over = kids.filter(k => k.r > innerWidth + 0.5);
+      const box = new THREE.Box3().setFromObject(root);
+      document.title += "|LAY=" + JSON.stringify({
+        scrollW: document.documentElement.scrollWidth, innerW: innerWidth,
+        ctl: [Math.round(r2.left), Math.round(r2.right), Math.round(r2.width)],
+        rows: new Set(kids.map(k => k.r)).size, kids, over: over.length,
+        camDist: +camera.position.distanceTo(controls.target).toFixed(2),
+        ndc: window.__fit ? +window.__fit.ndc.toFixed(3) : null,
+        look: window.__fit ? window.__fit.look : null,
+      });
+    }
+  }
+} else { anim(); }
+</script>
+</body>
+</html>
