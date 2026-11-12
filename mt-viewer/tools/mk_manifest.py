@@ -381,6 +381,27 @@ def body_material_data(exports, vehicle="", base_exports=None, base_vehicle=""):
     return {"bodyMaterials": out}
 
 
+def decal_slots(exports, vehicle="", base_exports=None, base_vehicle=""):
+    """DecalableMaterialSlotNames -- which material slots accept decals.
+
+    Decals are not authored data: a vehicle ships with an empty decal render target
+    and the player stamps layers onto it (MTVehicleDecalLayer: DecalKey, Color,
+    Position/Rotation in UV space, DecalScale, Stretch, Coverage). Which slots can
+    receive those stamps is the one thing the vehicle itself declares.
+    """
+    cdo = next((e for e in exports
+                if str(e.get("ExportName", "")).startswith("Default__" + vehicle + "_")), None)
+    names = (cdo.get("Properties") or {}).get("DecalableMaterialSlotNames") if cdo else None
+    if not isinstance(names, list) and base_exports:
+        bcdo = next((e for e in base_exports
+                     if str(e.get("ExportName", "")).startswith("Default__" + base_vehicle + "_")), None)
+        if bcdo:
+            names = (bcdo.get("Properties") or {}).get("DecalableMaterialSlotNames")
+    if not isinstance(names, list):
+        return {"decalSlots": []}
+    return {"decalSlots": [str(n) for n in names if isinstance(n, str)]}
+
+
 def mesh_import(props):
     """The component's mesh, whatever the property is called.
 
@@ -562,6 +583,7 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
         "parts": parts,
         **colour_data(exports, vehicle, base_exports, base_name or ""),
         **body_material_data(exports, vehicle, base_exports, base_name or ""),
+        **decal_slots(exports, vehicle, base_exports, base_name or ""),
     }
     with open(os.path.join(out_dir, vehicle + ".json"), "w") as f:
         json.dump(manifest, f, indent=1)
