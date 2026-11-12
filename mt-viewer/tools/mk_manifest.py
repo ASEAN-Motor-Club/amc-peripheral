@@ -311,7 +311,7 @@ def colour_data(exports, vehicle="", base_exports=None, base_vehicle=""):
     return cd
 
 
-def body_material_data(exports, vehicle=""):
+def body_material_data(exports, vehicle="", base_exports=None, base_vehicle=""):
     """BodyMaterialList -- the body material variants the game swaps at runtime.
 
     This is the *appearance* list, separate from BodyColors: entries are material
@@ -326,6 +326,13 @@ def body_material_data(exports, vehicle=""):
     if not cdo:
         return {"bodyMaterials": []}
     bml = (cdo.get("Properties") or {}).get("BodyMaterialList")
+    if not isinstance(bml, list) and base_exports:
+        # Reskins (Zydro_Police, Bongo_Bus) ship a CDO with no livery list of their
+        # own — like paint and geometry, it lives on the base blueprint.
+        bcdo = next((e for e in base_exports
+                     if str(e.get("ExportName", "")).startswith("Default__" + base_vehicle + "_")), None)
+        if bcdo:
+            bml = (bcdo.get("Properties") or {}).get("BodyMaterialList")
     if not isinstance(bml, list):
         return {"bodyMaterials": []}
     out = []
@@ -458,7 +465,7 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
         "units": "metres",
         "parts": parts,
         **colour_data(exports, vehicle, base_exports, base_name or ""),
-        **body_material_data(exports, vehicle),
+        **body_material_data(exports, vehicle, base_exports, base_name or ""),
     }
     with open(os.path.join(out_dir, vehicle + ".json"), "w") as f:
         json.dump(manifest, f, indent=1)

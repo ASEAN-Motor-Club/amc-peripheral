@@ -283,7 +283,12 @@ function applyLivery() {
     m.map = v.map ? loadTexture(v.map) : null;
     m.metalness = v.metalness ?? 0.3;
     m.roughness = v.roughness ?? 0.5;
-    if (!(paintIndex >= 0) && v.baseColor) {
+    if (v.map) {
+      // A livery texture already carries the paint (NukeTaxi's is pure yellow,
+      // 245,182,51) — multiplying it by the slot's dark default colour renders it
+      // black. Only a colour the user explicitly chose tints a livery.
+      m.color.setRGB(1, 1, 1);
+    } else if (v.baseColor) {
       m.color.setRGB(v.baseColor[0], v.baseColor[1], v.baseColor[2], THREE.LinearSRGBColorSpace);
     }
     m.needsUpdate = true;
