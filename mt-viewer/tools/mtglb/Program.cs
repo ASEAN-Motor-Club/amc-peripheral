@@ -39,6 +39,11 @@ if (argv.Length >= 4 && argv[0] == "--exports")
     foreach (var ex in pkg.GetExports())
     {
         Console.WriteLine($"{ex.Name} : {ex.ExportType}");
+        if (ex is UStaticMeshSocket sock)
+        {
+            Console.WriteLine($"    socket {sock.SocketName}: loc={sock.RelativeLocation} rot={sock.RelativeRotation} scale={sock.RelativeScale}");
+            continue;
+        }
         if (ex is not UStaticMesh smEx) continue;
         if (smEx.StaticMaterials is not null)
             foreach (var m in smEx.StaticMaterials)
@@ -301,6 +306,26 @@ foreach (var item in items)
                 File.Move(savedPath, want);
                 savedPath = want;
             }
+            // Sockets are how the game mounts several parts: the steering wheel sits on
+            // the body mesh's "SteeringWheel" socket rather than at a component offset.
+            // Emit them next to the GLB so staging can snap parts onto them.
+            // Sockets are how the game mounts several parts: the steering wheel sits on
+            // the body mesh's "SteeringWheel" socket rather than at a component offset.
+            // Emit them next to the GLB so staging can snap parts onto them.
+                        var sockList = uobj.Owner?.GetExports()
+                .OfType<UStaticMeshSocket>()
+                .Where(sk => !string.IsNullOrEmpty(sk.SocketName.Text))
+                .Select(sk => new
+                {
+                    name = sk.SocketName.Text,
+                    loc = new[] { sk.RelativeLocation.X, sk.RelativeLocation.Y, sk.RelativeLocation.Z },
+                    rot = new[] { sk.RelativeRotation.Pitch, sk.RelativeRotation.Yaw, sk.RelativeRotation.Roll },
+                    scale = new[] { sk.RelativeScale.X, sk.RelativeScale.Y, sk.RelativeScale.Z },
+                })
+                .ToList();
+            if (sockList is { Count: > 0 })
+                File.WriteAllText(Path.Combine(sub.FullName, safe + ".sockets.json"),
+                    JsonSerializer.Serialize(sockList, new JsonSerializerOptions { WriteIndented = true }));
             var size = new FileInfo(savedPath).Length / 1024;
             Console.WriteLine($"  OK {item.Name} <- {resolved} -> {Path.GetFileName(savedPath)} ({size} KB)");
             ok++;

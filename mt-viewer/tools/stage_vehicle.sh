@@ -24,6 +24,9 @@ rm -rf "$SITE/materials.json" "$SITE/textures" "$SITE/glb"
 mkdir -p "$SITE"
 python3 "$ROOT/tools/bake_materials.py" "$BUILD" "$SITE"
 cp "$ROOT/staged/$V.json" "$SITE/$SLUG.json"
+# parts the game mounts on a mesh socket (the steering wheel) carry no blueprint
+# offset -- snap them onto the socket the extractor wrote next to the GLBs
+python3 "$ROOT/tools/apply_sockets.py" "$SITE/$SLUG.json" "$BUILD" || true
 # rewrite the manifest so part glb filenames match the flat glb/ dir
 python3 - "$SITE/$SLUG.json" <<'PY'
 import json, sys
