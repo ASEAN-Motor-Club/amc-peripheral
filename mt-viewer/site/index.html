@@ -663,21 +663,16 @@ async function load() {
     const AXIS = { xy: [0, 1], xz: [0, 2], zy: [2, 1], yx: [1, 0] }[axes] || [0, 1];
     const UNIT = parseFloat(params.get("dunit") || "1000");   // position units per metre
 
-    // Stamp size: calibrate from the data instead of a constant. The design's own
-    // extent divided by its largest scale reproduces the layer proportions on every
-    // vehicle; a fixed base produced an 8.7 m roundel from a 28 cm design.
-    const xs = rec.layers.map(l => l.pos[0]), ys = rec.layers.map(l => l.pos[1]);
-    const spanU = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-    const maxScale = Math.max(...rec.layers.map(l => Math.abs(l.scale)), 0.001);
-    const autoBase = spanU / UNIT / maxScale;
-    const BASE = params.get("dbase") ? parseFloat(params.get("dbase")) : autoBase;
+    // Stamp size is a fraction of the bounds too: DecalScale is read against the mesh's
+    // own extent, which is why it needs no unit conversion at all.
+    const BASE = parseFloat(params.get("dbase") || "0.25");
 
     const posArr = [], sizeArr = [], rotArr = [], flagArr = [];
     const v3 = new THREE.Vector3();
     for (let i = 0; i < 32; i++) {
       const L = layers[i];
       if (!L) { posArr.push(new THREE.Vector4(0, 0, 0, 0)); sizeArr.push(new THREE.Vector2(0, 0)); rotArr.push(0); flagArr.push(0); continue; }
-      const s = Math.abs(L.scale) * BASE;   // metres
+      const s = Math.abs(L.scale) * BASE;   // fraction of the bounds
       const f = L.flags | 0;
       // EMTDecalLayerFlags: Flip=1, Mirror=2, DrawOnWheel=0x100
       const w = (f & 1) ? s * Math.abs(L.stretch) : s;
@@ -690,8 +685,8 @@ async function load() {
     }
 
     // root position so the shader works in vehicle space
+    // positions are in the target mesh's local space, so no world offset applies
     const rootPos = new THREE.Vector3();
-    root.getWorldPosition(rootPos);
 
     let patched = 0;
     const wholeBox = new THREE.Box3().setFromObject(root);
@@ -719,10 +714,13 @@ async function load() {
           sh.uniforms.uDecalFlags = { value: flagArr };
           sh.uniforms.uDecalAxis = { value: new THREE.Vector2(AXIS[0], AXIS[1]) };
           sh.uniforms.uNormalAxis = { value: 3 - AXIS[0] - AXIS[1] };
+          const lbox = new THREE.Box3().setFromBufferAttribute(o.geometry.attributes.position);
+          sh.uniforms.uBMin = { value: lbox.min.clone() };
+          sh.uniforms.uBMax = { value: lbox.max.clone() };
           sh.uniforms.uRootPos = { value: rootPos };
           sh.uniforms.uDecalDebug = { value: params.has("dbg") ? 1 : 0 };
           sh.vertexShader = "varying vec3 vDecalLocal;\n varying vec3 vDecalNrm;\n" + sh.vertexShader
-            .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvDecalLocal = (modelMatrix * vec4(position, 1.0)).xyz;\n\tvDecalNrm = normalize(mat3(modelMatrix) * normal);");
+            .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvDecalLocal = position;\n\tvDecalNrm = normal;");
           sh.fragmentShader = `
             uniform sampler2D decalAtlas;
             uniform int uDecalCount;
@@ -732,6 +730,8 @@ async function load() {
             uniform int uDecalFlags[32];
             uniform vec2 uDecalAxis;
             uniform vec3 uRootPos;
+            uniform vec3 uBMin;
+            uniform vec3 uBMax;
             uniform float uDecalDebug;
             uniform float uNormalAxis;
             varying vec3 vDecalLocal;
@@ -742,15 +742,23 @@ async function load() {
               // a decal box only paints what its projection axis sees; without this the
               // emblem runs over the shoulder and onto the roof
               float nrm = abs(uNormalAxis < 0.5 ? vDecalNrm.x : (uNormalAxis < 1.5 ? vDecalNrm.y : vDecalNrm.z));
-              vec3 rel = vDecalLocal - uRootPos;
+              // Position is per-mille of the mesh's local bounds, zero at their centre --
+              // which is why the brush takes LocalBounds as an input at all. 1171/1171
+              // saved layers sit inside +/-1000, so the space is normalised, not metric.
+              vec3 bc = (uBMin + uBMax) * 0.5;
+              vec3 be = (uBMax - uBMin);
+              vec3 rel = vDecalLocal - bc;
               vec2 p = vec2(uDecalAxis.x < 0.5 ? rel.x : (uDecalAxis.x < 1.5 ? rel.y : rel.z),
                             uDecalAxis.y < 0.5 ? rel.x : (uDecalAxis.y < 1.5 ? rel.y : rel.z));
+              vec2 bnd = vec2(uDecalAxis.x < 0.5 ? be.x : (uDecalAxis.x < 1.5 ? be.y : be.z),
+                              uDecalAxis.y < 0.5 ? be.x : (uDecalAxis.y < 1.5 ? be.y : be.z));
               for (int i = 0; i < 32; i++) {
                 if (nrm < 0.45) break;
                 if (i >= uDecalCount) break;
-                vec2 sz = uDecalSize[i];
+                vec2 sz = uDecalSize[i] * bnd;
                 if (sz.x <= 0.0001 || sz.y <= 0.0001) continue;
-                vec2 d = p - uDecalPos[i].xy;
+                // pos is per-mille of half the bounds; size is a fraction of the bounds
+                vec2 d = p - (uDecalPos[i].xy / 1000.0) * bnd * 0.5;
                 float ca = cos(-uDecalRot[i]), sa = sin(-uDecalRot[i]);
                 vec2 q = vec2(d.x * ca - d.y * sa, d.x * sa + d.y * ca) / sz + 0.5;
                 if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0) continue;
