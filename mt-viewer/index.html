@@ -32,7 +32,11 @@
   #hud .k { color:#8b93a7; }
   #hud .touch-hint { display:none; }
   #status { position:fixed; top:12px; right:12px; z-index:10; background:rgba(0,0,0,.62); padding:8px 12px; border-radius:8px; font-size:12px; color:#9f9; white-space:pre; }
-  #controls { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:10; display:flex; gap:8px; align-items:center; }
+  #controls { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:10; display:flex; gap:8px; align-items:center; transition:opacity .2s; }
+  /* Before the model exists the controls are inert: dim them rather than hide them,
+     so the page reads as "loading", not "broken". */
+  #controls.pending { opacity:.45; pointer-events:none; }
+  #status.pending { color:#ffd479; }
   #controls button, #controls label { background:#26272e; color:#eee; border:1px solid #3d3f49; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }
   #controls button:hover { background:#33353f; }
   #controls button.active { background:#1d6fd1; border-color:#1d6fd1; }
@@ -298,10 +302,29 @@ function applyLivery() {
 
 
 async function load() {
+  // The controls are in the DOM before any data arrives, so make the page usable
+  // immediately: the vehicle list is a separate, tiny request that lands first, so
+  // you can switch models before this one has even finished streaming.
+  const ctl = document.getElementById("controls");
+  ctl.classList.add("pending");
+  statusEl.classList.add("pending");
+  statusEl.textContent = "loading…";
+  const sel = document.getElementById("vehicle");
+  fetch("vehicles.json").then(r => r.json()).then(list => {
+    sel.innerHTML = list.map(v =>
+      `<option value="${v.slug}"${v.slug === vehicle ? " selected" : ""}>` +
+      `${v.vehicle}${v.inheritedFrom ? " (from " + v.inheritedFrom + ")" : ""}</option>`).join("");
+    sel.addEventListener("change", () => {
+      location.search = "?vehicle=" + sel.value + (syncMode ? "&sync" : "");
+    });
+  }).catch(() => sel.remove());
+
   const [manifest, table] = await Promise.all([
     fetch(`${vehicle}/${vehicle}.json`).then(r => r.json()),
     fetch(`${vehicle}/materials.json`).then(r => r.json()).catch(() => ({ materials: {} })),
   ]);
+  frameBox(estimateBox());   // something framed before the first byte arrives
+  statusEl.textContent = `geometry 0/${manifest.parts.length}`;
   const defs = table.materials || {};
   slotDefs = defs;
   slotMesh = table.slotsByMesh || {};
@@ -310,8 +333,58 @@ async function load() {
   bodyVariants = table.bodyVariants || [];
   liveryIndex = params.has("livery") ? parseInt(params.get("livery"), 10) : -1;
   paintIndex = params.has("scheme") ? parseInt(params.get("scheme"), 10) : -1;
+  // --- stream the geometry: silhouette first ----------------------------------
+  // Each part is added the moment its GLB lands and drawn with one shared wireframe
+  // material, so the shape appears while the rest is still downloading. Shading is
+  // a single pass after every part is present: swapping materials part-by-part made
+  // the model flicker between flat and textured as each texture decoded.
+  const wire = new THREE.MeshBasicMaterial({ color: 0x9fb4d0, wireframe: true, transparent: true, opacity: 0.5 });
+  const streamed = [];
+  // Framing during streaming. The manifest only carries part PIVOTS, which
+  // under-state the real extents (a chassis pivot does not know the cab is 2 m
+  // tall), so the box is the union of the estimated one and what has actually
+  // arrived — and it may only GROW. Fitting to arrived geometry alone zoomed onto
+  // the first wheel; shrinking the frame mid-load lurches. The exact fit runs once
+  // at the end, when every part is present.
+  let lastDiag = 0;
+  function estimateBox() {
+    const b = new THREE.Box3();
+    for (const part of manifest.parts) b.expandByPoint(new THREE.Vector3().fromArray(part.position));
+    return b.isEmpty() ? b : b.expandByScalar(1.6);
+  }
+  function frameBox(b) {
+    if (!b || b.isEmpty()) return;
+    const pv = b.getCenter(new THREE.Vector3());
+    const ps = b.getSize(new THREE.Vector3());
+    const rr = Math.max(ps.x, ps.y, ps.z) || 1;
+    const dist = (rr / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) * 1.05;
+    camera.position.copy(pv).add(new THREE.Vector3(0.95, 0.5, 1.15).normalize().multiplyScalar(dist));
+    camera.lookAt(pv);
+    controls.target.copy(pv);
+    controls.update();
+  }
+  function growFrame() {
+    const b = estimateBox().union(new THREE.Box3().setFromObject(root).expandByScalar(1.0));
+    const d = b.getSize(new THREE.Vector3()).length();
+    if (d <= lastDiag * 1.15) return;      // only re-frame on real growth
+    lastDiag = d;
+    frameBox(b);
+  }
+  // Load the biggest GLBs first, three at a time. Manifest order is blueprint
+  // order — a wheel can easily be part 1 — so sequential loading shows you a
+  // steering wheel for two seconds and nothing else. Body/chassis are the largest
+  // files, so sorting by Content-Length puts the silhouette on screen almost
+  // immediately and the trim fills in around it.
+  const parts = manifest.parts.slice();
+  const sizes = await Promise.all(parts.map(p =>
+    fetch(`${vehicle}/glb/${p.glb}`, { method: "HEAD" })
+      .then(r => +(r.headers.get("content-length") || 0)).catch(() => 0)));
+  parts.forEach((p, i) => { p.bytes = sizes[i]; });
+  parts.sort((a, b) => (b.bytes || 0) - (a.bytes || 0));
+  window.__order = parts.map(p => p.mesh + "=" + p.bytes);
+
   let done = 0;
-  for (const part of manifest.parts) {
+  async function streamPart(part) {
     try {
       const g = await loader.loadAsync(`${vehicle}/glb/${part.glb}`);
       const model = g.scene;
@@ -335,28 +408,38 @@ async function load() {
         }
         stats.materials.add(name);
         if (d && d.map) stats.textured++;
-        o.material = materialFor(name, d, plainMode);
         stats.meshes++;
+        o.userData.slot = name;                  // remembered for the shading pass
+        o.userData.def = d;
+        o.material = wire;
       });
       model.position.fromArray(part.position);
       model.quaternion.fromArray(part.rotation);
       model.scale.fromArray(part.scale);
       root.add(model);
+      streamed.push(model);
+      growFrame();
+      render();
     } catch (e) { console.warn("part failed", part.id, e.message); }
     done++;
-    statusEl.textContent = `loaded ${done}/${manifest.parts.length}`;
+    statusEl.textContent = `wireframe ${done}/${parts.length}`;
   }
+  // three workers, so the network is busy without 13 sockets fighting
+  let next = 0;
+  await Promise.all([0, 1, 2].map(async () => {
+    while (next < parts.length) await streamPart(parts[next++]);
+  }));
 
-  const sel = document.getElementById("vehicle");
-  try {
-    const list = await fetch("vehicles.json").then(r => r.json());
-    sel.innerHTML = list.map(v =>
-      `<option value="${v.slug}"${v.slug === vehicle ? " selected" : ""}>` +
-      `${v.vehicle}${v.inheritedFrom ? " (from " + v.inheritedFrom + ")" : ""}</option>`).join("");
-    sel.addEventListener("change", () => {
-      location.search = "?vehicle=" + sel.value + (syncMode ? "&sync" : "");
-    });
-  } catch (e) { sel.remove(); }
+  // --- everything is here: shade it -------------------------------------------
+  statusEl.textContent = `materials ${streamed.length}/${manifest.parts.length}`;
+  for (const model of streamed) model.traverse(o => {
+    if (!o.isMesh) return;
+    o.material = materialFor(o.userData.slot, o.userData.def, plainMode);
+  });
+  render();
+
+  // (the vehicle list was fetched and wired at the top of load(), so the selector
+  // is already live while this vehicle streams in)
 
   const box = new THREE.Box3().setFromObject(root);
   const c = box.getCenter(new THREE.Vector3());
@@ -498,6 +581,12 @@ async function load() {
 
   applyPaint();
   applyLivery();
+
+  // Everything is wired and shaded: hand the controls over.
+  ctl.classList.remove("pending");
+  statusEl.classList.remove("pending");
+  statusEl.textContent = `loaded ${manifest.parts.length}/${manifest.parts.length}`;
+  render();
 
   if (params.has("debug")) {
     document.title = JSON.stringify({

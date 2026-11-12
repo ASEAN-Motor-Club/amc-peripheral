@@ -64,6 +64,8 @@ def main():
     ap.add_argument("--eval")
     ap.add_argument("--settle", type=float, default=1.0)
     ap.add_argument("--timeout", type=float, default=60)
+    ap.add_argument("--throttle", type=int, default=0, help="kbit/s download cap, 0 = none")
+    ap.add_argument("--wait-for", default="loaded", help="status text to wait for; empty = fixed settle only")
     a = ap.parse_args()
 
     port = free_port()
@@ -93,6 +95,12 @@ def main():
         cdp.send("Emulation.setDeviceMetricsOverride", width=a.w, height=a.h,
                  deviceScaleFactor=a.dpr, mobile=True)
         cdp.send("Emulation.setTouchEmulationEnabled", enabled=True, maxTouchPoints=5)
+        if a.throttle:
+            # Slow the pipe down so the progressive/streaming path is observable at
+            # all: on localhost the whole vehicle lands before the first frame.
+            cdp.send("Network.enable")
+            cdp.send("Network.emulateNetworkConditions", offline=False, latency=150,
+                     downloadThroughput=a.throttle * 1000 // 8, uploadThroughput=a.throttle * 1000 // 8)
         cdp.send("Page.navigate", url=a.url)
         deadline = time.time() + a.timeout
         # poll for the app to finish loading instead of sleeping blind
@@ -101,7 +109,7 @@ def main():
                 st = cdp.eval("document.getElementById('status')?.textContent || ''")
             except Exception:
                 st = ""
-            if st and "loaded" in st:
+            if a.wait_for and st and a.wait_for in st:
                 break
             time.sleep(0.25)
         time.sleep(a.settle)
