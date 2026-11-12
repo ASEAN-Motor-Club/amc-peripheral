@@ -213,11 +213,14 @@ def asset_mesh_paths(uasset_path, mesh_name):
         game = b.decode("ascii", "ignore")
         leaf = game.rsplit("/", 1)[-1]
         base = pak_path(game)                     # .../Models/<Model>/<Asset>
-        cand = f"{base}/{leaf}"                   # UE stores mesh as folder/name/name
-        if cand in seen:
-            continue
-        seen.add(cand)
-        out.append((0 if leaf == mesh_name else 1, cand))
+        # UE usually stores a mesh as folder/name/name, but shared parts sit directly
+        # in the model folder: the Atlas cab is Cars/Models/Atlas/Cab, not Atlas/Cab/Cab.
+        # Both spellings come from the same import string, so offer both.
+        for cand in (f"{base}/{leaf}", base):
+            if cand in seen:
+                continue
+            seen.add(cand)
+            out.append((0 if leaf == mesh_name else 1, cand))
     out.sort(key=lambda t: t[0])
     return [c for _, c in out]
 
