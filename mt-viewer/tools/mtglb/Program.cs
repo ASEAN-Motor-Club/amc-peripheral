@@ -21,6 +21,30 @@ using System.Text.Json;
 using System.IO;
 
 var argv = Environment.GetCommandLineArgs().Skip(1).ToArray();
+if (argv.Length >= 4 && argv[0] == "--exports")
+{
+    // Diagnostic: list every export inside one package. Mesh packages hold several
+    // UStaticMesh objects (a car body and its bolt-on panels can live in the same
+    // package), and the loader only ever asks for one by name -- so a missing hood
+    // looks exactly like missing geometry until you look at the export list.
+    // usage: --exports <pakDir> <assetPath> <aesKey> <usmapPath>
+    var ep = new DefaultFileProvider(argv[1], SearchOption.AllDirectories, false,
+        new VersionContainer(EGame.GAME_UE5_5));
+    ep.Initialize();
+    if (argv[3].Length >= 32)
+        ep.SubmitKey(new FGuid(), new FAesKey(argv[3]));
+    if (argv.Length >= 5) ep.MappingsContainer = new FileUsmapTypeMappingsProvider(argv[4]);
+    var pkg = await ep.LoadPackageAsync(argv[2].Trim('/'));
+    if (pkg == null) { Console.WriteLine("no package: " + argv[2]); return 1; }
+    foreach (var ex in pkg.GetExports())
+    {
+        Console.WriteLine($"{ex.Name} : {ex.ExportType}");
+        if (ex is UStaticMesh smEx && smEx.StaticMaterials is not null)
+            foreach (var m in smEx.StaticMaterials)
+                Console.WriteLine($"    slot: {m.MaterialSlotName} -> {m.MaterialInterface?.GetPathName()}");
+    }
+    return 0;
+}
 if (argv.Length >= 3 && argv[0] == "--find")
 {
     // Diagnostic: list pak keys for an asset leaf, e.g. --find <pakDir> Body

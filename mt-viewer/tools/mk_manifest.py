@@ -359,17 +359,30 @@ def body_material_data(exports, vehicle="", base_exports=None, base_vehicle=""):
     return {"bodyMaterials": out}
 
 
+def mesh_import(props):
+    """The component's mesh, whatever the property is called.
+
+    Most components expose `StaticMesh`, but several use their own property name --
+    the dashboard uses `DashboardMesh`, light components carry their own. Matching
+    only the literal `StaticMesh` key silently dropped those parts from every
+    vehicle (a whole dashboard missing from the interior).
+    """
+    sm = props.get("StaticMesh")
+    if isinstance(sm, dict) and sm.get("Type") == "Import" and sm.get("Path"):
+        return sm
+    for v in props.values():
+        if isinstance(v, dict) and v.get("ClassName") == "StaticMesh" and v.get("Path"):
+            return v
+    return None
+
+
 def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
     data = json.load(open(parsed_json_path))
     exports = data["Data"]["Exports"]
     inherited_from = None
     base_exports = None
     base_name = None
-    if inherit and not any(
-        isinstance((e.get("Properties") or {}).get("StaticMesh"), dict)
-        and (e["Properties"]["StaticMesh"] or {}).get("Path")
-        for e in exports
-    ):
+    if inherit and not any(mesh_import(e.get("Properties") or {}) for e in exports):
         base, base_path = find_base(vehicle, parsed_dir or os.path.dirname(parsed_json_path))
         if base:
             base_exports = json.load(open(base_path))["Data"]["Exports"]
@@ -416,8 +429,8 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
     meshes, seen, parts = [], {}, []
     for e in exports:
         p = e.get("Properties") or {}
-        sm = p.get("StaticMesh")
-        if not (isinstance(sm, dict) and sm.get("Type") == "Import" and sm.get("Path")):
+        sm = mesh_import(p)
+        if sm is None:
             continue
         game_path = sm["Path"]
         key = pak_path(game_path)

@@ -274,7 +274,10 @@ function applyLivery() {
   for (const [key, m] of matCache) {
     const slot = key.split("|")[0];
     const def = slotDefs[slot] || {};
-    const isBody = /^Body/i.test(slot) || /M_Body|Body_/i.test(def.materialName || "");
+    // The visible shell is not always a Body_ slot: on the muscle cars it is the
+    // Palette section (12,690 of 15,543 triangles on the Tuscan), so a livery that
+    // only repainted Body_01 changed nothing on screen.
+    const isBody = /^(Body|Palette|Shell)/i.test(slot) || /M_Body|Body_|M_Palette/i.test(def.materialName || "");
     if (!isBody) continue;
     if (!v) {                        // back to the authored material
       m.map = def.map ? loadTexture(def.map) : null;
