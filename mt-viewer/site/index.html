@@ -593,6 +593,11 @@ async function load() {
   // Highlighted=0x80, DrawOnWheel=0x100}.
   async function applyVehicleDecals() {
     const info = (window.__decalInfo = { step: "start" });
+    // Placement is not calibrated yet: the positions are in the vehicle's own units and
+    // the panel only occupies a slice of the decal UV layout, so until the mapping is
+    // confirmed against an in-game reference the pass stays behind ?decals=1 rather
+    // than painting approximations onto the live catalogue.
+    if (!params.has("decals")) { info.step = "off"; return; }
     const slots = manifest.decalSlots || [];
     info.slots = slots;
     if (!slots.length) { info.step = "no-slots"; return; }
@@ -616,7 +621,7 @@ async function load() {
     const K = parseFloat(params.get("dk") || "1024");       // position units per uv unit
     // DecalScale is a multiplier on the catalogue's base stamp size, not a uv fraction:
     // 0.011..10 across the saved vehicles, with 0.5 the common value.
-    const SC = parseFloat(params.get("dsc") || "0.6");       // uv units per scale unit
+    const SC = parseFloat(params.get("dsc") || "0.25");      // uv units per scale unit
     const N = 2048;
 
     const cv = document.createElement("canvas");
@@ -632,19 +637,29 @@ async function load() {
     // patch first, draw second: ?sync captures one frame and the fetch/decode of 30
     // layer textures must not race it
     let patched = 0;
-    const seen = new Set();
+    const shellName = (n) => slots.includes(n) || /^(Palette|Shell)/i.test(n || "")
+      || slots.some(sl => (n || "").startsWith(sl));
+
+    // Clone the material per mesh instead of patching the shared instance: the wheels
+    // and landing gear point at the same Palette material as the panels, so patching
+    // in place drew decals on tyres and the jack foot.
+    // wheels and the landing-gear foot share the body's Palette material, so name
+    // alone can't separate them; the panels are metres across and those parts are not
+    const wholeBox = new THREE.Box3().setFromObject(root);
+    const wholeSize = wholeBox.getSize(new THREE.Vector3());
+    const minSpan = Math.max(wholeSize.x, wholeSize.z) * 0.25;
+
     root.traverse(o => {
-      if (!o.isMesh || !o.material) return;
+      if (!o.isMesh || !o.material || !o.geometry.attributes.uv1) return;
+      const bb = new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3());
+      if (Math.max(bb.x, bb.y, bb.z) < minSpan) return;
       const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of mats) {
-        // any mesh carrying the decal UV channel can take stamps; the game targets the
-        // paint shell, but slot names vary (Palette / PolygonCityPallete / Body_0N)
-        const isShell = !!o.geometry.attributes.uv1;
-        if (!isShell || seen.has(m)) continue;
-        seen.add(m);
-        m.userData.decalTex = decalTex;
-        m.customProgramCacheKey = () => "mt-decal";
-        m.onBeforeCompile = (sh) => {
+      const swap = mats.map((m) => {
+        if (!shellName(m.name)) return m;
+        const c = m.clone();
+        c.userData.decalTex = decalTex;
+        c.customProgramCacheKey = () => "mt-decal";
+        c.onBeforeCompile = (sh) => {
           window.__shaderRuns = (window.__shaderRuns || 0) + 1;
           sh.uniforms.decalTex = { value: decalTex };
           sh.uniforms.uDecalDebug = { value: params.has("dbg") ? 1 : 0 };
@@ -658,10 +673,41 @@ async function load() {
               else if (dec.a > 0.004) diffuseColor.rgb = mix(diffuseColor.rgb, dec.rgb * 1.6, dec.a);`);
           if (!sh.fragmentShader.includes("uDecalDebug")) window.__patchMiss = (window.__patchMiss || 0) + 1;
         };
-        m.needsUpdate = true;
+        c.needsUpdate = true;
         patched++;
+        return c;
+      });
+      if (swap.some((m, i) => m !== mats[i])) {
+        o.material = Array.isArray(o.material) ? swap : swap[0];
       }
     });
+    // The saved positions are in the vehicle's own units and the panel occupies only a
+    // slice of the decal UV layout, so a fixed divisor can't line them up. Fit the
+    // layer positions onto the shell's uv1 bounding box instead: that keeps the
+    // arrangement between stamps and only has to get the panel right once.
+    const uvBox = { u0: Infinity, u1: -Infinity, v0: Infinity, v1: -Infinity };
+    root.traverse(o => {
+      if (!o.isMesh || !o.material) return;
+      const m0 = Array.isArray(o.material) ? o.material[0] : o.material;
+      if (!m0 || !m0.userData || !m0.userData.decalTex) return;
+      const a = o.geometry.attributes.uv1;
+      if (!a) return;
+      for (let i = 0; i < a.count; i++) {
+        const u = a.getX(i), v = a.getY(i);
+        if (u < uvBox.u0) uvBox.u0 = u;
+        if (u > uvBox.u1) uvBox.u1 = u;
+        if (v < uvBox.v0) uvBox.v0 = v;
+        if (v > uvBox.v1) uvBox.v1 = v;
+      }
+    });
+    const posX = rec.layers.map(l => l.pos[0]), posY = rec.layers.map(l => l.pos[1]);
+    const pBox = { x0: Math.min(...posX), x1: Math.max(...posX), y0: Math.min(...posY), y1: Math.max(...posY) };
+    info.uvBox = [uvBox.u0, uvBox.v0, uvBox.u1, uvBox.v1];
+    info.posBox = [pBox.x0, pBox.y0, pBox.x1, pBox.y1];
+    const fitU = (x) => uvBox.u0 + (pBox.x1 === pBox.x0 ? 0.5 : (x - pBox.x0) / (pBox.x1 - pBox.x0)) * (uvBox.u1 - uvBox.u0);
+    const fitV = (y) => uvBox.v0 + (pBox.y1 === pBox.y0 ? 0.5 : (y - pBox.y0) / (pBox.y1 - pBox.y0)) * (uvBox.v1 - uvBox.v0);
+    const fitScale = (uvBox.u1 - uvBox.u0) / Math.max(1e-6, pBox.x1 - pBox.x0);
+
     info.patchedEarly = patched;
     try { render(); } catch (e) { try { renderer.render(scene, camera); } catch (e2) {} }
 
@@ -673,7 +719,8 @@ async function load() {
       try { img = await loadImage(`decals/tex/${d.category}/${d.name}.png`); } catch { continue; }
       const flags = L.flags | 0;
       const colour = `rgb(${L.color[0]},${L.color[1]},${L.color[2]})`;
-      const [cx, cy] = toPx(L.pos[0] / K, L.pos[1] / K);
+      const [cx, cy] = toPx(fitU(L.pos[0]), fitV(L.pos[1]));
+      // stamp size in uv units, converted from the layer's own units with the same fit
       const size = Math.abs(L.scale) * SC / SPAN * N;
       const w = size * (flags & 1 ? Math.abs(L.stretch) : 1);
       const h = size * (flags & 1 ? 1 : Math.abs(L.stretch));
