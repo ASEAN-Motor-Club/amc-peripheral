@@ -19,7 +19,7 @@ if [ ! -f "$FCLIB/libfontconfig.so.1" ]; then
 fi
 export LD_LIBRARY_PATH=/opt/data/cache/nuget/skiasharp.nativeassets.linux/2.88.9/runtimes/linux-x64/native:$FCLIB
 
-WT=/var/lib/data/opencode/.kimaki/worktrees/59474658/-hy-jrvs-gt-a-qstn
+WT=/opt/data/workspace/amc-server/mt-pak-extract-wt-0719
 # The worktree's Mappings.usmap symlink is dangling; the parsed extraction worktree
 # carries the real usmap for the same game version.
 USMAP=/opt/data/workspace/amc-server/mt-pak-extract-wt-0719/versions/v0.7.19/Mappings.usmap

@@ -9,7 +9,7 @@ export SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt
 FCLIB=/nix/store/74z7naywq3fzikbsbb0248y7j6mgcmi6-fontconfig-2.16.0-lib/lib
 [ -f "$FCLIB/libfontconfig.so.1" ] || FCLIB=$(/run/current-system/sw/bin/nix build --no-link --print-out-paths nixpkgs#fontconfig.lib 2>/dev/null | tail -1)/lib
 export LD_LIBRARY_PATH=/opt/data/cache/nuget/skiasharp.nativeassets.linux/2.88.9/runtimes/linux-x64/native:$FCLIB
-WT=/var/lib/data/opencode/.kimaki/worktrees/59474658/-hy-jrvs-gt-a-qstn
+WT=/opt/data/workspace/amc-server/mt-pak-extract-wt-0719
 USMAP=/opt/data/workspace/amc-server/mt-pak-extract-wt-0719/versions/v0.7.19/Mappings.usmap
 KEY=$(grep -E '^KEY=' "$WT/.env" | head -1 | cut -d= -f2-)
 cd /opt/data/workspace/mt-viewer/tools/mtmats
