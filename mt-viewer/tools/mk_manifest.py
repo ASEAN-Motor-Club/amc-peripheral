@@ -194,6 +194,34 @@ def overrides():
     return load_overrides()
 
 
+def asset_mesh_paths(uasset_path, mesh_name):
+    """Mesh candidates taken from the blueprint's OWN import table.
+
+    The heuristic in mesh_alts guesses sibling folders, which is how Brcuda ended
+    up rendering the Muscle_01 body: its blueprint says
+    /Game/Cars/Models/Brcuda/Body/Body (an asset that doesn't exist) while the
+    import table it actually links against names /Game/Cars/Models/Spider/Body.
+    Reading the strings out of the .uasset gives the real path instead of a guess.
+    """
+    try:
+        raw = open(uasset_path, "rb").read()
+    except OSError:
+        return []
+    found = re.findall(rb"/Game/Cars/Models/[A-Za-z0-9_]+/[A-Za-z0-9_]+", raw)
+    seen, out = set(), []
+    for b in found:
+        game = b.decode("ascii", "ignore")
+        leaf = game.rsplit("/", 1)[-1]
+        base = pak_path(game)                     # .../Models/<Model>/<Asset>
+        cand = f"{base}/{leaf}"                   # UE stores mesh as folder/name/name
+        if cand in seen:
+            continue
+        seen.add(cand)
+        out.append((0 if leaf == mesh_name else 1, cand))
+    out.sort(key=lambda t: t[0])
+    return [c for _, c in out]
+
+
 def mesh_alts(mesh_name, mesh_path, vehicle, model_dirs):
     """Candidate pak paths when a blueprint names a mesh that isn't where it says.
 
@@ -281,6 +309,47 @@ def colour_data(exports, vehicle="", base_exports=None, base_vehicle=""):
             cd["colorSlots"] = b["colorSlots"]
         cd["paints"] = b["paints"]
     return cd
+
+
+def body_material_data(exports, vehicle=""):
+    """BodyMaterialList -- the body material variants the game swaps at runtime.
+
+    This is the *appearance* list, separate from BodyColors: entries are material
+    instances (M_Taxi_01, M_Decal_03, M_Body_With_Decal, M_Ambulance_Cab ...), i.e.
+    liveries and decals painted onto the body rather than colour tints. 46
+    blueprints have the list, 37 have more than one entry. Nothing at runtime
+    references these materials from a mesh slot, so the extractor has to be told
+    about them explicitly.
+    """
+    cdo = next((e for e in exports
+                if str(e.get("ExportName", "")).startswith("Default__" + vehicle + "_")), None)
+    if not cdo:
+        return {"bodyMaterials": []}
+    bml = (cdo.get("Properties") or {}).get("BodyMaterialList")
+    if not isinstance(bml, list):
+        return {"bodyMaterials": []}
+    out = []
+    for i, entry in enumerate(bml):
+        if not isinstance(entry, dict):
+            continue
+        mat = entry.get("Material") or {}
+        path = mat.get("Path") if isinstance(mat, dict) else None
+        if not path:
+            continue
+        slots = {}
+        sm = entry.get("SlotMaterials") or {}
+        for kv in (sm.get("Entries") or []) if isinstance(sm, dict) else []:
+            k, v = kv.get("Key"), (kv.get("Value") or {})
+            if isinstance(k, str) and isinstance(v, dict) and v.get("Path"):
+                slots[k] = pak_path(v["Path"])
+        out.append({
+            "index": i,
+            "material": pak_path(path),
+            "name": mat.get("ObjectName") or os.path.basename(path),
+            "slots": slots,
+            "ai": bool(entry.get("bUseForAIVehicle", False)),
+        })
+    return {"bodyMaterials": out}
 
 
 def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
@@ -373,9 +442,11 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
             d = "/".join(seg[:i + 2])
             if d not in model_dirs:
                 model_dirs.append(d)
+    uasset = os.path.join(os.path.dirname(parsed_json_path), vehicle + ".uasset")
     for m in meshes:
         fixed = overrides().get(f"{vehicle}|{m['path']}")
-        alts = ([fixed] if fixed else []) + mesh_alts(m["name"], m["path"], vehicle, model_dirs)
+        alts = ([fixed] if fixed else []) + asset_mesh_paths(uasset, m["name"]) \
+             + mesh_alts(m["name"], m["path"], vehicle, model_dirs)
         m["alt"] = alts
 
     os.makedirs(out_dir, exist_ok=True)
@@ -387,11 +458,16 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
         "units": "metres",
         "parts": parts,
         **colour_data(exports, vehicle, base_exports, base_name or ""),
+        **body_material_data(exports, vehicle),
     }
     with open(os.path.join(out_dir, vehicle + ".json"), "w") as f:
         json.dump(manifest, f, indent=1)
     with open(os.path.join(out_dir, "meshes_" + vehicle + ".json"), "w") as f:
         json.dump(meshes, f, indent=1)
+    # sidecar for mtmats: the body material variants are not referenced by any mesh
+    # slot, so the extractor must be handed the list separately
+    with open(os.path.join(out_dir, vehicle + "_materials.json"), "w") as f:
+        json.dump([b["material"] for b in manifest["bodyMaterials"]], f, indent=1)
     print(f"{vehicle}: {len(parts)} mounts, {len(meshes)} unique meshes")
     return manifest, meshes
 

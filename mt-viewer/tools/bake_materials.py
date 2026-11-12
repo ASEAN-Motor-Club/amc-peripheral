@@ -91,6 +91,8 @@ def main(build_dir, out_dir):
     mats, conflicts = {}, []
     slots_by_mesh = {}
     for mesh, slots in mm.items():
+        if mesh == "__materials__" or not isinstance(slots, list):
+            continue
         for slot in slots:
             full = slot.get("material", "")
             name = os.path.basename(full).split(".")[0] or full
@@ -185,10 +187,49 @@ def main(build_dir, out_dir):
                     else:
                         shutil.copy2(src, dst)
 
+    # Body material variants (BodyMaterialList): the GT vehicle's livery/decal
+    # materials. No mesh slot references them, so they come from the extractor's
+    # __materials__ table. The viewer offers them as a "livery" choice; the paint
+    # colour is then applied on top, which is how the game stacks them.
+    variants = []
+    for raw, slot in (mm.get("__materials__") or {}).items():
+        if not isinstance(slot, dict):
+            continue
+        tex = slot.get("textures") or {}
+        cols = slot.get("colors") or {}
+        scal = slot.get("scalars") or {}
+        name = os.path.basename(slot.get("material") or raw).split(".")[0]
+        v = {
+            "material": raw,
+            "materialName": name,
+            "baseColor": [1.0, 1.0, 1.0],
+            "metalness": round(float(scal.get("Metallic", 0.3)), 4),
+            "roughness": round(float(scal.get("Roughness", 0.5)), 4),
+            "alphaMode": "BLEND" if slot.get("translucent") else ("MASK" if slot.get("masked") else "OPAQUE"),
+        }
+        if "Color" in cols:
+            c = cols["Color"]
+            v["baseColor"] = [round(c[0], 4), round(c[1], 4), round(c[2], 4)]
+        diff = slot.get("diffusePng") or pick_texture(tex, ["PM_Diffuse", "Base Color Texture", "Diffuse"]) \
+            or first_containing(tex, "Texture_01_A")
+        # Render targets (RT_LayerPreview / RT_ActivePreview) are the AdvancedDecal
+        # system's runtime surface, not a baked livery: using one paints the body
+        # black. Only accept a real texture asset here.
+        src_tex = (slot.get("diffuseTex") or "").rsplit("/", 1)[-1]
+        if src_tex.startswith("RT_"):
+            diff = None
+        if diff:
+            v["map"] = publish(diff)
+            v["diffuseTex"] = src_tex or None
+        if not v.get("map") and not cols:
+            v["note"] = "no texture params (runtime render-target decal; colour-only)"
+        variants.append(v)
+
     table = {
         "format": 3,
         "materials": mats,
         "slotsByMesh": slots_by_mesh,
+        "bodyVariants": variants,
         "textures": {sha: {"uri": rel, "bytes": size} for sha, (rel, size) in sorted(by_sha.items())},
     }
     json.dump(table, open(os.path.join(out_dir, "materials.json"), "w"), indent=1)

@@ -88,6 +88,8 @@
   <button data-look="side">Side</button>
   <button data-look="rear">Rear</button>
   <button data-look="top">Top</button>
+  <label title="Body material variant (livery/decal), as listed on the vehicle CDO">livery
+    <select id="livery"></select></label>
   <label title="Default paint variant (as the game picks on spawn)">paint
     <select id="scheme"></select></label>
   <label title="Custom body colour">custom <input type="color" id="paint" value="#c9302c"></label>
@@ -152,7 +154,12 @@ const texCache = new Map();
 function loadTexture(uri, dataTexture = false) {
   const key = uri + (dataTexture ? "|data" : "");
   if (texCache.has(key)) return texCache.get(key);
-  const t = texLoader.load(uri);
+  // materials.json stores textures as "textures/<sha>.png", i.e. relative to the
+  // VEHICLE directory — the GLBs embed no images (0 in the glTF "images" array), so
+  // this is the only source of maps. Resolving them against the page instead of the
+  // vehicle dir 404s every texture and leaves every body flat-coloured.
+  const url = /^(?:https?:|\/|data:|\.\.?\/)/.test(uri) ? uri : `${vehicle}/${uri}`;
+  const t = texLoader.load(url);
   if (!dataTexture) t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 8;
   t.flipY = false;               // glTF convention
@@ -212,6 +219,8 @@ let slotDefs = {};        // slot name -> material def (materials.json, keyed by
 let slotMesh = {};        // mesh -> ordered slot names
 let colorSlots = {};      // slot -> {defaultColor, metallic, roughness, useAlpha}
 let paints = [];          // [{slot: [r,g,b,a]}] the game's default paint variants
+let bodyVariants = [];    // BodyMaterialList: livery/decal materials on the CDO
+let liveryIndex = -1;     // -1 = the material the mesh slot actually names
 let paintIndex = -1;      // -1 = as authored on the material
 const assign = [];        // debug: part.mesh === "Body" primitive -> slot mapping
 
@@ -253,6 +262,35 @@ function applyPaint() {
   }
 }
 
+// Apply a BodyMaterialList entry to the body slots. These are the game's livery /
+// decal materials: the texture carries the stripes or logo, and the paint colour
+// sits on top of it, so the colour is left alone unless a paint variant is active.
+function applyLivery() {
+  const v = liveryIndex >= 0 ? bodyVariants[liveryIndex] : null;
+  for (const [key, m] of matCache) {
+    const slot = key.split("|")[0];
+    const def = slotDefs[slot] || {};
+    const isBody = /^Body/i.test(slot) || /M_Body|Body_/i.test(def.materialName || "");
+    if (!isBody) continue;
+    if (!v) {                        // back to the authored material
+      m.map = def.map ? loadTexture(def.map) : null;
+      m.metalness = def.metalness ?? 0.0;
+      m.roughness = def.roughness ?? 0.55;
+      if (def.baseColor) m.color.setRGB(def.baseColor[0], def.baseColor[1], def.baseColor[2], THREE.LinearSRGBColorSpace);
+      m.needsUpdate = true;
+      continue;
+    }
+    m.map = v.map ? loadTexture(v.map) : null;
+    m.metalness = v.metalness ?? 0.3;
+    m.roughness = v.roughness ?? 0.5;
+    if (!(paintIndex >= 0) && v.baseColor) {
+      m.color.setRGB(v.baseColor[0], v.baseColor[1], v.baseColor[2], THREE.LinearSRGBColorSpace);
+    }
+    m.needsUpdate = true;
+  }
+  if (paintIndex >= 0) applyPaint();
+}
+
 
 async function load() {
   const [manifest, table] = await Promise.all([
@@ -264,6 +302,8 @@ async function load() {
   slotMesh = table.slotsByMesh || {};
   colorSlots = manifest.colorSlots || {};
   paints = manifest.paints || [];
+  bodyVariants = table.bodyVariants || [];
+  liveryIndex = params.has("livery") ? parseInt(params.get("livery"), 10) : -1;
   paintIndex = params.has("scheme") ? parseInt(params.get("scheme"), 10) : -1;
   let done = 0;
   for (const part of manifest.parts) {
@@ -404,6 +444,21 @@ async function load() {
   });
 
   // --- paint: the vehicle CDO's own default variants, plus a free colour ---
+  const liverySel = document.getElementById("livery");
+  if (!bodyVariants.length) {
+    liverySel.closest("label").remove();          // most vehicles have no list
+  } else {
+    liverySel.innerHTML = ["-1", ...bodyVariants.map((_, i) => String(i))]
+      .map(v => `<option value="${v}"${+v === liveryIndex ? " selected" : ""}>${
+        +v < 0 ? "as authored" : (bodyVariants[+v].materialName + (bodyVariants[+v].map ? "" : " (no texture)"))}</option>`)
+      .join("");
+    liverySel.addEventListener("change", () => {
+      liveryIndex = parseInt(liverySel.value, 10);
+      applyLivery();
+      if (syncMode) render();
+    });
+  }
+
   const schemeSel = document.getElementById("scheme");
   const lab = idx => {
     if (idx < 0) return "material default";
@@ -437,10 +492,14 @@ async function load() {
   });
 
   applyPaint();
+  applyLivery();
 
   if (params.has("debug")) {
     document.title = JSON.stringify({
       paintIndex, paints: paints.length, colorSlots: Object.keys(colorSlots),
+      liveryIndex, bodyVariants: bodyVariants.map(v => v.materialName + (v.map ? "*" : "")),
+      maps: [...matCache].filter(([k]) => /^Body/i.test(k.split("|")[0]))
+        .map(([k, m]) => k.split("|")[0] + "=" + (m.map ? (m.map.image ? (m.map.image.src || "").split("/").pop() : "pending") : "none")),
       slotKeys: Object.keys(defs), meshes: Object.keys(slotMesh),
       cache: [...matCache.keys()],
       assigned: assign,

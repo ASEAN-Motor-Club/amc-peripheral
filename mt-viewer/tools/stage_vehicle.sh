@@ -18,7 +18,7 @@ mkdir -p "$BUILD"
 bash /opt/data/scripts/hostrun.sh "$ROOT/tools/build.sh" "$BUILD" "$ROOT/staged/meshes_$V.json" --materials --no-build \
   | grep -E "OK |ERR |SKIP |DONE" || true
 # material-graph params + decoded textures (this is what the viewer actually uses)
-bash /opt/data/scripts/hostrun.sh "$ROOT/tools/mtmats.sh" "$ROOT/staged/meshes_$V.json" "$BUILD" \
+bash /opt/data/scripts/hostrun.sh "$ROOT/tools/mtmats.sh" "$ROOT/staged/meshes_$V.json" "$BUILD" "$ROOT/staged/${V}_materials.json" \
   | grep -E "^===|slot |WROTE" || true
 rm -rf "$SITE/materials.json" "$SITE/textures" "$SITE/glb"
 mkdir -p "$SITE"
