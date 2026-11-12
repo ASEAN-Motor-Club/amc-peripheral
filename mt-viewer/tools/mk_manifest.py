@@ -376,6 +376,47 @@ def mesh_import(props):
     return None
 
 
+def bolt_on_parts(vehicle, parsed_dir):
+    """Bolt-on body parts the vehicle ships with: bonnet, bumpers, spoilers, skirts.
+
+    The Body mesh is a bare shell — its engine bay is open and there is no hood
+    geometry in it at all (verified against the asset's own 12 sections / 15,543
+    triangles). Motor Town builds those panels as separate `Aero` parts listed on the
+    vehicle row, each carrying its own StaticMesh. Without them the car renders with
+    a hole where the hood should be.
+    """
+    vpath = os.path.join(parsed_dir, "Vehicles_parsed.json")
+    ppath = os.path.join(parsed_dir, "VehicleParts_parsed.json")
+    if not (os.path.exists(vpath) and os.path.exists(ppath)):
+        return []
+    row = next((r for r in json.load(open(vpath))["Data"]["Rows"]
+                if r.get("RowName") == vehicle), None)
+    if not row:
+        return []
+    allparts = {r.get("RowName"): r for r in json.load(open(ppath))["Data"]["Rows"]}
+    out = []
+    for ent in (((row.get("Parts") or {}).get("Entries")) or []):
+        pname = ent.get("Value")
+        pr = allparts.get(pname)
+        if not pr:
+            continue
+        mesh = None
+        for v in pr.values():
+            if isinstance(v, dict) and isinstance(v.get("Mesh"), dict) and v["Mesh"].get("Path"):
+                mesh = v["Mesh"]["Path"]
+                break
+        if not mesh:
+            continue
+        out.append({
+            "slot": str(ent.get("Key") or "").split("::")[-1],
+            "part": pname,
+            "type": pr.get("PartType"),
+            "mesh": os.path.basename(mesh.rstrip("/")),
+            "path": pak_path(mesh),
+        })
+    return out
+
+
 def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
     data = json.load(open(parsed_json_path))
     exports = data["Data"]["Exports"]
@@ -468,6 +509,26 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
         alts = ([fixed] if fixed else []) + asset_mesh_paths(uasset, m["name"]) \
              + mesh_alts(m["name"], m["path"], vehicle, model_dirs)
         m["alt"] = alts
+
+    # Bolt-on panels (bonnet / bumpers / spoilers / skirts). These are authored in
+    # vehicle space like the body, so they mount at the origin with no offset.
+    for bp in bolt_on_parts(vehicle, parsed_dir or os.path.dirname(parsed_json_path)):
+        if any(x["glb"] == bp["mesh"] + ".glb" for x in parts):
+            continue
+        key = bp["path"]
+        if key not in seen:
+            seen[key] = bp["mesh"]
+            meshes.append({"name": bp["mesh"], "path": key})
+        parts.append({
+            "id": bp["part"],
+            "class": "VehiclePart:" + str(bp.get("type")),
+            "mesh": bp["mesh"],
+            "glb": bp["mesh"] + ".glb",
+            "partSlot": bp.get("slot"),
+            "position": [0, 0, 0],
+            "rotation": [0, 0, 0, 1],
+            "scale": [1, 1, 1],
+        })
 
     os.makedirs(out_dir, exist_ok=True)
     manifest = {

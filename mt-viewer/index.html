@@ -529,6 +529,8 @@ async function load() {
   statusEl.textContent = `loaded ${manifest.parts.length}/${manifest.parts.length}`;
 
   window.__viewer = { scene, root, camera, renderer, manifest, defs, stats, setCam };
+  // exposed for headless probes (ray casts, section visibility) that need the three.js namespace
+  window.__THREE = THREE;
 
   document.querySelectorAll("#controls button[data-look]").forEach(b => {
     b.addEventListener("click", () => setCam(b.dataset.look));

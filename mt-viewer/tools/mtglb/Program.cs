@@ -39,10 +39,151 @@ if (argv.Length >= 4 && argv[0] == "--exports")
     foreach (var ex in pkg.GetExports())
     {
         Console.WriteLine($"{ex.Name} : {ex.ExportType}");
-        if (ex is UStaticMesh smEx && smEx.StaticMaterials is not null)
+        if (ex is not UStaticMesh smEx) continue;
+        if (smEx.StaticMaterials is not null)
             foreach (var m in smEx.StaticMaterials)
                 Console.WriteLine($"    slot: {m.MaterialSlotName} -> {m.MaterialInterface?.GetPathName()}");
+        // Section inventory: the asset's own LOD/section/triangle numbers, so "the
+        // mesh has no hood" can be told apart from "the exporter dropped a section".
+        try
+        {
+            var t = smEx.GetType();
+            foreach (var pi in t.GetProperties(System.Reflection.BindingFlags.Public
+                        | System.Reflection.BindingFlags.Instance))
+            {
+                var v = pi.GetValue(smEx);
+                string desc = v switch
+                {
+                    Array arr => $"array[{arr.Length}] of {arr.GetType().GetElementType()?.Name}",
+                    null => "null",
+                    _ => v.GetType().Name,
+                };
+                Console.WriteLine($"    prop {pi.Name}: {desc}");
+            }
+            object? rd = (object?)t.GetProperty("LODModels")?.GetValue(smEx)
+                        ?? t.GetProperty("RenderData")?.GetValue(smEx)
+                        ?? t.GetProperty("LODs")?.GetValue(smEx);
+            if (rd is not null && rd is not Array)
+            {
+                var rdt = rd.GetType();
+                Console.WriteLine($"    renderdata {rdt.Name}:");
+                foreach (var pi in rdt.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic))
+                {
+                    object? v = null;
+                    try { v = pi.GetValue(rd); } catch { continue; }
+                    Console.WriteLine($"      prop {pi.Name}: " + (v switch
+                    {
+                        Array arr => $"array[{arr.Length}] of {arr.GetType().GetElementType()?.Name}",
+                        null => "null",
+                        _ => v.GetType().Name,
+                    }));
+                }
+                foreach (var fi in rdt.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic))
+                {
+                    object? v = null;
+                    try { v = fi.GetValue(rd); } catch { continue; }
+                    Console.WriteLine($"      field {fi.Name}: " + (v switch
+                    {
+                        Array arr => $"array[{arr.Length}] of {arr.GetType().GetElementType()?.Name}",
+                        null => "null",
+                        _ => v.GetType().Name,
+                    }));
+                }
+                // Nanite: if the mesh is Nanite-built, the classic sections are only the
+                // fallback mesh and the real geometry lives in Nanite clusters.
+                try
+                {
+                    var nr = rdt.GetField("NaniteResources", System.Reflection.BindingFlags.Public
+                                 | System.Reflection.BindingFlags.Instance
+                                 | System.Reflection.BindingFlags.NonPublic)?.GetValue(rd);
+                    if (nr is not null)
+                    {
+                        var nrt = nr.GetType();
+                        Console.WriteLine("      nanite " + nrt.Name + ":");
+                        foreach (var f in nrt.GetProperties(System.Reflection.BindingFlags.Public
+                                     | System.Reflection.BindingFlags.Instance
+                                     | System.Reflection.BindingFlags.NonPublic))
+                        {
+                            object? vv = null; try { vv = f.GetValue(nr); } catch { continue; }
+                            Console.WriteLine("        nprop " + f.Name + ": " + (vv switch
+                            {
+                                Array a => "array[" + a.Length + "]", null => "null", _ => vv.GetType().Name,
+                            }));
+                        }
+                        foreach (var f in nrt.GetFields(System.Reflection.BindingFlags.Public
+                                     | System.Reflection.BindingFlags.Instance
+                                     | System.Reflection.BindingFlags.NonPublic))
+                        {
+                            object? vv = null; try { vv = f.GetValue(nr); } catch { continue; }
+                            Console.WriteLine("        nfield " + f.Name + ": " + (vv switch
+                            {
+                                Array a => "array[" + a.Length + "]", null => "null", _ => vv.ToString(),
+                            }));
+                        }
+                    }
+                }
+                catch (Exception nre) { Console.WriteLine("      (nanite dump failed: " + nre.Message + ")"); }
+                rd = rdt.GetProperty("LODs")?.GetValue(rd)
+                     ?? rdt.GetField("LODs", System.Reflection.BindingFlags.Public
+                            | System.Reflection.BindingFlags.Instance
+                            | System.Reflection.BindingFlags.NonPublic)?.GetValue(rd);
+            }
+            if (rd is Array lods)
+                for (int l = 0; l < lods.Length; l++)
+                {
+                    var lod = lods.GetValue(l);
+                    if (lod is null) continue;
+                    var lt = lod.GetType();
+                    var secsProp = lt.GetProperty("Sections") ?? lt.GetProperty("Sections_GENERAL");
+                    var secs = secsProp?.GetValue(lod) as Array;
+                    Console.WriteLine($"      LOD{l}: {lt.Name} sections={secs?.Length ?? 0}");
+                    long tris = 0;
+                    if (secs is not null)
+                        for (int si = 0; si < secs.Length; si++)
+                        {
+                            var sec = secs.GetValue(si);
+                            var st = sec!.GetType();
+                            object? Get(string n) =>
+                                (object?)st.GetProperty(n)?.GetValue(sec)
+                                ?? st.GetField(n, System.Reflection.BindingFlags.Public
+                                        | System.Reflection.BindingFlags.Instance
+                                        | System.Reflection.BindingFlags.NonPublic)?.GetValue(sec);
+                            var mi = Get("MaterialIndex");
+                            var nt = Get("NumTriangles");
+                            if (nt is int n) tris += n;
+                            Console.WriteLine($"        sec{si}: mat={mi} tris={nt}");
+                        }
+                    Console.WriteLine($"      LOD{l}: total tris={tris}");
+                }
+        }
+        catch (Exception ex2) { Console.WriteLine("    (section dump failed: " + ex2.GetType().Name + " " + ex2.Message + ")"); }
     }
+    try
+    {
+        // Import table: every asset this package references. A hood mesh the blueprint
+        // does not mention would still show up here if the mesh asset pulls it in.
+        var impsMember = (object?)pkg.GetType().GetProperty("Imports")?.GetValue(pkg)
+                      ?? pkg.GetType().GetField("Imports", System.Reflection.BindingFlags.Public
+                             | System.Reflection.BindingFlags.Instance
+                             | System.Reflection.BindingFlags.NonPublic)?.GetValue(pkg);
+        if (impsMember is System.Collections.IEnumerable imps)
+        {
+            int ic = 0;
+            foreach (var imp in imps)
+            {
+                if (imp is null) continue;
+                ic++;
+                var it = imp.GetType();
+                string obj = it.GetProperty("ObjectName")?.GetValue(imp)?.ToString() ?? "?";
+                string cls = it.GetProperty("ClassName")?.GetValue(imp)?.ToString() ?? "?";
+                string pkgName = it.GetProperty("PackageName")?.GetValue(imp)?.ToString() ?? "";
+                Console.WriteLine($"  import {obj} : {cls} <- {pkgName}");
+            }
+            Console.WriteLine($"imports: {ic}");
+        }
+        else Console.WriteLine("imports: (none readable)");
+    }
+    catch (Exception ex3) { Console.WriteLine("  (import dump failed: " + ex3.Message + ")"); }
     return 0;
 }
 if (argv.Length >= 3 && argv[0] == "--find")
