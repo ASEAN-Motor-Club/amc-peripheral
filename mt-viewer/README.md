@@ -181,6 +181,28 @@ RGB over model pixels — enough to prove a material change reached the GPU:
   different renders from the same vehicle, which is the check that proves the
   CDO paint is reaching the surface rather than a material default
 
+### Mobile layout is checked with numbers, not vibes
+
+`tools/cdp-shot.py` and `tools/fit-sweep.py` drive Chromium over CDP. That is not
+gold-plating: **headless Chromium clamps `--window-size` to a 500px minimum width**,
+so every "phone" screenshot taken from the command line is silently a 500px-wide
+tablet — it will happily show you a layout that breaks on a real 390px screen.
+CDP's `Emulation.setDeviceMetricsOverride` is the only way to get a true narrow
+viewport, and turning on touch emulation is what makes `pointer: coarse` match.
+
+`?debug&layout` makes the page publish its own measurements in `document.title`:
+control-bar child rects, `scrollWidth` vs `innerWidth`, and `ndc` — the largest
+|NDC| of the model's 8 bounding-box corners after the camera fit (<=1 means on
+screen; we fit to 0.90, i.e. a 10% margin). `fit-sweep.py` asserts
+`ndc <= 0.95 && over == 0 && scrollW == innerWidth` over
+{phone portrait, phone landscape, tablet, desktop} × vehicles × {iso, front, top}
+and prints a pass/fail table.
+
+The camera fit itself is a binary search on distance with the corners projected
+each iteration. The analytic shortcut (distance from `aspect` alone) is wrong for
+long vehicles and for the top-down preset, and 0.5r vs 0.85r guesses clip a 13.5 m
+trailer on a phone.
+
 ## Status / known limitations
 
 - Catalogue: **174 of 175 staged vehicles pass `tools/verify_site.py`** (every

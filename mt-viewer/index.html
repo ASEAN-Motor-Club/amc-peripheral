@@ -15,14 +15,22 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#15161a">
 <title>Motor Town vehicle viewer</title>
 <style>
   :root { color-scheme: dark; }
-  body { margin:0; background:#15161a; color:#eee; font-family:system-ui,sans-serif; overflow:hidden; }
+  html, body { height: 100%; }
+  body { margin:0; background:#15161a; color:#eee; font-family:system-ui,sans-serif;
+         overflow:hidden; overscroll-behavior:none; -webkit-tap-highlight-color:transparent;
+         height:100dvh; }
+  /* touch-action:none is what stops the browser stealing the pinch/drag gesture
+     from OrbitControls on Android; without it the page pans/zooms instead. */
+  canvas { display:block; touch-action:none; }
   #hud { position:fixed; top:12px; left:12px; z-index:10; background:rgba(0,0,0,.62); padding:10px 14px; border-radius:8px; font-size:13px; line-height:1.55; }
   #hud b { color:#6cf; }
   #hud .k { color:#8b93a7; }
+  #hud .touch-hint { display:none; }
   #status { position:fixed; top:12px; right:12px; z-index:10; background:rgba(0,0,0,.62); padding:8px 12px; border-radius:8px; font-size:12px; color:#9f9; white-space:pre; }
   #controls { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:10; display:flex; gap:8px; align-items:center; }
   #controls button, #controls label { background:#26272e; color:#eee; border:1px solid #3d3f49; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }
@@ -30,12 +38,46 @@
   #controls button.active { background:#1d6fd1; border-color:#1d6fd1; }
   #controls input[type=color] { width:34px; height:30px; padding:0; border:1px solid #3d3f49; border-radius:6px; background:#26272e; }
   body.nohud #hud, body.nohud #controls, body.nohud #status { display:none; }
+
+  /* ---- touch / small screens ------------------------------------------------
+     A phone in portrait has ~390 CSS px of width: the desktop control bar is a
+     single unwrappable row that overflowed the viewport, and the HUD sat on top
+     of the model. Give the controls the full width as a wrapped bar pinned to the
+     safe area, shrink the text, and swap mouse hints for touch ones. */
+  @media (max-width: 760px), (pointer: coarse) {
+    #hud { top:8px; left:8px; padding:7px 10px; font-size:11.5px; line-height:1.4;
+           max-width:60vw; border-radius:7px; }
+    #hud .mouse-hint { display:none; }
+    #hud .touch-hint { display:inline; }
+    #status { top:8px; right:8px; padding:5px 8px; font-size:10.5px;
+              max-width:34vw; white-space:normal; border-radius:7px; }
+    #controls { left:0; right:0; bottom:0; transform:none; width:auto;
+                justify-content:center; flex-wrap:wrap; gap:6px;
+                padding:8px 8px calc(8px + env(safe-area-inset-bottom));
+                background:linear-gradient(to top, rgba(21,22,26,.92), rgba(21,22,26,.55));
+                backdrop-filter:blur(6px); }
+    #controls button, #controls label { padding:9px 11px; font-size:12.5px; min-height:42px;
+                                       display:inline-flex; align-items:center; gap:6px; }
+    #controls input[type=color] { width:30px; height:26px; }
+    #controls select { max-width:42vw; }
+    /* the camera presets are the least useful thing on a tiny screen — pinch does it */
+    @media (max-width: 430px) {
+      #controls button[data-look="rear"], #controls button[data-look="top"] { display:none; }
+    }
+  }
+  /* iPhone SE-class: the control bar would eat a third of the screen */
+  @media (max-height: 520px) {
+    #hud { display:none; }
+    #controls { padding:6px 8px calc(6px + env(safe-area-inset-bottom)); }
+    #controls button, #controls label { min-height:36px; padding:6px 9px; font-size:12px; }
+  }
 </style>
 </head>
 <body>
 <div id="hud">
   <b>Motor Town — vehicle</b><br>
-  <span class="k">drag</span> orbit · <span class="k">scroll</span> zoom · <span class="k">right-drag</span> pan<br>
+  <span class="mouse-hint"><span class="k">drag</span> orbit · <span class="k">scroll</span> zoom · <span class="k">right-drag</span> pan</span>
+  <span class="touch-hint"><span class="k">1 finger</span> orbit · <span class="k">2 fingers</span> zoom / pan</span><br>
   <span id="meta">loading…</span>
 </div>
 <div id="status">loading…</div>
@@ -73,10 +115,14 @@ const metaEl = document.getElementById("meta");
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x15161a);
+// A phone renders the same scene with a third of the pixels: cap the device pixel
+// ratio harder on coarse pointers, otherwise a 3x DPR screen draws 9x the pixels.
+const COARSE = matchMedia("(pointer: coarse)").matches;
+const DPR_CAP = COARSE ? 1.5 : 2;
 const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.01, 500);
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: syncMode });
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, DPR_CAP));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.85;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -280,19 +326,75 @@ async function load() {
     rear: new THREE.Vector3(-1.0, 0.22, 0.12),
     top: new THREE.Vector3(0.02, 1.0, 0.02),
   };
+  // Fit by projecting the model's 8 bounding-box corners and shrinking the distance
+  // until every one lands inside the frustum. An analytic guess from `aspect` alone
+  // is wrong the moment the shape is long, the view is top-down, or the FOV changes;
+  // this measures what actually lands on screen.
+  const corners = [];
+  for (const x of [box.min.x, box.max.x])
+    for (const y of [box.min.y, box.max.y])
+      for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+  let lastNdc = 0;
+  function ndcExtent(dist, dir) {
+    camera.position.copy(c).add(dir.clone().normalize().multiplyScalar(dist));
+    camera.lookAt(c);
+    camera.updateMatrixWorld();
+    let m = 0;
+    for (const p of corners) {
+      const v = p.clone().project(camera);
+      m = Math.max(m, Math.abs(v.x), Math.abs(v.y));
+    }
+    return m;
+  }
+  function fitDist(dir) {
+    // target 0.90 => ~10% margin; ndc extent is ~1/dist for a fixed direction
+    let lo = r * 0.8, hi = r * 12;
+    if (ndcExtent(hi, dir) > 0.9) return hi;         // pathological, refuse to loop
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (ndcExtent(mid, dir) > 0.9) lo = mid; else hi = mid;
+    }
+    lastNdc = ndcExtent(hi, dir);
+    return hi;
+  }
+  let currentLook = params.get("cam") || "iso";
+  let lastAspect = camera.aspect;
+  let lastDist = 0;
   function setCam(look) {
-    const d = dirs[look] || dirs.iso;
-    const dist = r * 1.9;
-    camera.position.copy(c).add(d.clone().normalize().multiplyScalar(dist));
+    if (look) currentLook = look;
+    const d = dirs[currentLook] || dirs.iso;
+    lastDist = fitDist(d);
+    camera.position.copy(c).add(d.clone().normalize().multiplyScalar(lastDist));
+    camera.lookAt(c);
     controls.target.copy(c);
     controls.update();
+    // exposed for the headless fit check (the debug block below is outside this scope)
+    window.__fit = { ndc: lastNdc, dist: lastDist, look: currentLook };
   }
   window.__setCam = setCam;
-  setCam(params.get("cam") || "iso");
+  setCam(currentLook);
 
-  metaEl.textContent =
-    `${manifest.vehicle} · ${s.x.toFixed(2)}×${s.y.toFixed(2)}×${s.z.toFixed(2)} m · ` +
-    `${stats.meshes} meshes · ${stats.materials.size} materials · ${table.__textures ?? ""}`;
+  // rotate / address-bar changes: keep the model framed, but don't stomp on a zoom
+  // the user did themselves unless the aspect really moved.
+  function refitIfAspectChanged() {
+    if (!camera.aspect) return;
+    if (Math.abs(camera.aspect - lastAspect) / lastAspect < 0.12) return;
+    lastAspect = camera.aspect;
+    setCam(currentLook);
+  }
+  addEventListener("orientationchange", refitIfAspectChanged);
+  addEventListener("resize", refitIfAspectChanged);
+  if (window.visualViewport) visualViewport.addEventListener("resize", refitIfAspectChanged);
+
+  // Build the caption from parts so a missing texture count can't leave a dangling
+  // separator ("… 14 materials · " was showing up on phones).
+  metaEl.textContent = [
+    manifest.vehicle,
+    `${s.x.toFixed(2)}×${s.y.toFixed(2)}×${s.z.toFixed(2)} m`,
+    `${stats.meshes} meshes`,
+    `${stats.materials.size} materials`,
+    table.__textures ? String(table.__textures) : "",
+  ].filter(Boolean).join(" · ");
   statusEl.textContent = `loaded ${manifest.parts.length}/${manifest.parts.length}`;
 
   window.__viewer = { scene, root, camera, renderer, manifest, defs, stats, setCam };
@@ -402,6 +504,25 @@ if (syncMode) {
       n++; r += buf[i]; g2 += buf[i + 1]; b += buf[i + 2];
     }
     document.title += `|px=${n} mean=${n ? [r / n, g2 / n, b / n].map(v => v.toFixed(0)).join(",") : "-"}`;
+    document.title += `|vp=${innerWidth}x${innerHeight} dpr=${devicePixelRatio} coarse=${COARSE ? 1 : 0} aspect=${camera.aspect.toFixed(3)}`;
+    if (params.has("layout")) {
+      const ctl = document.getElementById("controls");
+      const r2 = ctl.getBoundingClientRect();
+      const kids = [...ctl.children].map(e => {
+        const b = e.getBoundingClientRect();
+        return { tag: e.tagName.toLowerCase(), id: e.id || e.dataset.look || "", x: Math.round(b.left), r: Math.round(b.right), w: Math.round(b.width) };
+      });
+      const over = kids.filter(k => k.r > innerWidth + 0.5);
+      const box = new THREE.Box3().setFromObject(root);
+      document.title += "|LAY=" + JSON.stringify({
+        scrollW: document.documentElement.scrollWidth, innerW: innerWidth,
+        ctl: [Math.round(r2.left), Math.round(r2.right), Math.round(r2.width)],
+        rows: new Set(kids.map(k => k.r)).size, kids, over: over.length,
+        camDist: +camera.position.distanceTo(controls.target).toFixed(2),
+        ndc: window.__fit ? +window.__fit.ndc.toFixed(3) : null,
+        look: window.__fit ? window.__fit.look : null,
+      });
+    }
   }
 } else { anim(); }
 </script>
