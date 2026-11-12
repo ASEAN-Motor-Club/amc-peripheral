@@ -556,8 +556,15 @@ async function load() {
   const lab = idx => {
     if (idx < 0) return "material default";
     const sc = paints[idx] || {};
-    const keys = Object.keys(sc).filter(k => sc[k][3] > 0);
-    return `paint ${idx + 1}` + (keys.length ? "" : " (none)");
+    const keys = Object.keys(sc);
+    if (!keys.length) return `paint ${idx + 1} (none)`;
+    // Label by the paint colour, not by alpha: body slots carry alpha 0 (it is only
+    // meaningful for glass slots flagged bUseColorAlpha), so testing alpha labelled
+    // every paint on cars like the Stinger as "(none)" when the RGB was right there.
+    const k = keys.find(x => /^(Body|Palette|Shell)/i.test(x)) || keys[0];
+    const c = sc[k] || [255, 255, 255, 0];
+    const hex = "#" + c.slice(0, 3).map(v => v.toString(16).padStart(2, "0")).join("");
+    return `paint ${idx + 1} (${hex})`;
   };
   schemeSel.innerHTML = ["-1", ...paints.map((_, i) => String(i))]
     .map(v => `<option value="${v}"${+v === paintIndex ? " selected" : ""}>${lab(+v)}</option>`)

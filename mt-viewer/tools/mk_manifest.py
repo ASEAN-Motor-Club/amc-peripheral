@@ -282,9 +282,19 @@ def _cdo_colours(exports, vehicle=""):
     paints = []
     for pc in pr.get("BodyColors") or []:
         scheme = {}
+        # A paint can list the same slot key twice (the Stinger's is "Body" blue then
+        # "Body" white). Collapsing with a plain assignment kept the LAST entry, so the
+        # real colour was replaced by the trailing one and every paint came out white.
+        # First occurrence wins; later duplicates get a _2, _3 suffix so nothing is lost.
         for ent in ((pc.get("Colors") or {}).get("Entries") or []):
             c = ((ent.get("Value") or {}).get("Colors") or {})
-            scheme[ent.get("Key")] = [c.get("R", 0), c.get("G", 0), c.get("B", 0), c.get("A", 0)]
+            key = ent.get("Key")
+            if key in scheme:
+                n = 2
+                while f"{key}_{n}" in scheme:
+                    n += 1
+                key = f"{key}_{n}"
+            scheme[key] = [c.get("R", 0), c.get("G", 0), c.get("B", 0), c.get("A", 0)]
         if scheme:
             paints.append(scheme)
     return {"colorSlots": slots, "paints": paints}
