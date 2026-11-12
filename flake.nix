@@ -245,11 +245,6 @@
                 default = "bridge.aseanmotorclub.com";
                 description = "Domain for the UE4SS dev bridge hub.";
               };
-              vehicles = lib.mkOption {
-                type = lib.types.str;
-                default = "vehicles.aseanmotorclub.com";
-                description = "Domain for the Motor Town vehicle 3D viewer.";
-              };
             };
 
             # Radio web UI package
@@ -332,10 +327,9 @@
                 "L+ /var/www/nix-static/tire-web - - - - ${cfg.tireWeb.package}"
                 "L+ /var/www/nix-static/code-web - - - - ${cfg.codeWeb.package}"
                 "L+ /var/www/nix-static/docs-web - - - - ${cfg.docsWeb.package}"
-                "L+ /var/www/nix-static/mt-viewer - - - - ${cfg.mtViewer.package}"
-                "d /var/lib/mt-viewer 0755 root root -"
-                "L+ /var/lib/mt-viewer/index.html - - - - ${cfg.mtViewer.package}/index.html"
-                "L+ /var/lib/mt-viewer/README.md - - - - ${cfg.mtViewer.package}/README.md"
+                "d /var/lib/vehicles 0755 root root -"
+                "L+ /var/lib/vehicles/index.html - - - - ${cfg.mtViewer.package}/index.html"
+                "L+ /var/lib/vehicles/README.md - - - - ${cfg.mtViewer.package}/README.md"
               ]
               ++ lib.optionals cfg.sharry.enable [
                 "d /var/lib/sharry 0750 sharry sharry -"
@@ -583,18 +577,11 @@
               };
             };
 
-            # Motor Town Vehicle 3D Viewer (static site)
-            services.nginx.virtualHosts.${cfg.nginx.domains.vehicles} = {
-              enableACME = true;
-              forceSSL = true;
-              locations."/" = {
-                root = "/var/lib/mt-viewer";
-                tryFiles = "$uri $uri/index.html /index.html";
-                extraConfig = ''
-                  add_header Cache-Control "public, max-age=3600";
-                '';
-              };
-            };
+            # Motor Town Vehicle 3D Viewer (static site), served as a path on the
+            # mods host rather than its own subdomain: no extra cert/ACME, no DNS
+            # record, and the generated assets can be rsynced in without a rebuild.
+            # /var/lib/vehicles is the data root that tools/stage_all.sh writes to.
+            # (No vhost of its own any more — see the mods vhost below.)
 
             # Tire Mod Creator (static site + build API)
             services.nginx.virtualHosts.${cfg.nginx.domains.mods} = {
@@ -616,6 +603,17 @@
                   proxy_set_header X-Forwarded-Proto $scheme;
                   proxy_read_timeout 120s;
                   client_max_body_size 50M;
+                '';
+              };
+              # Vehicle 3D viewer. root=/var/lib + a directory literally named
+              # "vehicles" keeps try_files honest; an alias with try_files is the
+              # classic nginx footgun (it resolves against the request URI).
+              locations."/vehicles/" = {
+                root = "/var/lib";
+                index = "index.html";
+                tryFiles = "$uri $uri/ /vehicles/index.html";
+                extraConfig = ''
+                  add_header Cache-Control "public, max-age=3600";
                 '';
               };
             };

@@ -1,7 +1,19 @@
 # Motor Town Vehicle 3D Viewer
 
-Interactive three.js viewer for Motor Town vehicles, served as a static site.
+Interactive three.js viewer for Motor Town vehicles, served as a static site at
+**`https://mods.aseanmotorclub.com/vehicles/`** — a path on the mods host, not its
+own subdomain (no extra ACME cert, no DNS record; easy to promote to a subdomain
+later by adding one vhost).
+
 Geometry **and materials** come from the game's client PAK; nothing is hand-made.
+
+Everything the page fetches is **relative** (`vehicles.json`, `<slug>/<slug>.json`,
+`<slug>/glb/*.glb`), so it works under any path prefix — `tools/mt-shot-path.sh`
+renders it through `/vehicles/` to keep that true.
+
+Asset root on the host is `/var/lib/vehicles` (nginx `root /var/lib` + the
+`vehicles` directory name keeps `try_files` honest; an `alias` with `try_files`
+resolves against the request URI and silently 404s).
 
 ## What is in here
 
