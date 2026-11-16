@@ -11,7 +11,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .config import WorkshopSettings
+from .payloads import asset_version_for
 from .queries import WorkshopRepository
+from .snapshots import (
+    PRIORITY_POPULAR,
+    SnapshotJob,
+    SnapshotStore,
+    render_key,
+)
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +54,40 @@ CREATE TABLE IF NOT EXISTS author_summary (
 
 def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+def prewarm_popular(settings: WorkshopSettings, home: dict[str, Any]) -> int:
+    """Queue a bounded popular set behind all user-driven work."""
+    store = SnapshotStore(settings.site_db)
+    depth = store.queue_depth()
+    budget = min(settings.prewarm_limit, max(0, settings.prewarm_queue_limit - depth))
+    if budget <= 0:
+        return 0
+    enqueued = 0
+    for card in home["popular"][:budget]:
+        version = asset_version_for(settings.viewer_root, card["vehicleKey"])
+        config_hash = card.get("configHash") or ""
+        if version == "unversioned" or not config_hash:
+            continue
+        key = render_key(
+            source_kind="workshop",
+            source_id=int(card["id"]),
+            config_hash=config_hash,
+            asset_version=version,
+        )
+        if store.status(key) is not None:
+            continue
+        store.enqueue(SnapshotJob(
+            cache_key=key,
+            source_kind="workshop",
+            source_id=int(card["id"]),
+            config_hash=config_hash,
+            asset_version=version,
+            camera="default",
+            priority=PRIORITY_POPULAR,
+        ))
+        enqueued += 1
+    return enqueued
 
 
 def build(settings: WorkshopSettings) -> dict[str, Any]:
@@ -103,6 +144,9 @@ def build(settings: WorkshopSettings) -> dict[str, Any]:
         raise
     finally:
         conn.close()
+    enqueued = prewarm_popular(settings, home)
+    if enqueued:
+        log.info("queued %d popular snapshots at background priority", enqueued)
     return home
 
 

@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Any
 
 RENDERER_VERSION = "viewer-4"
+PRIORITY_POPULAR = -10
+PRIORITY_VISIBLE = 50
+PRIORITY_DIRECT = 100
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS snapshot_jobs (
     cache_key TEXT PRIMARY KEY,
@@ -121,7 +124,13 @@ class SnapshotStore:
                    renderer_version,camera,status,priority,next_attempt,
                    created_at,updated_at)
                 VALUES (?,?,?,?,?,?,?,'pending',?,?,?,?)
-                ON CONFLICT(cache_key) DO NOTHING
+                ON CONFLICT(cache_key) DO UPDATE SET
+                  priority=MAX(snapshot_jobs.priority,excluded.priority),
+                  next_attempt=CASE
+                    WHEN excluded.priority>snapshot_jobs.priority THEN excluded.next_attempt
+                    ELSE snapshot_jobs.next_attempt END,
+                  updated_at=excluded.updated_at
+                WHERE snapshot_jobs.status IN ('pending','retry_pending')
                 """,
                 (
                     job.cache_key,
@@ -346,6 +355,7 @@ class SnapshotStore:
             "sourceKind": row["source_kind"],
             "sourceId": row["source_id"],
             "configHash": row["config_hash"],
+            "priority": row["priority"],
             "width": row["width"],
             "height": row["height"],
             "bytes": row["bytes"],

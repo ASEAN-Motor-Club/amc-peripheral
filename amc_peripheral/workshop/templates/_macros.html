@@ -3,17 +3,20 @@
 {%- endmacro %}
 
 {% macro card(item, compare=false) -%}
-<article class="vehicle-card" data-workshop-id="{{ item.id }}">
+{% set pending = item.snapshotKey and not item.snapshotCardUrl and item.snapshotStatus not in ('unsupported', 'failed_permanent') %}
+<article class="vehicle-card" data-workshop-id="{{ item.id }}"{% if pending %} data-snapshot-key="{{ item.snapshotKey }}" data-snapshot-api="/api/workshop/items/{{ item.id }}/snapshot?via=card"{% endif %}>
   <a class="card-visual" href="/workshop/items/{{ item.id }}/" aria-hidden="true" tabindex="-1">
     {% if item.snapshotCardUrl %}
     <img src="{{ item.snapshotCardUrl }}" srcset="{{ item.snapshotCardUrl }} 480w, {{ item.snapshotUrl }} 960w" sizes="(max-width: 640px) 100vw, 360px" alt="" width="480" height="270" loading="lazy" decoding="async">
     {% else %}
     <img src="/workshop/static/placeholder.svg" alt="" width="480" height="270" loading="lazy">
     {% endif %}
+    {% if pending %}<span class="preview-pending" data-preview-pending><span class="preview-spinner" aria-hidden="true"></span>Rendering preview…</span>{% endif %}
     <span class="card-id">#{{ item.id }}</span>
   </a>
   <div class="card-body">
     <h3><a href="/workshop/items/{{ item.id }}/">{{ item.vehicleKey|replace('_', ' ') }}</a></h3>
+    {% if pending %}<p class="preview-pending-action" data-preview-pending><a href="/workshop/items/{{ item.id }}/viewer/">Open the 3D viewer while it renders</a></p>{% endif %}
     {% if item.author %}
       <p class="byline">by <a href="/workshop/authors/{{ item.accountId if item.accountId else '0' }}/">{{ item.author }}</a></p>
     {% else %}

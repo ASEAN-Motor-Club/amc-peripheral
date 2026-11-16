@@ -84,6 +84,12 @@ button:hover, .primary-button:hover { text-decoration: none; filter: brightness(
 .vehicle-card:hover { border-color: #3b4a63; transform: translateY(-2px); }
 .card-visual { position: relative; aspect-ratio: 16 / 9; background: #0a0e16; overflow: hidden; }
 .card-visual img { width: 100%; height: 100%; object-fit: cover; opacity: .9; }
+.preview-pending { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px; color: #dbe7f5; background: rgba(5, 10, 17, .7); font-size: 13px; }
+.preview-pending[hidden], .preview-pending-action[hidden] { display: none; }
+.preview-spinner { width: 16px; height: 16px; flex: none; border: 2px solid #60718a; border-top-color: var(--accent); border-radius: 50%; animation: preview-spin .8s linear infinite; }
+.preview-pending-action { margin: 0; font-size: 12px; }
+@keyframes preview-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .preview-spinner { animation: none; } }
 .card-id { position: absolute; right: 9px; bottom: 8px; font-size: 11px; color: #cbd6e7; background: rgba(4, 8, 14, .7); padding: 3px 6px; border-radius: 5px; }
 .card-body { padding: 15px 16px 14px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
 .card-body h3 a { color: var(--text); }
@@ -134,7 +140,8 @@ button:hover, .primary-button:hover { text-decoration: none; filter: brightness(
 .detail-main h1 { font-size: clamp(34px, 5vw, 62px); margin-bottom: 10px; }
 .detail-main h1 .muted { font-size: .42em; font-weight: 500; letter-spacing: 0; }
 .viewer-stage { margin-top: 24px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: #090d14; }
-.viewer-stage > img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.viewer-preview { position: relative; }
+.viewer-stage > img, .viewer-preview > img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 .viewer-actions { display: flex; align-items: center; gap: 14px; padding: 14px; border-top: 1px solid var(--line); }
 .viewer-actions .muted { font-size: 13px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; margin-top: 20px; }

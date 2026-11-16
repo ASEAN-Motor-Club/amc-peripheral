@@ -27,7 +27,13 @@ from .queries import (
     QueryError,
     WorkshopRepository,
 )
-from .snapshots import SnapshotJob, SnapshotStore, render_key
+from .snapshots import (
+    PRIORITY_DIRECT,
+    PRIORITY_VISIBLE,
+    SnapshotJob,
+    SnapshotStore,
+    render_key,
+)
 
 log = logging.getLogger(__name__)
 HERE = Path(__file__).resolve().parent
@@ -114,7 +120,7 @@ def create_app(
     (settings.snapshot_root / "public").mkdir(parents=True, exist_ok=True)
     snapshots = SnapshotStore(settings.site_db)
 
-    def snapshot_job(card: dict[str, Any]) -> SnapshotJob | None:
+    def snapshot_job(card: dict[str, Any], *, priority: int = PRIORITY_VISIBLE) -> SnapshotJob | None:
         config_hash = card.get("configHash") or ""
         if not config_hash:
             return None
@@ -132,22 +138,21 @@ def create_app(
             config_hash=config_hash,
             asset_version=version,
             camera="default",
+            priority=priority,
         )
 
-    def attach_author_snapshots(
-        authors: list[dict[str, Any]], *, enqueue: int = 0
-    ) -> None:
-        for index, author in enumerate(authors):
+    def attach_author_snapshots(authors: list[dict[str, Any]]) -> None:
+        for author in authors:
             representative = author.get("representativeId")
             if not representative:
                 continue
             card = repository.get_item(int(representative))
             if card is None:
                 continue
-            attach_snapshots([card], enqueue=enqueue if index < enqueue else 0)
+            attach_snapshots([card])
             author["snapshotUrl"] = card.get("snapshotCardUrl")
 
-    def attach_snapshots(items: list[dict[str, Any]], *, enqueue: int = 0) -> None:
+    def attach_snapshots(items: list[dict[str, Any]]) -> None:
         jobs = []
         for card in items:
             job = snapshot_job(card)
@@ -157,15 +162,18 @@ def create_app(
         ready = snapshots.ready_map(
             "workshop", [(int(card["id"]), card.get("configHash") or "") for card in items]
         )
+        current = snapshots.statuses([job.cache_key for job in jobs])
         for card in items:
+            key = card.get("snapshotKey")
+            status = current.get(key) if key else None
             meta = ready.get(int(card["id"]))
             card["snapshotUrl"] = meta["url"] if meta else None
             card["snapshotCardUrl"] = (
                 meta["url"].replace(".webp", "-card.webp") if meta else None
             )
-            card["snapshotStatus"] = meta["status"] if meta else "missing"
-        for job in (jobs[:enqueue] if snapshots.queue_depth() < 400 else []):
-            snapshots.enqueue(job)
+            card["snapshotStatus"] = (
+                status["status"] if status else (meta["status"] if meta else "missing")
+            )
 
     @web.middleware
     async def errors(request: web.Request, handler):
@@ -245,7 +253,7 @@ def create_app(
     async def api_home(request: web.Request) -> web.Response:
         data = await asyncio.to_thread(repository.home, settings.home_limit)
         attach_snapshots(data["popular"] + data["newest"])
-        attach_author_snapshots(data["authors"], enqueue=6)
+        attach_author_snapshots(data["authors"])
         return web.json_response(data)
 
     async def api_list(request: web.Request) -> web.Response:
@@ -320,12 +328,11 @@ def create_app(
                 {"status": "unsupported", "url": None}, status=200
             )
         item["configHash"] = config["source"]["configHash"]
-        job = snapshot_job(item)
+        priority = PRIORITY_VISIBLE if request.query.get("via") == "card" else PRIORITY_DIRECT
+        job = snapshot_job(item, priority=priority)
         if job is None:
             return _json_error("invalid_payload", "Configuration has no content hash", 422)
-        status = await asyncio.to_thread(snapshots.status, job.cache_key)
-        if status is None:
-            status = await asyncio.to_thread(snapshots.enqueue, job)
+        status = await asyncio.to_thread(snapshots.enqueue, job)
         return web.json_response(
             status,
             status=200 if status["status"] == "ready" else 202,
@@ -380,7 +387,7 @@ def create_app(
             asyncio.to_thread(repository.stats),
         )
         attach_snapshots(data["popular"] + data["newest"])
-        attach_author_snapshots(data["authors"], enqueue=6)
+        attach_author_snapshots(data["authors"])
         return render("home.html", page="home", data=data, stats=stats)
 
     async def page_gallery(request: web.Request) -> web.Response:
@@ -409,7 +416,7 @@ def create_app(
             asyncio.to_thread(repository.vehicles),
         )
         next_query = {key: value for key, value in query.items() if key != "cursor"}
-        attach_snapshots(data["items"], enqueue=settings.page_size)
+        attach_snapshots(data["items"])
         if data.get("nextCursor"):
             next_query["cursor"] = data["nextCursor"]
         next_url = (
@@ -439,11 +446,9 @@ def create_app(
         snapshot = None
         if config and config["vehicle"].get("assetAvailable"):
             item["configHash"] = config["source"]["configHash"]
-            job = snapshot_job(item)
+            job = snapshot_job(item, priority=PRIORITY_DIRECT)
             if job:
-                snapshot = snapshots.status(job.cache_key)
-                if snapshot is None:
-                    snapshot = snapshots.enqueue(job)
+                snapshot = snapshots.enqueue(job)
         return render("item.html", page="workshop", item=item, config=config,
                       snapshot=snapshot)
 
@@ -465,7 +470,7 @@ def create_app(
             filters=ListFilters(account_id=account_id),
             limit=settings.page_size,
         )
-        attach_snapshots(listing["items"], enqueue=settings.page_size)
+        attach_snapshots(listing["items"])
         return render("author.html", page="gallery", author=author, data=listing,
                       vehicles=[],
                       canonical_url=f"https://www.aseanmotorclub.com/workshop/authors/{account_id}/")
@@ -478,7 +483,7 @@ def create_app(
             filters=ListFilters(vehicle=vehicle),
             limit=settings.page_size,
         )
-        attach_snapshots(listing["items"], enqueue=settings.page_size)
+        attach_snapshots(listing["items"])
         return render(
             "author.html",
             page="gallery",

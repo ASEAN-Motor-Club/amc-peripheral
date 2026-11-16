@@ -25,6 +25,8 @@ class WorkshopSettings:
     max_page_size: int = 60
     max_payload_bytes: int = 2 * 1024 * 1024
     home_limit: int = 10
+    prewarm_limit: int = 48
+    prewarm_queue_limit: int = 50
     cache_ttl_seconds: float = 60.0
     character_vehicle_dsn: str | None = None
     character_vehicle_public: bool = False
@@ -61,6 +63,10 @@ class WorkshopSettings:
             page_size=int(os.environ.get("AMC_WORKSHOP_PAGE_SIZE", "24")),
             max_page_size=int(os.environ.get("AMC_WORKSHOP_MAX_PAGE_SIZE", "60")),
             home_limit=int(os.environ.get("AMC_WORKSHOP_HOME_LIMIT", "10")),
+            prewarm_limit=int(os.environ.get("AMC_WORKSHOP_PREWARM_LIMIT", "48")),
+            prewarm_queue_limit=int(
+                os.environ.get("AMC_WORKSHOP_PREWARM_QUEUE_LIMIT", "50")
+            ),
             cache_ttl_seconds=float(
                 os.environ.get("AMC_WORKSHOP_CACHE_SECONDS", "60")
             ),

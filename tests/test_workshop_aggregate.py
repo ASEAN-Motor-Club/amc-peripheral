@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import replace
 
 from amc_peripheral.workshop.aggregate import build
 from amc_peripheral.workshop.queries import ListFilters, WorkshopRepository
@@ -25,6 +26,23 @@ def test_aggregate_build_is_read_through(settings):
             "SELECT status, items FROM aggregate_runs ORDER BY run_id DESC LIMIT 1"
         ).fetchone()
     assert status == ("ready", 3)
+
+    from amc_peripheral.workshop.snapshots import SnapshotStore
+
+    store = SnapshotStore(settings.site_db)
+    assert store.health()["queueDepth"] == 2
+    with sqlite3.connect(settings.site_db) as conn:
+        priorities = conn.execute(
+            "SELECT priority FROM snapshot_jobs ORDER BY cache_key"
+        ).fetchall()
+    assert priorities == [(-10,), (-10,)]
+
+
+def test_prewarm_never_exceeds_queue_budget(settings):
+    from amc_peripheral.workshop.snapshots import SnapshotStore
+
+    build(replace(settings, prewarm_queue_limit=1))
+    assert SnapshotStore(settings.site_db).health()["queueDepth"] == 1
 
 
 def test_public_indexes_avoid_temp_sort(settings):

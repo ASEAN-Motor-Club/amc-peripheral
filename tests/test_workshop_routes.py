@@ -92,6 +92,7 @@ async def test_snapshot_endpoint_queues_then_reports_ready(client, settings):
     assert first.status == 202
     queued = await first.json()
     assert queued["status"] == "pending"
+    assert queued["priority"] == 100
     assert queued["url"] is None
 
     store = SnapshotStore(settings.site_db)
@@ -108,11 +109,25 @@ async def test_snapshot_endpoint_queues_then_reports_ready(client, settings):
     assert ready["url"] == "/workshop/snapshots/items/aa/preview.webp"
 
 
+async def test_card_snapshot_uses_visible_priority(client):
+    response = await client.get("/api/workshop/items/1/snapshot?via=card")
+    assert response.status == 202
+    payload = await response.json()
+    assert payload["status"] == "pending"
+    assert payload["priority"] == 50
+
+    direct = await client.get("/api/workshop/items/1/snapshot")
+    boosted = await direct.json()
+    assert boosted["priority"] == 100
+
+
 async def test_gallery_exposes_snapshot_keys_and_bounds_the_queue(client):
     response = await client.get("/workshop/gallery/?sort=new")
     assert response.status == 200
     text = await response.text()
     assert "/workshop/gallery/" in text
+    assert "data-snapshot-api" in text
+    assert "Rendering preview" in text
     listing = await client.get("/api/workshop/items?sort=new")
     data = await listing.json()
     assert all(item["snapshotKey"] for item in data["items"])
@@ -140,7 +155,7 @@ async def test_author_and_vehicle_pages(client, settings):
 
     from amc_peripheral.workshop.snapshots import SnapshotStore
 
-    assert SnapshotStore(settings.site_db).health()["queueDepth"] == 2
+    assert SnapshotStore(settings.site_db).health()["queueDepth"] == 0
 
 
 async def test_club_filter_uses_safe_projection(client):

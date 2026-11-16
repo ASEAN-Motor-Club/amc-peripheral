@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,17 @@ def test_enqueue_and_claim_are_idempotent(tmp_path: Path):
     assert claimed["cache_key"] == "k" * 64
     assert claimed["status"] == "rendering"
     assert store.claim("worker-b", lease_seconds=60) is None
+
+
+def test_page_view_boosts_an_existing_background_job(tmp_path: Path):
+    store = SnapshotStore(tmp_path / "site.db")
+    store.enqueue(replace(job(), priority=-10))
+    store.enqueue(replace(job(), priority=100))
+    status = store.status("k" * 64)
+    assert status and status["priority"] == 100
+    store.enqueue(replace(job(), priority=-10))
+    status = store.status("k" * 64)
+    assert status and status["priority"] == 100
 
 
 def test_expired_lease_is_recovered(tmp_path: Path):
