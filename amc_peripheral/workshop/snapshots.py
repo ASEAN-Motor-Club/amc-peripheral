@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-RENDERER_VERSION = "viewer-2"
+RENDERER_VERSION = "viewer-3"
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS snapshot_jobs (
     cache_key TEXT PRIMARY KEY,
