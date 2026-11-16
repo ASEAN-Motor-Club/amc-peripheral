@@ -112,7 +112,10 @@ import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUnifo
 import { DECAL_PROJECTION_GLSL } from "./js/decal-projection.js?v=1";
 
 const params = new URLSearchParams(location.search);
-const vehicle = params.get("vehicle") || "boxy";
+const workshopId = params.get("workshop");
+const characterVehicleId = params.get("characterVehicle");
+let vehicle = params.get("vehicle") || "boxy";
+let sourceConfig = null;
 const syncMode = params.has("sync");
 const plainMode = params.has("plain");
 if (params.get("ui") === "0") document.body.classList.add("nohud");
@@ -464,6 +467,33 @@ async function load() {
   ctl.classList.add("pending");
   statusEl.classList.add("pending");
   statusEl.textContent = "loading…";
+  if (workshopId || characterVehicleId) {
+    const endpoint = workshopId
+      ? `/api/workshop/items/${encodeURIComponent(workshopId)}/viewer`
+      : `/api/character-vehicles/${encodeURIComponent(characterVehicleId)}/viewer`;
+    const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
+    if (!response.ok) {
+      window.__configInfo = { step: "error", status: response.status, endpoint };
+      throw new Error(`configuration request failed (${response.status})`);
+    }
+    sourceConfig = await response.json();
+    if (!sourceConfig?.vehicle?.slug) throw new Error("configuration has no vehicle slug");
+    vehicle = sourceConfig.vehicle.slug;
+    if (sourceConfig.vehicle.assetAvailable === false) {
+      window.__configInfo = { step: "unsupported", ...sourceConfig.vehicle };
+      throw new Error(sourceConfig.renderReport?.warnings?.[0] || "3D asset is unavailable");
+    }
+    window.__configInfo = {
+      step: "ready",
+      kind: sourceConfig.source?.kind,
+      id: sourceConfig.source?.id,
+      slug: vehicle,
+      configHash: sourceConfig.source?.configHash,
+      decals: sourceConfig.decals?.length || 0,
+      attachments: sourceConfig.attachments?.length || 0,
+      warnings: sourceConfig.renderReport?.warnings || [],
+    };
+  }
   const sel = document.getElementById("vehicle");
   fetch("vehicles.json").then(r => r.json()).then(list => {
     sel.innerHTML = list.map(v =>
@@ -604,10 +634,13 @@ async function load() {
         fetch("attachments/materials.json?v=1").then(r => r.json()),
       ]);
     } catch (e) { info.step = "fetch-failed:" + e.message; return; }
-    const rec = owners.vehicles?.[vehicle] || Object.values(owners.vehicles || {}).find(r => r.slug === vehicle);
+    const rec = sourceConfig
+      ? { attachments: sourceConfig.attachments || [], ownerVehicleId: sourceConfig.source?.id }
+      : (owners.vehicles?.[vehicle] || Object.values(owners.vehicles || {}).find(r => r.slug === vehicle));
     const records = rec?.attachments || [];
     info.records = records.length;
     info.ownerVehicleId = rec?.ownerVehicleId;
+    info.dynamicConfiguration = Boolean(sourceConfig);
     if (!records.length) { info.step = "no-record"; return; }
 
     const actors = catalogue.actors || {};
@@ -833,7 +866,10 @@ async function load() {
   // render target. Here the same projection runs per fragment on the original
   // material, so no UV-space stamp or fitted bounding-box transform is needed.
   function applyOwnerColors(rec) {
-    const colors = rec?.ownerColors;
+    const configColors = sourceConfig?.paint?.colors;
+    const colors = configColors?.length
+      ? Object.fromEntries(configColors.map(c => [c.slot, c.rgba]))
+      : rec?.ownerColors;
     if (!colors) { window.__ownerPaint = null; return; }
     const applied = [];
     for (const [key, m] of matCache) {
@@ -849,7 +885,11 @@ async function load() {
       }
       if (!applied.includes(slot)) applied.push(slot);
     }
-    window.__ownerPaint = { vehicleId: rec.ownerVehicleId, applied };
+    window.__ownerPaint = {
+      vehicleId: sourceConfig?.source?.id ?? rec?.ownerVehicleId,
+      kind: sourceConfig?.source?.kind || "baked-record",
+      applied,
+    };
   }
 
   async function applyVehicleDecals() {
@@ -864,7 +904,15 @@ async function load() {
         fetch("decals/decals.json").then(r => r.json()),
       ]);
     } catch (e) { info.step = "fetch-failed:" + e.message; return; }
-    const rec = idx.vehicles[vehicle] || Object.values(idx.vehicles).find(v => v.slug === vehicle);
+    let rec = idx.vehicles[vehicle] || Object.values(idx.vehicles).find(v => v.slug === vehicle);
+    if (sourceConfig) {
+      rec = {
+        ownerVehicleId: sourceConfig.source?.id,
+        ownerColors: null,
+        layers: sourceConfig.decals || [],
+      };
+      info.dynamicConfiguration = true;
+    }
     applyOwnerColors(rec);
     if (params.get("decals") === "0") { info.step = "off"; render(); return; }
     info.rec = rec ? rec.layers.length : 0;
