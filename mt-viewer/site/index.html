@@ -110,6 +110,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { DECAL_PROJECTION_GLSL, decalFallbackSlots } from "./js/decal-projection.js?v=6";
+import { ownerColorForSlot } from "./js/owner-paint.js?v=1";
 
 const params = new URLSearchParams(location.search);
 const workshopId = params.get("workshop");
@@ -876,7 +877,7 @@ async function load() {
       if (key.includes("|attachment:")) continue;
       if (key.endsWith("|true")) continue; // plain fallback stays neutral
       const slot = key.split("|")[0];
-      const rgba = colors[slot];
+      const rgba = ownerColorForSlot(slot, colors, colourKeys, extraPaintSlot);
       if (!rgba) continue;
       m.color.setRGB(rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, THREE.SRGBColorSpace);
       if (colorSlots[slot]?.useAlpha) {
