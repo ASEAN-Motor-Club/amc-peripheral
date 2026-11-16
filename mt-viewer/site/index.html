@@ -177,7 +177,7 @@ function loadTexture(uri, dataTexture = false) {
   // this is the only source of maps. Resolving them against the page instead of the
   // vehicle dir 404s every texture and leaves every body flat-coloured.
   const url = /^(?:https?:|\/|data:|\.\.?\/)/.test(uri) ? uri : `${vehicle}/${uri}`;
-  const t = texLoader.load(url);
+  const t = texLoader.load(url, () => { t.needsUpdate = true; render(); });
   if (!dataTexture) t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 8;
   t.flipY = false;               // glTF convention
@@ -493,7 +493,7 @@ async function load() {
 
   // --- owned attachments: attachment transform -> actor-local components ----
   async function streamAttachments() {
-    const info = (window.__attachmentInfo = { step: "start", records: 0, resolved: 0, components: 0, lights: 0, lightBudgetSkipped: 0, missing: [] });
+    const info = (window.__attachmentInfo = { step: "start", records: 0, resolved: 0, components: 0, instances: 0, instancedDraws: 0, lights: 0, lightBudgetSkipped: 0, missing: [] });
     if (params.get("attachments") === "0") { info.step = "off"; return; }
     let catalogue, owners, attachmentTable;
     try {
@@ -517,7 +517,16 @@ async function load() {
       try { models[mesh] = (await loader.loadAsync(`attachments/glb/${mesh}.glb`)).scene; }
       catch (e) { console.warn("attachment mesh failed", mesh, e.message); }
     }));
+    const primitives = {};
+    for (const [mesh, model] of Object.entries(models)) {
+      model.updateMatrixWorld(true);
+      primitives[mesh] = [];
+      model.traverse(o => { if (o.isMesh) primitives[mesh].push(o); });
+    }
 
+    // One InstancedMesh per item key + GLB primitive. Vamos3 keeps the same
+    // 104 transformed primitives but submits 6 draws instead of 104.
+    const buckets = new Map();
     for (const part of records) {
       const actor = actors[part.key];
       if (!actor || !models[actor.mesh]) {
@@ -531,39 +540,34 @@ async function load() {
       group.position.fromArray(part.position);
       group.quaternion.fromArray(part.rotation);
       group.scale.fromArray(part.scale);
+      const attachmentMatrix = new THREE.Matrix4().compose(group.position, group.quaternion, group.scale);
+      const order = attachmentTable.slotsByMesh?.[actor.mesh] || [];
 
       for (const component of actor.components) {
-        const model = models[actor.mesh].clone(true);
-        const order = attachmentTable.slotsByMesh?.[actor.mesh] || [];
-        const prims = [];
-        model.traverse(o => { if (o.isMesh) prims.push(o); });
-        prims.forEach((o, i) => {
+        const cq = new THREE.Quaternion().fromArray(component.rotation);
+        const cs = new THREE.Vector3().fromArray(component.scale);
+        const componentMatrix = new THREE.Matrix4().compose(
+          new THREE.Vector3().fromArray(component.position), cq, cs);
+        primitives[actor.mesh].forEach((o, i) => {
           const fallback = Array.isArray(o.material) ? o.material[0]?.name : o.material?.name;
           const name = (fallback && attachmentDefs[fallback]) ? fallback : (order[i] || fallback);
           const def = attachmentDefs[name] || {};
-          // Actor colours are linear FLinearColor. Namespace every attachment
-          // material: Palette and other slot names also occur on vehicle bodies.
           const m = materialFor(name, def, plainMode, part.key);
           if (name === "Light") {
             m.color.setRGB(...actor.color, THREE.LinearSRGBColorSpace);
             m.emissive.setRGB(...actor.color, THREE.LinearSRGBColorSpace);
             m.emissiveIntensity = 2.0;
           }
-          o.material = m;
-          o.userData.slot = name;
-          o.userData.def = def;
-          o.userData.attachmentColor = name === "Light" ? actor.color : null;
-          o.userData.attachmentVariant = part.key;
-          o.userData.isAttachment = true;
-          stats.materials.add(name);
-          stats.meshes++;
+          const bucketKey = `${part.key}|${actor.mesh}|${i}`;
+          if (!buckets.has(bucketKey)) buckets.set(bucketKey, {
+            key: part.key, mesh: actor.mesh, primitive: i, geometry: o.geometry,
+            material: m, slot: name, def, color: name === "Light" ? actor.color : null,
+            matrices: [],
+          });
+          const matrix = attachmentMatrix.clone().multiply(componentMatrix).multiply(o.matrixWorld);
+          buckets.get(bucketKey).matrices.push(matrix);
+          info.instances++;
         });
-        const cg = new THREE.Group();
-        cg.position.fromArray(component.position);
-        cg.quaternion.fromArray(component.rotation);
-        cg.scale.fromArray(component.scale);
-        cg.add(model);
-        group.add(cg);
         info.components++;
       }
       if (params.get("attachmentLights") !== "0") {
@@ -588,10 +592,30 @@ async function load() {
       }
       root.add(group);
     }
+
+    for (const b of buckets.values()) {
+      const instanced = new THREE.InstancedMesh(b.geometry, b.material, b.matrices.length);
+      instanced.name = `AttachmentInstances_${b.key}_${b.primitive}`;
+      instanced.userData.slot = b.slot;
+      instanced.userData.def = b.def;
+      instanced.userData.attachmentColor = b.color;
+      instanced.userData.attachmentVariant = b.key;
+      instanced.userData.attachmentKey = b.key;
+      instanced.userData.isAttachment = true;
+      b.matrices.forEach((matrix, i) => instanced.setMatrixAt(i, matrix));
+      instanced.instanceMatrix.needsUpdate = true;
+      instanced.computeBoundingBox();
+      instanced.computeBoundingSphere();
+      root.add(instanced);
+      stats.materials.add(b.slot);
+      stats.meshes += b.matrices.length;
+      info.instancedDraws++;
+    }
     info.step = "done";
     if (info.lightBudgetSkipped) console.warn(`attachment lights skipped over budget: ${info.lightBudgetSkipped}`);
     render();
   }
+
   await streamAttachments();
 
   // --- everything is here: shade it -------------------------------------------
@@ -662,6 +686,7 @@ async function load() {
     controls.update();
     // exposed for the headless fit check (the debug block below is outside this scope)
     window.__fit = { ndc: lastNdc, dist: lastDist, look: currentLook };
+    render();
   }
   window.__setCam = setCam;
   setCam(currentLook);
@@ -901,7 +926,7 @@ async function load() {
     liverySel.addEventListener("change", () => {
       liveryIndex = parseInt(liverySel.value, 10);
       applyLivery();
-      if (syncMode) render();
+      render();
     });
   }
 
@@ -926,7 +951,7 @@ async function load() {
     paintIndex = parseInt(schemeSel.value, 10);
     bodyTint = null;                     // a scheme overrides the free colour
     applyPaint();
-    if (syncMode) render();
+    render();
   });
 
   const paint = document.getElementById("paint");
@@ -942,7 +967,7 @@ async function load() {
         m.color.copy(paintColor);
       }
     }
-    if (syncMode) render();
+    render();
   });
 
   indexPaintSlots();     // needs the finished model to know each section's size
@@ -995,21 +1020,31 @@ async function load() {
       }
       o.material = m;
     });
+    render();
   });
 
   render();
 }
 
+let needsRender = true;
 function render() {
+  if (!syncMode) { needsRender = true; return; }
   controls.update();
   renderer.render(scene, camera);
 }
-function anim() { requestAnimationFrame(anim); render(); }
+function anim() {
+  requestAnimationFrame(anim);
+  const moved = controls.update();
+  if (moved || needsRender) {
+    renderer.render(scene, camera);
+    needsRender = false;
+  }
+}
 addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
-  if (syncMode) render();
+  render();
 });
 
 await load();
