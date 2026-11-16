@@ -30,6 +30,7 @@ for slug in "${slugs[@]}"; do
     echo "FAIL $slug (mk_manifest)"; fail=$((fail+1)); continue
   fi
   cp "$ROOT/staged/$V.json" "$man"
+  python3 "$ROOT/tools/fetch_sockets.py" "$man" "$ROOT/staged/meshes_$V.json" "$ROOT/build/$slug-mat" >/dev/null 2>&1 || true
   python3 "$ROOT/tools/apply_sockets.py" "$man" "$ROOT/build/$slug-mat" >/dev/null 2>&1 || true
   python3 "$ROOT/tools/fit_wheels.py" "$man" "$SITE/$slug/glb" >/dev/null 2>&1 || true
   python3 - "$man" <<'PY'

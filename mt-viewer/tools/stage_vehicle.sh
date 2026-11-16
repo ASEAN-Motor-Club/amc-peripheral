@@ -24,8 +24,10 @@ rm -rf "$SITE/materials.json" "$SITE/textures" "$SITE/glb"
 mkdir -p "$SITE"
 python3 "$ROOT/tools/bake_materials.py" "$BUILD" "$SITE"
 cp "$ROOT/staged/$V.json" "$SITE/$SLUG.json"
-# parts the game mounts on a mesh socket (the steering wheel) carry no blueprint
-# offset -- snap them onto the socket the extractor wrote next to the GLBs
+# SCS AttachToName and stock partSlot mounts need sockets even when the GLB
+# exporter skipped the sidecar. Fetch only the targets this manifest needs.
+python3 "$ROOT/tools/fetch_sockets.py" "$SITE/$SLUG.json" "$ROOT/staged/meshes_$V.json" "$BUILD" || true
+# Compose socket transforms with each component's local transform.
 python3 "$ROOT/tools/apply_sockets.py" "$SITE/$SLUG.json" "$BUILD" || true
 # wheel meshes hang off the inner sidewall; centre them on the hub the blueprint gives
 python3 "$ROOT/tools/fit_wheels.py" "$SITE/$SLUG.json" "$SITE/glb" || true

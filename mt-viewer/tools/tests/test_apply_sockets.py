@@ -56,6 +56,66 @@ class SteeringWheelSocketTests(unittest.TestCase):
         self.assertEqual(part['mountedOn'], 'socket:SteeringWheel')
         self.assertNotIn('hidden', part)
 
+    def test_scs_socket_composes_with_component_local_offset_idempotently(self):
+        manifest = {'parts': [{
+            'id': 'MTVehicleDoor_GEN_VARIABLE', 'attachSocket': 'Hook_6x4',
+            'position': [0, -0.04, 0], 'rotation': [0, 0, 0, 1], 'scale': [1, 1, 1],
+        }]}
+        sockets = [{'name': 'Hook_6x4', 'loc': [-60.913258, 0, 120.00001],
+                    'rot': [0, 0, 0], 'scale': [1, 1, 1]}]
+        result = self.run_manifest(manifest, sockets)
+        part = result['parts'][0]
+        self.assertEqual(part['position'], [-0.60913, 1.16, -0.0])
+        self.assertEqual(part['mountedOn'], 'socket:Hook_6x4')
+        self.assertEqual(part['socketLocal']['position'], [0, -0.04, 0])
+        self.assertEqual(self.run_manifest(result, sockets), result)
+
+    def test_stock_part_slot_uses_rear_wing_socket(self):
+        manifest = {'parts': [{
+            'id': 'Vista_RearWing_01', 'partSlot': 'RearWing',
+            'position': [0, 0, 0], 'rotation': [0, 0, 0, 1], 'scale': [1, 1, 1],
+        }]}
+        sockets = [{'name': 'RearWing', 'loc': [-228.86314, 0, 104.161644],
+                    'rot': [0, 0, 0], 'scale': [1, 1, 1]}]
+        part = self.run_manifest(manifest, sockets)['parts'][0]
+        self.assertEqual(part['position'], [-2.28863, 1.04162, -0.0])
+        self.assertEqual(part['mountedOn'], 'socket:RearWing')
+
+
+class ConstructionScriptSocketTests(unittest.TestCase):
+    def test_attach_to_name_is_mapped_to_component_template(self):
+        exports = [{'Class': 'SCS_Node', 'Properties': {
+            'ComponentTemplate': {'ObjectName': 'MTVehicleDoor_GEN_VARIABLE'},
+            'AttachToName': 'Hook_6x4',
+        }}]
+        from tools.mk_manifest import component_socket_names
+        self.assertEqual(component_socket_names(exports), {
+            'MTVehicleDoor_GEN_VARIABLE': 'Hook_6x4',
+        })
+
+    def test_alternate_socket_packages_use_distinct_sidecars(self):
+        from tools.fetch_sockets import sidecar_path
+        first = sidecar_path('/tmp/build', 'Frame', '/Game/Cars/Models/Atlas/Frame', 0)
+        second = sidecar_path('/tmp/build', 'Frame', '/Game/Cars/Models/Atlas/Cab', 1)
+        self.assertNotEqual(first, second)
+        self.assertTrue(first.endswith('Frame__0_Frame.sockets.json'))
+        self.assertTrue(second.endswith('Frame__1_Cab.sockets.json'))
+
+    def test_fetch_targets_include_scs_and_known_stock_slots_only(self):
+        from tools.fetch_sockets import required_sockets
+        manifest = {'parts': [
+            {'id': 'Door', 'attachSocket': 'Hook_6x4'},
+            {'id': 'Wing', 'partSlot': 'RearWing'},
+            {'id': 'Bumper', 'partSlot': 'FrontBumper'},
+            {'id': 'SteeringWheel'},
+        ]}
+        self.assertEqual(required_sockets(manifest), {
+            'Hook_6x4', 'RearWing', 'SteeringWheel',
+        })
+        self.assertEqual(required_sockets(manifest, attachments_only=True), {
+            'Hook_6x4', 'RearWing',
+        })
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -46,6 +46,35 @@ def ue_to_gltf_quat(q):
     return convert(q)
 
 
+def q_mul(a, b):
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return (
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+        aw * bw - ax * bx - ay * by - az * bz,
+    )
+
+
+def q_rotate(q, v):
+    x, y, z, w = q
+    vx, vy, vz = v
+    return (
+        (1 - 2 * (y * y + z * z)) * vx + 2 * (x * y - z * w) * vy + 2 * (x * z + y * w) * vz,
+        2 * (x * y + z * w) * vx + (1 - 2 * (x * x + z * z)) * vy + 2 * (y * z - x * w) * vz,
+        2 * (x * z - y * w) * vx + 2 * (y * z + x * w) * vy + (1 - 2 * (x * x + y * y)) * vz,
+    )
+
+
+def socket_transform(sock):
+    lx, ly, lz = sock["loc"]
+    position = [lx / 100.0, lz / 100.0, -ly / 100.0]
+    rotation = ue_to_gltf_quat(rotator_quat(*sock["rot"]))
+    sx, sy, sz = sock.get("scale") or [1, 1, 1]
+    return position, rotation, [sx, sz, sy]
+
+
 def main():
     if len(sys.argv) < 3:
         print("usage: apply_sockets.py <manifest.json> <build-dir>", file=sys.stderr)
@@ -67,16 +96,15 @@ def main():
     kept_parts = []
     for part in manifest.get("parts", []):
         key = part.get("id") or part.get("mesh")
-        sock = sockets.get(key)
+        explicit_socket = part.get("attachSocket")
+        slot = part.get("partSlot")
+        socket_name = explicit_socket or (slot if slot in sockets else key)
+        sock = sockets.get(socket_name)
         at_origin = all(abs(v) < 1e-6 for v in part.get("position", [0, 0, 0]))
-        already_mounted = str(part.get("mountedOn") or "").startswith("socket:")
+        already_mounted = str(part.get("mountedOn") or "") == "socket:" + str(socket_name)
         if key == "SteeringWheel" and not at_origin:
-            part.pop("hidden", None)  # a later blueprint supplied an explicit mount
+            part.pop("hidden", None)
         if key == "SteeringWheel" and at_origin and not sock and not already_mounted:
-            # MTVehicleBaseBP supplies this component to every vehicle. Without the
-            # body socket there is no valid mount point (trailers), so hide it rather
-            # than staging it at the origin. Keep the part so a later socket export
-            # can recover the real mount without regenerating the whole manifest.
             part["hidden"] = True
             dropped.append(key)
             kept_parts.append(part)
@@ -86,14 +114,30 @@ def main():
             continue
         if key == "SteeringWheel":
             part.pop("hidden", None)
-        if not (at_origin or already_mounted):
+        # An SCS AttachToName is authoritative even with a local offset. Exact-id
+        # and partSlot mounts retain the old origin-only guard for explicit BP mounts.
+        if not explicit_socket and not (at_origin or already_mounted):
             kept_parts.append(part)
-            continue  # the blueprint places it itself; trust that
-        lx, ly, lz = sock["loc"]
-        part["position"] = [round(lx / 100.0, 5), round(lz / 100.0, 5), round(-ly / 100.0, 5)]
-        rx, ry, rz, rw = ue_to_gltf_quat(rotator_quat(*sock["rot"]))
-        part["rotation"] = [round(rx, 6), round(ry, 6), round(rz, 6), round(rw, 6)]
-        part["mountedOn"] = "socket:" + key
+            continue
+        if already_mounted:
+            local = part.get("socketLocal") or {
+                "position": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [1, 1, 1]
+            }
+        else:
+            local = {
+                "position": list(part.get("position") or [0, 0, 0]),
+                "rotation": list(part.get("rotation") or [0, 0, 0, 1]),
+                "scale": list(part.get("scale") or [1, 1, 1]),
+            }
+        spos, squat, sscale = socket_transform(sock)
+        lpos = local["position"]
+        scaled = [lpos[i] * sscale[i] for i in range(3)]
+        rotated = q_rotate(squat, scaled)
+        part["position"] = [round(spos[i] + rotated[i], 5) for i in range(3)]
+        part["rotation"] = [round(v, 6) for v in q_mul(squat, local["rotation"])]
+        part["scale"] = [round(sscale[i] * local["scale"][i], 5) for i in range(3)]
+        part["socketLocal"] = local
+        part["mountedOn"] = "socket:" + socket_name
         moved.append(key)
         kept_parts.append(part)
     manifest["parts"] = kept_parts

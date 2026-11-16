@@ -460,6 +460,26 @@ def bolt_on_parts(vehicle, parsed_dir):
     return out
 
 
+def component_socket_names(exports):
+    """Map component template names to the SCS node's explicit mesh socket.
+
+    AttachParent alone is insufficient: a fifth wheel can be parented to the body
+    while its SCS node attaches it to Hook_6x4 on the frame. The component's own
+    RelativeLocation remains a local offset from that socket.
+    """
+    sockets = {}
+    for export in exports:
+        if export.get("Class") != "SCS_Node":
+            continue
+        props = export.get("Properties") or {}
+        socket = props.get("AttachToName")
+        template = props.get("ComponentTemplate") or {}
+        name = template.get("ObjectName")
+        if socket and name:
+            sockets[name] = socket
+    return sockets
+
+
 def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
     data = json.load(open(parsed_json_path))
     exports = data["Data"]["Exports"]
@@ -511,6 +531,7 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
         return wloc, wq, wscl
 
     meshes, seen, parts = [], {}, []
+    socket_names = component_socket_names(exports)
     for e in exports:
         p = e.get("Properties") or {}
         sm = mesh_import(p)
@@ -526,7 +547,7 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
         # UE cm -> metres, axis swap (x, z, -y)
         pos_m = (loc[0] / 100.0, loc[2] / 100.0, -loc[1] / 100.0)
         q_gltf = ue_to_gltf_quat(q)
-        parts.append({
+        part = {
             "id": e.get("ExportName"),
             "class": e.get("Class"),
             "mesh": name,
@@ -534,7 +555,10 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
             "position": [round(v, 5) for v in pos_m],
             "rotation": [round(v, 6) for v in q_gltf],
             "scale": [round(scl[0], 5), round(scl[2], 5), round(scl[1], 5)],
-        })
+        }
+        if e.get("ExportName") in socket_names:
+            part["attachSocket"] = socket_names[e["ExportName"]]
+        parts.append(part)
 
     # Blueprint mesh paths lie for variants; give the exporter fallbacks. Model
     # folders are every distinct `Cars/Models/<X>` the blueprint touches.
