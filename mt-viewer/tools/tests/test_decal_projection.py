@@ -42,14 +42,17 @@ class DecalProjectionTests(unittest.TestCase):
     def test_simplified_projection_matches_assembly(self):
         rng = random.Random(5020)
         for _ in range(50):
+            yaw = rng.uniform(-1, 1)
             args = (
                 [rng.uniform(-1000, 1000) for _ in range(3)],
                 [rng.uniform(-1000, 1000) for _ in range(2)],
-                rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1),
+                yaw, rng.uniform(-1, 1), rng.uniform(-1, 1),
                 rng.uniform(0.01, 5), rng.uniform(0.1, 4), rng.choice([0, 1]),
             )
             got = primary_uv(*args)
-            expected = assembly_primary(*args)
+            workshop_args = list(args)
+            workshop_args[2] = -yaw
+            expected = assembly_primary(*workshop_args)
             for a, b in zip(got, expected):
                 self.assertAlmostEqual(a, b, places=10)
 

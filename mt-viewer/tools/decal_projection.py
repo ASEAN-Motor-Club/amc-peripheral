@@ -27,9 +27,9 @@ def rotate_local(point, yaw, pitch):
     return tuple(2.0*a*q_dot_p - q_dot_q*b for a, b in zip(q, point))
 
 
-def primary_uv(point, position, yaw, pitch, roll, texture_scale,
-               stretch=1.0, flip=0.0):
-    """Return the primary decal texture UV for an object-local position."""
+def _assembly_uv(point, position, yaw, pitch, roll, texture_scale,
+                 stretch=1.0, flip=0.0):
+    """Raw shader-5020 projection in the shader's own yaw frame."""
     rx, ry = rotate_local(point, yaw, pitch)[:2]
     t = TAU * (-yaw - 0.25)
     x = math.cos(t)*rx - math.sin(t)*ry - position[0]
@@ -44,10 +44,17 @@ def primary_uv(point, position, yaw, pitch, roll, texture_scale,
     )
 
 
+def primary_uv(point, position, yaw, pitch, roll, texture_scale,
+               stretch=1.0, flip=0.0):
+    """Project a saved workshop layer; its primary yaw is opposite the shader's."""
+    return _assembly_uv(point, position, -yaw, pitch, roll,
+                        texture_scale, stretch, flip)
+
+
 def mirror_uv(point, position, yaw, pitch, roll, texture_scale,
               stretch=1.0, flip=0.0):
-    """Return the shader's independent mirrored-projection UV."""
-    return primary_uv(
+    """Return the independent mirrored projection in the workshop yaw frame."""
+    return _assembly_uv(
         point,
         (-position[0]-1.0, position[1]),
         yaw,

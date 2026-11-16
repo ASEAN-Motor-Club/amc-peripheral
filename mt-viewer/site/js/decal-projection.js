@@ -23,7 +23,7 @@ function rotate(point, yaw, pitch) {
   return q.map((x, i) => 2*x*dp - qq*point[i]);
 }
 
-export function primaryUv(point, position, yaw, pitch, roll, textureScale, stretch=1, flip=0) {
+function projectUv(point, position, yaw, pitch, roll, textureScale, stretch=1, flip=0) {
   const r = rotate(point, yaw, pitch);
   const t = TAU * (-yaw - 0.25);
   const x = Math.cos(t)*r[0] - Math.sin(t)*r[1] - position[0];
@@ -35,10 +35,14 @@ export function primaryUv(point, position, yaw, pitch, roll, textureScale, stret
   return [(u-0.5)/(s*stretch)+0.5, (v-0.5)/(s*(1-2*flip))+0.5];
 }
 
+export function primaryUv(point, position, yaw, pitch, roll, textureScale, stretch=1, flip=0) {
+  // Saved workshop primary layers use the opposite yaw from shader 5020.
+  return projectUv(point, position, -yaw, pitch, roll, textureScale, stretch, flip);
+}
+
 export function mirrorUv(point, position, yaw, pitch, roll, textureScale, stretch=1, flip=0) {
-  // Workshop payload yaw is already in the mirror's frame (confirmed against
-  // the in-game MrBug 24982 render); do not negate it a second time.
-  return primaryUv(point, [-position[0]-1, position[1]], yaw, pitch, -roll,
+  // Mirror projection keeps workshop yaw; mirror culling independently negates it.
+  return projectUv(point, [-position[0]-1, position[1]], yaw, pitch, -roll,
     textureScale, -stretch, flip);
 }
 
@@ -74,7 +78,7 @@ vec3 mtDecalRotate(vec3 p, float yaw, float pitch) {
   vec3 q = mtDecalAxis(yaw, pitch);
   return 2.0*q*dot(q, p) - dot(q, q)*p;
 }
-vec2 mtDecalPrimaryUv(vec3 p, vec2 PositionXPositionY, vec3 turns,
+vec2 mtDecalProjectUv(vec3 p, vec2 PositionXPositionY, vec3 turns,
                       float TextureScale, float Stretch, float Flip) {
   vec3 r = mtDecalRotate(p, turns.x, turns.y);
   float t = 6.283185307179586 * (-turns.x - 0.25);
@@ -86,10 +90,15 @@ vec2 mtDecalPrimaryUv(vec3 p, vec2 PositionXPositionY, vec3 turns,
                 255.0*TextureScale*(1.0-2.0*Flip));
   return (v - 0.5)/d + 0.5;
 }
+vec2 mtDecalPrimaryUv(vec3 p, vec2 PositionXPositionY, vec3 turns,
+                      float TextureScale, float Stretch, float Flip) {
+  return mtDecalProjectUv(p, PositionXPositionY,
+    vec3(-turns.x, turns.y, turns.z), TextureScale, Stretch, Flip);
+}
 vec2 mtDecalMirrorUv(vec3 p, vec2 PositionXPositionY, vec3 turns,
                      float TextureScale, float Stretch, float Flip) {
-  // Workshop payload yaw is already in the mirror's frame.
-  return mtDecalPrimaryUv(p, vec2(-PositionXPositionY.x-1.0, PositionXPositionY.y),
+  // Mirror projection keeps workshop yaw; mirror culling independently negates it.
+  return mtDecalProjectUv(p, vec2(-PositionXPositionY.x-1.0, PositionXPositionY.y),
     vec3(turns.x, turns.y, -turns.z), TextureScale, -Stretch, Flip);
 }
 float mtDecalVisibility(vec3 p, vec3 n, vec3 turns, int flags, bool mirrored) {
