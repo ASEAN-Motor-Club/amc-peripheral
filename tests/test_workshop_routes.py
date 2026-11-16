@@ -172,10 +172,26 @@ async def test_legacy_character_url_redirects_after_opt_in(settings):
         await client.close()
 
 
-async def test_health_reports_readable_source(client):
+async def test_snapshot_batch_is_bounded_and_reports_missing(client):
+    queued = await (await client.get("/api/workshop/items/1/snapshot")).json()
+    response = await client.get(
+        "/api/workshop/snapshots", params={"keys": f"{queued['key']},{'0' * 64}"}
+    )
+    assert response.status == 200
+    data = await response.json()
+    assert data["snapshots"][queued["key"]]["status"] == "pending"
+    assert data["snapshots"]["0" * 64] is None
+    bad = await client.get("/api/workshop/snapshots", params={"keys": "not-a-key"})
+    assert bad.status == 400
+    assert (await bad.json())["error"]["code"] == "invalid_keys"
+
+
+async def test_health_includes_snapshot_worker_state(client):
     response = await client.get("/api/workshop/health")
     assert response.status == 200
     data = await response.json()
     assert data["status"] == "ok"
     assert data["items"] == 3
     assert data["runId"] == 7
+    assert data["snapshots"]["queueDepth"] == 0
+    assert data["snapshots"]["artifactBytes"] == 0
