@@ -209,6 +209,42 @@ class WorkshopRepository:
             for row in rows
         ]
 
+    def _site_search_authors(
+        self, query: str, limit: int
+    ) -> list[dict[str, Any]] | None:
+        if self.site_db is None or not self.site_db.is_file():
+            return None
+        escaped = query.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+        try:
+            conn = sqlite3.connect(
+                f"file:{self.site_db}?mode=ro", uri=True, timeout=2.0
+            )
+            conn.row_factory = sqlite3.Row
+            try:
+                rows = conn.execute(
+                    "SELECT account_id, display_name, uploads, installs, votes, "
+                    "representative_id FROM author_summary "
+                    "WHERE display_name LIKE ? ESCAPE '!' COLLATE NOCASE "
+                    "ORDER BY CASE WHEN display_name = ? COLLATE NOCASE THEN 0 ELSE 1 END, "
+                    "installs DESC, votes DESC, account_id ASC LIMIT ?",
+                    (f"%{escaped}%", query, limit),
+                ).fetchall()
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            return None
+        return [
+            {
+                "accountId": row["account_id"],
+                "displayName": row["display_name"],
+                "uploads": int(row["uploads"]),
+                "installs": int(row["installs"] or 0),
+                "votes": int(row["votes"] or 0),
+                "representativeId": row["representative_id"],
+            }
+            for row in rows
+        ]
+
     def _site_stats(self) -> dict[str, Any] | None:
         home = self._site_home()
         if not home:
@@ -364,6 +400,54 @@ class WorkshopRepository:
             "runId": run,
             "sort": sort,
         }
+
+    def search_authors(self, query: str, limit: int = 24) -> list[dict[str, Any]]:
+        query = " ".join(query.strip().split())[:80]
+        if not query:
+            return []
+        limit = max(1, min(limit, 48))
+        site = self._site_search_authors(query, limit)
+        if site is not None:
+            return site
+        escaped = query.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+        sql = f"""
+            WITH public AS (
+              SELECT w.* FROM workshop w
+              WHERE {PUBLIC_WHERE} AND w.account_id IN (
+                SELECT account_id FROM workshop m
+                WHERE m.deleted_at IS NULL AND COALESCE(m.hidden,0)=0
+                  AND m.account_id>0 AND m.author_name LIKE ? ESCAPE '!' COLLATE NOCASE
+              )
+            ), agg AS (
+              SELECT account_id, COUNT(*) AS uploads,
+                     SUM(COALESCE(installed,0)) AS installs,
+                     SUM(COALESCE(votes,0)) AS votes,
+                     (SELECT a2.author_name FROM public a2
+                       WHERE a2.account_id=p.account_id AND a2.author_name IS NOT NULL
+                       ORDER BY a2.created_at DESC,a2.id DESC LIMIT 1) AS display_name,
+                     (SELECT a3.id FROM public a3 WHERE a3.account_id=p.account_id
+                       ORDER BY COALESCE(a3.installed,0) DESC,COALESCE(a3.votes,0) DESC,
+                                a3.id DESC LIMIT 1) AS representative_id
+              FROM public p GROUP BY account_id
+            )
+            SELECT account_id,display_name,uploads,installs,votes,representative_id
+            FROM agg
+            ORDER BY CASE WHEN display_name=? COLLATE NOCASE THEN 0 ELSE 1 END,
+                     installs DESC,votes DESC,account_id ASC LIMIT ?
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql, (f"%{escaped}%", query, limit)).fetchall()
+        return [
+            {
+                "accountId": row["account_id"],
+                "displayName": row["display_name"],
+                "uploads": int(row["uploads"]),
+                "installs": int(row["installs"] or 0),
+                "votes": int(row["votes"] or 0),
+                "representativeId": row["representative_id"],
+            }
+            for row in rows
+        ]
 
     def authors(self, limit: int = 10) -> list[dict[str, Any]]:
         site = self._site_authors(limit)

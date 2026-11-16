@@ -98,6 +98,13 @@ def test_author_lookup(repo):
     assert repo.author(4444) is None
 
 
+def test_author_search_is_bounded_and_case_insensitive(repo):
+    assert [a["accountId"] for a in repo.search_authors("ALI")] == [11]
+    assert repo.search_authors("missing") == []
+    assert repo.search_authors("%") == []
+    assert repo.search_authors("   ") == []
+
+
 def test_club_filter_does_not_surface_steam_id(repo):
     result = repo.list_items(filters=ListFilters(club=True), limit=10)
     assert set(ids(result)) == {1, 3}

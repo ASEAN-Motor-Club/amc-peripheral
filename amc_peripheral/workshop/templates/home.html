@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import card %}
+{% from "_macros.html" import card, author_card %}
 {% block content %}
 <section class="hero">
   <div class="wrap hero-inner">
@@ -7,11 +7,10 @@
       <p class="eyebrow">Motor Town community creations</p>
       <h1>Find your next build.</h1>
       <p class="lede">Browse the largest community catalogue of shared paints, decals, parts and tuned vehicles in Motor Town.</p>
-      <form class="search-stub" action="/workshop/gallery/" method="get">
-        <label class="sr-only" for="vehicle">Filter by vehicle</label>
-        <input id="vehicle" name="vehicle" list="vehicle-list" placeholder="Vehicle key — e.g. Vamos3" autocomplete="off">
-        <datalist id="vehicle-list"></datalist>
-        <button type="submit">Browse gallery</button>
+      <form class="search-stub" action="/workshop/search/" method="get" role="search">
+        <label class="sr-only" for="workshop-search">Search by author or item code</label>
+        <input id="workshop-search" name="q" type="search" placeholder="Author name or item code — e.g. #179250" autocomplete="off" maxlength="80" required>
+        <button type="submit">Search</button>
       </form>
     </div>
     <dl class="stats" aria-label="Workshop totals">
@@ -49,19 +48,7 @@
     <div><p class="eyebrow">Builders worth following</p><h2 id="authors-title">Popular authors</h2></div>
   </div>
   <div class="author-grid">
-    {% for author in data.authors %}
-    <a class="author-card" href="/workshop/authors/{{ author.accountId }}/">
-      {% if author.snapshotUrl %}
-      <img class="author-avatar" src="{{ author.snapshotUrl }}" alt="" width="42" height="42" loading="lazy" decoding="async">
-      {% else %}
-      <span class="author-initial">{{ (author.displayName or '?')[:1] }}</span>
-      {% endif %}
-      <span>
-        <strong>{{ author.displayName or 'Workshop creator' }}</strong>
-        <span>{{ author.uploads }} builds · {{ author.installs }} installs</span>
-      </span>
-    </a>
-    {% else %}<p class="empty">No creators to show yet.</p>{% endfor %}
+    {% for author in data.authors %}{{ author_card(author) }}{% else %}<p class="empty">No creators to show yet.</p>{% endfor %}
   </div>
 </section>
 {% endblock %}

@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import mimetypes
+import re
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -37,6 +38,16 @@ from .snapshots import (
 
 log = logging.getLogger(__name__)
 HERE = Path(__file__).resolve().parent
+ITEM_CODE = re.compile(r"#([0-9]{1,9})")
+
+
+def search_query(request: web.Request) -> str:
+    return " ".join(request.query.get("q", "").strip().split())[:80]
+
+
+def search_item_id(query: str) -> int | None:
+    match = ITEM_CODE.fullmatch(query)
+    return int(match.group(1)) if match else None
 
 
 def _json_error(code: str, message: str, status: int = 400) -> web.Response:
@@ -256,6 +267,17 @@ def create_app(
         attach_author_snapshots(data["authors"])
         return web.json_response(data)
 
+    async def api_search(request: web.Request) -> web.Response:
+        query = search_query(request)
+        item_id = search_item_id(query)
+        if item_id is not None:
+            item = await asyncio.to_thread(repository.get_item, item_id)
+            if item is None:
+                return _json_error("not_found", "Workshop item not found", 404)
+            return web.json_response({"type": "item", "item": item})
+        authors = await asyncio.to_thread(repository.search_authors, query)
+        return web.json_response({"type": "authors", "query": query, "authors": authors})
+
     async def api_list(request: web.Request) -> web.Response:
         query = request.query
         try:
@@ -390,6 +412,18 @@ def create_app(
         attach_author_snapshots(data["authors"])
         return render("home.html", page="home", data=data, stats=stats)
 
+    async def page_search(request: web.Request) -> web.Response:
+        query = search_query(request)
+        item_id = search_item_id(query)
+        if item_id is not None:
+            item = await asyncio.to_thread(repository.get_item, item_id)
+            if item is None:
+                raise web.HTTPNotFound()
+            raise web.HTTPFound(f"/workshop/items/{item_id}/")
+        authors = await asyncio.to_thread(repository.search_authors, query)
+        attach_author_snapshots(authors)
+        return render("search.html", page="search", query=query, authors=authors)
+
     async def page_gallery(request: web.Request) -> web.Response:
         query = request.query
         try:
@@ -511,6 +545,7 @@ def create_app(
 
     app.router.add_get("/healthz", api_health)
     app.router.add_get("/workshop/", page_home)
+    app.router.add_get("/workshop/search/", page_search)
     app.router.add_get("/workshop/gallery/", page_gallery)
     app.router.add_get("/workshop/items/{id:\\d+}/", page_item)
     app.router.add_get("/workshop/items/{id:\\d+}/viewer/", page_item_viewer)
@@ -522,6 +557,7 @@ def create_app(
     app.router.add_get("/vehicles/", redirect_legacy_character)
 
     app.router.add_get("/api/workshop/home", api_home)
+    app.router.add_get("/api/workshop/search", api_search)
     app.router.add_get("/api/workshop/items", api_list)
     app.router.add_get("/api/workshop/items/{id:\\d+}", api_item)
     app.router.add_get("/api/workshop/items/{id:\\d+}/viewer", api_viewer)

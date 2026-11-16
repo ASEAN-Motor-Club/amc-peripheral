@@ -121,6 +121,37 @@ async def test_card_snapshot_uses_visible_priority(client):
     assert boosted["priority"] == 100
 
 
+async def test_search_finds_authors_and_opens_exact_item_codes(client):
+    home = await client.get("/workshop/")
+    text = await home.text()
+    assert 'action="/workshop/search/"' in text
+    assert 'name="q"' in text
+    assert "#179250" in text
+
+    page = await client.get("/workshop/search/?q=ALI")
+    assert page.status == 200
+    body = await page.text()
+    assert "Alice" in body
+    assert '/workshop/authors/11/' in body
+    assert "Bob" not in body
+
+    authors = await client.get("/api/workshop/search?q=ALI")
+    payload = await authors.json()
+    assert payload["type"] == "authors"
+    assert [a["accountId"] for a in payload["authors"]] == [11]
+
+    item = await client.get("/workshop/search/?q=%231", allow_redirects=False)
+    assert item.status == 302
+    assert item.headers["Location"] == "/workshop/items/1/"
+    api_item = await client.get("/api/workshop/search?q=%231")
+    assert (await api_item.json())["item"]["id"] == 1
+
+    hidden = await client.get("/workshop/search/?q=%235", allow_redirects=False)
+    assert hidden.status == 404
+    missing = await client.get("/api/workshop/search?q=%23999999")
+    assert missing.status == 404
+
+
 async def test_gallery_exposes_snapshot_keys_and_bounds_the_queue(client):
     response = await client.get("/workshop/gallery/?sort=new")
     assert response.status == 200

@@ -2,6 +2,20 @@
 <span class="badge {{ tone }}">{{ label }}</span>
 {%- endmacro %}
 
+{% macro author_card(author) -%}
+<a class="author-card" href="/workshop/authors/{{ author.accountId }}/">
+  {% if author.snapshotUrl %}
+  <img class="author-avatar" src="{{ author.snapshotUrl }}" alt="" width="42" height="42" loading="lazy" decoding="async">
+  {% else %}
+  <span class="author-initial">{{ (author.displayName or '?')[:1] }}</span>
+  {% endif %}
+  <span>
+    <strong>{{ author.displayName or 'Workshop creator' }}</strong>
+    <span>{{ author.uploads }} builds · {{ author.installs }} installs</span>
+  </span>
+</a>
+{%- endmacro %}
+
 {% macro card(item, compare=false) -%}
 {% set pending = item.snapshotKey and not item.snapshotCardUrl and item.snapshotStatus not in ('unsupported', 'failed_permanent') %}
 <article class="vehicle-card" data-workshop-id="{{ item.id }}"{% if pending %} data-snapshot-key="{{ item.snapshotKey }}" data-snapshot-api="/api/workshop/items/{{ item.id }}/snapshot?via=card"{% endif %}>
