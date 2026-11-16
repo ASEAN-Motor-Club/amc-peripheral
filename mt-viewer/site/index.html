@@ -117,6 +117,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { DECAL_PROJECTION_GLSL } from "./js/decal-projection.js?v=1";
 
 const params = new URLSearchParams(location.search);
@@ -142,6 +143,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.85;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
+RectAreaLightUniformsLib.init();
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = !syncMode;
@@ -491,12 +493,12 @@ async function load() {
 
   // --- owned attachments: attachment transform -> actor-local components ----
   async function streamAttachments() {
-    const info = (window.__attachmentInfo = { step: "start", records: 0, resolved: 0, components: 0, missing: [] });
+    const info = (window.__attachmentInfo = { step: "start", records: 0, resolved: 0, components: 0, lights: 0, lightBudgetSkipped: 0, missing: [] });
     if (params.get("attachments") === "0") { info.step = "off"; return; }
     let catalogue, owners, attachmentTable;
     try {
       [catalogue, owners, attachmentTable] = await Promise.all([
-        fetch("attachments/catalog.json?v=1").then(r => r.json()),
+        fetch("attachments/catalog.json?v=2").then(r => r.json()),
         fetch("attachments/vehicles.json?v=1").then(r => r.json()),
         fetch("attachments/materials.json?v=1").then(r => r.json()),
       ]);
@@ -564,9 +566,30 @@ async function load() {
         group.add(cg);
         info.components++;
       }
+      if (params.get("attachmentLights") !== "0") {
+        for (const ld of actor.lights || []) {
+          if (info.lights >= 24) { info.lightBudgetSkipped++; continue; }
+          const color = new THREE.Color().setRGB(...ld.color, THREE.LinearSRGBColorSpace);
+          const light = new THREE.RectAreaLight(color, ld.intensity, ld.width, ld.height);
+          light.name = `Light_${part.slot}`;
+          light.position.fromArray(ld.position);
+          // UE lights emit along local +X; Three RectAreaLight emits along -Z.
+          const align = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2);
+          light.quaternion.fromArray(ld.rotation).multiply(align);
+          light.castShadow = ld.castShadows;
+          light.userData.isAttachmentLight = true;
+          light.userData.attachmentKey = part.key;
+          // Metadata only: Three RectAreaLight has no cutoff or barn-door controls.
+          light.userData.attenuationRadius = ld.attenuationRadius;
+          light.userData.barnDoorAngle = ld.barnDoorAngle;
+          group.add(light);
+          info.lights++;
+        }
+      }
       root.add(group);
     }
     info.step = "done";
+    if (info.lightBudgetSkipped) console.warn(`attachment lights skipped over budget: ${info.lightBudgetSkipped}`);
     render();
   }
   await streamAttachments();

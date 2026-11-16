@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from tools.attachments import attachment_to_part, component_to_part
+from tools.attachments import attachment_to_part, component_to_part, rect_light_to_part
 
 
 class AttachmentTransformTests(unittest.TestCase):
@@ -47,6 +47,30 @@ class AttachmentTransformTests(unittest.TestCase):
         expected = [0.0, 0.0, -math.sqrt(0.5), math.sqrt(0.5)]
         for got, want in zip(part['rotation'], expected):
             self.assertAlmostEqual(got, want)
+    def test_blue_rect_light(self):
+        component = {
+            'Type': 'RectLightComponent', 'IntensityNits': 19.199999,
+            'Properties': {
+                'SourceWidth': 50, 'SourceHeight': 5, 'AttenuationRadius': 150,
+                'BarnDoorAngle': 90, 'LightColor': {'R': 0, 'G': 0, 'B': 255},
+                'RelativeLocation': {'X': 0, 'Y': 0, 'Z': -0.5},
+                'RelativeRotation': {'Pitch': -90, 'Yaw': 0, 'Roll': 0},
+                'CastShadows': False,
+            },
+        }
+        light = rect_light_to_part(component)
+        self.assertEqual(light['type'], 'rect')
+        self.assertEqual(light['position'], [0.0, -0.005, 0.0])
+        self.assertEqual(light['width'], 0.5)
+        self.assertEqual(light['height'], 0.05)
+        self.assertEqual(light['intensity'], 19.199999)
+        self.assertEqual(light['color'], [0.0, 0.0, 1.0])
+        self.assertEqual(light['attenuationRadius'], 1.5)
+        self.assertEqual(light['barnDoorAngle'], 90)
+        self.assertFalse(light['castShadows'])
+    def test_rect_light_requires_cooked_nits_and_area(self):
+        with self.assertRaises(ValueError):
+            rect_light_to_part({'Type': 'RectLightComponent', 'Properties': {'Intensity': 10}})
 
 
 if __name__ == '__main__':

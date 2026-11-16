@@ -55,3 +55,27 @@ def component_to_part(component):
     props = component.get('Properties', {})
     return convert(props.get('RelativeLocation'), props.get('RelativeRotation'),
                    props.get('RelativeScale3D'))
+
+
+def rect_light_to_part(component):
+    props = component.get('Properties', {})
+    color = props.get('LightColor', {})
+    # RectLightComponent.LightColor is FColor (bytes), unlike the separate
+    # MTLightControlComponent.Net_LightColor float property used by the mesh.
+    rgb = [float(color.get(k, 0.0)) / 255.0 for k in ('R', 'G', 'B')]
+    width = float(props.get('SourceWidth', 0.0)) / 100.0
+    height = float(props.get('SourceHeight', 0.0)) / 100.0
+    intensity = component.get('IntensityNits')
+    if intensity is None or width <= 0.0 or height <= 0.0:
+        raise ValueError('RectLight requires cooked IntensityNits and non-zero source dimensions')
+    return {
+        'type': 'rect',
+        **convert(props.get('RelativeLocation'), props.get('RelativeRotation')),
+        'color': rgb,
+        'intensity': float(intensity),
+        'width': width,
+        'height': height,
+        'attenuationRadius': float(props.get('AttenuationRadius', 0.0)) / 100.0,
+        'barnDoorAngle': float(props.get('BarnDoorAngle', 0.0)),
+        'castShadows': bool(props.get('CastShadows', False)),
+    }
