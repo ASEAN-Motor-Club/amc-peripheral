@@ -585,20 +585,40 @@ async function load() {
   // The game bakes each layer through LocalBounds/LocalNormal into a per-mesh
   // render target. Here the same projection runs per fragment on the original
   // material, so no UV-space stamp or fitted bounding-box transform is needed.
+  function applyOwnerColors(rec) {
+    const colors = rec?.ownerColors;
+    if (!colors) { window.__ownerPaint = null; return; }
+    const applied = [];
+    for (const [key, m] of matCache) {
+      if (key.endsWith("|true")) continue; // plain fallback stays neutral
+      const slot = key.split("|")[0];
+      const rgba = colors[slot];
+      if (!rgba) continue;
+      m.color.setRGB(rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, THREE.SRGBColorSpace);
+      if (colorSlots[slot]?.useAlpha) {
+        m.opacity = rgba[3] / 255;
+        m.transparent = m.opacity < 1;
+      }
+      if (!applied.includes(slot)) applied.push(slot);
+    }
+    window.__ownerPaint = { vehicleId: rec.ownerVehicleId, applied };
+  }
+
   async function applyVehicleDecals() {
     const info = (window.__decalInfo = { step: "start", projection: "shader-5020" });
-    if (params.get("decals") === "0") { info.step = "off"; return; }
     const slots = manifest.decalSlots || [];
     info.slots = slots.length ? slots : "fallback";
 
     let idx, cat;
     try {
       [idx, cat] = await Promise.all([
-        fetch("decals/vehicles.json").then(r => r.json()),
+        fetch("decals/vehicles.json?v=2").then(r => r.json()),
         fetch("decals/decals.json").then(r => r.json()),
       ]);
     } catch (e) { info.step = "fetch-failed:" + e.message; return; }
     const rec = idx.vehicles[vehicle] || Object.values(idx.vehicles).find(v => v.slug === vehicle);
+    applyOwnerColors(rec);
+    if (params.get("decals") === "0") { info.step = "off"; render(); return; }
     info.rec = rec ? rec.layers.length : 0;
     if (!rec || !rec.layers.length) { info.step = "no-record"; return; }
 
