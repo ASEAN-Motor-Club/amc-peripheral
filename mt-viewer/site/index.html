@@ -177,14 +177,18 @@ controls.target.set(0, 0.65, 0);
 // It is removed before the base vehicle's first material frame is presented.
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const loadingWaveEnabled = !reducedMotion && !syncMode;
-const loadingWaveInfo = (window.__loadingWave = { step: loadingWaveEnabled ? "active" : "skipped", points: 512, time: 0 });
+const ARENA_SIZE = 24, WAVE_GRID = 100, WAVE_POINTS = WAVE_GRID * WAVE_GRID;
+const loadingWaveInfo = (window.__loadingWave = {
+  step: loadingWaveEnabled ? "active" : "skipped", points: loadingWaveEnabled ? WAVE_POINTS : 0,
+  arenaSize: ARENA_SIZE, center: [0, 0.03, 0], time: 0
+});
 let loadingWave = null;
 if (loadingWaveEnabled) {
-  const positions = new Float32Array(32 * 16 * 3);
-  for (let z = 0; z < 16; z++) for (let x = 0; x < 32; x++) {
-    const i = (z * 32 + x) * 3;
-    positions[i] = (x - 15.5) * 0.16;
-    positions[i + 2] = (z - 7.5) * 0.16;
+  const positions = new Float32Array(WAVE_POINTS * 3);
+  for (let z = 0; z < WAVE_GRID; z++) for (let x = 0; x < WAVE_GRID; x++) {
+    const i = (z * WAVE_GRID + x) * 3;
+    positions[i] = (x / (WAVE_GRID - 1) - 0.5) * ARENA_SIZE;
+    positions[i + 2] = (z / (WAVE_GRID - 1) - 0.5) * ARENA_SIZE;
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
@@ -199,7 +203,7 @@ if (loadingWaveEnabled) {
         vec3 p = position;
         float radius = length(p.xz);
         float wave = sin(radius * 4.5 - uTime * 3.2);
-        p.y = wave * 0.13 + sin(p.x * 2.5 + uTime * 1.7) * 0.045;
+        p.y = wave * 0.24 + sin(p.x * 2.5 + uTime * 1.7) * 0.08;
         vEnergy = 0.55 + 0.45 * wave;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
@@ -216,7 +220,7 @@ if (loadingWaveEnabled) {
   });
   const points = new THREE.Points(geometry, material);
   points.name = "LoadingWave";
-  points.position.y = 0.65;
+  points.position.y = 0.03;
   points.frustumCulled = false;
   scene.add(points);
   loadingWave = { points, material, start: performance.now() };
@@ -239,9 +243,16 @@ const rim = new THREE.DirectionalLight(0x9fc0ff, 0.55); rim.position.set(-5, 3, 
 const fill = new THREE.DirectionalLight(0xffffff, 0.18); fill.position.set(-2, 1.5, 5); scene.add(fill);
 
 // neutral studio floor so the car reads against something
-const grid = new THREE.GridHelper(24, 24, 0x39415a, 0x242a3a);
+const grid = new THREE.GridHelper(ARENA_SIZE, ARENA_SIZE, 0x39415a, 0x242a3a);
 grid.position.y = -0.001;
 scene.add(grid);
+function alignArena(b) {
+  if (b.isEmpty()) return;
+  const center = b.getCenter(new THREE.Vector3());
+  grid.position.set(center.x, -0.001, center.z);
+  if (loadingWave) loadingWave.points.position.set(center.x, 0.03, center.z);
+  loadingWaveInfo.center = [center.x, 0.03, center.z];
+}
 
 const loader = new GLTFLoader();
 function loadImage(uri) {
@@ -468,7 +479,9 @@ async function load() {
     fetch(`${vehicle}/materials.json`).then(r => r.json()).catch(() => ({ materials: {} })),
   ]);
   const visibleParts = manifest.parts.filter(p => !p.hidden);
-  frameBox(estimateBox());   // something framed before the first byte arrives
+  const initialBox = estimateBox();
+  frameBox(initialBox);   // something framed before the first byte arrives
+  alignArena(initialBox);
   statusEl.textContent = `geometry 0/${visibleParts.length}`;
   const defs = table.materials || {};
   slotDefs = defs;
@@ -514,6 +527,7 @@ async function load() {
     if (d <= lastDiag * 1.15) return;      // only re-frame on real growth
     lastDiag = d;
     frameBox(b);
+    alignArena(b);
   }
   // Load the biggest GLBs first, three at a time. Manifest order is blueprint
   // order — a wheel can easily be part 1 — so sequential loading shows you a
@@ -1146,7 +1160,6 @@ function anim() {
   if (loadingWave) {
     const time = (performance.now() - loadingWave.start) / 1000;
     loadingWave.material.uniforms.uTime.value = time;
-    loadingWave.points.rotation.y = time * 0.08;
     loadingWaveInfo.time = time;
     needsRender = true;
   }
