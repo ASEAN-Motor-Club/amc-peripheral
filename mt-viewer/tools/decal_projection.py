@@ -50,7 +50,7 @@ def mirror_uv(point, position, yaw, pitch, roll, texture_scale,
     return primary_uv(
         point,
         (-position[0]-1.0, position[1]),
-        -yaw,
+        yaw,
         pitch,
         -roll,
         texture_scale,
