@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import mimetypes
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -81,6 +82,8 @@ def create_app(
     repository: WorkshopRepository | None = None,
     character_vehicles: CharacterVehicleRepository | None = None,
 ) -> web.Application:
+    # Some minimal Python builds lack a system mime.types entry for WebP.
+    mimetypes.add_type("image/webp", ".webp")
     settings = settings or WorkshopSettings.from_env()
     settings.validate()
     repository = repository or WorkshopRepository(
