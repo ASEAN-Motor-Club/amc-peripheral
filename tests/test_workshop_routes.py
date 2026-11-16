@@ -1,0 +1,146 @@
+"""HTTP and SSR behavior tests."""
+
+from __future__ import annotations
+
+import json
+
+
+async def test_home_page_renders_without_webgl(client):
+    response = await client.get("/workshop/")
+    assert response.status == 200
+    text = await response.text()
+    assert "Find your next build" in text
+    assert "Popular builds" in text
+    assert "Vamos3" in text
+    assert "webgl" not in text.lower()
+    assert "76561198000000000" not in text
+
+
+async def test_home_api_excludes_canary_and_exposes_no_steam_ids(client):
+    response = await client.get("/api/workshop/home")
+    assert response.status == 200
+    data = await response.json()
+    ids = {item["id"] for item in data["popular"] + data["newest"]}
+    assert 999999999 not in ids
+    assert 5 not in ids and 6 not in ids
+    assert "76561198000000000" not in json.dumps(data)
+
+
+async def test_gallery_paginates_and_cursor_stays_in_filters(client):
+    first = await client.get("/api/workshop/items?sort=popular&limit=1")
+    assert first.status == 200
+    body = await first.json()
+    assert body["items"][0]["id"] == 1
+    cursor = body["nextCursor"]
+    assert cursor
+    second = await client.get(
+        "/api/workshop/items", params={"sort": "popular", "limit": 1, "cursor": cursor}
+    )
+    assert second.status == 200
+    assert (await second.json())["items"][0]["id"] == 3
+    wrong = await client.get(
+        "/api/workshop/items",
+        params={"sort": "popular", "limit": 1, "cursor": cursor, "vehicle": "Boxy"},
+    )
+    assert wrong.status == 400
+    assert (await wrong.json())["error"]["code"] == "invalid_cursor"
+
+
+async def test_item_and_viewer_endpoints(client):
+    item = await client.get("/api/workshop/items/1")
+    assert item.status == 200
+    body = await item.json()
+    assert body["vehicleKey"] == "Vamos3"
+    assert body["accountId"] == 11
+
+    viewer = await client.get("/api/workshop/items/1/viewer")
+    assert viewer.status == 200
+    config = await viewer.json()
+    assert config["source"]["kind"] == "workshop"
+    assert config["vehicle"]["slug"] == "vamos3"
+    assert config["paint"]["colors"][0]["rgba"] == [18, 24, 30, 255]
+    assert config["decals"][0]["rot"] == [-89.9, 10.0, 11.8]
+    assert config["attachments"][0]["key"] == "Attachment_Light_04"
+    etag = viewer.headers["ETag"]
+    cached = await client.get(
+        "/api/workshop/items/1/viewer", headers={"If-None-Match": etag}
+    )
+    assert cached.status == 304
+
+
+async def test_item_page_reports_configuration(client):
+    response = await client.get("/workshop/items/1/")
+    assert response.status == 200
+    text = await response.text()
+    assert "Configuration" in text
+    assert "View in 3D" in text
+    assert "Rendered decals" in text
+    redirect = await client.get(
+        "/workshop/items/1/viewer/", allow_redirects=False
+    )
+    assert redirect.status == 302
+    assert redirect.headers["Location"] == "/vehicles/index.html?workshop=1"
+
+
+async def test_hidden_deleted_and_unknown_items_are_404(client):
+    for workshop_id in (5, 6, 999999999, 404):
+        response = await client.get(f"/api/workshop/items/{workshop_id}")
+        assert response.status == 404
+        assert (await response.json())["error"]["code"] == "not_found"
+
+
+async def test_author_and_vehicle_pages(client):
+    author = await client.get("/workshop/authors/11/")
+    assert author.status == 200
+    assert "Alice" in await author.text()
+    unknown_author = await client.get("/workshop/authors/999/")
+    assert unknown_author.status == 404
+    vehicle = await client.get("/workshop/vehicles/Vamos3/")
+    assert vehicle.status == 200
+    assert "Vamos3" in await vehicle.text()
+
+
+async def test_club_filter_uses_safe_projection(client):
+    response = await client.get("/api/workshop/items?club=1")
+    assert response.status == 200
+    data = await response.json()
+    assert {item["id"] for item in data["items"]} == {1, 3}
+    assert "76561198000000000" not in await response.text()
+
+
+async def test_character_vehicle_endpoint_is_disabled_by_default(client):
+    for path in ("/api/character-vehicles/1/viewer",
+                 "/api/character-vehicles/1/meta",
+                 "/vehicles/character/1/"):
+        response = await client.get(path)
+        assert response.status == 404
+
+
+async def test_legacy_character_url_redirects_after_opt_in(settings):
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from amc_peripheral.workshop.routes import create_app
+
+    enabled = type(settings)(
+        **{**settings.__dict__, "character_vehicle_dsn": "dbname=unused",
+           "character_vehicle_public": True}
+    )
+    client = TestClient(TestServer(create_app(enabled)))
+    await client.start_server()
+    try:
+        response = await client.get(
+            "/vehicles/?vehicle=vamos3&ownerVehicleId=2367", allow_redirects=False
+        )
+        assert response.status == 301
+        assert response.headers["Location"] == "/vehicles/character/2367/"
+    finally:
+        await client.close()
+
+
+async def test_health_reports_readable_source(client):
+    response = await client.get("/api/workshop/health")
+    assert response.status == 200
+    data = await response.json()
+    assert data["status"] == "ok"
+    assert data["items"] == 3
+    assert data["runId"] == 7

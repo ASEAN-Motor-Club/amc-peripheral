@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_macros.html" import card %}
+{% block content %}
+<section class="hero">
+  <div class="wrap hero-inner">
+    <div>
+      <p class="eyebrow">Motor Town community creations</p>
+      <h1>Find your next build.</h1>
+      <p class="lede">Browse the largest community catalogue of shared paints, decals, parts and tuned vehicles in Motor Town.</p>
+      <form class="search-stub" action="/workshop/gallery/" method="get">
+        <label class="sr-only" for="vehicle">Filter by vehicle</label>
+        <input id="vehicle" name="vehicle" list="vehicle-list" placeholder="Vehicle key — e.g. Vamos3" autocomplete="off">
+        <datalist id="vehicle-list"></datalist>
+        <button type="submit">Browse gallery</button>
+      </form>
+    </div>
+    <dl class="stats" aria-label="Workshop totals">
+      <div><dt>Builds</dt><dd>{{ "{:,}".format(stats['items']) }}</dd></div>
+      <div><dt>Creators</dt><dd>{{ "{:,}".format(stats['accounts']) }}</dd></div>
+      <div><dt>Vehicle types</dt><dd>{{ stats.vehicles }}</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="section wrap" aria-labelledby="popular-title">
+  <div class="section-head">
+    <div><p class="eyebrow">Most installed</p><h2 id="popular-title">Popular builds</h2></div>
+    <a href="/workshop/gallery/?sort=popular">See all popular</a>
+  </div>
+  <div class="card-grid">
+    {% for item in data.popular %}{{ card(item) }}{% else %}
+      <p class="empty">No public workshop items yet.</p>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="section wrap" aria-labelledby="new-title">
+  <div class="section-head">
+    <div><p class="eyebrow">Fresh from the workshop</p><h2 id="new-title">New uploads</h2></div>
+    <a href="/workshop/gallery/?sort=new">See all new</a>
+  </div>
+  <div class="card-grid">
+    {% for item in data.newest %}{{ card(item) }}{% endfor %}
+  </div>
+</section>
+
+<section class="section wrap" aria-labelledby="authors-title">
+  <div class="section-head">
+    <div><p class="eyebrow">Builders worth following</p><h2 id="authors-title">Popular authors</h2></div>
+  </div>
+  <div class="author-grid">
+    {% for author in data.authors %}
+    <a class="author-card" href="/workshop/authors/{{ author.accountId }}/">
+      <span class="author-initial">{{ (author.displayName or '?')[:1] }}</span>
+      <span>
+        <strong>{{ author.displayName or 'Workshop creator' }}</strong>
+        <span>{{ author.uploads }} builds · {{ author.installs }} installs</span>
+      </span>
+    </a>
+    {% else %}<p class="empty">No creators to show yet.</p>{% endfor %}
+  </div>
+</section>
+{% endblock %}

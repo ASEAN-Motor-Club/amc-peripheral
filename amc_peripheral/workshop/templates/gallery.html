@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% from "_macros.html" import card %}
+{% block title %}Workshop gallery — ASEAN Motor Club{% endblock %}
+{% block content %}
+<section class="page-head wrap">
+  <p class="eyebrow">Community catalogue</p>
+  <h1>Workshop gallery</h1>
+  <p class="lede">Filter builds, compare snapshots and open any vehicle in the 3D viewer.</p>
+</section>
+
+<div class="wrap gallery-layout">
+  <form class="filters" action="/workshop/gallery/" method="get" aria-label="Filter workshop builds">
+    <input type="hidden" name="sort" value="{{ query.get('sort', 'popular') }}">
+    <fieldset>
+      <legend>Sort</legend>
+      <label><input type="radio" name="sort" value="popular" {% if query.get('sort', 'popular') == 'popular' %}checked{% endif %}> Popular</label>
+      <label><input type="radio" name="sort" value="new" {% if query.get('sort') == 'new' %}checked{% endif %}> Newest</label>
+    </fieldset>
+    <label>Vehicle
+      <select name="vehicle">
+        <option value="">All vehicles</option>
+        {% for vehicle in vehicles %}
+        <option value="{{ vehicle.vehicleKey }}" {% if filters.vehicle == vehicle.vehicleKey %}selected{% endif %}>{{ vehicle.vehicleKey|replace('_',' ') }} ({{ vehicle.uploads }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <fieldset>
+      <legend>Contains</legend>
+      <label><input type="checkbox" name="paint" value="1" {% if filters.paint %}checked{% endif %}> Paint</label>
+      <label><input type="checkbox" name="decal" value="1" {% if filters.decal %}checked{% endif %}> Decals</label>
+      <label><input type="checkbox" name="parts" value="1" {% if filters.parts %}checked{% endif %}> Parts</label>
+      <label><input type="checkbox" name="tuning" value="1" {% if filters.tuning %}checked{% endif %}> Tuning</label>
+      <label><input type="checkbox" name="club" value="1" {% if filters.club %}checked{% endif %}> Club member</label>
+    </fieldset>
+    <button type="submit">Apply filters</button>
+    <a class="reset" href="/workshop/gallery/">Reset</a>
+  </form>
+
+  <section aria-labelledby="results-title">
+    <div class="results-head">
+      <h2 id="results-title">{{ data['items']|length }} results</h2>
+      <p class="muted">Snapshots are shown by default. Open a build to use 3D.</p>
+    </div>
+    <div class="card-grid">
+      {% for item in data['items'] %}{{ card(item, compare=true) }}{% else %}
+        <p class="empty">No builds match these filters.</p>
+      {% endfor %}
+    </div>
+    <nav class="pager" aria-label="Gallery pages">
+      {% if next_url %}<a href="{{ next_url }}" rel="next">Next page →</a>{% endif %}
+    </nav>
+  </section>
+</div>
+
+<aside class="compare-tray" data-compare-tray hidden aria-live="polite">
+  <strong><span data-compare-count>0</span> selected</strong>
+  <span class="muted">Choose 2–4 builds to compare.</span>
+  <div class="compare-slots" data-compare-slots></div>
+  <button type="button" data-compare-clear>Clear</button>
+</aside>
+{% endblock %}
+{% block scripts %}<script src="/workshop/static/workshop.js" defer></script>{% endblock %}

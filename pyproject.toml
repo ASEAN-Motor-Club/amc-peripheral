@@ -15,6 +15,7 @@ dependencies = [
     "gevent>=25.4.2",
     "google-cloud-texttospeech>=2.31.0",
     "gunicorn>=23.0.0",
+    "jinja2>=3.1.5",
     "markdownify>=1.1.0",
     "mutagen>=1.47.0",
     "openai==1.96.1",
@@ -45,6 +46,9 @@ amc_mods = "amc_peripheral.mods.server:main"
 amc_ban_trap = "amc_peripheral.malkuth.bot:main"
 amc_bridge = "amc_peripheral.devbridge.server:main"
 amcb = "amc_peripheral.devbridge.cli:main"
+amc_workshop = "amc_peripheral.workshop.server:main"
+amc_workshop_snapshots = "amc_peripheral.workshop.snapshot_worker:main"
+amc_workshop_aggregate = "amc_peripheral.workshop.aggregate:main"
 
 [build-system]
 requires = ["hatchling", "editables"]

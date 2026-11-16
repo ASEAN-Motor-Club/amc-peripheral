@@ -245,6 +245,11 @@
                 default = "bridge.aseanmotorclub.com";
                 description = "Domain for the UE4SS dev bridge hub.";
               };
+              workshop = lib.mkOption {
+                type = lib.types.str;
+                default = "workshop.aseanmotorclub.com";
+                description = "Domain for the Motor Town workshop browser.";
+              };
             };
 
             # Radio web UI package
@@ -280,6 +285,36 @@
               type = lib.types.package;
               default = (import ./docs-web {inherit pkgs;}).package;
               description = "Documentation site (Starlight) static build package.";
+            };
+
+            # Workshop browser (read-only over the scraper SQLite DB)
+            workshop = {
+              enable = lib.mkEnableOption "Motor Town workshop browser";
+              sourceDb = lib.mkOption {
+                type = lib.types.str;
+                default = "/opt/data/workspace/mt-workshop-scrape/workshop.db";
+                description = "Read-only workshop scrape database.";
+              };
+              viewerRoot = lib.mkOption {
+                type = lib.types.str;
+                default = "/var/www/www.aseanmotorclub.com/vehicles";
+                description = "Deployed Three.js viewer root.";
+              };
+              port = lib.mkOption {
+                type = lib.types.port;
+                default = 7003;
+                description = "Loopback port for the workshop web process.";
+              };
+              user = lib.mkOption {
+                type = lib.types.str;
+                default = "hermes";
+                description = "User that can read the scraper database.";
+              };
+              group = lib.mkOption {
+                type = lib.types.str;
+                default = "hermes";
+                description = "Group of the workshop service.";
+              };
             };
 
             # Sharry file sharing service
@@ -622,6 +657,87 @@
                   client_max_body_size 1M;
                 '';
               };
+            };
+
+            systemd.services.amc-workshop-aggregate = lib.mkIf cfg.workshop.enable {
+              description = "Build AMC workshop site aggregates";
+              wantedBy = ["multi-user.target"];
+              after = ["network.target"];
+              serviceConfig = {
+                Type = "oneshot";
+                User = cfg.workshop.user;
+                Group = cfg.workshop.group;
+                StateDirectory = "amc-workshop";
+                StateDirectoryMode = "0750";
+                UMask = "0077";
+                TimeoutStartSec = "180";
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                PrivateTmp = true;
+                NoNewPrivileges = true;
+                ReadOnlyPaths = [cfg.workshop.sourceDb];
+                Environment = [
+                  "AMC_WORKSHOP_DB=${cfg.workshop.sourceDb}"
+                  "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
+                  "AMC_WORKSHOP_VIEWER_ROOT=${cfg.workshop.viewerRoot}"
+                  "AMC_WORKSHOP_SNAPSHOT_ROOT=/var/lib/amc-workshop/snapshots"
+                ];
+                ExecStart = "${self.packages.${pkgs.system}.default}/bin/amc_workshop_aggregate";
+              };
+            };
+
+            systemd.timers.amc-workshop-aggregate = lib.mkIf cfg.workshop.enable {
+              wantedBy = ["timers.target"];
+              timerConfig = {
+                OnBootSec = "2min";
+                OnUnitActiveSec = "15min";
+                Unit = "amc-workshop-aggregate.service";
+              };
+            };
+
+            systemd.services.amc-workshop-web = lib.mkIf cfg.workshop.enable {
+              description = "AMC Motor Town workshop browser";
+              wantedBy = ["multi-user.target"];
+              after = ["network.target" "amc-workshop-aggregate.service"];
+              requires = ["amc-workshop-aggregate.service"];
+              serviceConfig = {
+                Type = "simple";
+                User = cfg.workshop.user;
+                Group = cfg.workshop.group;
+                StateDirectory = "amc-workshop";
+                StateDirectoryMode = "0750";
+                UMask = "0077";
+                Restart = "on-failure";
+                RestartSec = "5";
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                PrivateTmp = true;
+                NoNewPrivileges = true;
+                ReadOnlyPaths = [cfg.workshop.sourceDb cfg.workshop.viewerRoot];
+                Environment = [
+                  "AMC_WORKSHOP_DB=${cfg.workshop.sourceDb}"
+                  "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
+                  "AMC_WORKSHOP_VIEWER_ROOT=${cfg.workshop.viewerRoot}"
+                  "AMC_WORKSHOP_SNAPSHOT_ROOT=/var/lib/amc-workshop/snapshots"
+                  "AMC_WORKSHOP_PORT=${toString cfg.workshop.port}"
+                ];
+              };
+              script = ''
+                exec ${self.packages.${pkgs.system}.default}/bin/amc_workshop
+              '';
+            };
+
+            services.nginx.virtualHosts.${cfg.nginx.domains.workshop} = lib.mkIf cfg.workshop.enable {
+              enableACME = true;
+              forceSSL = true;
+              locations."/vehicles/".alias = "${cfg.workshop.viewerRoot}/";
+              locations."/workshop/".proxyPass =
+                "http://127.0.0.1:${toString cfg.workshop.port}/workshop/";
+              locations."/api/".proxyPass =
+                "http://127.0.0.1:${toString cfg.workshop.port}/api/";
+              locations."/healthz".proxyPass =
+                "http://127.0.0.1:${toString cfg.workshop.port}/healthz";
+              locations."/".return = "302 /workshop/";
             };
 
             systemd.services.amc-radio = {

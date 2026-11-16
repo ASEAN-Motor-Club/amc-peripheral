@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ item.vehicleKey|replace('_',' ') }} workshop build — ASEAN Motor Club{% endblock %}
+{% block description %}Motor Town workshop build {{ item.id }} for {{ item.vehicleKey|replace('_',' ') }}{% if item.author %} by {{ item.author }}{% endif %}.{% endblock %}
+{% block canonical %}https://www.aseanmotorclub.com/workshop/items/{{ item.id }}/{% endblock %}
+{% block content %}
+<div class="wrap detail-layout">
+  <section class="detail-main">
+    <p class="eyebrow"><a href="/workshop/gallery/">Workshop</a> / {{ item.vehicleKey|replace('_',' ') }}</p>
+    <h1>{{ item.vehicleKey|replace('_',' ') }} <span class="muted">#{{ item.id }}</span></h1>
+    {% if item.author %}
+      <p class="byline">Shared by <a href="/workshop/authors/{{ item.accountId }}/">{{ item.author }}</a> · <time datetime="{{ item.createdAt|iso }}">{{ item.createdAt[:10] }}</time></p>
+    {% else %}
+      <p class="byline muted">Workshop upload · <time datetime="{{ item.createdAt|iso }}">{{ item.createdAt[:10] }}</time></p>
+    {% endif %}
+
+    <div class="viewer-stage">
+      <img src="/workshop/static/placeholder.svg" alt="Preview of the {{ item.vehicleKey|replace('_',' ') }} workshop configuration" width="960" height="540">
+      <div class="viewer-actions">
+        {% if config and config.vehicle.assetAvailable %}
+        <a class="primary-button" href="/workshop/items/{{ item.id }}/viewer/">View in 3D</a>
+        <span class="muted">Loads the full interactive viewer.</span>
+        {% else %}
+        <span class="badge warning">3D unavailable</span>
+        <span class="muted">This vehicle's mesh has not been extracted for the web viewer.</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if config %}
+    <section class="panel" aria-labelledby="configuration-title">
+      <h2 id="configuration-title">Configuration</h2>
+      <dl class="fact-grid">
+        <div><dt>Paint slots</dt><dd>{{ config.paint.colors|length }}</dd></div>
+        <div><dt>Decal layers</dt><dd>{{ config.renderReport.decalLayersTotal }}</dd></div>
+        <div><dt>Rendered decals</dt><dd>{{ config.renderReport.decalLayersRenderable }}</dd></div>
+        <div><dt>Fitted parts</dt><dd>{{ config.renderReport.partsTotal }}</dd></div>
+        <div><dt>Attachments</dt><dd>{{ config.renderReport.attachmentsRenderable }}</dd></div>
+        <div><dt>Revision</dt><dd>{{ item.revision }}</dd></div>
+      </dl>
+      {% if config.renderReport.warnings %}
+      <div class="notice" role="note">
+        <strong>Rendering notes</strong>
+        <ul>{% for warning in config.renderReport.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+    </section>
+
+    {% if config.paint.colors %}
+    <section class="panel" aria-labelledby="paint-title">
+      <h2 id="paint-title">Paint</h2>
+      <ul class="swatches">
+        {% for color in config.paint.colors %}
+        <li>
+          <span class="swatch" style="--swatch: rgba({{ color.rgba[0] }}, {{ color.rgba[1] }}, {{ color.rgba[2] }}, {{ color.rgba[3] / 255 }})"></span>
+          <span>{{ color.slot }}</span>
+          <code>#{{ '%02x%02x%02x'|format(color.rgba[0], color.rgba[1], color.rgba[2]) }}</code>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if item.tags %}
+    <section class="panel"><h2>Tags</h2><ul class="badges">{% for tag in item.tags %}<li class="badge">{{ tag }}</li>{% endfor %}</ul></section>
+    {% endif %}
+    {% else %}
+    <div class="notice error" role="alert">This configuration could not be decoded. The original item may be malformed or quarantined.</div>
+    {% endif %}
+  </section>
+
+  <aside class="detail-side">
+    <section class="panel">
+      <h2>Community signals</h2>
+      <dl class="signal-list">
+        <div><dt>Installs</dt><dd>{{ item.installs }}</dd></div>
+        <div><dt>Votes</dt><dd>{{ item.votes }}</dd></div>
+      </dl>
+    </section>
+    <section class="panel">
+      <h2>More like this</h2>
+      <ul class="link-list">
+        <li><a href="/workshop/vehicles/{{ item.vehicleKey }}/">More {{ item.vehicleKey|replace('_',' ') }} builds</a></li>
+        {% if item.accountId %}<li><a href="/workshop/authors/{{ item.accountId }}/">More by this creator</a></li>{% endif %}
+      </ul>
+    </section>
+  </aside>
+</div>
+{% endblock %}

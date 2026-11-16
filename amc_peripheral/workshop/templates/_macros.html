@@ -1,0 +1,37 @@
+{% macro badge(label, tone='') -%}
+<span class="badge {{ tone }}">{{ label }}</span>
+{%- endmacro %}
+
+{% macro card(item, compare=false) -%}
+<article class="vehicle-card" data-workshop-id="{{ item.id }}">
+  <a class="card-visual" href="/workshop/items/{{ item.id }}/" aria-hidden="true" tabindex="-1">
+    <img src="/workshop/static/placeholder.svg" alt="" width="480" height="270" loading="lazy">
+    <span class="card-id">#{{ item.id }}</span>
+  </a>
+  <div class="card-body">
+    <h3><a href="/workshop/items/{{ item.id }}/">{{ item.vehicleKey|replace('_', ' ') }}</a></h3>
+    {% if item.author %}
+      <p class="byline">by <a href="/workshop/authors/{{ item.accountId if item.accountId else '0' }}/">{{ item.author }}</a></p>
+    {% else %}
+      <p class="byline muted">Workshop upload</p>
+    {% endif %}
+    <ul class="badges" aria-label="Configuration features">
+      {% if item.hasPaint %}{{ badge('Paint') }}{% endif %}
+      {% if item.hasDecal %}{{ badge(item.decalLayers ~ ' decals', 'decal') }}{% endif %}
+      {% if item.hasParts %}{{ badge(item.partCount ~ ' parts') }}{% endif %}
+      {% if item.hasTunings %}{{ badge('Tuned', 'tuned') }}{% endif %}
+    </ul>
+    <div class="card-meta">
+      <span title="Installs">{{ item.installs }} installs</span>
+      <span title="Votes">{{ item.votes }} votes</span>
+      <time datetime="{{ item.createdAt|iso }}">{{ item.createdAt[:10] }}</time>
+    </div>
+  </div>
+  {% if compare %}
+  <label class="compare-check">
+    <input type="checkbox" value="{{ item.id }}" data-vehicle="{{ item.vehicleKey }}">
+    <span>Compare</span>
+  </label>
+  {% endif %}
+</article>
+{%- endmacro %}

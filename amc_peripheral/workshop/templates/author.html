@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_macros.html" import card %}
+{% block title %}{{ author.displayName or 'Creator' }} — Workshop{% endblock %}
+{% block content %}
+<section class="page-head wrap">
+  <p class="eyebrow">{% if author.accountId %}Creator{% else %}Vehicle{% endif %}</p>
+  <h1>{{ author.displayName or 'Workshop builds' }}</h1>
+  <p class="muted">{{ author.uploads }} builds shown on this page{% if author.accountId %} · {{ author.installs }} installs · {{ author.votes }} votes{% endif %}</p>
+</section>
+<section class="wrap section">
+  <div class="card-grid">
+    {% for item in data['items'] %}{{ card(item) }}{% else %}<p class="empty">No builds found.</p>{% endfor %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}CharacterVehicle {{ vehicle_id }} — ASEAN Motor Club{% endblock %}
+{% block content %}
+<div class="wrap detail-layout">
+  <section class="detail-main">
+    <p class="eyebrow">CharacterVehicle</p>
+    <h1>{{ config.vehicle.key|replace('_',' ') }} <span class="muted">#{{ vehicle_id }}</span></h1>
+    <p class="byline muted">Owned vehicle configuration · private direct link</p>
+    <div class="viewer-stage">
+      <img src="/workshop/static/placeholder.svg" alt="Preview of this CharacterVehicle configuration" width="960" height="540">
+      <div class="viewer-actions">
+        {% if config.vehicle.assetAvailable %}
+        <a class="primary-button" href="/vehicles/index.html?characterVehicle={{ vehicle_id }}">View in 3D</a>
+        {% else %}
+        <span class="badge warning">3D unavailable</span>
+        <span class="muted">This vehicle's mesh has not been extracted for the web viewer.</span>
+        {% endif %}
+      </div>
+    </div>
+    <section class="panel">
+      <h2>Configuration</h2>
+      <dl class="fact-grid">
+        <div><dt>Paint slots</dt><dd>{{ config.paint.colors|length }}</dd></div>
+        <div><dt>Decal layers</dt><dd>{{ config.renderReport.decalLayersTotal }}</dd></div>
+        <div><dt>Fitted parts</dt><dd>{{ config.renderReport.partsTotal }}</dd></div>
+        <div><dt>Attachments</dt><dd>{{ config.renderReport.attachmentsRenderable }}</dd></div>
+      </dl>
+      {% if config.renderReport.warnings %}
+      <div class="notice" role="note"><strong>Rendering notes</strong><ul>{% for warning in config.renderReport.warnings %}<li>{{ warning }}</li>{% endfor %}</ul></div>
+      {% endif %}
+    </section>
+  </section>
+</div>
+{% endblock %}

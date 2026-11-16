@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270" viewBox="0 0 480 270" role="img" aria-label="Workshop preview pending">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b111b"/>
+      <stop offset="0.55" stop-color="#111a28"/>
+      <stop offset="1" stop-color="#172234"/>
+    </linearGradient>
+    <linearGradient id="car" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6fa8c8"/>
+      <stop offset="1" stop-color="#27435b"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="270" fill="url(#bg)"/>
+  <g opacity=".14" stroke="#7b94b3">
+    <path d="M0 225h480M0 180h480M0 135h480M0 90h480M0 45h480"/>
+    <path d="M60 0v270M120 0v270M180 0v270M240 0v270M300 0v270M360 0v270M420 0v270"/>
+  </g>
+  <g transform="translate(112 93)">
+    <path d="M18 58c2-15 14-24 42-27l23-16c8-6 18-9 31-9h80c19 0 34 5 47 16l27 24c29 5 42 13 43 29v21c0 6-4 10-10 10h-22c-2-18-12-27-29-27s-27 9-29 27H96c-2-18-12-27-29-27S40 78 38 96H14c-6 0-10-4-10-10v-9c0-7 5-13 14-19z" fill="url(#car)" opacity=".86"/>
+    <path d="M118 36h62V17h-45c-7 0-12 3-17 8zM195 36h52l-18-17c-4-4-9-6-16-6h-18z" fill="#abc4d6" opacity=".24"/>
+    <circle cx="66" cy="97" r="20" fill="#0c1119" stroke="#55708c" stroke-width="5"/>
+    <circle cx="285" cy="97" r="20" fill="#0c1119" stroke="#55708c" stroke-width="5"/>
+  </g>
+  <text x="24" y="34" fill="#7e91a9" font-family="system-ui,sans-serif" font-size="12" letter-spacing="2">PREVIEW</text>
+</svg>
