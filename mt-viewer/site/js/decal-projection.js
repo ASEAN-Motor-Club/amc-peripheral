@@ -28,7 +28,9 @@ export function primaryUv(point, position, yaw, pitch, roll, textureScale, stret
 }
 
 export function mirrorUv(point, position, yaw, pitch, roll, textureScale, stretch=1, flip=0) {
-  return primaryUv(point, [position[0]+1, position[1]], -yaw, pitch, -roll,
+  // Mirror cb2[12].zw is +(PositionX+1), and the shader adds it. primaryUv
+  // subtracts its X argument, so pass the negated offset here.
+  return primaryUv(point, [-position[0]-1, position[1]], -yaw, pitch, -roll,
     textureScale, -stretch, flip);
 }
 
@@ -78,7 +80,8 @@ vec2 mtDecalPrimaryUv(vec3 p, vec2 PositionXPositionY, vec3 turns,
 }
 vec2 mtDecalMirrorUv(vec3 p, vec2 PositionXPositionY, vec3 turns,
                      float TextureScale, float Stretch, float Flip) {
-  return mtDecalPrimaryUv(p, PositionXPositionY + vec2(1.0, 0.0),
+  // cb2[12].zw is +(PositionX+1); primary subtracts its X argument.
+  return mtDecalPrimaryUv(p, vec2(-PositionXPositionY.x-1.0, PositionXPositionY.y),
     vec3(-turns.x, turns.y, -turns.z), TextureScale, -Stretch, Flip);
 }
 float mtDecalVisibility(vec3 p, vec3 n, vec3 turns, int flags, bool mirrored) {

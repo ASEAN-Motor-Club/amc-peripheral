@@ -53,18 +53,18 @@ class DecalProjectionTests(unittest.TestCase):
             for a, b in zip(got, expected):
                 self.assertAlmostEqual(a, b, places=10)
 
-    def test_mirror_uses_negative_yaw_roll_and_one_unit_shift(self):
+    def test_mirror_uses_negative_yaw_roll_and_positive_one_unit_shift(self):
         p = (120, -240, 360)
         pos = (20, 30)
         yaw, pitch, roll, scale = 0.17, -0.11, 0.08, 1.3
         got = mirror_uv(p, pos, yaw, pitch, roll, scale, 1.7, 0)
-        # Primary implementation with all mirrored source-side substitutions.
-        expected_primary = primary_uv(
-            p, (pos[0]+1, pos[1]), -yaw, pitch, -roll, scale, -1.7, 0,
+        # Independent transcription of the mirror block (5020.asm 95-110).
+        # cb2[12].zw is +(PositionX+1), so the assembly ADDS that X offset;
+        # assembly_primary subtracts its position argument, hence -(X+1) here.
+        expected = assembly_primary(
+            p, (-pos[0]-1, pos[1]), -yaw, pitch, -roll, scale, -1.7, 0,
         )
-        # The mirror's position preshader is -(-PositionX-1) = PositionX+1.
-        # primary_uv subtracts its first position component, hence pos[0]+1.
-        for a, b in zip(got, expected_primary):
+        for a, b in zip(got, expected):
             self.assertAlmostEqual(a, b, places=12)
 
 

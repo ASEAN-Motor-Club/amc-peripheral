@@ -49,7 +49,7 @@ def mirror_uv(point, position, yaw, pitch, roll, texture_scale,
     """Return the shader's independent mirrored-projection UV."""
     return primary_uv(
         point,
-        (position[0]+1.0, position[1]),
+        (-position[0]-1.0, position[1]),
         -yaw,
         pitch,
         -roll,
