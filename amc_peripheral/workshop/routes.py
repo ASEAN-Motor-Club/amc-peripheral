@@ -462,7 +462,7 @@ def create_app(
         )
         return render("author.html", page="gallery", author=author, data=listing,
                       vehicles=[],
-                      canonical=f"https://www.aseanmotorclub.com/workshop/authors/{account_id}/")
+                      canonical_url=f"https://www.aseanmotorclub.com/workshop/authors/{account_id}/")
 
     async def page_vehicle(request: web.Request) -> web.Response:
         vehicle = request.match_info["vehicle"]
@@ -479,7 +479,7 @@ def create_app(
                     "installs": 0, "votes": 0, "accountId": None},
             data=listing,
             vehicles=[],
-            canonical=f"https://www.aseanmotorclub.com/workshop/vehicles/{vehicle}/",
+            canonical_url=f"https://www.aseanmotorclub.com/workshop/vehicles/{vehicle}/",
         )
 
     async def page_character(request: web.Request) -> web.Response:

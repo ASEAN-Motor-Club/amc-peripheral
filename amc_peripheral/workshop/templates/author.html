@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import card %}
 {% block title %}{{ author.displayName or 'Creator' }} — Workshop{% endblock %}
-{% block canonical %}{% if canonical is defined %}{{ canonical }}{% elif author.accountId %}https://www.aseanmotorclub.com/workshop/authors/{{ author.accountId }}/{% else %}https://www.aseanmotorclub.com/workshop/{% endif %}{% endblock %}
+{% block canonical %}{% if canonical_url is defined %}{{ canonical_url }}{% elif author.accountId %}https://www.aseanmotorclub.com/workshop/authors/{{ author.accountId }}/{% else %}https://www.aseanmotorclub.com/workshop/{% endif %}{% endblock %}
 {% block content %}
 <section class="page-head wrap">
   <p class="eyebrow">{% if author.accountId %}Creator{% else %}Vehicle{% endif %}</p>

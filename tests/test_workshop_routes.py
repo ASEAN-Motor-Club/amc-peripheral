@@ -132,7 +132,9 @@ async def test_author_and_vehicle_pages(client):
     assert unknown_author.status == 404
     vehicle = await client.get("/workshop/vehicles/Vamos3/")
     assert vehicle.status == 200
-    assert "Vamos3" in await vehicle.text()
+    vehicle_text = await vehicle.text()
+    assert "Vamos3" in vehicle_text
+    assert "workshop/vehicles/Vamos3/" in vehicle_text
 
 
 async def test_club_filter_uses_safe_projection(client):
