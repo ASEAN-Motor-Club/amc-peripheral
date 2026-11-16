@@ -109,7 +109,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
-import { DECAL_PROJECTION_GLSL } from "./js/decal-projection.js?v=1";
+import { DECAL_PROJECTION_GLSL } from "./js/decal-projection.js?v=2";
 
 const params = new URLSearchParams(location.search);
 const workshopId = params.get("workshop");
@@ -1026,15 +1026,7 @@ async function load() {
                 float flip = (flags & 1) != 0 ? 1.0 : 0.0;
                 vec3 size = uDecalSize[i];
                 vec2 q = mtDecalPrimaryUv(p, uDecalPos[i], uDecalRot[i], size.x, size.y, flip);
-                float cy = cos(6.283185307179586*uDecalRot[i].x);
-                float sy = sin(6.283185307179586*uDecalRot[i].x);
-                float cp = cos(6.283185307179586*uDecalRot[i].y);
-                float sp = sin(6.283185307179586*uDecalRot[i].y);
-                vec3 cullDir = vec3(cy*cp, sy*cp, sp);
-                float opposite = (flags & 4) != 0 ? 1.0 : 0.0;
-                float backface = (flags & 8) != 0 ? 1.0 : 0.0;
-                float visible = (1.0 + opposite*(clamp(dot(p, cullDir), 0.0, 1.0)-1.0))
-                              * (1.0 + backface*(clamp(dot(n, cullDir), 0.0, 1.0)-1.0));
+                float visible = mtDecalVisibility(p, n, uDecalRot[i], flags, false);
                 if (visible > 0.0 && q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
                   float col = mod(float(i), 8.0), row = floor(float(i)/8.0);
                   vec2 auv = vec2((col+q.x)/8.0, ((7.0-row)+q.y)/8.0);
@@ -1044,9 +1036,7 @@ async function load() {
                 }
                 if ((flags & 2) != 0) {
                   vec2 qm = mtDecalMirrorUv(p, uDecalPos[i], uDecalRot[i], size.x, size.y, flip);
-                  vec3 cm = vec3(cy*cp, -sy*cp, sp);
-                  float vm = (1.0 + opposite*(clamp(dot(n, cm), 0.0, 1.0)-1.0))
-                           * (1.0 + backface*(clamp(dot(n, cm), 0.0, 1.0)-1.0));
+                  float vm = mtDecalVisibility(p, n, uDecalRot[i], flags, true);
                   if (vm > 0.0 && qm.x >= 0.0 && qm.x <= 1.0 && qm.y >= 0.0 && qm.y <= 1.0) {
                     float col = mod(float(i), 8.0), row = floor(float(i)/8.0);
                     vec2 auv = vec2((col+qm.x)/8.0, ((7.0-row)+qm.y)/8.0);

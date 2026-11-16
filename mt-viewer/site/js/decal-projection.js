@@ -32,6 +32,28 @@ export function mirrorUv(point, position, yaw, pitch, roll, textureScale, stretc
     textureScale, -stretch, flip);
 }
 
+function visibility(point, normal, yaw, pitch, flags, mirrored) {
+  const cy = Math.cos(TAU * (mirrored ? -yaw : yaw));
+  const sy = Math.sin(TAU * (mirrored ? -yaw : yaw));
+  const cp = Math.cos(TAU * pitch);
+  const sp = Math.sin(TAU * pitch);
+  const c = [cy*cp, sy*cp, sp];
+  const dp = c[0]*point[0] + c[1]*point[1] + c[2]*point[2];
+  const dn = c[0]*normal[0] + c[1]*normal[1] + c[2]*normal[2];
+  const opposite = (flags & 4) ? 1 : 0;
+  const backface = (flags & 8) ? 1 : 0;
+  return (1 + opposite*(Math.max(0, Math.min(1, dp))-1))
+       * (1 + backface*(Math.max(0, Math.min(1, dn))-1));
+}
+
+export function primaryVisibility(point, normal, yaw, pitch, flags) {
+  return visibility(point, normal, yaw, pitch, flags, false);
+}
+
+export function mirrorVisibility(point, normal, yaw, pitch, flags) {
+  return visibility(point, normal, yaw, pitch, flags, true);
+}
+
 export const DECAL_PROJECTION_GLSL = /* glsl */`
 vec3 mtDecalAxis(float yaw, float pitch) {
   float a = 6.283185307179586 * (pitch + 0.25) / 2.0;
@@ -58,6 +80,18 @@ vec2 mtDecalMirrorUv(vec3 p, vec2 PositionXPositionY, vec3 turns,
                      float TextureScale, float Stretch, float Flip) {
   return mtDecalPrimaryUv(p, PositionXPositionY + vec2(1.0, 0.0),
     vec3(-turns.x, turns.y, -turns.z), TextureScale, -Stretch, Flip);
+}
+float mtDecalVisibility(vec3 p, vec3 n, vec3 turns, int flags, bool mirrored) {
+  float yaw = mirrored ? -turns.x : turns.x;
+  float cy = cos(6.283185307179586*yaw);
+  float sy = sin(6.283185307179586*yaw);
+  float cp = cos(6.283185307179586*turns.y);
+  float sp = sin(6.283185307179586*turns.y);
+  vec3 c = vec3(cy*cp, sy*cp, sp);
+  float opposite = (flags & 4) != 0 ? 1.0 : 0.0;
+  float backface = (flags & 8) != 0 ? 1.0 : 0.0;
+  return (1.0 + opposite*(clamp(dot(p, c), 0.0, 1.0)-1.0))
+       * (1.0 + backface*(clamp(dot(n, c), 0.0, 1.0)-1.0));
 }
 float mtDecalEdge(float u) {
   return clamp((1.0 - 2.0*abs(u - 0.5))*100000.0, 0.0, 1.0);

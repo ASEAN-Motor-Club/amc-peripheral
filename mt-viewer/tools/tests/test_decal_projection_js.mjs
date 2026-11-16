@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { primaryUv, mirrorUv, DECAL_PROJECTION_GLSL } from '../../site/js/decal-projection.js';
+import { primaryUv, mirrorUv, primaryVisibility, mirrorVisibility, DECAL_PROJECTION_GLSL } from '../../site/js/decal-projection.js';
 
 const cases = [
   {
@@ -25,6 +25,16 @@ for (const c of cases) {
     assert.ok(Math.abs(m[i]-c.mirror[i]) < 1e-12, `${m[i]} != ${c.mirror[i]}`);
   }
 }
-for (const token of ['255.0', 'PositionX', 'mtDecalPrimaryUv', 'mtDecalMirrorUv'])
+const CULL_BOTH = 4 | 8;
+// DXBC 5020: primary opposite-cull reads LocalBounds (r4), backface-cull reads
+// LocalNormal (r3). The mirror block repeats that same pairing with cb2[15].
+assert.equal(primaryVisibility([100,0,0], [1,0,0], 0, 0, CULL_BOTH), 1);
+assert.equal(primaryVisibility([-100,0,0], [1,0,0], 0, 0, CULL_BOTH), 0);
+assert.equal(primaryVisibility([100,0,0], [-1,0,0], 0, 0, CULL_BOTH), 0);
+assert.equal(primaryVisibility([0,100,0], [0,1,0], 0.25, 0, CULL_BOTH), 1);
+assert.equal(mirrorVisibility([0,100,0], [0,1,0], 0.25, 0, CULL_BOTH), 0);
+assert.equal(mirrorVisibility([0,-100,0], [0,-1,0], 0.25, 0, CULL_BOTH), 1);
+
+for (const token of ['255.0', 'PositionX', 'mtDecalPrimaryUv', 'mtDecalMirrorUv', 'mtDecalVisibility'])
   assert.ok(DECAL_PROJECTION_GLSL.includes(token), `missing GLSL token ${token}`);
 console.log('decal projection JS: 3 primary + 3 mirror reference cases passed');
