@@ -147,6 +147,67 @@ RectAreaLightUniformsLib.init();
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = !syncMode;
+camera.position.set(4, 2.4, 5);
+camera.lookAt(0, 0.65, 0);
+controls.target.set(0, 0.65, 0);
+
+// Immediate in-scene loading feedback: one GPU-animated point cloud, one draw.
+// It is removed before the base vehicle's first material frame is presented.
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const loadingWaveEnabled = !reducedMotion && !syncMode;
+const loadingWaveInfo = (window.__loadingWave = { step: loadingWaveEnabled ? "active" : "skipped", points: 512, time: 0 });
+let loadingWave = null;
+if (loadingWaveEnabled) {
+  const positions = new Float32Array(32 * 16 * 3);
+  for (let z = 0; z < 16; z++) for (let x = 0; x < 32; x++) {
+    const i = (z * 32 + x) * 3;
+    positions[i] = (x - 15.5) * 0.16;
+    positions[i + 2] = (z - 7.5) * 0.16;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uPixelRatio: { value: renderer.getPixelRatio() } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `
+      uniform float uTime;
+      uniform float uPixelRatio;
+      varying float vEnergy;
+      void main() {
+        vec3 p = position;
+        float radius = length(p.xz);
+        float wave = sin(radius * 4.5 - uTime * 3.2);
+        p.y = wave * 0.13 + sin(p.x * 2.5 + uTime * 1.7) * 0.045;
+        vEnergy = 0.55 + 0.45 * wave;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = clamp(24.0 * uPixelRatio / -mv.z, 2.0, 8.0);
+      }`,
+    fragmentShader: `
+      varying float vEnergy;
+      void main() {
+        float d = length(gl_PointCoord - vec2(0.5));
+        float alpha = smoothstep(0.5, 0.12, d);
+        vec3 colour = mix(vec3(0.20, 0.55, 1.0), vec3(0.35, 1.0, 0.90), vEnergy);
+        gl_FragColor = vec4(colour, alpha * 0.85);
+      }`,
+  });
+  const points = new THREE.Points(geometry, material);
+  points.name = "LoadingWave";
+  points.position.y = 0.65;
+  points.frustumCulled = false;
+  scene.add(points);
+  loadingWave = { points, material, start: performance.now() };
+}
+function dismissLoadingWave() {
+  if (loadingWave) {
+    scene.remove(loadingWave.points);
+    loadingWave.points.geometry.dispose();
+    loadingWave.material.dispose();
+    loadingWave = null;
+  }
+  if (loadingWaveInfo.step === "active") loadingWaveInfo.step = "done";
+}
 
 // Physically sane exposure: the game's albedos are already mid-grey, so piling on
 // lights turned tyres into white plastic. Keep the key light dominant and modest.
@@ -630,6 +691,7 @@ async function load() {
   });
   statusEl.textContent = "vehicle ready · loading attachments & decals…";
   if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
+  dismissLoadingWave();
   render();
   // Yield a real frame so the base vehicle is visible before the expensive
   // rect-light/decal shader variants begin compiling.
@@ -1063,6 +1125,13 @@ function render() {
 }
 function anim() {
   requestAnimationFrame(anim);
+  if (loadingWave) {
+    const time = (performance.now() - loadingWave.start) / 1000;
+    loadingWave.material.uniforms.uTime.value = time;
+    loadingWave.points.rotation.y = time * 0.08;
+    loadingWaveInfo.time = time;
+    needsRender = true;
+  }
   const moved = controls.update();
   if (moved || needsRender) {
     renderer.render(scene, camera);
@@ -1077,7 +1146,12 @@ addEventListener("resize", () => {
 });
 
 if (!syncMode) anim();
-await load();
+try { await load(); }
+catch (e) {
+  dismissLoadingWave();
+  statusEl.textContent = "load failed";
+  throw e;
+}
 // give textures a beat to decode before the single frame in sync mode
 await new Promise(r => setTimeout(r, 350));
 if (syncMode) {
