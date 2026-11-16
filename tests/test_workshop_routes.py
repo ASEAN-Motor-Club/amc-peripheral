@@ -124,7 +124,7 @@ async def test_hidden_deleted_and_unknown_items_are_404(client):
         assert (await response.json())["error"]["code"] == "not_found"
 
 
-async def test_author_and_vehicle_pages(client):
+async def test_author_and_vehicle_pages(client, settings):
     author = await client.get("/workshop/authors/11/")
     assert author.status == 200
     assert "Alice" in await author.text()
@@ -135,6 +135,10 @@ async def test_author_and_vehicle_pages(client):
     vehicle_text = await vehicle.text()
     assert "Vamos3" in vehicle_text
     assert "workshop/vehicles/Vamos3/" in vehicle_text
+
+    from amc_peripheral.workshop.snapshots import SnapshotStore
+
+    assert SnapshotStore(settings.site_db).health()["queueDepth"] == 2
 
 
 async def test_club_filter_uses_safe_projection(client):

@@ -465,6 +465,7 @@ def create_app(
             filters=ListFilters(account_id=account_id),
             limit=settings.page_size,
         )
+        attach_snapshots(listing["items"], enqueue=settings.page_size)
         return render("author.html", page="gallery", author=author, data=listing,
                       vehicles=[],
                       canonical_url=f"https://www.aseanmotorclub.com/workshop/authors/{account_id}/")
@@ -477,6 +478,7 @@ def create_app(
             filters=ListFilters(vehicle=vehicle),
             limit=settings.page_size,
         )
+        attach_snapshots(listing["items"], enqueue=settings.page_size)
         return render(
             "author.html",
             page="gallery",
