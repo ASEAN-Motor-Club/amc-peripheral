@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 from aiohttp import web
+from aiohttp.web_fileresponse import CONTENT_TYPES
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .character_vehicles import CharacterVehicleRepository, CharacterVehicleUnavailable
@@ -84,6 +85,7 @@ def create_app(
 ) -> web.Application:
     # Some minimal Python builds lack a system mime.types entry for WebP.
     mimetypes.add_type("image/webp", ".webp")
+    CONTENT_TYPES.add_type("image/webp", ".webp")
     settings = settings or WorkshopSettings.from_env()
     settings.validate()
     repository = repository or WorkshopRepository(

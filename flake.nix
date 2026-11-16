@@ -780,7 +780,8 @@
                   "http://127.0.0.1:${toString cfg.workshop.port}/workshop/";
               };
               "/workshop/snapshots/" = {
-                alias = "/var/lib/amc-workshop/snapshots/public/";
+                proxyPass =
+                  "http://127.0.0.1:${toString cfg.workshop.port}/workshop/snapshots/";
                 extraConfig = ''
                   expires 1h;
                   add_header Cache-Control "public, max-age=3600";
