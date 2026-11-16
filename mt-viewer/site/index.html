@@ -117,6 +117,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DECAL_PROJECTION_GLSL } from "./js/decal-projection.js?v=1";
 
 const params = new URLSearchParams(location.search);
 const vehicle = params.get("vehicle") || "boxy";
@@ -580,26 +581,13 @@ async function load() {
   ].filter(Boolean).join(" · ");
   statusEl.textContent = `loaded ${manifest.parts.length}/${manifest.parts.length}`;
 
-  // --- decals -------------------------------------------------------------
-  // The game does not project decals in world space. FMTDecalTargetMesh keeps a
-  // UTextureRenderTarget2D per body mesh and M_DecalDistribution paints layers into it,
-  // i.e. decals are stamped in a UV space that MTGenerateVehicleDecalUVCommandlet builds
-  // for each vehicle -- the extra UV channel our GLBs carry as TEXCOORD_1 (it runs
-  // outside [0,1], unlike TEXCOORD_0). So the honest viewer equivalent is a decal
-  // texture sampled through uv1 and blended over the paint.
-  //
-  // A layer is DecalKey + Color + Position/Rotation + DecalScale/Stretch/Coverage, with
-  // EMTDecalLayerFlags = {Flip=1, Mirror=2, OppositeCull=4, BackFaceCull=8,
-  // Highlighted=0x80, DrawOnWheel=0x100}.
+  // --- decals: projection transcribed from M_DecalBounds_Test shader 5020 ---
+  // The game bakes each layer through LocalBounds/LocalNormal into a per-mesh
+  // render target. Here the same projection runs per fragment on the original
+  // material, so no UV-space stamp or fitted bounding-box transform is needed.
   async function applyVehicleDecals() {
-    const info = (window.__decalInfo = { step: "start" });
-    // Placement is calibrated against a rendered composition: Position is in
-    // millimetres in the vehicle's local frame (X along the body, Y up), and
-    // DecalScale is a fraction of a 2 m stamp -- that is what makes 30 separate layers
-    // resolve into one emblem instead of a pile of fragments. ?decals=0 disables.
+    const info = (window.__decalInfo = { step: "start", projection: "shader-5020" });
     if (params.get("decals") === "0") { info.step = "off"; return; }
-    // Manifests whose decalable slot list lives on a base class were never expanded,
-    // so fall back to the paint materials by name rather than declaring "no decals".
     const slots = manifest.decalSlots || [];
     info.slots = slots.length ? slots : "fallback";
 
@@ -614,18 +602,12 @@ async function load() {
     info.rec = rec ? rec.layers.length : 0;
     if (!rec || !rec.layers.length) { info.step = "no-record"; return; }
 
-    // ---- how the game actually does it -------------------------------------
-    // FMTDecalTargetMesh keeps a DecalRT per body mesh and MTDecalBaker renders the mesh
-    // into it with a brush material: every fragment samples the decal texture by its own
-    // position in decal space, and the mesh's decal UV decides where the result lands.
-    // That is why the stored Position/Rotation are the vehicle's own units and why
-    // stamping them straight into UV space could never line up. So evaluate the layer
-    // stack per fragment from the surface position and let uv1 place the result.
     const byKey = new Map(cat.decals.map(d => [d.key, d]));
     const layers = rec.layers.filter(L => byKey.get(L.key)).slice(0, 32);
     if (!layers.length) { info.step = "no-known-keys"; return; }
 
-    // one atlas so the shader needs a single sampler
+    // One atlas keeps the fragment pass to a single sampler. Colour is applied
+    // with source-in just as the brush multiplies the decal by its layer Colour.
     const TILE = 256, GRID = 8;
     const atlas = document.createElement("canvas");
     atlas.width = atlas.height = TILE * GRID;
@@ -651,124 +633,111 @@ async function load() {
     const atlasTex = new THREE.CanvasTexture(atlas);
     atlasTex.colorSpace = THREE.SRGBColorSpace;
     atlasTex.flipY = true;
-    // nearest keeps neighbouring atlas tiles from bleeding into each other, which
-    // showed up as brown/purple scraps of the wrong decal on the panel
     atlasTex.magFilter = THREE.NearestFilter;
     atlasTex.minFilter = THREE.NearestFilter;
     atlasTex.generateMipmaps = false;
 
-    // ---- layer uniforms ----------------------------------------------------
-    // Position is in millimetres in the vehicle's local frame: X along the body, Y up.
-    const axes = (params.get("daxes") || "xy").toLowerCase();
-    const AXIS = { xy: [0, 1], xz: [0, 2], zy: [2, 1], yx: [1, 0] }[axes] || [0, 1];
-    const UNIT = parseFloat(params.get("dunit") || "1000");   // position units per metre
-
-    // Stamp size is a fraction of the bounds too: DecalScale is read against the mesh's
-    // own extent, which is why it needs no unit conversion at all.
-    const BASE = parseFloat(params.get("dbase") || "0.25");
-
-    const posArr = [], sizeArr = [], rotArr = [], flagArr = [];
-    const v3 = new THREE.Vector3();
+    // Saved rotations are degrees. The material preshader consumes turns and
+    // multiplies them by 2π. Position stays in UE centimetres; only the glTF
+    // vertex position needs conversion (metres, Y-up -> centimetres, Z-up).
+    const posArr = [], rotArr = [], sizeArr = [], flagArr = [];
     for (let i = 0; i < 32; i++) {
       const L = layers[i];
-      if (!L) { posArr.push(new THREE.Vector4(0, 0, 0, 0)); sizeArr.push(new THREE.Vector2(0, 0)); rotArr.push(0); flagArr.push(0); continue; }
-      const s = Math.abs(L.scale) * BASE;   // fraction of the bounds
-      const f = L.flags | 0;
-      // EMTDecalLayerFlags: Flip=1, Mirror=2, DrawOnWheel=0x100
-      const w = (f & 1) ? s * Math.abs(L.stretch) : s;
-      const h = (f & 1) ? s : s * Math.abs(L.stretch);
-      // metres for the shader
-      posArr.push(new THREE.Vector4(L.pos[0] / UNIT, L.pos[1] / UNIT, 0, 0));
-      sizeArr.push(new THREE.Vector2(w, h));
-      rotArr.push(THREE.MathUtils.degToRad(L.rot[2]));
-      flagArr.push(f);
+      if (!L) {
+        posArr.push(new THREE.Vector2());
+        rotArr.push(new THREE.Vector3());
+        sizeArr.push(new THREE.Vector3());
+        flagArr.push(0);
+        continue;
+      }
+      posArr.push(new THREE.Vector2(L.pos[0], L.pos[1]));
+      rotArr.push(new THREE.Vector3(L.rot[0]/360, L.rot[1]/360, L.rot[2]/360));
+      sizeArr.push(new THREE.Vector3(L.scale, L.stretch, L.coverage ?? 1));
+      flagArr.push(L.flags | 0);
     }
 
-    // root position so the shader works in vehicle space
-    // positions are in the target mesh's local space, so no world offset applies
-    const rootPos = new THREE.Vector3();
-
     let patched = 0;
-    const wholeBox = new THREE.Box3().setFromObject(root);
-    const wholeSize = wholeBox.getSize(new THREE.Vector3());
+    const wholeSize = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3());
     const minSpan = Math.max(wholeSize.x, wholeSize.z) * 0.25;
-    const shellName = (n) => slots.includes(n) || /^(Palette|Shell)/i.test(n || "")
+    const shellName = n => slots.includes(n) || /^(Palette|Shell)/i.test(n || "")
       || slots.some(sl => (n || "").startsWith(sl));
 
     root.traverse(o => {
       if (!o.isMesh || !o.material || !o.geometry.attributes.uv1) return;
       const bb = new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3());
-      if (Math.max(bb.x, bb.y, bb.z) < minSpan) return;      // skip wheels / jack feet
+      if (Math.max(bb.x, bb.y, bb.z) < minSpan) return;
       const mats = Array.isArray(o.material) ? o.material : [o.material];
-      const swap = mats.map((m) => {
+      const swap = mats.map(m => {
         if (!shellName(m.name)) return m;
         const c = m.clone();
-        c.customProgramCacheKey = () => "mt-decal";
-        c.onBeforeCompile = (sh) => {
+        c.customProgramCacheKey = () => "mt-decal-shader-5020";
+        c.onBeforeCompile = sh => {
           window.__shaderRuns = (window.__shaderRuns || 0) + 1;
-          sh.uniforms.decalAtlas = { value: atlasTex };
-          sh.uniforms.uDecalCount = { value: packed };
-          sh.uniforms.uDecalPos = { value: posArr };
-          sh.uniforms.uDecalSize = { value: sizeArr };
-          sh.uniforms.uDecalRot = { value: rotArr };
-          sh.uniforms.uDecalFlags = { value: flagArr };
-          sh.uniforms.uDecalAxis = { value: new THREE.Vector2(AXIS[0], AXIS[1]) };
-          sh.uniforms.uNormalAxis = { value: 3 - AXIS[0] - AXIS[1] };
-          const lbox = new THREE.Box3().setFromBufferAttribute(o.geometry.attributes.position);
-          sh.uniforms.uBMin = { value: lbox.min.clone() };
-          sh.uniforms.uBMax = { value: lbox.max.clone() };
-          sh.uniforms.uRootPos = { value: rootPos };
-          sh.uniforms.uDecalDebug = { value: params.has("dbg") ? 1 : 0 };
-          sh.vertexShader = "varying vec3 vDecalLocal;\n varying vec3 vDecalNrm;\n" + sh.vertexShader
+          Object.assign(sh.uniforms, {
+            decalAtlas: { value: atlasTex },
+            uDecalCount: { value: packed },
+            uDecalPos: { value: posArr },
+            uDecalRot: { value: rotArr },
+            uDecalSize: { value: sizeArr },
+            uDecalFlags: { value: flagArr },
+            uDecalDebug: { value: params.has("dbg") ? 1 : 0 },
+          });
+          sh.vertexShader = "varying vec3 vDecalLocal;\nvarying vec3 vDecalNrm;\n" + sh.vertexShader
             .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvDecalLocal = position;\n\tvDecalNrm = normal;");
           sh.fragmentShader = `
             uniform sampler2D decalAtlas;
             uniform int uDecalCount;
-            uniform vec4 uDecalPos[32];
-            uniform vec2 uDecalSize[32];
-            uniform float uDecalRot[32];
+            uniform vec2 uDecalPos[32];
+            uniform vec3 uDecalRot[32];
+            uniform vec3 uDecalSize[32];
             uniform int uDecalFlags[32];
-            uniform vec2 uDecalAxis;
-            uniform vec3 uRootPos;
-            uniform vec3 uBMin;
-            uniform vec3 uBMax;
             uniform float uDecalDebug;
-            uniform float uNormalAxis;
             varying vec3 vDecalLocal;
             varying vec3 vDecalNrm;
+            ${DECAL_PROJECTION_GLSL}
           ` + sh.fragmentShader.replace("#include <map_fragment>", `#include <map_fragment>
             if (uDecalDebug > 0.5) { diffuseColor.rgb = vec3(1.0, 0.0, 1.0); }
             else {
-              // a decal box only paints what its projection axis sees; without this the
-              // emblem runs over the shoulder and onto the roof
-              float nrm = abs(uNormalAxis < 0.5 ? vDecalNrm.x : (uNormalAxis < 1.5 ? vDecalNrm.y : vDecalNrm.z));
-              // Position is per-mille of the mesh's local bounds, zero at their centre --
-              // which is why the brush takes LocalBounds as an input at all. 1171/1171
-              // saved layers sit inside +/-1000, so the space is normalised, not metric.
-              vec3 bc = (uBMin + uBMax) * 0.5;
-              vec3 be = (uBMax - uBMin);
-              vec3 rel = vDecalLocal - bc;
-              vec2 p = vec2(uDecalAxis.x < 0.5 ? rel.x : (uDecalAxis.x < 1.5 ? rel.y : rel.z),
-                            uDecalAxis.y < 0.5 ? rel.x : (uDecalAxis.y < 1.5 ? rel.y : rel.z));
-              vec2 bnd = vec2(uDecalAxis.x < 0.5 ? be.x : (uDecalAxis.x < 1.5 ? be.y : be.z),
-                              uDecalAxis.y < 0.5 ? be.x : (uDecalAxis.y < 1.5 ? be.y : be.z));
+              vec3 p = vec3(vDecalLocal.x, -vDecalLocal.z, vDecalLocal.y)*100.0;
+              vec3 n = normalize(vec3(vDecalNrm.x, -vDecalNrm.z, vDecalNrm.y));
               for (int i = 0; i < 32; i++) {
-                if (nrm < 0.45) break;
                 if (i >= uDecalCount) break;
-                vec2 sz = uDecalSize[i] * bnd;
-                if (sz.x <= 0.0001 || sz.y <= 0.0001) continue;
-                // pos is per-mille of half the bounds; size is a fraction of the bounds
-                vec2 d = p - (uDecalPos[i].xy / 1000.0) * bnd * 0.5;
-                float ca = cos(-uDecalRot[i]), sa = sin(-uDecalRot[i]);
-                vec2 q = vec2(d.x * ca - d.y * sa, d.x * sa + d.y * ca) / sz + 0.5;
-                if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0) continue;
-                float col = mod(float(i), 8.0), row = floor(float(i) / 8.0);
-                vec2 auv = vec2((col + q.x) / 8.0, ((7.0 - row) + q.y) / 8.0);
-                vec4 dec = texture2D(decalAtlas, auv);
-                if (dec.a > 0.004) diffuseColor.rgb = mix(diffuseColor.rgb, dec.rgb * 1.6, dec.a);
+                int flags = uDecalFlags[i];
+                float flip = (flags & 1) != 0 ? 1.0 : 0.0;
+                vec3 size = uDecalSize[i];
+                vec2 q = mtDecalPrimaryUv(p, uDecalPos[i], uDecalRot[i], size.x, size.y, flip);
+                float cy = cos(6.283185307179586*uDecalRot[i].x);
+                float sy = sin(6.283185307179586*uDecalRot[i].x);
+                float cp = cos(6.283185307179586*uDecalRot[i].y);
+                float sp = sin(6.283185307179586*uDecalRot[i].y);
+                vec3 cullDir = vec3(cy*cp, sy*cp, sp);
+                float opposite = (flags & 4) != 0 ? 1.0 : 0.0;
+                float backface = (flags & 8) != 0 ? 1.0 : 0.0;
+                float visible = (1.0 + opposite*(clamp(dot(p, cullDir), 0.0, 1.0)-1.0))
+                              * (1.0 + backface*(clamp(dot(n, cullDir), 0.0, 1.0)-1.0));
+                if (visible > 0.0 && q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
+                  float col = mod(float(i), 8.0), row = floor(float(i)/8.0);
+                  vec2 auv = vec2((col+q.x)/8.0, ((7.0-row)+q.y)/8.0);
+                  vec4 dec = texture2D(decalAtlas, auv);
+                  float alpha = dec.a*mtDecalEdge(q.x)*mtDecalEdge(q.y)*size.z;
+                  diffuseColor.rgb = mix(diffuseColor.rgb, dec.rgb, alpha);
+                }
+                if ((flags & 2) != 0) {
+                  vec2 qm = mtDecalMirrorUv(p, uDecalPos[i], uDecalRot[i], size.x, size.y, flip);
+                  vec3 cm = vec3(cy*cp, -sy*cp, sp);
+                  float vm = (1.0 + opposite*(clamp(dot(n, cm), 0.0, 1.0)-1.0))
+                           * (1.0 + backface*(clamp(dot(n, cm), 0.0, 1.0)-1.0));
+                  if (vm > 0.0 && qm.x >= 0.0 && qm.x <= 1.0 && qm.y >= 0.0 && qm.y <= 1.0) {
+                    float col = mod(float(i), 8.0), row = floor(float(i)/8.0);
+                    vec2 auv = vec2((col+qm.x)/8.0, ((7.0-row)+qm.y)/8.0);
+                    vec4 dec = texture2D(decalAtlas, auv);
+                    float alpha = dec.a*mtDecalEdge(qm.x)*mtDecalEdge(qm.y)*size.z;
+                    diffuseColor.rgb = mix(diffuseColor.rgb, dec.rgb, alpha);
+                  }
+                }
               }
             }`);
-          if (!sh.fragmentShader.includes("uDecalDebug")) window.__patchMiss = (window.__patchMiss || 0) + 1;
+          if (!sh.fragmentShader.includes("mtDecalPrimaryUv")) window.__patchMiss = (window.__patchMiss || 0) + 1;
         };
         c.needsUpdate = true;
         patched++;
@@ -778,7 +747,7 @@ async function load() {
     });
     info.patched = patched;
     info.step = "done";
-    info.axes = axes;
+    info.layers = layers.map(L => ({ key: L.key, pos: L.pos, rot: L.rot, scale: L.scale, flags: L.flags }));
     try { render(); } catch (e) { try { renderer.render(scene, camera); } catch (e2) {} }
   }
   applyVehicleDecals().catch(e => { console.warn("decals:", e); window.__decalInfo = { step: "error:" + e.message }; });
