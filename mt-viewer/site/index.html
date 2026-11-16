@@ -109,7 +109,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
-import { DECAL_PROJECTION_GLSL } from "./js/decal-projection.js?v=4";
+import { DECAL_PROJECTION_GLSL, decalFallbackSlots } from "./js/decal-projection.js?v=5";
 
 const params = new URLSearchParams(location.search);
 const workshopId = params.get("workshop");
@@ -979,8 +979,9 @@ async function load() {
     let patched = 0;
     const wholeSize = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3());
     const minSpan = Math.max(wholeSize.x, wholeSize.z) * 0.25;
+    const fallbackSlots = decalFallbackSlots(slots, colorSlots, extraPaintSlot);
     const shellName = n => slots.includes(n) || /^(Palette|Shell)/i.test(n || "")
-      || slots.some(sl => (n || "").startsWith(sl));
+      || slots.some(sl => (n || "").startsWith(sl)) || fallbackSlots.has(n);
 
     root.traverse(o => {
       if (!o.isMesh || o.userData.isAttachment || !o.material || !o.geometry.attributes.uv1) return;

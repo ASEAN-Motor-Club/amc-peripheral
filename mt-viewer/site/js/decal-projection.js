@@ -3,6 +3,14 @@
 
 const TAU = 2 * Math.PI;
 
+export function decalFallbackSlots(decalSlots, colorSlots, extraPaintSlots) {
+  if (decalSlots.length) return new Set();
+  return new Set([
+    ...Object.keys(extraPaintSlots),
+    ...Object.entries(colorSlots).filter(([, def]) => !def.useAlpha).map(([key]) => key),
+  ]);
+}
+
 function axis(yaw, pitch) {
   const a = TAU * (pitch + 0.25) / 2;
   return [Math.cos(TAU*yaw)*Math.cos(a), Math.sin(TAU*yaw)*Math.cos(a), Math.sin(a)];

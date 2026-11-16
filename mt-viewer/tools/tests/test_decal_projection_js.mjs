@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { primaryUv, mirrorUv, primaryVisibility, mirrorVisibility, DECAL_PROJECTION_GLSL } from '../../site/js/decal-projection.js';
+import { primaryUv, mirrorUv, primaryVisibility, mirrorVisibility, decalFallbackSlots, DECAL_PROJECTION_GLSL } from '../../site/js/decal-projection.js';
 
 const cases = [
   {
@@ -34,6 +34,14 @@ assert.equal(primaryVisibility([100,0,0], [-1,0,0], 0, 0, CULL_BOTH), 0);
 assert.equal(primaryVisibility([0,100,0], [0,1,0], 0.25, 0, CULL_BOTH), 1);
 assert.equal(mirrorVisibility([0,100,0], [0,1,0], 0.25, 0, CULL_BOTH), 0);
 assert.equal(mirrorVisibility([0,-100,0], [0,-1,0], 0.25, 0, CULL_BOTH), 1);
+
+const fallback = decalFallbackSlots(
+  [],
+  { Body: { useAlpha: false }, Body__2: { useAlpha: false }, Windows: { useAlpha: true } },
+  { Body_0: 0, Body_1: 1 },
+);
+assert.deepEqual([...fallback].sort(), ['Body', 'Body_0', 'Body_1', 'Body__2']);
+assert.equal(decalFallbackSlots(['CargoBed_01'], { Body: {} }, { Body_0: 0 }).size, 0);
 
 for (const token of ['255.0', 'PositionX', 'mtDecalPrimaryUv', 'mtDecalMirrorUv', 'mtDecalVisibility'])
   assert.ok(DECAL_PROJECTION_GLSL.includes(token), `missing GLSL token ${token}`);
