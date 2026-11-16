@@ -376,11 +376,12 @@ async function load() {
   }).catch(() => sel.remove());
 
   const [manifest, table] = await Promise.all([
-    fetch(`${vehicle}/${vehicle}.json`).then(r => r.json()),
+    fetch(`${vehicle}/${vehicle}.json?v=2`).then(r => r.json()),
     fetch(`${vehicle}/materials.json`).then(r => r.json()).catch(() => ({ materials: {} })),
   ]);
+  const visibleParts = manifest.parts.filter(p => !p.hidden);
   frameBox(estimateBox());   // something framed before the first byte arrives
-  statusEl.textContent = `geometry 0/${manifest.parts.length}`;
+  statusEl.textContent = `geometry 0/${visibleParts.length}`;
   const defs = table.materials || {};
   slotDefs = defs;
   slotMesh = table.slotsByMesh || {};
@@ -405,7 +406,7 @@ async function load() {
   let lastDiag = 0;
   function estimateBox() {
     const b = new THREE.Box3();
-    for (const part of manifest.parts) b.expandByPoint(new THREE.Vector3().fromArray(part.position));
+    for (const part of visibleParts) b.expandByPoint(new THREE.Vector3().fromArray(part.position));
     return b.isEmpty() ? b : b.expandByScalar(1.6);
   }
   function frameBox(b) {
@@ -431,7 +432,7 @@ async function load() {
   // steering wheel for two seconds and nothing else. Body/chassis are the largest
   // files, so sorting by Content-Length puts the silhouette on screen almost
   // immediately and the trim fills in around it.
-  const parts = manifest.parts.slice();
+  const parts = visibleParts.slice();
   const sizes = await Promise.all(parts.map(p =>
     fetch(`${vehicle}/glb/${p.glb}`, { method: "HEAD" })
       .then(r => +(r.headers.get("content-length") || 0)).catch(() => 0)));
@@ -487,7 +488,7 @@ async function load() {
   }));
 
   // --- everything is here: shade it -------------------------------------------
-  statusEl.textContent = `materials ${streamed.length}/${manifest.parts.length}`;
+  statusEl.textContent = `materials ${streamed.length}/${visibleParts.length}`;
   for (const model of streamed) model.traverse(o => {
     if (!o.isMesh) return;
     o.material = materialFor(o.userData.slot, o.userData.def, plainMode);
@@ -579,7 +580,7 @@ async function load() {
     `${stats.materials.size} materials`,
     table.__textures ? String(table.__textures) : "",
   ].filter(Boolean).join(" · ");
-  statusEl.textContent = `loaded ${manifest.parts.length}/${manifest.parts.length}`;
+  statusEl.textContent = `loaded ${visibleParts.length}/${visibleParts.length}`;
 
   // --- decals: projection transcribed from M_DecalBounds_Test shader 5020 ---
   // The game bakes each layer through LocalBounds/LocalNormal into a per-mesh
@@ -842,7 +843,7 @@ async function load() {
   // Everything is wired and shaded: hand the controls over.
   ctl.classList.remove("pending");
   statusEl.classList.remove("pending");
-  statusEl.textContent = `loaded ${manifest.parts.length}/${manifest.parts.length}`;
+  statusEl.textContent = `loaded ${visibleParts.length}/${visibleParts.length}`;
   render();
 
   if (params.has("debug")) {
