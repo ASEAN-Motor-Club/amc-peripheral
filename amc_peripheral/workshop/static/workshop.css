@@ -118,6 +118,17 @@ button:hover, .primary-button:hover { text-decoration: none; filter: brightness(
 .compare-tray button { padding: 8px 11px; background: #29354a; color: var(--text); }
 .compare-slots { display: flex; gap: 6px; }
 .compare-slots code { background: var(--panel-2); padding: 3px 6px; border-radius: 5px; }
+.compare-dialog { width: min(1120px, calc(100% - 24px)); max-height: calc(100% - 40px); padding: 0; color: var(--text); background: #0d1420; border: 1px solid #34445f; border-radius: 15px; box-shadow: 0 24px 70px #000a; }
+.compare-dialog::backdrop { background: #02060dcc; }
+.compare-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: #0d1420; z-index: 1; }
+.compare-dialog h2 { margin: 0; font-size: 24px; }
+.compare-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; padding: 16px; overflow: auto; }
+.compare-column { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.compare-column img, .compare-placeholder { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; background: #060a10; }
+.compare-placeholder { display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+.compare-column h3 { margin: 0; font-size: 18px; }
+.compare-column .primary-button { margin-top: auto; text-align: center; }
+.compare-column .badges { margin: 0; }
 .detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 32px; padding: 44px 0 80px; }
 .detail-main h1 { font-size: clamp(34px, 5vw, 62px); margin-bottom: 10px; }
 .detail-main h1 .muted { font-size: .42em; font-weight: 500; letter-spacing: 0; }
@@ -158,6 +169,7 @@ button:hover, .primary-button:hover { text-decoration: none; filter: brightness(
   .gallery-layout { grid-template-columns: 1fr; }
   .filters { position: static; }
   .compare-tray { flex-wrap: wrap; }
+  .compare-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fact-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
