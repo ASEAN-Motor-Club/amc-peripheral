@@ -310,6 +310,11 @@
                 default = "https";
                 description = "Scheme used to reach the workshop from the snapshot worker.";
               };
+              aliasHost = lib.mkOption {
+                type = lib.types.str;
+                default = "workshop.aseanmotorclub.com";
+                description = "Optional alias hostname that redirects to the workshop subpath.";
+              };
               user = lib.mkOption {
                 type = lib.types.str;
                 default = "hermes";
@@ -774,11 +779,27 @@
                 proxyPass =
                   "http://127.0.0.1:${toString cfg.workshop.port}/workshop/";
               };
+              "/workshop/snapshots/" = {
+                alias = "/var/lib/amc-workshop/snapshots/public/";
+                extraConfig = ''
+                  expires 1h;
+                  add_header Cache-Control "public, max-age=3600";
+                '';
+              };
               "/api/workshop/" = {
                 proxyPass =
                   "http://127.0.0.1:${toString cfg.workshop.port}/api/workshop/";
               };
             };
+
+            # Keep a memorable hostname working without duplicating the app.
+            services.nginx.virtualHosts.${cfg.workshop.aliasHost} =
+              lib.mkIf cfg.workshop.enable {
+                enableACME = true;
+                forceSSL = true;
+                locations."/".return =
+                  "301 https://${cfg.workshop.publicHost}/workshop/";
+              };
 
             systemd.services.amc-radio = {
               wantedBy = ["multi-user.target"];
