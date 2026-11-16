@@ -1,0 +1,47 @@
+{
+ "format": 3,
+ "materials": {
+  "Palette": {
+   "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+   "blendMode": "BLEND_Opaque",
+   "baseColor": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "metalness": 0.0,
+   "roughness": 0.6,
+   "alphaMode": "OPAQUE",
+   "doubleSided": false,
+   "map": null,
+   "roughnessMap": null,
+   "metalnessMap": null,
+   "normalMap": null,
+   "materialName": "M_Palette",
+   "slot": "Palette"
+  },
+  "Light": {
+   "material": "MotorTown/Content/Materials/M_Light.M_Light",
+   "blendMode": "BLEND_Opaque",
+   "baseColor": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "metalness": 0.0,
+   "roughness": 0.6,
+   "alphaMode": "OPAQUE",
+   "doubleSided": false,
+   "materialName": "M_Light",
+   "slot": "Light"
+  }
+ },
+ "slotsByMesh": {
+  "LED_Strips_50cm": [
+   "Palette",
+   "Light"
+  ]
+ },
+ "bodyVariants": [],
+ "textures": {}
+}
