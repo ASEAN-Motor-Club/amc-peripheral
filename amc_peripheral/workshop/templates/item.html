@@ -64,6 +64,17 @@
     </section>
     {% endif %}
 
+    {% if config.parts %}
+    <details class="panel">
+      <summary><span class="panel-title">Parts ({{ config.parts|length }})</span></summary>
+      <ul class="detail-list part-list">
+        {% for part in config.parts %}
+        <li><code>{{ part.key }}</code><span class="muted">{{ part.slot }}</span></li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+
     {% if config.decals %}
     <details class="panel" open>
       <summary><span class="panel-title">Decal layers ({{ config.decals|length }})</span></summary>
@@ -82,20 +93,9 @@
     {% if config.attachments %}
     <details class="panel" open>
       <summary><span class="panel-title">Attachments ({{ config.attachments|length }})</span></summary>
-      <ul class="detail-list">
+      <ul class="detail-list part-list">
         {% for attachment in config.attachments %}
         <li><code>{{ attachment.key }}</code><span class="muted">{{ attachment.slot }}</span></li>
-        {% endfor %}
-      </ul>
-    </details>
-    {% endif %}
-
-    {% if config.parts %}
-    <details class="panel">
-      <summary><span class="panel-title">Parts ({{ config.parts|length }})</span></summary>
-      <ul class="detail-list">
-        {% for part in config.parts %}
-        <li><code>{{ part.key }}</code><span class="muted">{{ part.slot }}</span></li>
         {% endfor %}
       </ul>
     </details>
