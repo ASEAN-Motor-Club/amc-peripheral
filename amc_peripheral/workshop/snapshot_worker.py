@@ -138,7 +138,11 @@ def render_job(job: SnapshotJob, settings: SnapshotSettings, browser) -> dict:
                  ['done','no-record','off'].includes(window.__attachmentInfo.step)""",
             timeout=settings.page_timeout_ms,
         )
-        page.wait_for_timeout(700)
+        page.wait_for_function(
+            "() => window.__syncFrame && window.__syncFrame.rendered === true",
+            timeout=settings.page_timeout_ms,
+        )
+        page.wait_for_timeout(150)
         if page_errors:
             raise RenderError("page_error", "; ".join(page_errors[:3]))
         errors = page.evaluate("window.__errs || []")
