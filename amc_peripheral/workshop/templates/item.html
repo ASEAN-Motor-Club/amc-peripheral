@@ -66,7 +66,7 @@
 
     {% if config.decals %}
     <details class="panel" open>
-      <summary><h2>Decal layers ({{ config.decals|length }})</h2></summary>
+      <summary><span class="panel-title">Decal layers ({{ config.decals|length }})</span></summary>
       <ol class="detail-list decal-list">
         {% for decal in config.decals %}
         <li>
@@ -81,7 +81,7 @@
 
     {% if config.attachments %}
     <details class="panel" open>
-      <summary><h2>Attachments ({{ config.attachments|length }})</h2></summary>
+      <summary><span class="panel-title">Attachments ({{ config.attachments|length }})</span></summary>
       <ul class="detail-list">
         {% for attachment in config.attachments %}
         <li><code>{{ attachment.key }}</code><span class="muted">{{ attachment.slot }}</span></li>
@@ -92,7 +92,7 @@
 
     {% if config.parts %}
     <details class="panel">
-      <summary><h2>Parts ({{ config.parts|length }})</h2></summary>
+      <summary><span class="panel-title">Parts ({{ config.parts|length }})</span></summary>
       <ul class="detail-list">
         {% for part in config.parts %}
         <li><code>{{ part.key }}</code><span class="muted">{{ part.slot }}</span></li>

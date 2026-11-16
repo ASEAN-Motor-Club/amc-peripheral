@@ -151,6 +151,7 @@ button:hover, .primary-button:hover { text-decoration: none; filter: brightness(
 .notice { margin-top: 16px; border-left: 3px solid var(--accent); padding: 12px 14px; background: #101d29; border-radius: 0 8px 8px 0; }
 details.panel > summary { cursor: pointer; }
 details.panel > summary h2 { display: inline; margin: 0; }
+.panel-title { font-size: 22px; font-weight: 700; }
 .detail-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 7px; }
 .detail-list li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 8px; background: var(--panel-2); border-radius: 7px; }
 .detail-list li > code { overflow-wrap: anywhere; }
