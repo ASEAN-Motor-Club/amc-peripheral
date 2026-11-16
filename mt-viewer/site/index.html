@@ -362,6 +362,7 @@ function applyLivery() {
 
 
 async function load() {
+  const loadTiming = (window.__loadTiming = { start: performance.now() });
   // The controls are in the DOM before any data arrives, so make the page usable
   // immediately: the vehicle list is a separate, tiny request that lands first, so
   // you can switch models before this one has even finished streaming.
@@ -485,11 +486,14 @@ async function load() {
     done++;
     statusEl.textContent = `wireframe ${done}/${parts.length}`;
   }
-  // three workers, so the network is busy without 13 sockets fighting
+  // Six workers keep HTTP/2 busy without flooding the main thread with GLB parses.
   let next = 0;
-  await Promise.all([0, 1, 2].map(async () => {
+  await Promise.all([0, 1, 2, 3, 4, 5].map(async () => {
     while (next < parts.length) await streamPart(parts[next++]);
   }));
+  loadTiming.geometry = performance.now();
+
+  // --- shade the base vehicle first ------------------------------------------
 
   // --- owned attachments: attachment transform -> actor-local components ----
   async function streamAttachments() {
@@ -611,20 +615,32 @@ async function load() {
       stats.meshes += b.matrices.length;
       info.instancedDraws++;
     }
+    info.step = "compiling";
+    if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
     info.step = "done";
     if (info.lightBudgetSkipped) console.warn(`attachment lights skipped over budget: ${info.lightBudgetSkipped}`);
     render();
   }
 
-  await streamAttachments();
-
-  // --- everything is here: shade it -------------------------------------------
+  // --- base materials: get a usable vehicle on screen before enhancements ----
   statusEl.textContent = `materials ${streamed.length}/${visibleParts.length}`;
   for (const model of streamed) model.traverse(o => {
     if (!o.isMesh) return;
     o.material = materialFor(o.userData.slot, o.userData.def, plainMode);
   });
+  statusEl.textContent = "vehicle ready · loading attachments & decals…";
+  if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
   render();
+  // Yield a real frame so the base vehicle is visible before the expensive
+  // rect-light/decal shader variants begin compiling.
+  await Promise.race([
+    new Promise(resolve => requestAnimationFrame(resolve)),
+    new Promise(resolve => setTimeout(resolve, 100)), // hidden tabs may throttle rAF
+  ]);
+  loadTiming.baseReady = performance.now();
+  loadTiming.baseDrawCalls = renderer.info.render.calls;
+  await streamAttachments();
+  loadTiming.attachments = performance.now();
 
   // (the vehicle list was fetched and wired at the top of load(), so the selector
   // is already live while this vehicle streams in)
@@ -712,7 +728,7 @@ async function load() {
     `${stats.materials.size} materials`,
     table.__textures ? String(table.__textures) : "",
   ].filter(Boolean).join(" · ");
-  statusEl.textContent = `loaded ${visibleParts.length}/${visibleParts.length}`;
+  statusEl.textContent = "vehicle ready · finishing decals…";
 
   // --- decals: projection transcribed from M_DecalBounds_Test shader 5020 ---
   // The game bakes each layer through LocalBounds/LocalNormal into a per-mesh
@@ -767,10 +783,14 @@ async function load() {
     atlas.width = atlas.height = TILE * GRID;
     const actx = atlas.getContext("2d");
     let packed = 0;
+    const images = await Promise.all(layers.map(L => {
+      const d = byKey.get(L.key);
+      return loadImage(`decals/tex/${d.category}/${d.name}.png`).catch(() => null);
+    }));
     for (let i = 0; i < layers.length; i++) {
       const d = byKey.get(layers[i].key);
-      let img;
-      try { img = await loadImage(`decals/tex/${d.category}/${d.name}.png`); } catch { continue; }
+      const img = images[i];
+      if (!img) continue;
       const t = document.createElement("canvas");
       t.width = t.height = TILE;
       const tc = t.getContext("2d");
@@ -900,11 +920,20 @@ async function load() {
       if (swap.some((m, i) => m !== mats[i])) o.material = Array.isArray(o.material) ? swap : swap[0];
     });
     info.patched = patched;
-    info.step = "done";
+    info.step = "compiling";
     info.layers = layers.map(L => ({ key: L.key, pos: L.pos, rot: L.rot, scale: L.scale, flags: L.flags }));
+    if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
+    loadTiming.decals = performance.now();
+    info.step = "done";
     try { render(); } catch (e) { try { renderer.render(scene, camera); } catch (e2) {} }
   }
-  applyVehicleDecals().catch(e => { console.warn("decals:", e); window.__decalInfo = { step: "error:" + e.message }; });
+  applyVehicleDecals().catch(e => {
+    console.warn("decals:", e);
+    window.__decalInfo = { step: "error:" + e.message };
+  }).finally(() => {
+    const failed = /^(?:error:|fetch-failed:)/.test(window.__decalInfo?.step || "");
+    statusEl.textContent = failed ? "loaded · decals unavailable" : `loaded ${visibleParts.length}/${visibleParts.length}`;
+  });
 
   window.__viewer = { scene, root, camera, renderer, manifest, defs, stats, setCam };
   // exposed for headless probes (ray casts, section visibility) that need the three.js namespace
@@ -977,7 +1006,7 @@ async function load() {
   // Everything is wired and shaded: hand the controls over.
   ctl.classList.remove("pending");
   statusEl.classList.remove("pending");
-  statusEl.textContent = `loaded ${visibleParts.length}/${visibleParts.length}`;
+  statusEl.textContent = "vehicle ready · finishing decals…";
   render();
 
   if (params.has("debug")) {
@@ -1047,6 +1076,7 @@ addEventListener("resize", () => {
   render();
 });
 
+if (!syncMode) anim();
 await load();
 // give textures a beat to decode before the single frame in sync mode
 await new Promise(r => setTimeout(r, 350));
@@ -1086,7 +1116,7 @@ if (syncMode) {
       });
     }
   }
-} else { anim(); }
+}
 </script>
 </body>
 </html>
