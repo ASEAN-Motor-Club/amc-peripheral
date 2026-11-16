@@ -143,6 +143,14 @@ class SnapshotStore:
             return None
         return self._public(row, include_error=True)
 
+    def queue_depth(self) -> int:
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS n FROM snapshot_jobs "
+                "WHERE status IN ('pending','retry_pending','rendering')"
+            ).fetchone()
+        return int(row["n"] if row else 0)
+
     def ready_map(
         self, source_kind: str, pairs: list[tuple[int, str]]
     ) -> dict[int, dict[str, Any]]:

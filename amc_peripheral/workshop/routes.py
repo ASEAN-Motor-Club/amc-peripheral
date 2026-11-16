@@ -146,7 +146,7 @@ def create_app(
                 meta["url"].replace(".webp", "-card.webp") if meta else None
             )
             card["snapshotStatus"] = meta["status"] if meta else "missing"
-        for job in jobs[:enqueue]:
+        for job in (jobs[:enqueue] if snapshots.queue_depth() < 400 else []):
             snapshots.enqueue(job)
 
     @web.middleware
@@ -366,7 +366,7 @@ def create_app(
             asyncio.to_thread(repository.vehicles),
         )
         next_query = {key: value for key, value in query.items() if key != "cursor"}
-        attach_snapshots(data["items"], enqueue=8)
+        attach_snapshots(data["items"], enqueue=settings.page_size)
         if data.get("nextCursor"):
             next_query["cursor"] = data["nextCursor"]
         next_url = (

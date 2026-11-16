@@ -75,11 +75,46 @@ async def test_item_page_reports_configuration(client):
     assert "Configuration" in text
     assert "View in 3D" in text
     assert "Rendered decals" in text
+    assert "snapshot-api" in text
     redirect = await client.get(
         "/workshop/items/1/viewer/", allow_redirects=False
     )
     assert redirect.status == 302
     assert redirect.headers["Location"] == "/vehicles/index.html?workshop=1"
+
+
+async def test_snapshot_endpoint_queues_then_reports_ready(client, settings):
+    from amc_peripheral.workshop.snapshots import SnapshotStore
+
+    first = await client.get("/api/workshop/items/1/snapshot")
+    assert first.status == 202
+    queued = await first.json()
+    assert queued["status"] == "pending"
+    assert queued["url"] is None
+
+    store = SnapshotStore(settings.site_db)
+    claimed = store.claim("test-worker", lease_seconds=60)
+    assert claimed and claimed["cache_key"] == queued["key"]
+    store.complete(
+        queued["key"], artifact_path="items/aa/preview.webp", width=960,
+        height=540, size=2048, sha256="e" * 64,
+    )
+    second = await client.get("/api/workshop/items/1/snapshot")
+    assert second.status == 200
+    ready = await second.json()
+    assert ready["status"] == "ready"
+    assert ready["url"] == "/workshop/snapshots/items/aa/preview.webp"
+
+
+async def test_gallery_exposes_snapshot_keys_and_bounds_the_queue(client):
+    response = await client.get("/workshop/gallery/?sort=new")
+    assert response.status == 200
+    text = await response.text()
+    assert "/workshop/gallery/" in text
+    listing = await client.get("/api/workshop/items?sort=new")
+    data = await listing.json()
+    assert all(item["snapshotKey"] for item in data["items"])
+
 
 
 async def test_hidden_deleted_and_unknown_items_are_404(client):
