@@ -199,6 +199,7 @@ def run(settings: SnapshotSettings, *, once: bool = False, max_jobs: int = 0) ->
         browser = playwright.chromium.launch(**launch)
         try:
             while True:
+                store.heartbeat(owner)
                 row = store.claim(owner, settings.lease_seconds)
                 if row is None:
                     if once:

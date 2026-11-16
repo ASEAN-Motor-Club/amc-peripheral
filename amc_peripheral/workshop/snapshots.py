@@ -40,6 +40,10 @@ CREATE INDEX IF NOT EXISTS ix_snapshot_ready
     ON snapshot_jobs(source_kind, source_id, config_hash, status);
 CREATE INDEX IF NOT EXISTS ix_snapshot_due
     ON snapshot_jobs(status, next_attempt, priority, created_at);
+CREATE TABLE IF NOT EXISTS snapshot_worker_heartbeat (
+    worker_id TEXT PRIMARY KEY,
+    updated_at REAL NOT NULL
+);
 """
 
 
@@ -150,6 +154,63 @@ class SnapshotStore:
                 "WHERE status IN ('pending','retry_pending','rendering')"
             ).fetchone()
         return int(row["n"] if row else 0)
+
+    def statuses(self, cache_keys: list[str]) -> dict[str, dict[str, Any]]:
+        if not cache_keys:
+            return {}
+        marks = ",".join("?" for _ in cache_keys)
+        with self._conn() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM snapshot_jobs WHERE cache_key IN ({marks})",
+                tuple(cache_keys),
+            ).fetchall()
+        return {row["cache_key"]: self._public(row) for row in rows}
+
+    def heartbeat(self, worker_id: str) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO snapshot_worker_heartbeat(worker_id,updated_at) "
+                "VALUES(?,?) ON CONFLICT(worker_id) DO UPDATE SET updated_at=excluded.updated_at",
+                (worker_id, time.time()),
+            )
+
+    def health(self) -> dict[str, Any]:
+        now = time.time()
+        with self._conn() as conn:
+            counts = {
+                row["status"]: int(row["n"])
+                for row in conn.execute(
+                    "SELECT status, COUNT(*) AS n FROM snapshot_jobs GROUP BY status"
+                )
+            }
+            oldest = conn.execute(
+                "SELECT MIN(created_at) AS at FROM snapshot_jobs "
+                "WHERE status IN ('pending','retry_pending')"
+            ).fetchone()
+            heartbeat = conn.execute(
+                "SELECT MAX(updated_at) AS at FROM snapshot_worker_heartbeat"
+            ).fetchone()
+            ready = conn.execute(
+                "SELECT COALESCE(SUM(bytes),0) AS bytes FROM snapshot_jobs "
+                "WHERE status='ready'"
+            ).fetchone()
+        depth = sum(
+            counts.get(status, 0)
+            for status in ("pending", "retry_pending", "rendering")
+        )
+        return {
+            "queueDepth": depth,
+            "oldestQueuedSeconds": (
+                round(now - float(oldest["at"]), 1) if oldest and oldest["at"] else None
+            ),
+            "workerHeartbeatAgeSeconds": (
+                round(now - float(heartbeat["at"]), 1)
+                if heartbeat and heartbeat["at"]
+                else None
+            ),
+            "artifactBytes": int(ready["bytes"] if ready else 0),
+            "statusCounts": counts,
+        }
 
     def ready_map(
         self, source_kind: str, pairs: list[tuple[int, str]]

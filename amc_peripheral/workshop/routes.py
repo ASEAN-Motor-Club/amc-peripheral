@@ -329,8 +329,31 @@ def create_app(
         return web.json_response({"vehicles": await asyncio.to_thread(repository.vehicles)})
 
     async def api_health(request: web.Request) -> web.Response:
-        stats = await asyncio.to_thread(repository.stats)
-        return web.json_response({"status": "ok", **stats})
+        stats, snapshot_health = await asyncio.gather(
+            asyncio.to_thread(repository.stats),
+            asyncio.to_thread(snapshots.health),
+        )
+        return web.json_response(
+            {"status": "ok", **stats, "snapshots": snapshot_health}
+        )
+
+    async def api_snapshot_batch(request: web.Request) -> web.Response:
+        raw = request.query.get("keys", "")
+        keys = [key for key in raw.split(",") if key]
+        allowed = set("0123456789abcdef")
+        if not keys or len(keys) > 48 or any(
+            len(key) != 64 or any(char not in allowed for char in key)
+            for key in keys
+        ):
+            return _json_error(
+                "invalid_keys",
+                "keys must be 1-48 comma-separated sha256 digests",
+            )
+        statuses = await asyncio.to_thread(snapshots.statuses, keys)
+        return web.json_response(
+            {"snapshots": {key: statuses.get(key) for key in keys}},
+            headers={"Cache-Control": "no-store"},
+        )
 
     async def page_home(request: web.Request) -> web.Response:
         data, stats = await asyncio.gather(
@@ -474,6 +497,7 @@ def create_app(
     app.router.add_get("/api/workshop/items/{id:\\d+}", api_item)
     app.router.add_get("/api/workshop/items/{id:\\d+}/viewer", api_viewer)
     app.router.add_get("/api/workshop/items/{id:\\d+}/snapshot", api_snapshot)
+    app.router.add_get("/api/workshop/snapshots", api_snapshot_batch)
     app.router.add_get("/api/workshop/authors/{id:\\d+}", api_authors)
     app.router.add_get("/api/workshop/vehicles", api_vehicles)
     app.router.add_get("/api/workshop/health", api_health)
