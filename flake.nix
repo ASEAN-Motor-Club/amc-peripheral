@@ -727,6 +727,40 @@
               '';
             };
 
+            systemd.services.amc-workshop-snapshots = lib.mkIf cfg.workshop.enable {
+              description = "Render AMC workshop vehicle snapshots";
+              wantedBy = ["multi-user.target"];
+              after = ["network-online.target" "amc-workshop-web.service"];
+              wants = ["network-online.target"];
+              requires = ["amc-workshop-web.service"];
+              serviceConfig = {
+                Type = "simple";
+                User = cfg.workshop.user;
+                Group = cfg.workshop.group;
+                StateDirectory = "amc-workshop";
+                StateDirectoryMode = "0750";
+                UMask = "0077";
+                Restart = "always";
+                RestartSec = "15";
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                PrivateTmp = true;
+                NoNewPrivileges = true;
+                MemoryMax = "2G";
+                ReadOnlyPaths = [cfg.workshop.sourceDb cfg.workshop.viewerRoot];
+                Environment = [
+                  "HOME=/var/lib/amc-workshop"
+                  "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
+                  "AMC_WORKSHOP_SNAPSHOT_ROOT=/var/lib/amc-workshop/snapshots"
+                  "AMC_WORKSHOP_VIEWER_URL=https://${cfg.nginx.domains.workshop}/vehicles/index.html"
+                  "AMC_SNAPSHOT_CHROME=${lib.getExe pkgs.chromium}"
+                ];
+              };
+              script = ''
+                exec ${self.packages.${pkgs.system}.default}/bin/amc_workshop_snapshots
+              '';
+            };
+
             services.nginx.virtualHosts.${cfg.nginx.domains.workshop} = lib.mkIf cfg.workshop.enable {
               enableACME = true;
               forceSSL = true;

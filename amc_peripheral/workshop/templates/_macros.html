@@ -5,7 +5,11 @@
 {% macro card(item, compare=false) -%}
 <article class="vehicle-card" data-workshop-id="{{ item.id }}">
   <a class="card-visual" href="/workshop/items/{{ item.id }}/" aria-hidden="true" tabindex="-1">
+    {% if item.snapshotCardUrl %}
+    <img src="{{ item.snapshotCardUrl }}" srcset="{{ item.snapshotCardUrl }} 480w, {{ item.snapshotUrl }} 960w" sizes="(max-width: 640px) 100vw, 360px" alt="" width="480" height="270" loading="lazy" decoding="async">
+    {% else %}
     <img src="/workshop/static/placeholder.svg" alt="" width="480" height="270" loading="lazy">
+    {% endif %}
     <span class="card-id">#{{ item.id }}</span>
   </a>
   <div class="card-body">

@@ -25,6 +25,7 @@ from .queries import (
     QueryError,
     WorkshopRepository,
 )
+from .snapshots import SnapshotJob, SnapshotStore, render_key
 
 log = logging.getLogger(__name__)
 HERE = Path(__file__).resolve().parent
@@ -105,6 +106,48 @@ def create_app(
     app["repository"] = repository
     app["character_vehicles"] = character_vehicles
     app["attachment_catalogue"] = AttachmentCatalogue(settings.viewer_root)
+    (settings.snapshot_root / "public").mkdir(parents=True, exist_ok=True)
+    snapshots = SnapshotStore(settings.site_db)
+
+    def snapshot_job(card: dict[str, Any]) -> SnapshotJob | None:
+        config_hash = card.get("configHash") or ""
+        if not config_hash:
+            return None
+        version = asset_version_for(settings.viewer_root, card["vehicleKey"])
+        key = render_key(
+            source_kind="workshop",
+            source_id=int(card["id"]),
+            config_hash=config_hash,
+            asset_version=version,
+        )
+        return SnapshotJob(
+            cache_key=key,
+            source_kind="workshop",
+            source_id=int(card["id"]),
+            config_hash=config_hash,
+            asset_version=version,
+            camera="default",
+        )
+
+    def attach_snapshots(items: list[dict[str, Any]], *, enqueue: int = 0) -> None:
+        jobs = []
+        for card in items:
+            job = snapshot_job(card)
+            card["snapshotKey"] = job.cache_key if job else None
+            if job:
+                jobs.append(job)
+        ready = snapshots.ready_map(
+            "workshop", [(int(card["id"]), card.get("configHash") or "") for card in items]
+        )
+        for card in items:
+            meta = ready.get(int(card["id"]))
+            card["snapshotUrl"] = meta["url"] if meta else None
+            card["snapshotCardUrl"] = (
+                meta["url"].replace(".webp", "-card.webp") if meta else None
+            )
+            card["snapshotStatus"] = meta["status"] if meta else "missing"
+        for job in jobs[:enqueue]:
+            snapshots.enqueue(job)
 
     @web.middleware
     async def errors(request: web.Request, handler):
@@ -183,6 +226,7 @@ def create_app(
 
     async def api_home(request: web.Request) -> web.Response:
         data = await asyncio.to_thread(repository.home, settings.home_limit)
+        attach_snapshots(data["popular"] + data["newest"])
         return web.json_response(data)
 
     async def api_list(request: web.Request) -> web.Response:
@@ -209,6 +253,7 @@ def create_app(
             limit=limit,
             cursor=query.get("cursor"),
         )
+        attach_snapshots(data["items"])
         return web.json_response(data)
 
     async def api_item(request: web.Request) -> web.Response:
@@ -245,6 +290,29 @@ def create_app(
             return _json_error("not_found", "CharacterVehicle not found", 404)
         return web.json_response(row)
 
+    async def api_snapshot(request: web.Request) -> web.Response:
+        workshop_id = int(request.match_info["id"])
+        config = await configuration(workshop_id)
+        item = await asyncio.to_thread(repository.get_item, workshop_id)
+        if item is None:
+            return _json_error("not_found", "Workshop item not found", 404)
+        if not config["vehicle"].get("assetAvailable"):
+            return web.json_response(
+                {"status": "unsupported", "url": None}, status=200
+            )
+        item["configHash"] = config["source"]["configHash"]
+        job = snapshot_job(item)
+        if job is None:
+            return _json_error("invalid_payload", "Configuration has no content hash", 422)
+        status = await asyncio.to_thread(snapshots.status, job.cache_key)
+        if status is None:
+            status = await asyncio.to_thread(snapshots.enqueue, job)
+        return web.json_response(
+            status,
+            status=200 if status["status"] == "ready" else 202,
+            headers={"Cache-Control": "no-store", "Retry-After": "10"},
+        )
+
     async def api_authors(request: web.Request) -> web.Response:
         author = await asyncio.to_thread(repository.author, int(request.match_info["id"]))
         if author is None:
@@ -269,6 +337,7 @@ def create_app(
             asyncio.to_thread(repository.home, settings.home_limit),
             asyncio.to_thread(repository.stats),
         )
+        attach_snapshots(data["popular"] + data["newest"])
         return render("home.html", page="home", data=data, stats=stats)
 
     async def page_gallery(request: web.Request) -> web.Response:
@@ -297,6 +366,7 @@ def create_app(
             asyncio.to_thread(repository.vehicles),
         )
         next_query = {key: value for key, value in query.items() if key != "cursor"}
+        attach_snapshots(data["items"], enqueue=8)
         if data.get("nextCursor"):
             next_query["cursor"] = data["nextCursor"]
         next_url = (
@@ -323,7 +393,16 @@ def create_app(
             config = await configuration(workshop_id)
         except (PayloadError, web.HTTPNotFound):
             config = None
-        return render("item.html", page="workshop", item=item, config=config)
+        snapshot = None
+        if config and config["vehicle"].get("assetAvailable"):
+            item["configHash"] = config["source"]["configHash"]
+            job = snapshot_job(item)
+            if job:
+                snapshot = snapshots.status(job.cache_key)
+                if snapshot is None:
+                    snapshot = snapshots.enqueue(job)
+        return render("item.html", page="workshop", item=item, config=config,
+                      snapshot=snapshot)
 
     async def page_item_viewer(request: web.Request) -> web.Response:
         workshop_id = int(request.match_info["id"])
@@ -394,6 +473,7 @@ def create_app(
     app.router.add_get("/api/workshop/items", api_list)
     app.router.add_get("/api/workshop/items/{id:\\d+}", api_item)
     app.router.add_get("/api/workshop/items/{id:\\d+}/viewer", api_viewer)
+    app.router.add_get("/api/workshop/items/{id:\\d+}/snapshot", api_snapshot)
     app.router.add_get("/api/workshop/authors/{id:\\d+}", api_authors)
     app.router.add_get("/api/workshop/vehicles", api_vehicles)
     app.router.add_get("/api/workshop/health", api_health)
@@ -404,4 +484,9 @@ def create_app(
         "/api/character-vehicles/{id:\\d+}/meta", api_character_meta
     )
     app.router.add_static("/workshop/static/", HERE / "static", name="workshop-static")
+    app.router.add_static(
+        "/workshop/snapshots/",
+        settings.snapshot_root / "public",
+        name="workshop-snapshots",
+    )
     return app

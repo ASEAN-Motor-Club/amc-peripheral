@@ -14,7 +14,11 @@
     {% endif %}
 
     <div class="viewer-stage">
-      <img src="/workshop/static/placeholder.svg" alt="Preview of the {{ item.vehicleKey|replace('_',' ') }} workshop configuration" width="960" height="540">
+      {% if snapshot and snapshot.url %}
+      <img id="item-snapshot" src="{{ snapshot.url }}" alt="Preview of the {{ item.vehicleKey|replace('_',' ') }} workshop configuration" width="960" height="540">
+      {% else %}
+      <img id="item-snapshot" src="/workshop/static/placeholder.svg" alt="Preview of the {{ item.vehicleKey|replace('_',' ') }} workshop configuration" width="960" height="540"{% if snapshot and snapshot.status not in ('unsupported', 'failed_permanent') %} data-snapshot-api="/api/workshop/items/{{ item.id }}/snapshot"{% endif %}>
+      {% endif %}
       <div class="viewer-actions">
         {% if config and config.vehicle.assetAvailable %}
         <a class="primary-button" href="/workshop/items/{{ item.id }}/viewer/">View in 3D</a>
@@ -85,4 +89,30 @@
     </section>
   </aside>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const image = document.getElementById("item-snapshot");
+  const endpoint = image?.dataset.snapshotApi;
+  if (!endpoint) return;
+  let attempts = 0;
+  const poll = async () => {
+    if (++attempts > 18) return;
+    try {
+      const response = await fetch(endpoint, { headers: { Accept: "application/json" }, cache: "no-store" });
+      const payload = await response.json();
+      if (payload.url) {
+        image.src = payload.url;
+        return;
+      }
+      if (["unsupported", "failed_permanent"].includes(payload.status)) return;
+    } catch (error) {
+      console.debug("snapshot poll failed", error);
+    }
+    window.setTimeout(poll, 5000);
+  };
+  window.setTimeout(poll, 1500);
+})();
+</script>
 {% endblock %}

@@ -24,7 +24,8 @@ NEW_ORDER = "w.created_at DESC, w.id DESC"
 CARD_COLUMNS = """
     w.id, w.vehicle_key, w.account_id, w.author_name, w.created_at,
     w.revision, w.votes, w.installed, w.has_paint, w.has_decal,
-    w.has_parts, w.has_tunings, w.decal_layers, w.part_count, w.tags
+    w.has_parts, w.has_tunings, w.decal_layers, w.part_count, w.tags,
+    w.json_sha256
 """
 
 
@@ -129,6 +130,7 @@ def _card(row: sqlite3.Row) -> dict[str, Any]:
         "decalLayers": int(row["decal_layers"] or 0),
         "partCount": int(row["part_count"] or 0),
         "tags": _tags(row["tags"]),
+        "configHash": row["json_sha256"] or "",
     }
 
 
