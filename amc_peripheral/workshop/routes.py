@@ -129,6 +129,19 @@ def create_app(
             camera="default",
         )
 
+    def attach_author_snapshots(
+        authors: list[dict[str, Any]], *, enqueue: int = 0
+    ) -> None:
+        for index, author in enumerate(authors):
+            representative = author.get("representativeId")
+            if not representative:
+                continue
+            card = repository.get_item(int(representative))
+            if card is None:
+                continue
+            attach_snapshots([card], enqueue=enqueue if index < enqueue else 0)
+            author["snapshotUrl"] = card.get("snapshotCardUrl")
+
     def attach_snapshots(items: list[dict[str, Any]], *, enqueue: int = 0) -> None:
         jobs = []
         for card in items:
@@ -227,6 +240,7 @@ def create_app(
     async def api_home(request: web.Request) -> web.Response:
         data = await asyncio.to_thread(repository.home, settings.home_limit)
         attach_snapshots(data["popular"] + data["newest"])
+        attach_author_snapshots(data["authors"], enqueue=6)
         return web.json_response(data)
 
     async def api_list(request: web.Request) -> web.Response:
@@ -361,6 +375,7 @@ def create_app(
             asyncio.to_thread(repository.stats),
         )
         attach_snapshots(data["popular"] + data["newest"])
+        attach_author_snapshots(data["authors"], enqueue=6)
         return render("home.html", page="home", data=data, stats=stats)
 
     async def page_gallery(request: web.Request) -> web.Response:

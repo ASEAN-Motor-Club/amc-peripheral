@@ -99,6 +99,7 @@ button:hover, .primary-button:hover { text-decoration: none; filter: brightness(
 .author-card { display: flex; gap: 13px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 15px; color: var(--text); }
 .author-card:hover { text-decoration: none; border-color: #3b4a63; }
 .author-initial { display: grid; place-items: center; width: 42px; height: 42px; flex: none; border-radius: 50%; color: #071018; background: linear-gradient(135deg, var(--accent-2), var(--accent)); font-weight: 800; }
+.author-avatar { width: 42px; height: 42px; flex: none; border-radius: 50%; object-fit: cover; border: 1px solid var(--line); }
 .author-card strong, .author-card span span { display: block; }
 .author-card span span { color: var(--muted); font-size: 13px; }
 .page-head { padding: 52px 0 24px; }

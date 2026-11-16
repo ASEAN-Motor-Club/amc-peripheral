@@ -51,7 +51,11 @@
   <div class="author-grid">
     {% for author in data.authors %}
     <a class="author-card" href="/workshop/authors/{{ author.accountId }}/">
+      {% if author.snapshotUrl %}
+      <img class="author-avatar" src="{{ author.snapshotUrl }}" alt="" width="42" height="42" loading="lazy" decoding="async">
+      {% else %}
       <span class="author-initial">{{ (author.displayName or '?')[:1] }}</span>
+      {% endif %}
       <span>
         <strong>{{ author.displayName or 'Workshop creator' }}</strong>
         <span>{{ author.uploads }} builds · {{ author.installs }} installs</span>
