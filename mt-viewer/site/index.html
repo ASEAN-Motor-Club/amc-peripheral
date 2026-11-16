@@ -118,7 +118,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
-import { DECAL_PROJECTION_GLSL } from "./js/decal-projection.js?v=1";
+import { DECAL_PROJECTION_GLSL, decalPrecompute } from "./js/decal-projection.js?v=2";
 
 const params = new URLSearchParams(location.search);
 const vehicle = params.get("vehicle") || "boxy";
@@ -135,6 +135,11 @@ scene.background = new THREE.Color(0x15161a);
 // ratio harder on coarse pointers, otherwise a 3x DPR screen draws 9x the pixels.
 const COARSE = matchMedia("(pointer: coarse)").matches;
 const DPR_CAP = COARSE ? 1.5 : 2;
+const FULL_QUALITY = params.get("quality") === "full";
+const PIXEL_BUDGET = FULL_QUALITY ? Infinity : (COARSE ? 1500000 : 4000000);
+const requestedInteractiveScale = Number(params.get("interactiveScale") || 0.7);
+const INTERACTIVE_SCALE = FULL_QUALITY || syncMode ? 1 :
+  Math.min(1, Math.max(0.4, Number.isFinite(requestedInteractiveScale) ? requestedInteractiveScale : 0.7));
 const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.01, 500);
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: syncMode });
 renderer.setSize(innerWidth, innerHeight);
@@ -143,10 +148,36 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.85;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
+const qualityInfo = (window.__quality = { pixelBudget: PIXEL_BUDGET, interactiveScale: INTERACTIVE_SCALE });
+let basePixelRatio = 1, interacting = false, restoreQuality = false, restoreQualityAt = 0;
+function applyRenderResolution(scale = 1) {
+  const budgetRatio = Math.sqrt(PIXEL_BUDGET / Math.max(1, innerWidth * innerHeight));
+  basePixelRatio = Math.min(devicePixelRatio, DPR_CAP, budgetRatio);
+  const active = basePixelRatio * scale;
+  renderer.setPixelRatio(active);
+  renderer.setSize(innerWidth, innerHeight);
+  Object.assign(qualityInfo, { basePixelRatio, activePixelRatio: active, scale,
+    pixels: renderer.domElement.width * renderer.domElement.height, interacting });
+}
+applyRenderResolution();
 RectAreaLightUniformsLib.init();
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = !syncMode;
+controls.addEventListener("start", () => {
+  if (syncMode) return;
+  interacting = true;
+  restoreQuality = false;
+  if (INTERACTIVE_SCALE < 1) applyRenderResolution(INTERACTIVE_SCALE);
+  needsRender = true;
+});
+controls.addEventListener("end", () => {
+  if (syncMode) return;
+  interacting = false;
+  qualityInfo.interacting = false;
+  restoreQuality = true;
+  restoreQualityAt = performance.now() + 350;
+});
 camera.position.set(4, 2.4, 5);
 camera.lookAt(0, 0.65, 0);
 controls.target.set(0, 0.65, 0);
@@ -876,20 +907,26 @@ async function load() {
     // Saved rotations are degrees. The material preshader consumes turns and
     // multiplies them by 2π. Position stays in UE centimetres; only the glTF
     // vertex position needs conversion (metres, Y-up -> centimetres, Z-up).
-    const posArr = [], rotArr = [], sizeArr = [], flagArr = [];
+    const posArr = [], sizeArr = [], flagArr = [];
+    const axisArr = [], trigArr = [], cullArr = [];
     for (let i = 0; i < 32; i++) {
       const L = layers[i];
       if (!L) {
         posArr.push(new THREE.Vector2());
-        rotArr.push(new THREE.Vector3());
         sizeArr.push(new THREE.Vector3());
         flagArr.push(0);
+        axisArr.push(new THREE.Vector3());
+        trigArr.push(new THREE.Vector4());
+        cullArr.push(new THREE.Vector3());
         continue;
       }
       posArr.push(new THREE.Vector2(L.pos[0], L.pos[1]));
-      rotArr.push(new THREE.Vector3(L.rot[0]/360, L.rot[1]/360, L.rot[2]/360));
       sizeArr.push(new THREE.Vector3(L.scale, L.stretch, L.coverage ?? 1));
       flagArr.push(L.flags | 0);
+      const pre = decalPrecompute(L.rot);
+      axisArr.push(new THREE.Vector3(...pre.axis));
+      trigArr.push(new THREE.Vector4(...pre.trig));
+      cullArr.push(new THREE.Vector3(...pre.cull));
     }
 
     let patched = 0;
@@ -913,9 +950,11 @@ async function load() {
             decalAtlas: { value: atlasTex },
             uDecalCount: { value: packed },
             uDecalPos: { value: posArr },
-            uDecalRot: { value: rotArr },
             uDecalSize: { value: sizeArr },
             uDecalFlags: { value: flagArr },
+            uDecalAxis: { value: axisArr },
+            uDecalTrig: { value: trigArr },
+            uDecalCull: { value: cullArr },
             uDecalDebug: { value: params.has("dbg") ? 1 : 0 },
           });
           sh.vertexShader = "varying vec3 vDecalLocal;\nvarying vec3 vDecalNrm;\n" + sh.vertexShader
@@ -924,9 +963,11 @@ async function load() {
             uniform sampler2D decalAtlas;
             uniform int uDecalCount;
             uniform vec2 uDecalPos[32];
-            uniform vec3 uDecalRot[32];
             uniform vec3 uDecalSize[32];
             uniform int uDecalFlags[32];
+            uniform vec3 uDecalAxis[32];
+            uniform vec4 uDecalTrig[32];
+            uniform vec3 uDecalCull[32];
             uniform float uDecalDebug;
             varying vec3 vDecalLocal;
             varying vec3 vDecalNrm;
@@ -941,12 +982,8 @@ async function load() {
                 int flags = uDecalFlags[i];
                 float flip = (flags & 1) != 0 ? 1.0 : 0.0;
                 vec3 size = uDecalSize[i];
-                vec2 q = mtDecalPrimaryUv(p, uDecalPos[i], uDecalRot[i], size.x, size.y, flip);
-                float cy = cos(6.283185307179586*uDecalRot[i].x);
-                float sy = sin(6.283185307179586*uDecalRot[i].x);
-                float cp = cos(6.283185307179586*uDecalRot[i].y);
-                float sp = sin(6.283185307179586*uDecalRot[i].y);
-                vec3 cullDir = vec3(cy*cp, sy*cp, sp);
+                vec2 q = mtDecalPrimaryUvPre(p, uDecalPos[i], uDecalAxis[i], uDecalTrig[i], size.x, size.y, flip);
+                vec3 cullDir = uDecalCull[i];
                 float opposite = (flags & 4) != 0 ? 1.0 : 0.0;
                 float backface = (flags & 8) != 0 ? 1.0 : 0.0;
                 float visible = (1.0 + opposite*(clamp(dot(p, cullDir), 0.0, 1.0)-1.0))
@@ -959,8 +996,8 @@ async function load() {
                   diffuseColor.rgb = mix(diffuseColor.rgb, dec.rgb, alpha);
                 }
                 if ((flags & 2) != 0) {
-                  vec2 qm = mtDecalMirrorUv(p, uDecalPos[i], uDecalRot[i], size.x, size.y, flip);
-                  vec3 cm = vec3(cy*cp, -sy*cp, sp);
+                  vec2 qm = mtDecalMirrorUvPre(p, uDecalPos[i], uDecalAxis[i], uDecalTrig[i], size.x, size.y, flip);
+                  vec3 cm = vec3(cullDir.x, -cullDir.y, cullDir.z);
                   float vm = (1.0 + opposite*(clamp(dot(n, cm), 0.0, 1.0)-1.0))
                            * (1.0 + backface*(clamp(dot(n, cm), 0.0, 1.0)-1.0));
                   if (vm > 0.0 && qm.x >= 0.0 && qm.x <= 1.0 && qm.y >= 0.0 && qm.y <= 1.0) {
@@ -1133,6 +1170,11 @@ function anim() {
     needsRender = true;
   }
   const moved = controls.update();
+  if (!interacting && restoreQuality && !moved && performance.now() >= restoreQualityAt) {
+    applyRenderResolution(1);
+    restoreQuality = false;
+    needsRender = true;
+  }
   if (moved || needsRender) {
     renderer.render(scene, camera);
     needsRender = false;
@@ -1141,7 +1183,8 @@ function anim() {
 addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+  applyRenderResolution(interacting ? INTERACTIVE_SCALE : 1);
+  if (loadingWave) loadingWave.material.uniforms.uPixelRatio.value = renderer.getPixelRatio();
   render();
 });
 

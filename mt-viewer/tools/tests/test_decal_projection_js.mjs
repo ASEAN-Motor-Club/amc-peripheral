@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { primaryUv, mirrorUv, DECAL_PROJECTION_GLSL } from '../../site/js/decal-projection.js';
+import { primaryUv, mirrorUv, decalPrecompute, primaryUvPrecomputed, mirrorUvPrecomputed, DECAL_PROJECTION_GLSL } from '../../site/js/decal-projection.js';
 
 const cases = [
   {
@@ -20,11 +20,33 @@ const cases = [
 ];
 for (const c of cases) {
   const p = primaryUv(...c.args), m = mirrorUv(...c.args);
+  const [point, position, yaw, pitch, roll, scale, stretch, flip] = c.args;
+  const pre = decalPrecompute([yaw,pitch,roll].map(v => v*360));
+  const pp = primaryUvPrecomputed(point, position, pre, scale, stretch, flip);
+  const pm = mirrorUvPrecomputed(point, position, pre, scale, stretch, flip);
   for (let i=0;i<2;i++) {
+    assert.ok(Math.abs(pp[i]-p[i]) < 1e-12, `precomputed primary mismatch ${pp[i]} != ${p[i]}`);
+    assert.ok(Math.abs(pm[i]-m[i]) < 1e-12, `precomputed mirror mismatch ${pm[i]} != ${m[i]}`);
     assert.ok(Math.abs(p[i]-c.primary[i]) < 1e-12, `${p[i]} != ${c.primary[i]}`);
     assert.ok(Math.abs(m[i]-c.mirror[i]) < 1e-12, `${m[i]} != ${c.mirror[i]}`);
   }
 }
+let seed = 0x4d544465;
+const random = () => ((seed = (1664525*seed + 1013904223) >>> 0) / 0x100000000);
+for (let n=0; n<1000; n++) {
+  const point = [-500,250,50].map((v,i) => v+(random()-0.5)*400);
+  const position = [(random()-0.5)*300,(random()-0.5)*600];
+  const turns = [(random()-0.5)*4,(random()-0.5)*4,(random()-0.5)*4];
+  const scale = 0.05+random()*8, stretch = 0.1+random()*2, flip = n%2;
+  const args = [point,position,...turns,scale,stretch,flip];
+  const pre = decalPrecompute(turns.map(v => v*360));
+  const p = primaryUv(...args), pp = primaryUvPrecomputed(point,position,pre,scale,stretch,flip);
+  const m = mirrorUv(...args), pm = mirrorUvPrecomputed(point,position,pre,scale,stretch,flip);
+  for (let i=0;i<2;i++) {
+    assert.ok(Math.abs(pp[i]-p[i])<1e-12, `sweep primary ${n}/${i}`);
+    assert.ok(Math.abs(pm[i]-m[i])<1e-12, `sweep mirror ${n}/${i}`);
+  }
+}
 for (const token of ['255.0', 'PositionX', 'mtDecalPrimaryUv', 'mtDecalMirrorUv'])
   assert.ok(DECAL_PROJECTION_GLSL.includes(token), `missing GLSL token ${token}`);
-console.log('decal projection JS: 3 primary + 3 mirror reference cases passed');
+console.log('decal projection JS: 3 reference cases + 1000 primary/mirror sweep cases passed');
