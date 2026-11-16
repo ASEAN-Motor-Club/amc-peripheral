@@ -54,7 +54,8 @@ def build(settings: WorkshopSettings) -> dict[str, Any]:
     repo = WorkshopRepository(settings.source_db)
     home = repo.home(limit=settings.home_limit)
     home["stats"] = repo.stats()
-    conn = sqlite3.connect(settings.site_db)
+    conn = sqlite3.connect(settings.site_db, timeout=30)
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
     started = _now()
     cursor = conn.execute(

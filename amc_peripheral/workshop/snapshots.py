@@ -79,6 +79,7 @@ def connect(path: Path) -> sqlite3.Connection:
 
 def ensure_schema(path: Path) -> None:
     with connect(path) as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(SCHEMA)
 
 
