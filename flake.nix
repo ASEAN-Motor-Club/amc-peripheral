@@ -245,11 +245,6 @@
                 default = "bridge.aseanmotorclub.com";
                 description = "Domain for the UE4SS dev bridge hub.";
               };
-              workshop = lib.mkOption {
-                type = lib.types.str;
-                default = "workshop.aseanmotorclub.com";
-                description = "Domain for the Motor Town workshop browser.";
-              };
             };
 
             # Radio web UI package
@@ -304,6 +299,16 @@
                 type = lib.types.port;
                 default = 7003;
                 description = "Loopback port for the workshop web process.";
+              };
+              publicHost = lib.mkOption {
+                type = lib.types.str;
+                default = "www.aseanmotorclub.com";
+                description = "Existing nginx virtual host that serves the workshop subpath.";
+              };
+              publicScheme = lib.mkOption {
+                type = lib.types.str;
+                default = "https";
+                description = "Scheme used to reach the workshop from the snapshot worker.";
               };
               user = lib.mkOption {
                 type = lib.types.str;
@@ -752,7 +757,7 @@
                   "HOME=/var/lib/amc-workshop"
                   "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
                   "AMC_WORKSHOP_SNAPSHOT_ROOT=/var/lib/amc-workshop/snapshots"
-                  "AMC_WORKSHOP_VIEWER_URL=https://${cfg.nginx.domains.workshop}/vehicles/index.html"
+                  "AMC_WORKSHOP_VIEWER_URL=${cfg.workshop.publicScheme}://${cfg.workshop.publicHost}/vehicles/index.html"
                   "AMC_SNAPSHOT_CHROME=${lib.getExe pkgs.chromium}"
                 ];
               };
@@ -761,17 +766,18 @@
               '';
             };
 
-            services.nginx.virtualHosts.${cfg.nginx.domains.workshop} = lib.mkIf cfg.workshop.enable {
-              enableACME = true;
-              forceSSL = true;
-              locations."/vehicles/".alias = "${cfg.workshop.viewerRoot}/";
-              locations."/workshop/".proxyPass =
-                "http://127.0.0.1:${toString cfg.workshop.port}/workshop/";
-              locations."/api/".proxyPass =
-                "http://127.0.0.1:${toString cfg.workshop.port}/api/";
-              locations."/healthz".proxyPass =
-                "http://127.0.0.1:${toString cfg.workshop.port}/healthz";
-              locations."/".return = "302 /workshop/";
+            services.nginx.virtualHosts.${cfg.workshop.publicHost}.locations = lib.mkIf cfg.workshop.enable {
+              "/workshop" = {
+                return = "301 /workshop/";
+              };
+              "/workshop/" = {
+                proxyPass =
+                  "http://127.0.0.1:${toString cfg.workshop.port}/workshop/";
+              };
+              "/api/workshop/" = {
+                proxyPass =
+                  "http://127.0.0.1:${toString cfg.workshop.port}/api/workshop/";
+              };
             };
 
             systemd.services.amc-radio = {
