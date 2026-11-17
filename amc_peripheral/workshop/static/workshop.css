@@ -121,8 +121,12 @@ button:hover, .primary-button:hover { text-decoration: none; filter: brightness(
 .results-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 17px; }
 .results-head p { font-size: 13px; }
 .gallery-layout .card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.pager { padding: 26px 0; }
+.pager { padding: 26px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .pager a { display: inline-block; padding: 11px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; }
+.pager a.current { background: var(--accent, #2d6cdf); border-color: var(--accent, #2d6cdf); color: #fff; font-weight: 600; }
+.pager a[rel="first"], .pager a[rel="last"] { padding: 11px 13px; }
+.pager-gap { color: var(--muted); padding: 0 4px; }
+.pager .pager-summary { margin-left: auto; font-size: 13px; }
 .compare-tray { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 20; display: flex; align-items: center; gap: 14px; background: #111826; border: 1px solid #34445f; border-radius: 13px; padding: 11px 14px; box-shadow: 0 16px 40px rgba(0, 0, 0, .45); max-width: calc(100% - 30px); }
 .compare-tray button { padding: 8px 11px; background: #29354a; color: var(--text); }
 .compare-slots { display: flex; gap: 6px; }

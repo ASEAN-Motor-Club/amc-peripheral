@@ -12,8 +12,23 @@
   <div class="card-grid">
     {% for item in data['items'] %}{{ card(item) }}{% else %}<p class="empty">No builds found.</p>{% endfor %}
   </div>
+  {% if pagination and pagination.totalPages > 1 %}
   <nav class="pager" aria-label="Creator pages">
-    {% if next_url %}<a href="{{ next_url }}" rel="next">Next page →</a>{% endif %}
+    {% if pagination.page > 1 %}
+      <a href="{{ pagination.firstUrl }}" rel="first">« First</a>
+      <a href="{{ pagination.prevUrl }}" rel="prev">← Previous</a>
+    {% endif %}
+    {% for entry in pagination.pages %}
+      {% if entry.gap %}<span class="pager-gap" aria-hidden="true">…</span>
+      {% elif entry.current %}<a href="{{ entry.url }}" aria-current="page" class="current">{{ entry.number }}</a>
+      {% else %}<a href="{{ entry.url }}">{{ entry.number }}</a>{% endif %}
+    {% endfor %}
+    {% if pagination.page < pagination.totalPages %}
+      <a href="{{ pagination.nextUrl }}" rel="next">Next →</a>
+      <a href="{{ pagination.lastUrl }}" rel="last">Last »</a>
+    {% endif %}
+    <span class="muted pager-summary">Page {{ pagination.page }} of {{ pagination.totalPages }}</span>
   </nav>
+  {% endif %}
 </section>
 {% endblock %}

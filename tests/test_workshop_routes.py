@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 
 from PIL import Image
 
@@ -181,7 +180,7 @@ async def test_hidden_deleted_and_unknown_items_are_404(client):
         assert (await response.json())["error"]["code"] == "not_found"
 
 
-async def test_author_page_paginates_with_cursor(settings):
+async def test_author_page_has_numbered_pagination(settings):
     from dataclasses import replace
 
     from aiohttp.test_utils import TestClient, TestServer
@@ -196,14 +195,23 @@ async def test_author_page_paginates_with_cursor(settings):
         text = await first.text()
         assert "/workshop/items/1/" in text
         assert "/workshop/items/3/" not in text
-        match = re.search(r'href="(/workshop/authors/11/\?cursor=[^"]+)" rel="next"', text)
-        assert match, "author page should link to the next page"
-        second = await client.get(match.group(1))
+        assert 'aria-current="page" class="current">1</a>' in text
+        assert 'href="/workshop/authors/11/?page=2"' in text
+        assert 'rel="last"' in text
+        assert "Page 1 of 2" in text
+
+        second = await client.get("/workshop/authors/11/?page=2")
         assert second.status == 200
         second_text = await second.text()
         assert "/workshop/items/3/" in second_text
         assert "/workshop/items/1/" not in second_text
+        assert 'rel="prev"' in second_text
         assert 'rel="next"' not in second_text
+        assert "Page 2 of 2" in second_text
+
+        beyond = await client.get("/workshop/authors/11/?page=99", allow_redirects=False)
+        assert beyond.status == 302
+        assert beyond.headers["Location"] == "/workshop/authors/11/?page=2"
     finally:
         await client.close()
 

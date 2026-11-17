@@ -329,15 +329,21 @@ class WorkshopRepository:
         filters: ListFilters | None = None,
         limit: int = 24,
         cursor: str | None = None,
+        offset: int = 0,
     ) -> dict[str, Any]:
         filters = filters or ListFilters()
         if sort not in {"popular", "new"}:
             raise QueryError("invalid_sort", "sort must be popular or new")
+        offset = max(0, int(offset))
         where, args = self._where(filters)
         filter_key = filters.key(sort, limit)
         with self._connect() as conn:
             run = self.sync_run(conn)
             cursor_data = _decode_cursor(cursor) if cursor else None
+            if cursor_data and offset:
+                raise InvalidCursor(
+                    "invalid_cursor", "Use either cursor or offset pagination"
+                )
             if cursor_data:
                 if cursor_data.get("f") != filter_key or cursor_data.get("s") != sort:
                     raise InvalidCursor(
@@ -368,9 +374,9 @@ class WorkshopRepository:
             order = POPULAR_ORDER if sort == "popular" else NEW_ORDER
             sql = (
                 f"SELECT {CARD_COLUMNS} FROM workshop w WHERE {where} "
-                f"ORDER BY {order} LIMIT ?"
+                f"ORDER BY {order} LIMIT ? OFFSET ?"
             )
-            rows = conn.execute(sql, [*args, limit + 1]).fetchall()
+            rows = conn.execute(sql, [*args, limit + 1, offset]).fetchall()
         has_more = len(rows) > limit
         rows = rows[:limit]
         next_cursor = None
