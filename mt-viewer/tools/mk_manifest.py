@@ -512,13 +512,18 @@ def apply_native_hub_mounts(parts):
         return
     for part in parts:
         is_front_rod = part.get("attachSocket") == "FrontRodHub" or part.get("id") == "FrontArmStaticMesh_GEN_VARIABLE"
-        if not is_front_rod or part.get("mountedOn") == "native-hub:Wheel0":
+        if not is_front_rod:
             continue
+        part["sourceRotation"] = part.get("sourceRotation") or part.get("rotation", [0, 0, 0, 1])
         part["position"] = list(wheel["position"])
-        part["rotation"] = [round(v, 6) for v in q_normalize(q_mul(
-            wheel.get("rotation", [0, 0, 0, 1]), part.get("rotation", [0, 0, 0, 1])
-        ))]
-        part["sourceUnitCompensation"] = part.get("scale", [1, 1, 1])
+        if part.get("id") == "FrontArmStaticMesh_GEN_VARIABLE":
+            # The recovered source yaw points the exported fork backwards.
+            part["rotation"] = [0, 0.707107, 0, 0.707107]
+        else:
+            part["rotation"] = [round(v, 6) for v in q_normalize(q_mul(
+                wheel.get("rotation", [0, 0, 0, 1]), part["sourceRotation"]
+            ))]
+        part["sourceUnitCompensation"] = part.get("sourceUnitCompensation") or part.get("scale", [1, 1, 1])
         part["scale"] = [1, 1, 1]
         part["mountedOn"] = "native-hub:Wheel0"
 

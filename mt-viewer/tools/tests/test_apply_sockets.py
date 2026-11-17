@@ -82,6 +82,21 @@ class SteeringWheelSocketTests(unittest.TestCase):
         self.assertEqual(part['mountedOn'], 'socket:RearWing')
 
 
+    def test_zero_handlebar_stays_in_authored_vehicle_space(self):
+        part = {
+            'id': 'SteeringWheel', 'mesh': 'Handlebar',
+            'position': [0.42971, 0.96908, -0.00005],
+            'rotation': [0, 0, -0.53018, 0.847885], 'scale': [1, 1, 1],
+            'mountedOn': 'socket:SteeringWheel',
+            'socketLocal': {'position': [0, 0, 0]},
+        }
+        result = self.run_manifest({'parts': [part]})['parts'][0]
+        self.assertEqual(result['position'], [0, 0, 0])
+        self.assertEqual(result['rotation'], [0, 0, 0, 1])
+        self.assertNotIn('mountedOn', result)
+        self.assertNotIn('socketLocal', result)
+
+
 class ConstructionScriptSocketTests(unittest.TestCase):
     def test_attach_to_name_is_mapped_to_component_template(self):
         exports = [{'Class': 'SCS_Node', 'Properties': {

@@ -23,7 +23,7 @@ class NativeHubMountTests(unittest.TestCase):
         self.assertEqual(fork['sourceUnitCompensation'], [0.01, 0.01, 0.01])
         self.assertEqual(fork['mountedOn'], 'native-hub:Wheel0')
         # Wheel visual scale must not leak into the native hub/fork transform.
-        self.assertEqual(fork['rotation'], [0, -0.707107, 0, 0.707107])
+        self.assertEqual(fork['rotation'], [0, 0.707107, 0, 0.707107])
         before = [dict(fork)]
         apply_native_hub_mounts(parts)
         self.assertEqual(parts[1], before[0])

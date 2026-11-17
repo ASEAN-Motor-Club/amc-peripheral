@@ -96,6 +96,17 @@ def main():
     kept_parts = []
     for part in manifest.get("parts", []):
         key = part.get("id") or part.get("mesh")
+        if key == "SteeringWheel" and part.get("mesh") == "Handlebar":
+            # Zero's motorcycle handlebar is authored in vehicle space and has no
+            # SCS AttachToName. The generic steering-socket fallback moved it twice.
+            part["position"] = [0, 0, 0]
+            part["rotation"] = [0, 0, 0, 1]
+            part["scale"] = [1, 1, 1]
+            part.pop("mountedOn", None)
+            part.pop("socketLocal", None)
+            part.pop("hidden", None)
+            kept_parts.append(part)
+            continue
         explicit_socket = part.get("attachSocket")
         slot = part.get("partSlot")
         socket_name = explicit_socket or (slot if slot in sockets else key)
