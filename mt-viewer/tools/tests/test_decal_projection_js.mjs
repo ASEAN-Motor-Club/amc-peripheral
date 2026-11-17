@@ -50,7 +50,9 @@ assert.deepEqual([...decalFallbackSlots([], slotDefs, bodyVariants, 0)].sort(),
   ['Body_01', 'Palette']);
 assert.deepEqual([...decalFallbackSlots([], slotDefs, bodyVariants, -1)].sort(),
   ['Body_01', 'Palette']);
-assert.equal(decalFallbackSlots([], slotDefs, bodyVariants, 4).size, 0);
+assert.equal(decalFallbackSlots([], slotDefs, bodyVariants, 4).size, 2);
+assert.deepEqual([...decalFallbackSlots([], slotDefs, bodyVariants, 4)].sort(),
+  ['Body_01', 'Palette']);
 assert.deepEqual([...decalFallbackSlots([], slotDefs, [], -1)].sort(),
   ['Body_01', 'Palette']);
 assert.equal(decalFallbackSlots(['CargoBed_01'], slotDefs, bodyVariants, 0).size, 0);

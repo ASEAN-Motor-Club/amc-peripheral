@@ -5,9 +5,9 @@ const TAU = 2 * Math.PI;
 
 export function decalFallbackSlots(decalSlots, slotDefs, bodyVariants, selectedIndex) {
   if (decalSlots.length) return new Set();
-  const allVariants = bodyVariants || [];
-  const selected = allVariants.find((variant, position) => (variant.index ?? position) === selectedIndex);
-  if (allVariants.length && !selected && selectedIndex >= 0) return new Set();
+  // A saved bodyMaterialIndex can outlive the vehicle's BodyMaterialList (item 99433
+  // requests index 16 for Zino, which no longer exists). That must not disable decals:
+  // fall through to the conservative Body/Shell/Palette slots instead of returning empty.
   // Without BodyMaterialList metadata, Body/Shell and Palette are the body slots.
   // Do NOT include PolygonCityPallete / Mat_PolygonCity_Texture*: on Vista those are
   // the four wheel meshes (Vista_L/Vista_R at the corners), so adding them painted
