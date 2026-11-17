@@ -7,9 +7,17 @@
 
   let ready = false;
   let fallbackExpanded = false;
+  const showFallback = (message) => {
+    stage.classList.add("viewer-fallback");
+    frame.setAttribute("aria-hidden", "true");
+    if (status) {
+      status.textContent = message;
+      status.hidden = false;
+    }
+  };
   window.setTimeout(() => {
-    if (!ready && status) {
-      status.textContent = "Interactive 3D is unavailable or still loading; showing the static preview.";
+    if (!ready) {
+      showFallback("Interactive 3D is unavailable or still loading; showing the static preview.");
     }
   }, 20000);
 
@@ -21,13 +29,13 @@
       ready = true;
       frame.hidden = false;
       frame.setAttribute("aria-hidden", "false");
+      stage.classList.remove("viewer-fallback");
       stage.classList.add("is-interactive");
       if (status) status.hidden = true;
       return;
     }
     if (data.type === "error" && !ready) {
-      frame.setAttribute("aria-hidden", "true");
-      if (status) status.textContent = "Interactive 3D could not be loaded; showing the static preview.";
+      showFallback("Interactive 3D could not be loaded; showing the static preview.");
     }
   });
 
