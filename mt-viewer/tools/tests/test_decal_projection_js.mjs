@@ -47,12 +47,12 @@ const bodyVariants = [
   { index: 1, material: 'MotorTown/Content/Cars/Materials/M_Palette' },
 ];
 assert.deepEqual([...decalFallbackSlots([], slotDefs, bodyVariants, 0)].sort(),
-  ['Body_01', 'Mat_PolygonCity_Texture_01_A_001', 'Palette']);
+  ['Body_01', 'Palette']);
 assert.deepEqual([...decalFallbackSlots([], slotDefs, bodyVariants, -1)].sort(),
-  ['Body_01', 'Mat_PolygonCity_Texture_01_A_001', 'Palette']);
+  ['Body_01', 'Palette']);
 assert.equal(decalFallbackSlots([], slotDefs, bodyVariants, 4).size, 0);
 assert.deepEqual([...decalFallbackSlots([], slotDefs, [], -1)].sort(),
-  ['Body_01', 'Mat_PolygonCity_Texture_01_A_001', 'Palette']);
+  ['Body_01', 'Palette']);
 assert.equal(decalFallbackSlots(['CargoBed_01'], slotDefs, bodyVariants, 0).size, 0);
 
 for (const token of ['255.0', 'PositionX', 'mtDecalPrimaryUv', 'mtDecalMirrorUv', 'mtDecalVisibility'])

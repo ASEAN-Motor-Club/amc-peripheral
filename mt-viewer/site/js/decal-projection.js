@@ -8,13 +8,12 @@ export function decalFallbackSlots(decalSlots, slotDefs, bodyVariants, selectedI
   const allVariants = bodyVariants || [];
   const selected = allVariants.find((variant, position) => (variant.index ?? position) === selectedIndex);
   if (allVariants.length && !selected && selectedIndex >= 0) return new Set();
-  // Without BodyMaterialList metadata, Body/Shell is a conservative fallback. Palette
-  // slots must also count whenever they exist: on Vista the textured shell is
-  // Palette/PolygonCity (8,038 tris) while Body_01 is only 1,912, so restricting
-  // decals to Body_01 silently dropped 24 of 30 layers on item 258880.
+  // Without BodyMaterialList metadata, Body/Shell and Palette are the body slots.
+  // Do NOT include PolygonCityPallete / Mat_PolygonCity_Texture*: on Vista those are
+  // the four wheel meshes (Vista_L/Vista_R at the corners), so adding them painted
+  // decals onto tyres.
   return new Set(Object.keys(slotDefs || {}).filter(slot =>
-    /^(Body|Shell)/i.test(slot) ||
-    /^(Palette|Mat_PolygonCity_Texture|PolygonCityPallete)/i.test(slot)
+    /^(Body|Shell|Palette)/i.test(slot)
   ));
 }
 
