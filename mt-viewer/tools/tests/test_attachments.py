@@ -3,7 +3,7 @@ import math
 import unittest
 from pathlib import Path
 
-from tools.attachments import attachment_to_part, component_to_part, rect_light_to_part
+from tools.attachments import attachment_to_part, component_to_part, rect_light_to_part, spot_light_to_part
 
 
 class AttachmentTransformTests(unittest.TestCase):
@@ -75,6 +75,28 @@ class AttachmentTransformTests(unittest.TestCase):
             rect_light_to_part({'Type': 'RectLightComponent', 'Properties': {'Intensity': 10}})
 
 
+class SpotLightTests(unittest.TestCase):
+    def test_lumens_are_converted_to_candela_for_source_cone(self):
+        light = spot_light_to_part({
+            'Type': 'SpotLightComponent',
+            'Properties': {
+                'Intensity': 50,
+                'IntensityUnits': 'ELightUnits::Lumens',
+                'OuterConeAngle': 50,
+                'InnerConeAngle': 20,
+                'AttenuationRadius': 500,
+                'LightColor': {'R': 255, 'G': 166, 'B': 0},
+            },
+        })
+        expected = 50 / (2 * math.pi * (1 - math.cos(math.radians(50))))
+        self.assertAlmostEqual(light['intensity'], expected)
+        self.assertEqual(light['sourceIntensity'], 50)
+        self.assertEqual(light['outerConeAngle'], 50)
+        self.assertEqual(light['innerConeAngle'], 20)
+        self.assertEqual(light['attenuationRadius'], 5)
+        self.assertEqual(light['color'], [1.0, 166 / 255, 0.0])
+
+
 class AttachmentCatalogTests(unittest.TestCase):
     def test_two_metre_blue_and_red_variants_are_catalogued(self):
         catalog_path = Path(__file__).parents[2] / 'site' / 'attachments' / 'catalog.json'
@@ -118,6 +140,51 @@ class AttachmentCatalogTests(unittest.TestCase):
             self.assertEqual(light['height'], 0.05)
             self.assertEqual(light['intensity'], 19.199999)
             self.assertEqual(light['attenuationRadius'], 1.5)
+
+
+    def test_all_vanilla_light_and_oversize_actors_have_assets(self):
+        root = Path(__file__).parents[2] / 'site' / 'attachments'
+        actors = json.loads((root / 'catalog.json').read_text())['actors']
+        materials = json.loads((root / 'materials.json').read_text())
+        keys = [f'Attachment_Light_{i:02d}' for i in range(1, 16)]
+        keys += [
+            'Attachment_OversizeLoad_PanelSign_Left',
+            'Attachment_OversizeLoad_PanelSign_Right',
+            *[f'Attachment_OversizeLoad_Sign_{i}' for i in range(1, 8)],
+        ]
+        self.assertEqual(len(keys), 24)
+        for key in keys:
+            with self.subTest(key=key):
+                actor = actors[key]
+                self.assertTrue(actor['components'])
+                for component in actor['components']:
+                    mesh = component['mesh']
+                    self.assertTrue((root / 'glb' / f'{mesh}.glb').stat().st_size > 0)
+                    defs = materials['materialsByMesh'][mesh]
+                    self.assertTrue(defs)
+                    for definition in defs.values():
+                        self.assertIn('baseColor', definition)
+                        if 'map' in definition:
+                            texture = root / 'textures' / Path(definition['map']).name
+                            self.assertTrue(texture.is_file(), texture)
+                for light in actor['lights']:
+                    self.assertEqual(light['type'], 'spot')
+                    self.assertGreaterEqual(light['intensity'], 0)
+
+        self.assertEqual(
+            {component['mesh'] for component in actors['Attachment_Light_06']['components']},
+            {'RotatingAmberLight_01_Case', 'RotatingAmberLight_01_Light'},
+        )
+        self.assertEqual(
+            {component['mesh'] for component in actors['Attachment_Light_08']['components']},
+            {'RotatingEmergencyLight_01_Case', 'RotatingEmergencyLight_01_Light'},
+        )
+        self.assertEqual(
+            actors['Attachment_Light_01']['components'][0]['materialSlots'],
+            ['M_Palette', 'MI_M_AttachmentLight_A6A6A6'],
+        )
+        sign = materials['materialsByMesh']['Sign_1']['Sign']
+        self.assertTrue(sign['map'].endswith('/T_Signs_T_Signs.png'))
 
 
 if __name__ == '__main__':

@@ -63,8 +63,14 @@ string? EncodePng(UTexture tex)
 {
     try
     {
+        if (tex.PlatformData != null && tex.Format == EPixelFormat.PF_Unknown && Enum.TryParse<EPixelFormat>(tex.PlatformData.PixelFormat, out var pixelFormat))
+            typeof(UTexture).GetProperty(nameof(UTexture.Format))!.SetValue(tex, pixelFormat);
         var ct = TextureDecoder.Decode(tex);
-        if (ct == null) return null;
+        if (ct == null)
+        {
+            Console.WriteLine($"    tex NULL {tex.GetPathName()} fmt={tex.Format} type={tex.GetType().Name} platform={(tex.PlatformData == null ? "null" : "present")}");
+            return null;
+        }
         var bytes = TextureEncoder.Encode(ct, ETextureFormat.Png, false, out var ext);
         if (bytes == null || bytes.Length == 0) return null;
         var name = Path.GetFileName(tex.GetPathName()).Replace(".", "_") + ".png";

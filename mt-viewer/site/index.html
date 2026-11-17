@@ -587,9 +587,9 @@ async function load() {
     let catalogue, owners, attachmentTable;
     try {
       [catalogue, owners, attachmentTable] = await Promise.all([
-        fetch("attachments/catalog.json?v=2").then(r => r.json()),
+        fetch("attachments/catalog.json?v=3").then(r => r.json()),
         fetch("attachments/vehicles.json?v=1").then(r => r.json()),
-        fetch("attachments/materials.json?v=1").then(r => r.json()),
+        fetch("attachments/materials.json?v=2").then(r => r.json()),
       ]);
     } catch (e) { info.step = "fetch-failed:" + e.message; return; }
     const rec = sourceConfig
@@ -603,7 +603,10 @@ async function load() {
 
     const actors = catalogue.actors || {};
     const attachmentDefs = attachmentTable.materials || {};
-    const needed = new Set(records.filter(p => actors[p.key]).map(p => actors[p.key].mesh));
+    const needed = new Set(records.filter(p => actors[p.key]).flatMap(p => {
+      const actor = actors[p.key];
+      return actor.components.map(component => component.mesh || actor.mesh);
+    }));
     const models = {};
     await Promise.all([...needed].map(async mesh => {
       try { models[mesh] = (await loader.loadAsync(`attachments/glb/${mesh}.glb`)).scene; }
@@ -633,27 +636,31 @@ async function load() {
       group.quaternion.fromArray(part.rotation);
       group.scale.fromArray(part.scale);
       const attachmentMatrix = new THREE.Matrix4().compose(group.position, group.quaternion, group.scale);
-      const order = attachmentTable.slotsByMesh?.[actor.mesh] || [];
 
       for (const component of actor.components) {
+        const componentMesh = component.mesh || actor.mesh;
+        const order = attachmentTable.slotsByMesh?.[componentMesh] || [];
+        const componentDefs = attachmentTable.materialsByMesh?.[componentMesh] || attachmentDefs;
         const cq = new THREE.Quaternion().fromArray(component.rotation);
         const cs = new THREE.Vector3().fromArray(component.scale);
         const componentMatrix = new THREE.Matrix4().compose(
           new THREE.Vector3().fromArray(component.position), cq, cs);
-        primitives[actor.mesh].forEach((o, i) => {
+        primitives[componentMesh].forEach((o, i) => {
           const fallback = Array.isArray(o.material) ? o.material[0]?.name : o.material?.name;
-          const name = (fallback && attachmentDefs[fallback]) ? fallback : (order[i] || fallback);
-          const def = attachmentDefs[name] || {};
+          const name = component.materialSlots?.[i] || ((fallback && componentDefs[fallback]) ? fallback : (order[i] || fallback));
+          const def = componentDefs[name] || attachmentDefs[name] || {};
+          const isLightMaterial = name === "Light" || def.material?.includes("/M_AttachmentLight.");
+          const attachmentColor = actor.color || [1, 1, 1];
           const m = materialFor(name, def, plainMode, part.key);
-          if (name === "Light") {
-            m.color.setRGB(...actor.color, THREE.LinearSRGBColorSpace);
-            m.emissive.setRGB(...actor.color, THREE.LinearSRGBColorSpace);
+          if (isLightMaterial) {
+            m.color.setRGB(...attachmentColor, THREE.LinearSRGBColorSpace);
+            m.emissive.setRGB(...attachmentColor, THREE.LinearSRGBColorSpace);
             m.emissiveIntensity = 2.0;
           }
-          const bucketKey = `${part.key}|${actor.mesh}|${i}`;
+          const bucketKey = `${part.key}|${componentMesh}|${i}`;
           if (!buckets.has(bucketKey)) buckets.set(bucketKey, {
-            key: part.key, mesh: actor.mesh, primitive: i, geometry: o.geometry,
-            material: m, slot: name, def, color: name === "Light" ? actor.color : null,
+            key: part.key, mesh: componentMesh, primitive: i, geometry: o.geometry,
+            material: m, slot: name, def, color: isLightMaterial ? attachmentColor : null,
             matrices: [],
           });
           const matrix = attachmentMatrix.clone().multiply(componentMatrix).multiply(o.matrixWorld);
@@ -666,10 +673,20 @@ async function load() {
         for (const ld of actor.lights || []) {
           if (info.lights >= 24) { info.lightBudgetSkipped++; continue; }
           const color = new THREE.Color().setRGB(...ld.color, THREE.LinearSRGBColorSpace);
-          const light = new THREE.RectAreaLight(color, ld.intensity, ld.width, ld.height);
+          let light;
+          if (ld.type === "spot") {
+            const outer = THREE.MathUtils.degToRad(ld.outerConeAngle);
+            const penumbra = ld.outerConeAngle > 0 ? THREE.MathUtils.clamp(1 - ld.innerConeAngle / ld.outerConeAngle, 0, 1) : 0;
+            light = new THREE.SpotLight(color, ld.intensity, ld.attenuationRadius || 0, outer, penumbra, 2);
+            light.target.position.set(1, 0, 0); // UE local +X after the align rotation below.
+            group.add(light.target);
+            light.userData.sourceLumens = ld.sourceIntensity;
+          } else {
+            light = new THREE.RectAreaLight(color, ld.intensity, ld.width, ld.height);
+          }
           light.name = `Light_${part.slot}`;
           light.position.fromArray(ld.position);
-          // UE lights emit along local +X; Three RectAreaLight emits along -Z.
+          // UE lights emit along local +X; Three lights emit along -Z.
           const align = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2);
           light.quaternion.fromArray(ld.rotation).multiply(align);
           light.castShadow = ld.castShadows;

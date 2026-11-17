@@ -79,3 +79,32 @@ def rect_light_to_part(component):
         'barnDoorAngle': float(props.get('BarnDoorAngle', 0.0)),
         'castShadows': bool(props.get('CastShadows', False)),
     }
+
+
+def spot_light_to_part(component):
+    props = component.get('Properties', {})
+    color = props.get('LightColor', {})
+    rgb = [float(color.get(k, 255.0)) / 255.0 for k in ('R', 'G', 'B')]
+    outer = float(props.get('OuterConeAngle', 35.0))
+    inner = float(props.get('InnerConeAngle', outer))
+    source_intensity = float(props.get('Intensity', 0.0))
+    if props.get('IntensityUnits') == 'ELightUnits::Lumens':
+        # Three.js SpotLight intensity is candela. Unreal's lumens are distributed
+        # over the spotlight cone, not treated as nits or candela verbatim.
+        import math
+        solid_angle = 2.0 * math.pi * (1.0 - math.cos(math.radians(outer)))
+        intensity = source_intensity / solid_angle if solid_angle > 0.0 else source_intensity / (4.0 * math.pi)
+    else:
+        intensity = source_intensity
+    return {
+        'type': 'spot',
+        **convert(props.get('RelativeLocation'), props.get('RelativeRotation')),
+        'color': rgb,
+        'intensity': intensity,
+        'sourceIntensity': source_intensity,
+        'intensityUnits': props.get('IntensityUnits'),
+        'outerConeAngle': outer,
+        'innerConeAngle': inner,
+        'attenuationRadius': float(props.get('AttenuationRadius', 0.0)) / 100.0,
+        'castShadows': bool(props.get('CastShadows', False)),
+    }
