@@ -6,7 +6,7 @@
 <section class="page-head wrap">
   <p class="eyebrow">{% if author.accountId %}Creator{% else %}Vehicle{% endif %}</p>
   <h1>{{ author.displayName or 'Workshop builds' }}</h1>
-  <p class="muted">{{ author.uploads }} builds shown on this page{% if author.accountId %} · {{ author.installs }} installs · {{ author.votes }} votes{% endif %}</p>
+  <p class="muted">{% if author.accountId %}{{ data['items']|length }} of {{ author.uploads }} builds · {{ author.installs }} installs · {{ author.votes }} votes{% else %}{{ author.uploads }} builds{% endif %}</p>
 </section>
 <section class="wrap section">
   <div class="card-grid">
