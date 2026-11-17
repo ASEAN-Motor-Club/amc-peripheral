@@ -17,7 +17,20 @@ VEHICLE_SLUG_ALIASES = {
     "2": "stinger",
     "3": "maity",
     "4": "spider",
+    "Sports_01": "raton",
 }
+VEHICLE_DISPLAY_NAMES = {
+    "1": "Hana",
+    "2": "Stinger",
+    "3": "Maity",
+    "4": "Spider",
+    "Sports_01": "Raton",
+}
+
+
+def vehicle_display_name(vehicle_key: str) -> str:
+    key = str(vehicle_key or "")
+    return VEHICLE_DISPLAY_NAMES.get(key, key.replace("_", " "))
 
 
 class PayloadError(ValueError):

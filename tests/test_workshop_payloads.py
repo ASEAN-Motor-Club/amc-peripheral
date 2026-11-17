@@ -13,6 +13,7 @@ from amc_peripheral.workshop.payloads import (
     decode_payload,
     normalize_character_vehicle,
     normalize_workshop,
+    vehicle_display_name,
     vehicle_slug,
 )
 
@@ -107,6 +108,10 @@ def test_decal_limit_is_reported():
 def test_vehicle_slug_aliases():
     assert vehicle_slug("3") == "maity"
     assert vehicle_slug("Vamos3") == "vamos3"
+    assert vehicle_slug("Sports_01") == "raton"
+    assert vehicle_display_name("Sports_01") == "Raton"
+    assert vehicle_display_name("3") == "Maity"
+    assert vehicle_display_name("Vamos3") == "Vamos3"
 
 
 def test_character_vehicle_pascal_config_normalizes():

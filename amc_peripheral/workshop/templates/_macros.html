@@ -29,7 +29,7 @@
     <span class="card-id">#{{ item.id }}</span>
   </a>
   <div class="card-body">
-    <h3><a href="/workshop/items/{{ item.id }}/">{{ item.vehicleKey|replace('_', ' ') }}</a></h3>
+    <h3><a href="/workshop/items/{{ item.id }}/">{{ item.vehicleKey|vehicle_name }}</a></h3>
     {% if pending %}<p class="preview-pending-action" data-preview-pending><a href="/workshop/items/{{ item.id }}/viewer/">Open the 3D viewer while it renders</a></p>{% endif %}
     {% if item.author %}
       <p class="byline">by <a href="/workshop/authors/{{ item.accountId if item.accountId else '0' }}/">{{ item.author }}</a></p>

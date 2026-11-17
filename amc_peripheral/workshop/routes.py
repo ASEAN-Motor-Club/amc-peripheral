@@ -22,6 +22,7 @@ from .payloads import (
     asset_version_for,
     decode_payload,
     normalize_workshop,
+    vehicle_display_name,
 )
 from .queries import (
     ListFilters,
@@ -122,6 +123,7 @@ def create_app(
     )
     env.filters["iso"] = _iso
     env.filters["tag_label"] = lambda value: str(value or "").replace("_", " ")
+    env.filters["vehicle_name"] = vehicle_display_name
 
     app = web.Application(client_max_size=64 * 1024)
     app["settings"] = settings

@@ -21,7 +21,7 @@
       <select name="vehicle">
         <option value="">All vehicles</option>
         {% for vehicle in vehicles %}
-        <option value="{{ vehicle.vehicleKey }}" {% if filters.vehicle == vehicle.vehicleKey %}selected{% endif %}>{{ vehicle.vehicleKey|replace('_',' ') }} ({{ vehicle.uploads }})</option>
+        <option value="{{ vehicle.vehicleKey }}" {% if filters.vehicle == vehicle.vehicleKey %}selected{% endif %}>{{ vehicle.vehicleKey|vehicle_name }} ({{ vehicle.uploads }})</option>
         {% endfor %}
       </select>
     </label>
