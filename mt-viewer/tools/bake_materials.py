@@ -200,6 +200,7 @@ def main(build_dir, out_dir):
         scal = slot.get("scalars") or {}
         name = os.path.basename(slot.get("material") or raw).split(".")[0]
         v = {
+            "index": len(variants),
             "material": raw,
             "materialName": name,
             "baseColor": [1.0, 1.0, 1.0],

@@ -79,6 +79,7 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { DECAL_PROJECTION_GLSL, decalFallbackSlots } from "./js/decal-projection.js?v=7";
 import { ownerColorForSlot } from "./js/owner-paint.js?v=3";
+import { selectedBodyVariant } from "./js/body-material.js?v=1";
 
 const params = new URLSearchParams(location.search);
 const workshopId = params.get("workshop");
@@ -400,7 +401,8 @@ function applyPaint() {
 // decal materials: the texture carries the stripes or logo, and the paint colour
 // sits on top of it, so the colour is left alone unless a paint variant is active.
 function applyLivery() {
-  const v = liveryIndex >= 0 ? bodyVariants[liveryIndex] : null;
+  const v = selectedBodyVariant(bodyVariants, liveryIndex);
+  window.__bodyMaterial = { requestedIndex: liveryIndex, selectedIndex: v?.index ?? null, name: v?.materialName || null };
   for (const [key, m] of matCache) {
     if (key.includes("|attachment:")) continue;
     const slot = key.split("|")[0];
@@ -482,7 +484,7 @@ async function load() {
   colorSlots = manifest.colorSlots || {};
   paints = manifest.paints || [];
   bodyVariants = table.bodyVariants || [];
-  liveryIndex = params.has("livery") ? parseInt(params.get("livery"), 10) : -1;
+  liveryIndex = params.has("livery") ? parseInt(params.get("livery"), 10) : (sourceConfig?.paint?.bodyMaterialIndex ?? -1);
   paintIndex = params.has("scheme") ? parseInt(params.get("scheme"), 10) : -1;
   // --- stream the geometry: silhouette first ----------------------------------
   // Each part is added the moment its GLB lands and drawn with one shared wireframe
