@@ -7,14 +7,28 @@ import json
 import logging
 import mimetypes
 import re
+import secrets
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
+import aiohttp
 from aiohttp import web
 from aiohttp.web_fileresponse import CONTENT_TYPES
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from .auth import (
+    SESSION_COOKIE,
+    STATE_COOKIE,
+    PlayerIdentityRepository,
+    SSOSettings,
+    authorize_url,
+    display_name,
+    new_state,
+    sign_in,
+    sign_session,
+    verify_session,
+)
 from .character_vehicles import CharacterVehicleRepository, CharacterVehicleUnavailable
 from .config import WorkshopSettings
 from .covers import write_author_cover
@@ -101,6 +115,8 @@ def create_app(
     *,
     repository: WorkshopRepository | None = None,
     character_vehicles: CharacterVehicleRepository | None = None,
+    sso: SSOSettings | None = None,
+    player_identity: PlayerIdentityRepository | None = None,
 ) -> web.Application:
     # Some minimal Python builds lack a system mime.types entry for WebP.
     mimetypes.add_type("image/webp", ".webp")
@@ -115,6 +131,10 @@ def create_app(
     character_vehicles = character_vehicles or CharacterVehicleRepository(
         settings.character_vehicle_dsn,
         enabled=settings.character_vehicle_public,
+    )
+    sso = sso or SSOSettings.from_env()
+    player_identity = player_identity or PlayerIdentityRepository(
+        settings.player_dsn, enabled=bool(settings.player_dsn)
     )
 
     env = Environment(
@@ -131,6 +151,8 @@ def create_app(
     app["repository"] = repository
     app["character_vehicles"] = character_vehicles
     app["attachment_catalogue"] = AttachmentCatalogue(settings.viewer_root)
+    app["sso"] = sso
+    app["player_identity"] = player_identity
     (settings.snapshot_root / "public").mkdir(parents=True, exist_ok=True)
     snapshots = SnapshotStore(settings.site_db)
 
@@ -225,8 +247,37 @@ def create_app(
 
     app.middlewares.append(errors)
 
-    def render(template: str, **context) -> web.Response:
+    async def http_session_startup(app: web.Application) -> None:
+        app["http_session"] = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=sso.timeout_seconds)
+        )
+
+    async def http_session_cleanup(app: web.Application) -> None:
+        session = app.get("http_session")
+        if session is not None:
+            await session.close()
+
+    app.on_startup.append(http_session_startup)
+    app.on_cleanup.append(http_session_cleanup)
+
+    @web.middleware
+    async def sessions(request: web.Request, handler):
+        """Attach the signed-in user (or ``None``) to every request."""
+        request["user"] = (
+            verify_session(request.cookies.get(SESSION_COOKIE), sso.session_secret)
+            if sso.enabled
+            else None
+        )
+        return await handler(request)
+
+    app.middlewares.append(sessions)
+
+    def render(request: web.Request, template: str, **context) -> web.Response:
         context.setdefault("settings", settings)
+        context.setdefault("user", request.get("user"))
+        context.setdefault("user_name", display_name(request.get("user")))
+        context.setdefault("sso_enabled", sso.enabled)
+        context.setdefault("request_path", request.path_qs)
         html = env.get_template(template).render(**context)
         return web.Response(text=html, content_type="text/html")
 
@@ -428,7 +479,7 @@ def create_app(
         )
         attach_snapshots(data["popular"] + data["newest"])
         attach_author_snapshots(data["authors"])
-        return render("home.html", page="home", data=data, stats=stats)
+        return render(request, "home.html", page="home", data=data, stats=stats)
 
     async def page_search(request: web.Request) -> web.Response:
         query = search_query(request)
@@ -440,7 +491,7 @@ def create_app(
             raise web.HTTPFound(f"/workshop/items/{item_id}/")
         authors = await asyncio.to_thread(repository.search_authors, query)
         attach_author_snapshots(authors)
-        return render("search.html", page="search", query=query, authors=authors)
+        return render(request, "search.html", page="search", query=query, authors=authors)
 
     async def page_gallery(request: web.Request) -> web.Response:
         query = request.query
@@ -477,7 +528,7 @@ def create_app(
             else None
         )
         return render(
-            "gallery.html",
+            request, "gallery.html",
             page="gallery",
             data=data,
             vehicles=vehicles,
@@ -501,7 +552,7 @@ def create_app(
             job = snapshot_job(item, priority=PRIORITY_DIRECT)
             if job:
                 snapshot = snapshots.enqueue(job)
-        return render("item.html", page="workshop", item=item, config=config,
+        return render(request, "item.html", page="workshop", item=item, config=config,
                       snapshot=snapshot)
 
     async def page_item_viewer(request: web.Request) -> web.Response:
@@ -579,7 +630,7 @@ def create_app(
             limit=60,
         )
         cover_url = await asyncio.to_thread(author_cover, account_id, popular["items"])
-        return render("author.html", page="gallery", author=author, data=listing,
+        return render(request, "author.html", page="gallery", author=author, data=listing,
                       vehicles=[], pagination=pagination,
                       social_image=(f"https://www.aseanmotorclub.com{cover_url}" if cover_url else None),
                       canonical_url=f"https://www.aseanmotorclub.com/workshop/authors/{account_id}/")
@@ -594,7 +645,7 @@ def create_app(
         )
         attach_snapshots(listing["items"])
         return render(
-            "author.html",
+            request, "author.html",
             page="gallery",
             author={"displayName": vehicle, "uploads": len(listing["items"]),
                     "installs": 0, "votes": 0, "accountId": None},
@@ -607,7 +658,7 @@ def create_app(
         vehicle_id = int(request.match_info["id"])
         config = await character_configuration(vehicle_id)
         return render(
-            "character.html", page="workshop", vehicle_id=vehicle_id, config=config
+            request, "character.html", page="workshop", vehicle_id=vehicle_id, config=config
         )
 
     async def redirect_legacy_character(request: web.Request) -> web.Response:
@@ -618,8 +669,128 @@ def create_app(
             )
         raise web.HTTPFound(location="/vehicles/")
 
+    # -- Discord SSO -------------------------------------------------------
+
+    secure_cookies = sso.public_url.startswith("https")
+
+    def safe_next(value: str | None) -> str:
+        """Only ever bounce back into this site."""
+        if not value or not value.startswith("/") or value.startswith("//"):
+            return "/workshop/account/"
+        return value
+
+    async def auth_login(request: web.Request) -> web.Response:
+        if not sso.enabled:
+            raise web.HTTPNotFound()
+        state = new_state()
+        target = safe_next(request.query.get("next"))
+        response = web.HTTPFound(authorize_url(sso, state))
+        response.set_cookie(
+            STATE_COOKIE,
+            f"{state}:{target}",
+            max_age=600,
+            path="/",
+            httponly=True,
+            secure=secure_cookies,
+            samesite="Lax",
+        )
+        raise response
+
+    async def auth_callback(request: web.Request) -> web.Response:
+        if not sso.enabled:
+            raise web.HTTPNotFound()
+        cookie = request.cookies.get(STATE_COOKIE) or ""
+        expected_state, _, target = cookie.partition(":")
+        state = request.query.get("state", "")
+        if (
+            request.query.get("error")
+            or not state
+            or not expected_state
+            or not secrets.compare_digest(state, expected_state)
+        ):
+            log.warning(
+                "workshop sign-in rejected: state mismatch or %s",
+                request.query.get("error") or "missing state",
+            )
+            raise web.HTTPFound("/workshop/?auth=failed")
+        claims = await sign_in(
+            sso, request.query.get("code", ""), request.app["http_session"]
+        )
+        if claims is None:
+            raise web.HTTPFound("/workshop/?auth=failed")
+        response = web.HTTPFound(safe_next(target))
+        response.set_cookie(
+            SESSION_COOKIE,
+            sign_session(claims, sso.session_secret, sso.session_ttl),
+            max_age=sso.session_ttl,
+            path="/",
+            httponly=True,
+            secure=secure_cookies,
+            samesite="Lax",
+        )
+        response.del_cookie(STATE_COOKIE, path="/")
+        raise response
+
+    async def auth_logout(request: web.Request) -> web.Response:
+        response = web.HTTPFound("/workshop/")
+        response.del_cookie(SESSION_COOKIE, path="/")
+        raise response
+
+    async def steam_id_for(request: web.Request, claims: dict[str, Any]) -> int | None:
+        identity: PlayerIdentityRepository = request.app["player_identity"]
+        return await asyncio.to_thread(identity.steam_id_for, claims["sub"])
+
+    async def api_me(request: web.Request) -> web.Response:
+        user = request.get("user")
+        steam_id = await steam_id_for(request, user) if user else None
+        return web.json_response(
+            {
+                "authenticated": bool(user),
+                "ssoEnabled": sso.enabled,
+                "user": (
+                    {
+                        "id": user["sub"],
+                        "username": user.get("u"),
+                        "displayName": display_name(user),
+                        "avatarUrl": user.get("a"),
+                        "member": bool(user.get("m")),
+                    }
+                    if user
+                    else None
+                ),
+                "steamId": str(steam_id) if steam_id else None,
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+
+    async def page_account(request: web.Request) -> web.Response:
+        user = request.get("user")
+        if not user:
+            if not sso.enabled:
+                raise web.HTTPNotFound()
+            raise web.HTTPFound("/workshop/auth/login?next=/workshop/account/")
+        steam_id = await steam_id_for(request, user)
+        items: list[dict[str, Any]] = []
+        if steam_id:
+            items = await asyncio.to_thread(
+                repository.items_for_steam_id, steam_id, 24
+            )
+            attach_snapshots(items)
+        return render(
+            request,
+            "account.html",
+            page="account",
+            steam_id=steam_id,
+            items=items,
+        )
+
     app.router.add_get("/healthz", api_health)
     app.router.add_get("/workshop/", page_home)
+    app.router.add_get("/workshop/account/", page_account)
+    app.router.add_get("/workshop/auth/login", auth_login)
+    app.router.add_get("/workshop/auth/callback", auth_callback)
+    app.router.add_get("/workshop/auth/logout", auth_logout)
+    app.router.add_post("/workshop/auth/logout", auth_logout)
     app.router.add_get("/workshop/search/", page_search)
     app.router.add_get("/workshop/gallery/", page_gallery)
     app.router.add_get("/workshop/items/{id:\\d+}/", page_item)
@@ -641,6 +812,7 @@ def create_app(
     app.router.add_get("/api/workshop/authors/{id:\\d+}", api_authors)
     app.router.add_get("/api/workshop/vehicles", api_vehicles)
     app.router.add_get("/api/workshop/health", api_health)
+    app.router.add_get("/api/workshop/me", api_me)
     app.router.add_get(
         "/api/character-vehicles/{id:\\d+}/viewer", api_character_viewer
     )

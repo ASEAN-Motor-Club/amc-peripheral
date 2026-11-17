@@ -217,3 +217,34 @@ details.panel > summary h2 { display: inline; margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }
+
+/* Discord sign-in (workshop SSO) */
+.user-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 10px 5px 6px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line);
+  color: var(--text); font-size: 13px; max-width: 190px;
+}
+.user-chip:hover { text-decoration: none; border-color: #4a6590; }
+.user-chip img { width: 24px; height: 24px; border-radius: 50%; display: block; }
+.user-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-chip.ghost { padding: 8px 12px; color: var(--muted); }
+
+.account-layout { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.account-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; gap: 16px; }
+.account-card h2, .account-builds h2 { margin: 0; font-size: 18px; }
+.identity-row { display: flex; align-items: center; gap: 14px; }
+.identity-avatar { width: 64px; height: 64px; border-radius: 50%; background: var(--panel-2); }
+.identity-row p { margin: 4px 0 0; font-size: 13px; }
+.membership { margin: 0; }
+.muted-badge { color: var(--muted); }
+.account-card button.secondary { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+.account-card button.secondary:hover { color: var(--text); }
+.account-builds { display: grid; gap: 16px; }
+.account-builds .card-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+
+@media (max-width: 860px) {
+  .account-layout { grid-template-columns: 1fr; }
+  .user-chip span { display: none; }
+  .user-chip { padding: 5px; }
+}

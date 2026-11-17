@@ -30,6 +30,7 @@ class WorkshopSettings:
     cache_ttl_seconds: float = 60.0
     character_vehicle_dsn: str | None = None
     character_vehicle_public: bool = False
+    player_dsn: str | None = None
 
     @classmethod
     def from_env(cls) -> WorkshopSettings:
@@ -75,6 +76,7 @@ class WorkshopSettings:
                 "AMC_CHARACTER_VEHICLE_PUBLIC", ""
             ).lower()
             in {"1", "true", "yes"},
+            player_dsn=os.environ.get("AMC_WORKSHOP_PLAYER_DSN") or None,
         )
 
     def validate(self) -> None:

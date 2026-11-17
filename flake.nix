@@ -325,6 +325,17 @@
                 default = "hermes";
                 description = "Group of the workshop service.";
               };
+              environmentFile = lib.mkOption {
+                type = lib.types.nullOr lib.types.path;
+                default = null;
+                description = ''
+                  Environment file with the Discord SSO settings
+                  (AMC_WORKSHOP_DISCORD_CLIENT_ID, ..._CLIENT_SECRET,
+                  AMC_WORKSHOP_SESSION_SECRET, optional
+                  AMC_WORKSHOP_DISCORD_GUILD_ID and AMC_WORKSHOP_PLAYER_DSN).
+                  Without it the site runs anonymously: no sign-in link.
+                '';
+              };
             };
 
             # Sharry file sharing service
@@ -733,7 +744,11 @@
                   "AMC_WORKSHOP_VIEWER_ROOT=${cfg.workshop.viewerRoot}"
                   "AMC_WORKSHOP_SNAPSHOT_ROOT=/var/lib/amc-workshop/snapshots"
                   "AMC_WORKSHOP_PORT=${toString cfg.workshop.port}"
+                  "AMC_WORKSHOP_PUBLIC_URL=${cfg.workshop.publicScheme}://${cfg.workshop.publicHost}"
                 ];
+                EnvironmentFile = lib.optional (
+                  cfg.workshop.environmentFile != null
+                ) cfg.workshop.environmentFile;
               };
               script = ''
                 exec ${self.packages.${pkgs.system}.default}/bin/amc_workshop

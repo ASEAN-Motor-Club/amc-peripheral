@@ -407,6 +407,23 @@ class WorkshopRepository:
             "sort": sort,
         }
 
+    def items_for_steam_id(self, steam_id: int, limit: int = 24) -> list[dict[str, Any]]:
+        """Builds a club member uploaded, resolved through ``club_character``.
+
+        The workshop scrape carries no Steam identity, so Discord → player →
+        character GUID is the only trustworthy path to "your builds".
+        """
+        limit = max(1, min(int(limit), 60))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT {CARD_COLUMNS} FROM workshop w WHERE {PUBLIC_WHERE} "
+                "AND EXISTS (SELECT 1 FROM club_character c "
+                "WHERE c.character_guid = w.character_guid AND c.steam_id = ?) "
+                f"ORDER BY {NEW_ORDER} LIMIT ?",
+                [str(steam_id), limit],
+            ).fetchall()
+        return [_card(row) for row in rows]
+
     def search_authors(self, query: str, limit: int = 24) -> list[dict[str, Any]]:
         query = " ".join(query.strip().split())[:80]
         if not query:
