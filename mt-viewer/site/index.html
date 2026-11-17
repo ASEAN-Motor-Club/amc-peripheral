@@ -77,9 +77,10 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { DECAL_PROJECTION_GLSL, decalFallbackSlots } from "./js/decal-projection.js?v=7";
 import { ownerColorForSlot } from "./js/owner-paint.js?v=3";
-import { selectedBodyVariant } from "./js/body-material.js?v=1";
+import { selectedBodyVariant, isBodyMaterialSlot } from "./js/body-material.js?v=2";
 
 const params = new URLSearchParams(location.search);
 const workshopId = params.get("workshop");
@@ -221,6 +222,16 @@ scene.add(new THREE.HemisphereLight(0xc9d8ff, 0x1f232c, 0.55));
 const key = new THREE.DirectionalLight(0xfff4e6, 1.9); key.position.set(4, 7, 5); scene.add(key);
 const rim = new THREE.DirectionalLight(0x9fc0ff, 0.55); rim.position.set(-5, 3, -6); scene.add(rim);
 const fill = new THREE.DirectionalLight(0xffffff, 0.18); fill.position.set(-2, 1.5, 5); scene.add(fill);
+
+// A single cached studio environment gives metallic trim and synthetic mirrors
+// something to reflect. It is deliberately subtle; the key light still defines exposure.
+const pmrem = new THREE.PMREMGenerator(renderer);
+const environmentScene = new RoomEnvironment();
+const environmentTarget = pmrem.fromScene(environmentScene, 0.04);
+scene.environment = environmentTarget.texture;
+scene.environmentIntensity = 0.45;
+environmentScene.dispose();
+pmrem.dispose();
 
 // neutral studio floor so the car reads against something
 const grid = new THREE.GridHelper(ARENA_SIZE, ARENA_SIZE, 0x39415a, 0x242a3a);
@@ -410,7 +421,7 @@ function applyLivery() {
     // The visible shell is not always a Body_ slot: on the muscle cars it is the
     // Palette section (12,690 of 15,543 triangles on the Tuscan), so a livery that
     // only repainted Body_01 changed nothing on screen.
-    const isBody = /^(Body|Palette|Shell)/i.test(slot) || /M_Body|Body_|M_Palette/i.test(def.materialName || "");
+    const isBody = isBodyMaterialSlot(slot, def);
     if (!isBody) continue;
     if (!v) {                        // back to the authored material
       m.map = def.map ? loadTexture(def.map) : null;

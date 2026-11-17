@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { selectedBodyVariant } from '../../site/js/body-material.js';
+import { selectedBodyVariant, isBodyMaterialSlot } from '../../site/js/body-material.js';
 
 const variants = [{ index: 2, materialName: 'M_Decal' }, { index: 7, materialName: 'M_Body' }];
 assert.equal(selectedBodyVariant(variants, 7)?.materialName, 'M_Body');
@@ -8,4 +8,9 @@ assert.equal(selectedBodyVariant([{ materialName: 'M_Body' }], 0)?.materialName,
   'legacy baked arrays retain positional compatibility');
 assert.equal(selectedBodyVariant(variants, -1), null);
 assert.equal(selectedBodyVariant(variants, NaN), null);
+assert.equal(isBodyMaterialSlot('Mat_PolygonCity_Texture_01_A_001'), true,
+  'Muhan hood/roof palette section receives the selected body material');
+assert.equal(isBodyMaterialSlot('Headlight'), false);
+assert.equal(isBodyMaterialSlot('MI_ColorPalette', { materialName: 'MI_ColorPalette' }), false,
+  'Cheetah AI palette is not forced into owner paint');
 console.log('body material: numeric workshop selection passed');

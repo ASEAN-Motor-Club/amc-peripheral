@@ -98,10 +98,10 @@ object Describe(UUnrealMaterial mat, string label)
     }
 
     var textures = new Dictionary<string, string>();
+    var textureObjects = new Dictionary<string, UTexture>();
     var colors = new Dictionary<string, float[]>();
     var scalars = new Dictionary<string, float>();
     bool translucent = false;
-    UTexture? firstTex = null;
     var paramsAll = new List<CMaterialParams2>();
 
     foreach (var m2 in chain)
@@ -113,8 +113,12 @@ object Describe(UUnrealMaterial mat, string label)
         if (!translucent && pp.IsTranslucent) translucent = true;
         if (pp.Textures is IDictionary td)
             foreach (DictionaryEntry kv in td)
-                if (kv.Value is UObject t2)
-                    textures.TryAdd(kv.Key?.ToString() ?? "?", t2.GetPathName());
+                if (kv.Value is UTexture tex2)
+                {
+                    var key = kv.Key?.ToString() ?? "?";
+                    textures.TryAdd(key, tex2.GetPathName());
+                    textureObjects.TryAdd(key, tex2);
+                }
         if (pp.Colors is IDictionary pd)
             foreach (DictionaryEntry kv in pd)
                 if (kv.Value is FLinearColor lc)
@@ -122,12 +126,47 @@ object Describe(UUnrealMaterial mat, string label)
         if (pp.Scalars is IDictionary sd)
             foreach (DictionaryEntry kv in sd)
                 if (kv.Value is float f) scalars.TryAdd(kv.Key?.ToString() ?? "?", f);
-        if (firstTex == null && pp.TryGetFirstTexture2d(out var dt) && dt != null) firstTex = dt;
     }
     var p2 = paramsAll.Count > 0 ? paramsAll[0] : new CMaterialParams2();
 
-    string? png = null;
-    if (firstTex != null) png = EncodePng(firstTex);
+    string? SelectTexture(string semantic)
+    {
+        bool Has(string value, string needle) => value.Contains(needle, StringComparison.OrdinalIgnoreCase);
+        bool Placeholder(string value) => Has(value, "RT_") || Has(value, "ActiveLayerCRT2D") || Has(value, "UE4_LOGO_CARD");
+        var candidates = textureObjects.Keys.Where(k => !Placeholder(k) && !Placeholder(textureObjects[k].GetPathName())).ToList();
+        if (semantic == "baseColor")
+        {
+            foreach (var preferred in new[] { "Base Color Texture", "BaseColor", "Diffuse" })
+            {
+                var hit = candidates.FirstOrDefault(k => k == preferred);
+                if (hit != null) return hit;
+            }
+            var palette = candidates.FirstOrDefault(k =>
+                (Has(k, "colorPalette") || Has(k, "Palette_") || Has(k, "Texture_01_A")) &&
+                !Has(k, "rough") && !Has(k, "metal") && !Has(k, "normal") && !Has(k, "emissive"));
+            if (palette != null) return palette;
+            return candidates.FirstOrDefault(k => k == "PM_Diffuse" && !Has(textureObjects[k].GetPathName(), "rough"));
+        }
+        var needle = semantic switch {
+            "roughness" => "rough", "metallic" => "metal", "normal" => "normal", "emissive" => "emissive",
+            _ => "__never__"
+        };
+        return candidates.FirstOrDefault(k => Has(k, needle) || Has(textureObjects[k].GetPathName(), needle));
+    }
+
+    var maps = new Dictionary<string, string>();
+    var mapAssets = new Dictionary<string, string>();
+    foreach (var semantic in new[] { "baseColor", "roughness", "metallic", "normal", "emissive" })
+    {
+        var key = SelectTexture(semantic);
+        if (key == null) continue;
+        var texture = textureObjects[key];
+        mapAssets[semantic] = texture.GetPathName();
+        var encoded = EncodePng(texture);
+        if (encoded != null) maps[semantic] = encoded;
+    }
+    maps.TryGetValue("baseColor", out var png);
+    mapAssets.TryGetValue("baseColor", out var diffuseAsset);
 
     Console.WriteLine($"  {label} -> {mat.GetPathName()} [{mat.GetType().Name}] chain={chain.Count} blend={p2.BlendMode} tr={translucent} " +
                       $"diffuse={p2.HasTopDiffuse} tex={string.Join(",", textures.Keys)} col={string.Join(",", colors.Keys)} scl={string.Join(",", scalars.Keys)} png={png}");
@@ -144,16 +183,60 @@ object Describe(UUnrealMaterial mat, string label)
         masked = p2.BlendMode.ToString() == "BLEND_Masked",
         hasDiffuse = p2.HasTopDiffuse,
         textures,
+        maps,
+        mapAssets,
         colors,
         scalars,
         diffusePng = png,
-        diffuseTex = firstTex?.GetPathName(),
+        diffuseTex = diffuseAsset,
     };
+}
+
+List<Dictionary<string, object>> SectionSlots(UStaticMesh sm)
+{
+    try
+    {
+        var type = sm.GetType();
+        object? renderData = (object?)type.GetProperty("LODModels")?.GetValue(sm)
+            ?? type.GetProperty("RenderData")?.GetValue(sm)
+            ?? type.GetProperty("LODs")?.GetValue(sm);
+        if (renderData is not null && renderData is not Array)
+        {
+            var rdType = renderData.GetType();
+            renderData = rdType.GetProperty("LODs")?.GetValue(renderData)
+                ?? rdType.GetField("LODs", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.GetValue(renderData);
+        }
+        if (renderData is not Array lods || lods.Length == 0 || lods.GetValue(0) is not { } lod) return new List<Dictionary<string, object>>();
+        var lodType = lod.GetType();
+        var sections = (lodType.GetProperty("Sections") ?? lodType.GetProperty("Sections_GENERAL"))?.GetValue(lod) as Array;
+        if (sections == null) return new List<Dictionary<string, object>>();
+        var rows = new List<Dictionary<string, object>>();
+        foreach (var section in sections)
+        {
+            if (section == null) continue;
+            var sectionType = section.GetType();
+            object? Get(string name) => (object?)sectionType.GetProperty(name)?.GetValue(section)
+                ?? sectionType.GetField(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.GetValue(section);
+            if (Get("MaterialIndex") is not int index || index < 0 || index >= sm.StaticMaterials.Length) return new List<Dictionary<string, object>>();
+            var triangles = Get("NumTriangles") is int count ? count : -1;
+            rows.Add(new Dictionary<string, object> {
+                ["slot"] = sm.StaticMaterials[index].MaterialSlotName.Text,
+                ["triangles"] = triangles,
+            });
+        }
+        return rows;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"    section mapping failed: {ex.Message}");
+        return new List<Dictionary<string, object>>();
+    }
 }
 
 var items = JsonSerializer.Deserialize<List<Item>>(File.ReadAllText(jsonPath),
     new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
 var result = new Dictionary<string, object>();
+var sectionResults = new Dictionary<string, List<Dictionary<string, object>>>();
 
 foreach (var it in items)
 {
@@ -172,7 +255,9 @@ foreach (var it in items)
         slots.Add(Describe(mat, slotName));
     }
     result[it.Name] = slots;
+    sectionResults[it.Name] = SectionSlots(sm);
 }
+result["__sections__"] = sectionResults;
 
 // materials that no mesh slot points at (vehicle body/livery variants)
 if (extrasPath != null && File.Exists(extrasPath))

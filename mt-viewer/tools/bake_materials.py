@@ -91,12 +91,14 @@ def main(build_dir, out_dir):
     mats, conflicts = {}, []
     slots_by_mesh = {}
     for mesh, slots in mm.items():
-        if mesh == "__materials__" or not isinstance(slots, list):
+        if mesh in ("__materials__", "__sections__") or not isinstance(slots, list):
             continue
         for slot in slots:
             full = slot.get("material", "")
             name = os.path.basename(full).split(".")[0] or full
             tex = slot.get("textures") or {}
+            semantic_maps = slot.get("maps") or {}
+            map_assets = slot.get("mapAssets") or {}
             cols = slot.get("colors") or {}
             scal = slot.get("scalars") or {}
 
@@ -113,19 +115,21 @@ def main(build_dir, out_dir):
                 c = cols["Color"]
                 entry["baseColor"] = [round(c[0], 4), round(c[1], 4), round(c[2], 4)]
 
-            diffuse = slot.get("diffusePng") or pick_texture(
-                tex, ["PM_Diffuse", "Base Color Texture", "Diffuse"]) or first_containing(tex, "Texture_01_A")
+            diffuse = semantic_maps.get("baseColor") or slot.get("diffusePng") or pick_texture(
+                tex, ["Base Color Texture", "BaseColor", "Diffuse", "PM_Diffuse"]) or first_containing(tex, "Texture_01_A")
             if diffuse:
                 entry["map"] = publish(diffuse)
-            rough = pick_texture(tex, ["PM_Roughness"]) or first_containing(tex, "Roughness")
+            rough = semantic_maps.get("roughness") or pick_texture(tex, ["PM_Roughness"]) or first_containing(tex, "Roughness")
             if rough:
                 entry["roughnessMap"] = publish(rough)
-            metal = pick_texture(tex, ["PM_Metalness"]) or first_containing(tex, "Metallic")
+            metal = semantic_maps.get("metallic") or pick_texture(tex, ["PM_Metalness"]) or first_containing(tex, "Metallic")
             if metal:
                 entry["metalnessMap"] = publish(metal)
-            norm = pick_texture(tex, ["PM_Normals"]) or first_containing(tex, "Normal")
+            norm = semantic_maps.get("normal") or pick_texture(tex, ["PM_Normals"]) or first_containing(tex, "Normal")
             if norm:
                 entry["normalMap"] = publish(norm)
+            if map_assets.get("baseColor") and not entry.get("map"):
+                entry["mapMissing"] = {"semantic": "baseColor", "asset": map_assets["baseColor"]}
 
             if entry["alphaMode"] == "BLEND":
                 entry["opacity"] = round(float(scal.get("Opacity", 0.35)), 4)
@@ -180,7 +184,7 @@ def main(build_dir, out_dir):
                     dst = os.path.join(glb_dir, f)
                     if slots:
                         try:
-                            glb_slots.rewrite(src, dst, pairs)
+                            glb_slots.rewrite(src, dst, pairs, (mm.get("__sections__") or {}).get(part))
                         except Exception as e:
                             print(f"  glb rewrite failed for {f}: {e}")
                             shutil.copy2(src, dst)
@@ -196,6 +200,8 @@ def main(build_dir, out_dir):
         if not isinstance(slot, dict):
             continue
         tex = slot.get("textures") or {}
+        semantic_maps = slot.get("maps") or {}
+        map_assets = slot.get("mapAssets") or {}
         cols = slot.get("colors") or {}
         scal = slot.get("scalars") or {}
         name = os.path.basename(slot.get("material") or raw).split(".")[0]
@@ -211,7 +217,7 @@ def main(build_dir, out_dir):
         if "Color" in cols:
             c = cols["Color"]
             v["baseColor"] = [round(c[0], 4), round(c[1], 4), round(c[2], 4)]
-        diff = slot.get("diffusePng") or pick_texture(tex, ["PM_Diffuse", "Base Color Texture", "Diffuse"]) \
+        diff = semantic_maps.get("baseColor") or slot.get("diffusePng") or pick_texture(tex, ["Base Color Texture", "BaseColor", "Diffuse", "PM_Diffuse"]) \
             or first_containing(tex, "Texture_01_A")
         # Render targets (RT_LayerPreview / RT_ActivePreview) are the AdvancedDecal
         # system's runtime surface, not a baked livery: using one paints the body
@@ -222,6 +228,8 @@ def main(build_dir, out_dir):
         if diff:
             v["map"] = publish(diff)
             v["diffuseTex"] = src_tex or None
+        if map_assets.get("baseColor") and not v.get("map"):
+            v["mapMissing"] = {"semantic": "baseColor", "asset": map_assets["baseColor"]}
         if not v.get("map") and not cols:
             v["note"] = "no texture params (runtime render-target decal; colour-only)"
         variants.append(v)

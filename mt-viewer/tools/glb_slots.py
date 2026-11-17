@@ -50,7 +50,7 @@ def _join_glb(version, chunks):
     return blob[:8] + struct.pack("<I", len(blob)) + blob[12:]
 
 
-def rewrite(src, dst, slots):
+def rewrite(src, dst, slots, section_slots=None):
     """Name every primitive's material after its UE slot.
 
     `slots` is a list of (slotName, materialAssetName) in UE material-slot order.
@@ -60,6 +60,7 @@ def rewrite(src, dst, slots):
     the palette section first, the body section second).
     """
     pairs = [(s, None) if isinstance(s, str) else (s[0], s[1]) for s in slots]
+    remaining_sections = list(section_slots or [])
     data = open(src, "rb").read()
     version, chunks = _split_glb(data)
     ji = next(i for i, (t, _) in enumerate(chunks) if t == JSON_CHUNK)
@@ -74,11 +75,35 @@ def rewrite(src, dst, slots):
             asset = (orig.get("name") or "").split(".")[0]
 
             slot = None
-            for cand, matname in pairs:
-                if matname and asset and matname.split(".")[0] == asset and cand not in used:
-                    slot = cand
-                    break
-            if slot is None:
+            if remaining_sections and isinstance(remaining_sections[0], dict):
+                accessor = g.get("accessors", [])[prim.get("indices", -1)] if prim.get("indices") is not None else {}
+                triangles = accessor.get("count", 0) // 3
+                pair_assets = {name: (mat or "").rsplit("/", 1)[-1].split(".")[0] for name, mat in pairs}
+                match_index = next((i for i, section in enumerate(remaining_sections)
+                                    if section.get("triangles") == triangles
+                                    and pair_assets.get(section.get("slot"), asset) == asset), None)
+                if match_index is not None:
+                    slot = remaining_sections.pop(match_index)["slot"]
+            elif remaining_sections and prim_i < len(remaining_sections):
+                # Legacy string-only metadata has no geometry identity; retain its
+                # original order behavior for old fixtures.
+                slot = remaining_sections[prim_i]
+            matching = [cand for cand, matname in pairs
+                        if matname and asset and matname.rsplit("/", 1)[-1].split(".")[0] == asset]
+            if slot is not None:
+                pass  # Authoritative UE section mapping, including duplicate assets.
+            elif len(matching) == 1:
+                # A UE slot can span many glTF primitives. Reuse its name instead
+                # of assigning later sections to unrelated paint slots.
+                slot = matching[0]
+            else:
+                # Multiple distinct slots can also share one material asset
+                # (Body_01 / Seat_01 on M_Body). Preserve their section sequence.
+                for cand in matching:
+                    if cand not in used:
+                        slot = cand
+                        break
+            if slot is None and not matching:
                 for cand, _ in pairs:
                     if cand not in used:
                         slot = cand

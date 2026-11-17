@@ -24,6 +24,12 @@ class StreamingPerformanceSourceTests(unittest.TestCase):
         stage = self.index[start:end]
         self.assertNotIn('compileAsync', stage)
         self.assertNotIn('render();', stage)
+    def test_single_subtle_environment_for_metals(self):
+        source = self.index
+        self.assertIn('new THREE.PMREMGenerator(renderer)', source)
+        self.assertIn('new RoomEnvironment()', source)
+        self.assertIn('scene.environmentIntensity = 0.45', source)
+        self.assertEqual(source.count('pmrem.fromScene('), 1)
 
 
 if __name__ == '__main__':
