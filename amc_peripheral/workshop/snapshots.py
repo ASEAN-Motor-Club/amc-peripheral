@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-RENDERER_VERSION = "viewer-22"
+RENDERER_VERSION = "viewer-23"
 PRIORITY_POPULAR = -10
 PRIORITY_VISIBLE = 50
 PRIORITY_DIRECT = 100
