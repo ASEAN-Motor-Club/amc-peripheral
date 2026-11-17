@@ -13,19 +13,23 @@
       <p class="byline muted">Workshop upload · <time datetime="{{ item.createdAt|iso }}">{{ item.createdAt[:10] }}</time></p>
     {% endif %}
 
-    <div class="viewer-stage">
-      <div class="viewer-preview">
+    <div class="viewer-stage" id="item-viewer-stage">
+      <div class="viewer-preview" id="item-viewer-preview">
         {% if snapshot and snapshot.url %}
         <img id="item-snapshot" src="{{ snapshot.url }}" alt="Preview of the {{ item.vehicleKey|replace('_',' ') }} workshop configuration" width="960" height="540">
         {% else %}
         <img id="item-snapshot" src="/workshop/static/placeholder.svg" alt="Preview of the {{ item.vehicleKey|replace('_',' ') }} workshop configuration" width="960" height="540"{% if snapshot and snapshot.status not in ('unsupported', 'failed_permanent') %} data-snapshot-api="/api/workshop/items/{{ item.id }}/snapshot"{% endif %}>
         {% if snapshot and snapshot.status not in ('unsupported', 'failed_permanent') %}<div class="preview-pending" id="item-snapshot-pending"><span class="preview-spinner" aria-hidden="true"></span>Rendering preview…</div>{% endif %}
         {% endif %}
+        {% if config and config.vehicle.assetAvailable %}
+        <iframe id="item-viewer-frame" src="/vehicles/index.html?workshop={{ item.id }}&amp;ui=0&amp;embed=1" title="Interactive 3D preview of the {{ item.vehicleKey|replace('_',' ') }} workshop configuration" allow="fullscreen" hidden></iframe>
+        <div class="viewer-embed-status" id="item-viewer-status" role="status">Loading interactive 3D…</div>
+        {% endif %}
       </div>
       <div class="viewer-actions">
         {% if config and config.vehicle.assetAvailable %}
-        <a class="primary-button" href="/workshop/items/{{ item.id }}/viewer/">View in 3D</a>
-        <span class="muted">Loads the full interactive viewer.</span>
+        <button class="primary-button" id="item-viewer-fullscreen" type="button">Fullscreen</button>
+        <span class="muted" id="item-viewer-help">Drag to rotate · scroll to zoom · right-drag to pan</span>
         {% else %}
         <span class="badge warning">3D unavailable</span>
         <span class="muted">This vehicle's mesh has not been extracted for the web viewer.</span>
@@ -131,6 +135,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
+<script src="/workshop/static/item-viewer.js?v=1" defer></script>
 <script>
 (() => {
   const image = document.getElementById("item-snapshot");

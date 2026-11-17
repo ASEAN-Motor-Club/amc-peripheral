@@ -491,7 +491,7 @@ def create_app(
         item = await asyncio.to_thread(repository.get_item, workshop_id)
         if item is None:
             raise web.HTTPNotFound()
-        raise web.HTTPFound(f"/vehicles/index.html?workshop={workshop_id}")
+        raise web.HTTPMovedPermanently(f"/workshop/items/{workshop_id}/")
 
     async def page_author(request: web.Request) -> web.Response:
         account_id = int(request.match_info["id"])

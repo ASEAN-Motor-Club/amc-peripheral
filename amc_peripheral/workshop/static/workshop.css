@@ -141,6 +141,17 @@ button:hover, .primary-button:hover { text-decoration: none; filter: brightness(
 .detail-main h1 .muted { font-size: .42em; font-weight: 500; letter-spacing: 0; }
 .viewer-stage { margin-top: 24px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: #090d14; }
 .viewer-preview { position: relative; }
+.viewer-preview > iframe { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #090d14; }
+.viewer-preview > iframe[hidden] { display: none; }
+.viewer-stage.is-interactive .viewer-preview > img { visibility: hidden; }
+.viewer-stage.is-interactive .preview-pending { display: none; }
+.viewer-embed-status { position: absolute; left: 14px; bottom: 14px; padding: 8px 11px; border-radius: 8px; background: rgba(6, 10, 16, .86); color: #d7e4f2; font-size: 13px; pointer-events: none; }
+.viewer-embed-status[hidden] { display: none; }
+.viewer-stage:fullscreen, .viewer-stage.viewer-expanded { display: flex; flex-direction: column; width: 100%; height: 100%; border: 0; border-radius: 0; background: #090d14; }
+.viewer-stage.viewer-expanded { position: fixed; inset: 0; z-index: 2000; }
+.viewer-stage:fullscreen .viewer-preview, .viewer-stage.viewer-expanded .viewer-preview { flex: 1; min-height: 0; }
+.viewer-stage:fullscreen .viewer-preview > img, .viewer-stage.viewer-expanded .viewer-preview > img { height: 100%; aspect-ratio: auto; object-fit: contain; }
+body.viewer-expanded-open { overflow: hidden; }
 .viewer-stage > img, .viewer-preview > img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 .viewer-actions { display: flex; align-items: center; gap: 14px; padding: 14px; border-top: 1px solid var(--line); }
 .viewer-actions .muted { font-size: 13px; }

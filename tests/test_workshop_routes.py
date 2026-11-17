@@ -73,7 +73,11 @@ async def test_item_page_reports_configuration(client):
     assert response.status == 200
     text = await response.text()
     assert "Configuration" in text
-    assert "View in 3D" in text
+    assert 'id="item-viewer-frame"' in text
+    assert 'src="/vehicles/index.html?workshop=1&amp;ui=0&amp;embed=1"' in text
+    assert 'id="item-viewer-fullscreen"' in text
+    assert "/workshop/static/item-viewer.js" in text
+    assert "View in 3D" not in text
     assert "Rendered decals" in text
     assert "snapshot-api" in text
     assert text.index("Parts (") < text.index("Decal layers (")
@@ -81,8 +85,8 @@ async def test_item_page_reports_configuration(client):
     redirect = await client.get(
         "/workshop/items/1/viewer/", allow_redirects=False
     )
-    assert redirect.status == 302
-    assert redirect.headers["Location"] == "/vehicles/index.html?workshop=1"
+    assert redirect.status == 301
+    assert redirect.headers["Location"] == "/workshop/items/1/"
 
 
 async def test_snapshot_endpoint_queues_then_reports_ready(client, settings):
