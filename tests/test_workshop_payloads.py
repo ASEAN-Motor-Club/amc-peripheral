@@ -10,6 +10,7 @@ from workshop_support import _payload
 
 from amc_peripheral.workshop.payloads import (
     PayloadError,
+    convert_attachment,
     decode_payload,
     normalize_character_vehicle,
     normalize_workshop,
@@ -81,6 +82,21 @@ def test_attachment_conversion_matches_ue_to_gltf_axes():
     assert attachment["position"] == pytest.approx([2.41, 0.9, 0.0])
     assert attachment["scale"] == [1.0, 1.0, 1.0]
     assert len(attachment["rotation"]) == 4
+
+
+def test_racers_xyz_attachment_rotations_match_named_rotators():
+    xyz = convert_attachment(
+        {"x": -215, "y": 16, "z": 35},
+        {"x": 45.06376647949219, "y": -90.2572021484375, "z": 90},
+        {"x": 1, "y": 1, "z": 1},
+    )
+    named = convert_attachment(
+        {"X": -215, "Y": 16, "Z": 35},
+        {"pitch": 45.06376647949219, "yaw": -90.2572021484375, "roll": 90},
+        {"X": 1, "Y": 1, "Z": 1},
+    )
+    assert xyz["rotation"] == pytest.approx(named["rotation"])
+    assert xyz["rotation"] != pytest.approx([0, 0, 0, 1])
 
 
 def test_unknown_attachment_is_reported_not_dropped_silently():

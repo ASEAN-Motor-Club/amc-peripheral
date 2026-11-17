@@ -102,7 +102,9 @@ def _xyz(value: Any, default: float = 0.0) -> list[float]:
 
 
 def _rotator(value: Any) -> tuple[float, float, float]:
-    if isinstance(value, dict):
+    if isinstance(value, dict) and any(
+        key in value for key in ("Pitch", "pitch", "Yaw", "yaw", "Roll", "roll")
+    ):
         return (
             _number(value.get("Pitch", value.get("pitch"))),
             _number(value.get("Yaw", value.get("yaw"))),
