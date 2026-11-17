@@ -685,7 +685,9 @@
                 ProtectHome = true;
                 PrivateTmp = true;
                 NoNewPrivileges = true;
-                ReadOnlyPaths = [cfg.workshop.sourceDb];
+                # WAL readers need write access to the companion -shm/-wal files,
+                # even though all application connections use PRAGMA query_only.
+                ReadWritePaths = [(dirOf cfg.workshop.sourceDb)];
                 Environment = [
                   "AMC_WORKSHOP_DB=${cfg.workshop.sourceDb}"
                   "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
@@ -723,7 +725,8 @@
                 ProtectHome = true;
                 PrivateTmp = true;
                 NoNewPrivileges = true;
-                ReadOnlyPaths = [cfg.workshop.sourceDb cfg.workshop.viewerRoot];
+                ReadOnlyPaths = [cfg.workshop.viewerRoot];
+                ReadWritePaths = [(dirOf cfg.workshop.sourceDb)];
                 Environment = [
                   "AMC_WORKSHOP_DB=${cfg.workshop.sourceDb}"
                   "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
