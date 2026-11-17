@@ -75,6 +75,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { DECAL_PROJECTION_GLSL, decalFallbackSlots } from "./js/decal-projection.js?v=7";
 import { ownerColorForSlot } from "./js/owner-paint.js?v=1";
@@ -233,6 +234,7 @@ function alignArena(b) {
 }
 
 const loader = new GLTFLoader();
+loader.setMeshoptDecoder(MeshoptDecoder);
 function loadImage(uri) {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = uri; });
 }
@@ -530,6 +532,27 @@ async function load() {
   parts.sort((a, b) => priority(b) - priority(a));
   window.__order = parts.map(p => p.mesh + "=" + (p.bytes || priority(p)));
 
+  let previewModel = null;
+  let fullPartsAdded = 0;
+  const previewPromise = manifest.preview?.glb ? (async () => {
+    const info = (window.__previewInfo = { step: "loading", bytes: manifest.preview.bytes || 0 });
+    try {
+      const g = await loader.loadAsync(`${vehicle}/${manifest.preview.glb}`);
+      if (fullPartsAdded) { info.step = "superseded"; return; }
+      previewModel = g.scene;
+      previewModel.traverse(o => { if (o.isMesh) o.material = wire; });
+      root.add(previewModel);
+      growFrame();
+      render();
+      info.step = "shown";
+      info.shownAt = performance.now();
+      loadTiming.preview = info.shownAt;
+    } catch (e) {
+      info.step = "error:" + e.message;
+      console.warn("lightweight preview failed", e);
+    }
+  })() : Promise.resolve();
+
   let done = 0;
   async function streamPart(part) {
     try {
@@ -564,6 +587,12 @@ async function load() {
       model.quaternion.fromArray(part.rotation);
       model.scale.fromArray(part.scale);
       root.add(model);
+      fullPartsAdded++;
+      if (previewModel) {
+        root.remove(previewModel);
+        previewModel = null;
+        if (window.__previewInfo) window.__previewInfo.step = "replaced";
+      }
       streamed.push(model);
       growFrame();
       render();
@@ -671,7 +700,8 @@ async function load() {
       }
       if (params.get("attachmentLights") !== "0") {
         for (const ld of actor.lights || []) {
-          if (info.lights >= 24) { info.lightBudgetSkipped++; continue; }
+          const lightBudget = params.get("attachmentLights") === "full" ? 24 : 4;
+          if (info.lights >= lightBudget) { info.lightBudgetSkipped++; continue; }
           const color = new THREE.Color().setRGB(...ld.color, THREE.LinearSRGBColorSpace);
           let light;
           if (ld.type === "spot") {
@@ -720,11 +750,8 @@ async function load() {
       stats.meshes += b.matrices.length;
       info.instancedDraws++;
     }
-    info.step = "compiling";
-    if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
     info.step = "done";
     if (info.lightBudgetSkipped) console.warn(`attachment lights skipped over budget: ${info.lightBudgetSkipped}`);
-    render();
   }
 
   // --- base materials: get a usable vehicle on screen before enhancements ----
