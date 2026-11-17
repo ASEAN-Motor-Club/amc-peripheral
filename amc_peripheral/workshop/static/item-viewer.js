@@ -7,6 +7,11 @@
 
   let ready = false;
   let fallbackExpanded = false;
+  window.setTimeout(() => {
+    if (!ready && status) {
+      status.textContent = "Interactive 3D is unavailable or still loading; showing the static preview.";
+    }
+  }, 20000);
 
   window.addEventListener("message", (event) => {
     if (event.origin !== window.location.origin || event.source !== frame.contentWindow) return;
