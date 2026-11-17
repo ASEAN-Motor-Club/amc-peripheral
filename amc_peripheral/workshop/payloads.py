@@ -110,8 +110,9 @@ def _rotator(value: Any) -> tuple[float, float, float]:
             _number(value.get("Yaw", value.get("yaw"))),
             _number(value.get("Roll", value.get("roll"))),
         )
-    p, y, r = _xyz(value)
-    return p, y, r
+    # Workshop VectorValues store Euler angles as (Roll, Pitch, Yaw).
+    x, y, z = _xyz(value)
+    return y, z, x
 
 
 def _q_mul(a: tuple[float, float, float, float],

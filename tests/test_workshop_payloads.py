@@ -84,15 +84,15 @@ def test_attachment_conversion_matches_ue_to_gltf_axes():
     assert len(attachment["rotation"]) == 4
 
 
-def test_racers_xyz_attachment_rotations_match_named_rotators():
+def test_racers_xyz_attachment_rotators_are_roll_pitch_yaw():
     xyz = convert_attachment(
         {"x": -215, "y": 16, "z": 35},
-        {"x": 45.06376647949219, "y": -90.2572021484375, "z": 90},
+        {"x": 0, "y": -90.2572021484375, "z": 90},
         {"x": 1, "y": 1, "z": 1},
     )
     named = convert_attachment(
         {"X": -215, "Y": 16, "Z": 35},
-        {"pitch": 45.06376647949219, "yaw": -90.2572021484375, "roll": 90},
+        {"pitch": -90.2572021484375, "yaw": 90, "roll": 0},
         {"X": 1, "Y": 1, "Z": 1},
     )
     assert xyz["rotation"] == pytest.approx(named["rotation"])
