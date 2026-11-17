@@ -129,9 +129,14 @@ def main():
             continue
         if key == "SteeringWheel":
             part.pop("hidden", None)
-        # An SCS AttachToName is authoritative. Native steering meshes may also
-        # carry a small local offset from their namesake socket; large offsets are
-        # vehicle-space geometry and must not be snapped a second time.
+        # An SCS AttachToName is authoritative. Other origin-pivot parts may use
+        # their namesake socket; meshSpace=vehicle prevents a second transform.
+        if (key == "SteeringWheel" and part.get("meshSpace") == "vehicle"
+                and not explicit_socket and not already_mounted):
+            # This mesh's exported root already contains its vehicle-space cabin
+            # transform; applying the steering socket would place it twice.
+            kept_parts.append(part)
+            continue
         steering_local_offset = key == "SteeringWheel" and all(
             abs(v) <= 0.1 for v in part.get("position", [0, 0, 0])
         )

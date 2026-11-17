@@ -71,6 +71,16 @@ class SteeringWheelSocketTests(unittest.TestCase):
         self.assertEqual(part['mountedOn'], 'socket:SteeringWheel')
         self.assertNotIn('hidden', part)
 
+    def test_vehicle_space_steering_mesh_is_not_transformed_twice(self):
+        manifest = {'parts': [{'id': 'SteeringWheel', 'position': [0, 0, 0],
+                               'meshSpace': 'vehicle'}]}
+        sockets = [{'name': 'SteeringWheel', 'loc': [100, 200, 300],
+                    'rot': [0, 0, 0], 'scale': [1, 1, 1]}]
+        result = self.run_manifest(manifest, sockets)
+        part = result['parts'][0]
+        self.assertEqual(part['position'], [0, 0, 0])
+        self.assertNotIn('mountedOn', part)
+
     def test_scs_socket_composes_with_component_local_offset_idempotently(self):
         manifest = {'parts': [{
             'id': 'MTVehicleDoor_GEN_VARIABLE', 'attachSocket': 'Hook_6x4',
