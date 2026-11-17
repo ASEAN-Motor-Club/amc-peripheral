@@ -94,7 +94,7 @@ def render_job(job: SnapshotJob, settings: SnapshotSettings, browser) -> dict:
         else f"characterVehicle={job.source_id}"
     )
     separator = "&" if "?" in settings.viewer_url else "?"
-    url = f"{settings.viewer_url}{separator}{query}&sync&ui=0"
+    url = f"{settings.viewer_url}{separator}{query}&sync&ui=0&attachmentLights=0"
     context = browser.new_context(
         viewport={"width": 960, "height": 540},
         device_scale_factor=1,
