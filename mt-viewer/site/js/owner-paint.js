@@ -5,11 +5,6 @@ function exactColor(colors, key) {
   return hit ? colors[hit] : undefined;
 }
 
-export function replacedAiBodySlots(bodyMaterials, selectedIndex) {
-  if (selectedIndex == null) return [];
-  return (bodyMaterials || []).filter(m => m.ai && m.index !== selectedIndex).map(m => m.name);
-}
-
 export function ownerColorForSlot(slot, colors, colourKeys, extraPaintSlots) {
   const direct = exactColor(colors, slot);
   if (direct) return direct;

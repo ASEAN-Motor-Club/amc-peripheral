@@ -78,7 +78,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { DECAL_PROJECTION_GLSL, decalFallbackSlots } from "./js/decal-projection.js?v=7";
-import { ownerColorForSlot, replacedAiBodySlots } from './js/owner-paint.js?v=2';
+import { ownerColorForSlot } from "./js/owner-paint.js?v=3";
 
 const params = new URLSearchParams(location.search);
 const workshopId = params.get("workshop");
@@ -372,10 +372,9 @@ function indexPaintSlots() {
   const bodyMesh = slotMesh["Body"] ? "Body"
     : Object.keys(slotMesh).reduce((a, b) => ((slotMesh[a] || []).length >= (slotMesh[b] || []).length ? a : b));
   const pool = bodyMesh ? slotMesh[bodyMesh] : Object.keys(slotDefs);
-  const aiReplacements = new Set(replacedAiBodySlots(window.__viewer?.manifest?.bodyMaterials, sourceConfig?.paint?.bodyMaterialIndex));
   const cand = pool.filter(s => {
     const d = slotDefs[s] || {};
-    return !d.map && !colourKeys.includes(s) && (aiReplacements.has(s) || /M_Body|M_Palette/i.test(d.materialName || ""));
+    return /M_Body|M_Palette/i.test(d.materialName || "") && !d.map && !colourKeys.includes(s);
   });
   cand.sort((a, b) => (tris[b] || 0) - (tris[a] || 0));
   extraPaintSlot = {};

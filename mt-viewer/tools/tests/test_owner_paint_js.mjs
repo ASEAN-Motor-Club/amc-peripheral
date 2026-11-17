@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { ownerColorForSlot, replacedAiBodySlots } from "../../site/js/owner-paint.js";
+import { ownerColorForSlot } from '../../site/js/owner-paint.js';
 
 const orange = [187, 130, 0, 255];
 const dark = [41, 42, 48, 255];
@@ -16,10 +16,6 @@ assert.equal(ownerColorForSlot('Body_02', { Body: orange }, colourKeys, extra), 
   'numeric slot suffix falls back to the base slot');
 assert.equal(ownerColorForSlot('Seat_01', colors, colourKeys, extra), undefined,
   'unpainted slots stay at their material default');
-assert.deepEqual(replacedAiBodySlots([
-  { index: 0, name: 'MI_ColorPalette', ai: true },
-  { index: 1, name: 'M_Body', ai: false },
-], 1), ['MI_ColorPalette']);
-assert.deepEqual(replacedAiBodySlots([{ index: 0, name: 'MI_ColorPalette', ai: true }], null), [],
-  'default AI paint is preserved when no custom material is selected');
+assert.equal(ownerColorForSlot('MI_ColorPalette', colors, colourKeys, extra), undefined,
+  'AI palette materials retain their authored appearance under custom paint');
 console.log('owner paint: Palette inheritance and slot-alias cases passed');
