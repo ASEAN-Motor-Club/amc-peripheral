@@ -135,7 +135,7 @@ def main():
         steering_local_offset = key == "SteeringWheel" and all(
             abs(v) <= 0.1 for v in part.get("position", [0, 0, 0])
         )
-        if not explicit_socket and not (at_origin or steering_local_offset or already_mounted):
+        if not explicit_socket and not (at_origin or steering_local_offset or already_mounted or native_dashboard_socket):
             kept_parts.append(part)
             continue
         if already_mounted:
@@ -149,6 +149,10 @@ def main():
                 "scale": list(part.get("scale") or [1, 1, 1]),
             }
         spos, squat, sscale = socket_transform(sock)
+        if native_dashboard_socket:
+            # A centered dashboard must not inherit the steering wheel's lateral
+            # offset. The socket supplies only longitudinal/height alignment.
+            spos[2] = 0.0
         lpos = local["position"]
         scaled = [lpos[i] * sscale[i] for i in range(3)]
         rotated = q_rotate(squat, scaled)
@@ -157,6 +161,10 @@ def main():
         part["scale"] = [round(sscale[i] * local["scale"][i], 5) for i in range(3)]
         part["socketLocal"] = local
         part["mountedOn"] = "socket:" + socket_name
+        if native_dashboard_socket:
+            part["socketLateralCentered"] = True
+        else:
+            part.pop("socketLateralCentered", None)
         moved.append(key)
         kept_parts.append(part)
     manifest["parts"] = kept_parts
