@@ -118,6 +118,13 @@ const characterVehicleId = params.get("characterVehicle");
 let vehicle = params.get("vehicle") || "boxy";
 let sourceConfig = null;
 const syncMode = params.has("sync");
+const embedMode = params.has("embed");
+function notifyEmbed(type, extra = {}) {
+  if (!embedMode || window.parent === window) return;
+  window.parent.postMessage({
+    source: "amc-mt-viewer", type, id: workshopId, ...extra,
+  }, location.origin);
+}
 const plainMode = params.has("plain");
 if (params.get("ui") === "0") document.body.classList.add("nohud");
 
@@ -1227,10 +1234,13 @@ try { await load(); }
 catch (e) {
   dismissLoadingWave();
   statusEl.textContent = "load failed";
+  notifyEmbed("error", { message: String(e?.message || e) });
   throw e;
 }
 // give textures a beat to decode before the single frame in sync mode
 await new Promise(r => setTimeout(r, 350));
+if (!syncMode) render();
+notifyEmbed("ready", { configHash: sourceConfig?.source?.configHash || null });
 if (syncMode) {
   render();
   window.__syncFrame = { rendered: true, at: performance.now() };
