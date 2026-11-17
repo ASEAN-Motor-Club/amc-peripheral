@@ -16,8 +16,9 @@
     }
   };
   window.setTimeout(() => {
-    if (!ready) {
-      showFallback("Interactive 3D is unavailable or still loading; showing the static preview.");
+    if (!ready && status) {
+      status.textContent = "Still loading 3D…";
+      status.hidden = false;
     }
   }, 20000);
 
