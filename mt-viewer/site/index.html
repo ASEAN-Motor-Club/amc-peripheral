@@ -81,6 +81,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { DECAL_PROJECTION_GLSL, decalFallbackSlots } from "./js/decal-projection.js?v=7";
 import { ownerColorForSlot } from "./js/owner-paint.js?v=3";
 import { selectedBodyVariant, isBodyMaterialSlot } from "./js/body-material.js?v=2";
+import { spotlightTarget } from "./js/attachment-lights.js?v=1";
 
 const params = new URLSearchParams(location.search);
 const workshopId = params.get("workshop");
@@ -723,7 +724,6 @@ async function load() {
             const outer = THREE.MathUtils.degToRad(ld.outerConeAngle);
             const penumbra = ld.outerConeAngle > 0 ? THREE.MathUtils.clamp(1 - ld.innerConeAngle / ld.outerConeAngle, 0, 1) : 0;
             light = new THREE.SpotLight(color, ld.intensity, ld.attenuationRadius || 0, outer, penumbra, 2);
-            light.target.position.set(1, 0, 0); // UE local +X after the align rotation below.
             group.add(light.target);
             light.userData.sourceLumens = ld.sourceIntensity;
           } else {
@@ -734,6 +734,10 @@ async function load() {
           // UE lights emit along local +X; Three lights emit along -Z.
           const align = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2);
           light.quaternion.fromArray(ld.rotation).multiply(align);
+          if (light.isSpotLight) {
+            // Three.js aims spotlights at target.position; rotating the light alone has no effect.
+            light.target.position.fromArray(spotlightTarget(light.position.toArray(), light.quaternion.toArray()));
+          }
           light.castShadow = ld.castShadows;
           light.userData.isAttachmentLight = true;
           light.userData.attachmentKey = part.key;
