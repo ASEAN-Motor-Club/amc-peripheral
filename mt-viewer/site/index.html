@@ -372,7 +372,7 @@ function indexPaintSlots() {
   const bodyMesh = slotMesh["Body"] ? "Body"
     : Object.keys(slotMesh).reduce((a, b) => ((slotMesh[a] || []).length >= (slotMesh[b] || []).length ? a : b));
   const pool = bodyMesh ? slotMesh[bodyMesh] : Object.keys(slotDefs);
-  const aiReplacements = new Set(replacedAiBodySlots(manifest.bodyMaterials, sourceConfig?.paint?.bodyMaterialIndex));
+  const aiReplacements = new Set(replacedAiBodySlots(window.__viewer?.manifest?.bodyMaterials, sourceConfig?.paint?.bodyMaterialIndex));
   const cand = pool.filter(s => {
     const d = slotDefs[s] || {};
     return !d.map && !colourKeys.includes(s) && (aiReplacements.has(s) || /M_Body|M_Palette/i.test(d.materialName || ""));
