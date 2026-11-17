@@ -926,7 +926,7 @@ async function load() {
     try {
       [idx, cat] = await Promise.all([
         fetch("decals/vehicles.json?v=2").then(r => r.json()),
-        fetch("decals/decals.json?v=2").then(r => r.json()),
+        fetch("decals/decals.json?v=3").then(r => r.json()),
       ]);
     } catch (e) { info.step = "fetch-failed:" + e.message; return; }
     let rec = idx.vehicles[vehicle] || Object.values(idx.vehicles).find(v => v.slug === vehicle);

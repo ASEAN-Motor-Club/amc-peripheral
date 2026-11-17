@@ -1362,6 +1362,14 @@
 "flags": 0
 },
 {
+"key": "Numbers_01_036-number_3",
+"category": "Numbers_01",
+"name": "036-number_3",
+"texture": "Materials/Decal/DecalTextures/Numbers_01/036-number_3",
+"cost": 100,
+"flags": 0
+},
+{
 "key": "Numbers_01_037-thirty_nine",
 "category": "Numbers_01",
 "name": "037-thirty_nine",
