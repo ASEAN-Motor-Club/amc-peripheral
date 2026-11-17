@@ -500,6 +500,29 @@ def component_socket_names(exports):
     return sockets
 
 
+def apply_native_hub_mounts(parts):
+    """Resolve native motorcycle hubs that have no StaticMesh socket sidecar.
+
+    Zero's FrontRodHub is created by native vehicle code at Wheel0. Its fork mesh
+    also carries a 0.01 authoring-unit compensation, but CUE4Parse has already
+    converted that mesh to metres, so retaining the compensation shrinks it twice.
+    """
+    wheel = next((part for part in parts if part.get("id") == "Wheel0"), None)
+    if wheel is None:
+        return
+    for part in parts:
+        is_front_rod = part.get("attachSocket") == "FrontRodHub" or part.get("id") == "FrontArmStaticMesh_GEN_VARIABLE"
+        if not is_front_rod or part.get("mountedOn") == "native-hub:Wheel0":
+            continue
+        part["position"] = list(wheel["position"])
+        part["rotation"] = [round(v, 6) for v in q_normalize(q_mul(
+            wheel.get("rotation", [0, 0, 0, 1]), part.get("rotation", [0, 0, 0, 1])
+        ))]
+        part["sourceUnitCompensation"] = part.get("scale", [1, 1, 1])
+        part["scale"] = [1, 1, 1]
+        part["mountedOn"] = "native-hub:Wheel0"
+
+
 def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
     data = json.load(open(parsed_json_path))
     exports = data["Data"]["Exports"]
@@ -607,6 +630,8 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
         alts = ([fixed] if fixed else []) + asset_mesh_paths(uasset, m["name"]) \
              + mesh_alts(m["name"], m["path"], vehicle, model_dirs)
         m["alt"] = alts
+
+    apply_native_hub_mounts(parts)
 
     # Bolt-on panels (bonnet / bumpers / spoilers / skirts). These are authored in
     # vehicle space like the body, so they mount at the origin with no offset.
