@@ -32,22 +32,10 @@
   #hud .k { color:#8b93a7; }
   #hud .touch-hint { display:none; }
   #status { position:fixed; top:12px; right:12px; z-index:10; background:rgba(0,0,0,.62); padding:8px 12px; border-radius:8px; font-size:12px; color:#9f9; white-space:pre; }
-  #controls { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:10; display:flex; gap:8px; align-items:center; transition:opacity .2s; }
-  /* Before the model exists the controls are inert: dim them rather than hide them,
-     so the page reads as "loading", not "broken". */
-  #controls.pending { opacity:.45; pointer-events:none; }
   #status.pending { color:#ffd479; }
-  #controls button, #controls label { background:#26272e; color:#eee; border:1px solid #3d3f49; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }
-  #controls button:hover { background:#33353f; }
-  #controls button.active { background:#1d6fd1; border-color:#1d6fd1; }
-  #controls input[type=color] { width:34px; height:30px; padding:0; border:1px solid #3d3f49; border-radius:6px; background:#26272e; }
-  body.nohud #hud, body.nohud #controls, body.nohud #status { display:none; }
+  body.nohud #hud, body.nohud #status { display:none; }
 
-  /* ---- touch / small screens ------------------------------------------------
-     A phone in portrait has ~390 CSS px of width: the desktop control bar is a
-     single unwrappable row that overflowed the viewport, and the HUD sat on top
-     of the model. Give the controls the full width as a wrapped bar pinned to the
-     safe area, shrink the text, and swap mouse hints for touch ones. */
+  /* ---- touch / small screens ------------------------------------------------ */
   @media (max-width: 760px), (pointer: coarse) {
     #hud { top:8px; left:8px; padding:7px 10px; font-size:11.5px; line-height:1.4;
            max-width:60vw; border-radius:7px; }
@@ -55,21 +43,9 @@
     #hud .touch-hint { display:inline; }
     #status { top:8px; right:8px; padding:5px 8px; font-size:10.5px;
               max-width:34vw; white-space:normal; border-radius:7px; }
-    #controls { left:0; right:0; bottom:0; transform:none; width:auto;
-                justify-content:center; flex-wrap:wrap; gap:6px;
-                padding:8px 8px calc(8px + env(safe-area-inset-bottom));
-                background:linear-gradient(to top, rgba(21,22,26,.92), rgba(21,22,26,.55));
-                backdrop-filter:blur(6px); }
-    #controls button, #controls label { padding:9px 11px; font-size:12.5px; min-height:42px;
-                                       display:inline-flex; align-items:center; gap:6px; }
-    #controls input[type=color] { width:30px; height:26px; }
-    #controls select { max-width:42vw; }
   }
-  /* iPhone SE-class: the control bar would eat a third of the screen */
   @media (max-height: 520px) {
     #hud { display:none; }
-    #controls { padding:6px 8px calc(6px + env(safe-area-inset-bottom)); }
-    #controls button, #controls label { min-height:36px; padding:6px 9px; font-size:12px; }
   }
 </style>
 </head>
@@ -81,15 +57,6 @@
   <span id="meta">loading…</span>
 </div>
 <div id="status">loading…</div>
-<div id="controls">
-  <select id="vehicle"></select>
-  <label title="Body material variant (livery/decal), as listed on the vehicle CDO">livery
-    <select id="livery"></select></label>
-  <label title="Default paint variant (as the game picks on spawn)">paint
-    <select id="scheme"></select></label>
-  <label title="Custom body colour">custom <input type="color" id="paint" value="#c9302c"></label>
-  <button id="togglePlain">plain</button>
-</div>
 <script type="importmap">
 { "imports": {
     "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
@@ -468,11 +435,6 @@ function applyLivery() {
 
 async function load() {
   const loadTiming = (window.__loadTiming = { start: performance.now() });
-  // The controls are in the DOM before any data arrives, so make the page usable
-  // immediately: the vehicle list is a separate, tiny request that lands first, so
-  // you can switch models before this one has even finished streaming.
-  const ctl = document.getElementById("controls");
-  ctl.classList.add("pending");
   statusEl.classList.add("pending");
   statusEl.textContent = "loading…";
   if (workshopId || characterVehicleId) {
@@ -502,15 +464,6 @@ async function load() {
       warnings: sourceConfig.renderReport?.warnings || [],
     };
   }
-  const sel = document.getElementById("vehicle");
-  fetch("vehicles.json").then(r => r.json()).then(list => {
-    sel.innerHTML = list.map(v =>
-      `<option value="${v.slug}"${v.slug === vehicle ? " selected" : ""}>` +
-      `${v.vehicle}${v.inheritedFrom ? " (from " + v.inheritedFrom + ")" : ""}</option>`).join("");
-    sel.addEventListener("change", () => {
-      location.search = "?vehicle=" + sel.value + (syncMode ? "&sync" : "");
-    });
-  }).catch(() => sel.remove());
 
   const [manifest, table] = await Promise.all([
     fetch(`${vehicle}/${vehicle}.json?v=2`).then(r => r.json()),
@@ -1084,68 +1037,10 @@ async function load() {
   // exposed for headless probes (ray casts, section visibility) that need the three.js namespace
   window.__THREE = THREE;
 
-  // --- paint: the vehicle CDO's own default variants, plus a free colour ---
-  const liverySel = document.getElementById("livery");
-  if (!bodyVariants.length) {
-    liverySel.closest("label").remove();          // most vehicles have no list
-  } else {
-    liverySel.innerHTML = ["-1", ...bodyVariants.map((_, i) => String(i))]
-      .map(v => `<option value="${v}"${+v === liveryIndex ? " selected" : ""}>${
-        +v < 0 ? "as authored" : (bodyVariants[+v].materialName + (bodyVariants[+v].map ? "" : " (no texture)"))}</option>`)
-      .join("");
-    liverySel.addEventListener("change", () => {
-      liveryIndex = parseInt(liverySel.value, 10);
-      applyLivery();
-      render();
-    });
-  }
-
-  const schemeSel = document.getElementById("scheme");
-  const lab = idx => {
-    if (idx < 0) return "material default";
-    const sc = paints[idx] || {};
-    const keys = Object.keys(sc);
-    if (!keys.length) return `paint ${idx + 1} (none)`;
-    // Label by the paint colour, not by alpha: body slots carry alpha 0 (it is only
-    // meaningful for glass slots flagged bUseColorAlpha), so testing alpha labelled
-    // every paint on cars like the Stinger as "(none)" when the RGB was right there.
-    const k = keys.find(x => /^(Body|Palette|Shell)/i.test(x)) || keys[0];
-    const c = sc[k] || [255, 255, 255, 0];
-    const hex = "#" + c.slice(0, 3).map(v => v.toString(16).padStart(2, "0")).join("");
-    return `paint ${idx + 1} (${hex})`;
-  };
-  schemeSel.innerHTML = ["-1", ...paints.map((_, i) => String(i))]
-    .map(v => `<option value="${v}"${+v === paintIndex ? " selected" : ""}>${lab(+v)}</option>`)
-    .join("");
-  schemeSel.addEventListener("change", () => {
-    paintIndex = parseInt(schemeSel.value, 10);
-    bodyTint = null;                     // a scheme overrides the free colour
-    applyPaint();
-    render();
-  });
-
-  const paint = document.getElementById("paint");
-  paint.value = "#" + paintColor.getHexString();
-  paint.addEventListener("input", () => {
-    paintColor.set(paint.value);
-    bodyTint = paintColor.clone();
-    // custom colour paints every body slot, leaving seats/glass/lamps alone
-    for (const [k, m] of matCache) {
-      if (k.includes("|attachment:")) continue;
-      const slot = k.split("|")[0];
-      if (/^Body/i.test(slot) && /Body/i.test(slotDefs[slot]?.materialName || "M_Body")) {
-        m.color.copy(paintColor);
-      }
-    }
-    render();
-  });
-
   indexPaintSlots();     // needs the finished model to know each section's size
   applyPaint();
   applyLivery();
 
-  // Everything is wired and shaded: hand the controls over.
-  ctl.classList.remove("pending");
   statusEl.classList.remove("pending");
   statusEl.textContent = "vehicle ready · finishing decals…";
   render();
@@ -1173,25 +1068,6 @@ async function load() {
       body: (() => { const m = matCache.get("Body_01|false"); return m ? m.color.getHexString() : null; })(),
     });
   }
-
-  const tp = document.getElementById("togglePlain");
-  tp.addEventListener("click", () => {
-    const on = tp.classList.toggle("active");
-    root.traverse(o => {
-      if (!o.isMesh) return;
-      const cur = Array.isArray(o.material) ? o.material[0] : o.material;
-      const slot = cur.name || "unknown";
-      const def = o.userData.def || defs[slot];
-      const m = materialFor(slot, def, on, o.userData.attachmentVariant || "");
-      if (!on && o.userData.attachmentColor) {
-        m.color.setRGB(...o.userData.attachmentColor, THREE.LinearSRGBColorSpace);
-        m.emissive.setRGB(...o.userData.attachmentColor, THREE.LinearSRGBColorSpace);
-        m.emissiveIntensity = 2.0;
-      }
-      o.material = m;
-    });
-    render();
-  });
 
   render();
 }
@@ -1259,24 +1135,6 @@ if (syncMode) {
     }
     document.title += `|px=${n} mean=${n ? [r / n, g2 / n, b / n].map(v => v.toFixed(0)).join(",") : "-"}`;
     document.title += `|vp=${innerWidth}x${innerHeight} dpr=${devicePixelRatio} coarse=${COARSE ? 1 : 0} aspect=${camera.aspect.toFixed(3)}`;
-    if (params.has("layout")) {
-      const ctl = document.getElementById("controls");
-      const r2 = ctl.getBoundingClientRect();
-      const kids = [...ctl.children].map(e => {
-        const b = e.getBoundingClientRect();
-        return { tag: e.tagName.toLowerCase(), id: e.id || e.dataset.look || "", x: Math.round(b.left), r: Math.round(b.right), w: Math.round(b.width) };
-      });
-      const over = kids.filter(k => k.r > innerWidth + 0.5);
-      const box = new THREE.Box3().setFromObject(root);
-      document.title += "|LAY=" + JSON.stringify({
-        scrollW: document.documentElement.scrollWidth, innerW: innerWidth,
-        ctl: [Math.round(r2.left), Math.round(r2.right), Math.round(r2.width)],
-        rows: new Set(kids.map(k => k.r)).size, kids, over: over.length,
-        camDist: +camera.position.distanceTo(controls.target).toFixed(2),
-        ndc: window.__fit ? +window.__fit.ndc.toFixed(3) : null,
-        look: window.__fit ? window.__fit.look : null,
-      });
-    }
   }
 }
 </script>
