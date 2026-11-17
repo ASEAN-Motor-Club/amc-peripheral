@@ -99,6 +99,15 @@ def test_racers_xyz_attachment_rotators_are_roll_pitch_yaw():
     assert xyz["rotation"] != pytest.approx([0, 0, 0, 1])
 
 
+def test_partial_zero_attachment_scale_axis_is_unset():
+    scaled = convert_attachment({"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0},
+                                {"x": 1, "y": 0.8796, "z": 0})
+    assert scaled["scale"] == pytest.approx([1.0, 1.0, 0.8796])
+    hidden = convert_attachment({"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0},
+                                {"x": 0, "y": 0, "z": 0})
+    assert hidden["scale"] == [0.0, 0.0, 0.0]
+
+
 def test_unknown_attachment_is_reported_not_dropped_silently():
     raw = json.loads(zlib.decompress(_payload(attachment_known=False)))
     config = normalize_workshop(

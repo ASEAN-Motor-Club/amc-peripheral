@@ -161,6 +161,13 @@ def convert_attachment(position: Any, rotation: Any, scale: Any = None) -> dict[
         sx = sy = sz = 1.0
     else:
         sx, sy, sz = _xyz(scale, 1.0)
+        # Workshop scale triples often initialise an unused axis to 0 (e.g.
+        # (1, 0.88, 0) on item 183316). The game treats a partial zero as an
+        # unset axis, not a collapse; only an all-zero triple hides the part.
+        if sx or sy or sz:
+            sx = sx or 1.0
+            sy = sy or 1.0
+            sz = sz or 1.0
     return {
         "position": [x / 100.0, z / 100.0, -y / 100.0],
         "rotation": list(_ue_to_gltf_quat(_q_from_rotator(pitch, yaw, roll))),
