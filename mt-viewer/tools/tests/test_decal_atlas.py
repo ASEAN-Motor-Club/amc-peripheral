@@ -20,6 +20,12 @@ class DecalAtlasTests(unittest.TestCase):
         self.assertNotIn('((7.0-row)+q.y)', index)
         self.assertNotIn('((7.0-row)+qm.y)', index)
         self.assertIn('((7.0-row)+(1.0-q.y))', shader)
+    def test_projection_uses_vehicle_space_not_raw_mesh_space(self):
+        index = (Path(__file__).parents[2] / 'site' / 'index.html').read_text()
+        self.assertIn('uniform mat4 uDecalRootInverse', index)
+        self.assertIn('uDecalRootInverse * modelMatrix * vec4(position, 1.0)', index)
+        self.assertIn('mat3(uDecalRootInverse) * mat3(modelMatrix) * normal', index)
+        self.assertNotIn('vDecalLocal = position;', index)
 
 
 if __name__ == '__main__':

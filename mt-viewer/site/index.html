@@ -1009,10 +1009,11 @@ async function load() {
             uDecalRot: { value: rotArr },
             uDecalSize: { value: sizeArr },
             uDecalFlags: { value: flagArr },
+            uDecalRootInverse: { value: root.matrixWorld.clone().invert() },
             uDecalDebug: { value: params.has("dbg") ? 1 : 0 },
           });
-          sh.vertexShader = "varying vec3 vDecalLocal;\nvarying vec3 vDecalNrm;\n" + sh.vertexShader
-            .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvDecalLocal = position;\n\tvDecalNrm = normal;");
+          sh.vertexShader = "uniform mat4 uDecalRootInverse;\nvarying vec3 vDecalLocal;\nvarying vec3 vDecalNrm;\n" + sh.vertexShader
+            .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvDecalLocal = (uDecalRootInverse * modelMatrix * vec4(position, 1.0)).xyz;\n\tvDecalNrm = normalize(mat3(uDecalRootInverse) * mat3(modelMatrix) * normal);");
           sh.fragmentShader = `
             uniform sampler2D decalAtlas;
             uniform int uDecalCount;
