@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from PIL import Image
 
@@ -178,6 +179,33 @@ async def test_hidden_deleted_and_unknown_items_are_404(client):
         response = await client.get(f"/api/workshop/items/{workshop_id}")
         assert response.status == 404
         assert (await response.json())["error"]["code"] == "not_found"
+
+
+async def test_author_page_paginates_with_cursor(settings):
+    from dataclasses import replace
+
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from amc_peripheral.workshop.routes import create_app
+
+    client = TestClient(TestServer(create_app(replace(settings, page_size=1))))
+    await client.start_server()
+    try:
+        first = await client.get("/workshop/authors/11/")
+        assert first.status == 200
+        text = await first.text()
+        assert "/workshop/items/1/" in text
+        assert "/workshop/items/3/" not in text
+        match = re.search(r'href="(/workshop/authors/11/\?cursor=[^"]+)" rel="next"', text)
+        assert match, "author page should link to the next page"
+        second = await client.get(match.group(1))
+        assert second.status == 200
+        second_text = await second.text()
+        assert "/workshop/items/3/" in second_text
+        assert "/workshop/items/1/" not in second_text
+        assert 'rel="next"' not in second_text
+    finally:
+        await client.close()
 
 
 async def test_author_and_vehicle_pages(client, settings):

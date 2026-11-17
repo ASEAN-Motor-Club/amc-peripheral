@@ -12,5 +12,8 @@
   <div class="card-grid">
     {% for item in data['items'] %}{{ card(item) }}{% else %}<p class="empty">No builds found.</p>{% endfor %}
   </div>
+  <nav class="pager" aria-label="Creator pages">
+    {% if next_url %}<a href="{{ next_url }}" rel="next">Next page →</a>{% endif %}
+  </nav>
 </section>
 {% endblock %}

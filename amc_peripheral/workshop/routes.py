@@ -516,13 +516,20 @@ def create_app(
         author = await asyncio.to_thread(repository.author, account_id)
         if author is None:
             raise web.HTTPNotFound()
+        cursor = request.query.get("cursor")
         listing = await asyncio.to_thread(
             repository.list_items,
             sort="new",
             filters=ListFilters(account_id=account_id),
             limit=settings.page_size,
+            cursor=cursor,
         )
         attach_snapshots(listing["items"])
+        next_url = (
+            f"/workshop/authors/{account_id}/?cursor={listing['nextCursor']}"
+            if listing.get("nextCursor")
+            else None
+        )
         popular = await asyncio.to_thread(
             repository.list_items,
             sort="popular",
@@ -531,7 +538,7 @@ def create_app(
         )
         cover_url = await asyncio.to_thread(author_cover, account_id, popular["items"])
         return render("author.html", page="gallery", author=author, data=listing,
-                      vehicles=[],
+                      vehicles=[], next_url=next_url,
                       social_image=(f"https://www.aseanmotorclub.com{cover_url}" if cover_url else None),
                       canonical_url=f"https://www.aseanmotorclub.com/workshop/authors/{account_id}/")
 
