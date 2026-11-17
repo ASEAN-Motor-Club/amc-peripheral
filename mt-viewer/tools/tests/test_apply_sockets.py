@@ -93,6 +93,27 @@ class ConstructionScriptSocketTests(unittest.TestCase):
             'MTVehicleDoor_GEN_VARIABLE': 'Hook_6x4',
         })
 
+    def test_native_dashboard_defaults_to_steering_socket_with_mesh_local_transform(self):
+        from tools.mk_manifest import dashboard_local, dashboard_socket
+        props = {
+            'DashboardMeshLocation': {'DashboardMeshLocation': {'X': 5, 'Y': 0, 'Z': 2}},
+            'DashboardMeshRotation': {'DashboardMeshRotation': {
+                'Pitch': -5, 'Yaw': 0, 'Roll': 0,
+            }},
+        }
+        self.assertEqual(dashboard_socket(props), 'SteeringWheel')
+        loc, q, scale = dashboard_local(props)
+        self.assertEqual(loc, (5, 0, 2))
+        self.assertNotEqual(q, (0, 0, 0, 1))
+        self.assertEqual(scale, (1, 1, 1))
+
+    def test_mesh_dashboard_uses_vehicle_space_without_socket(self):
+        from tools.mk_manifest import dashboard_socket
+        self.assertIsNone(dashboard_socket({'DashboardMeshComponentName': 'Mesh'}))
+        self.assertEqual(dashboard_socket({
+            'DashboardMeshComponentName': 'SteeringWheel',
+        }), 'SteeringWheel')
+
     def test_alternate_socket_packages_use_distinct_sidecars(self):
         from tools.fetch_sockets import sidecar_path
         first = sidecar_path('/tmp/build', 'Frame', '/Game/Cars/Models/Atlas/Frame', 0)

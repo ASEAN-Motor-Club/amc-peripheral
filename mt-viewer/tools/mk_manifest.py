@@ -102,11 +102,11 @@ def vec(prop, key):
     return (float(inner.get("X", 0)), float(inner.get("Y", 0)), float(inner.get("Z", 0)))
 
 
-def rot(prop):
-    """RelativeRotation is {_StructType, RelativeRotation:{Pitch,Yaw,Roll}}."""
+def rot(prop, key="RelativeRotation"):
+    """UE rotator struct; native fields may use their own property name."""
     if not isinstance(prop, dict):
         return None
-    inner = prop.get("RelativeRotation")
+    inner = prop.get(key)
     if isinstance(inner, dict):
         return (float(inner.get("Pitch", 0)), float(inner.get("Yaw", 0)), float(inner.get("Roll", 0)))
     if isinstance(inner, list) and len(inner) == 3:
@@ -419,6 +419,26 @@ def mesh_import(props):
     return None
 
 
+def dashboard_socket(props):
+    """Native MTDashboard visuals default to the steering-wheel socket.
+
+    Vehicle-specific dashboards opt into the Body/Mesh component and are authored
+    in vehicle space. The socket name is separate from the mesh local offset.
+    """
+    component = props.get("DashboardMeshComponentName") or "SteeringWheel"
+    if component == "Mesh":
+        return None
+    return props.get("DashboardAttachSocketName") or component
+
+
+def dashboard_local(props):
+    loc = vec(props.get("DashboardMeshLocation"), "DashboardMeshLocation") or (0, 0, 0)
+    r = rot(props.get("DashboardMeshRotation"), "DashboardMeshRotation")
+    q = q_from_ue_rotator(*r) if r else (0, 0, 0, 1)
+    scale = vec(props.get("DashboardMeshScale"), "DashboardMeshScale") or (1, 1, 1)
+    return loc, q, scale
+
+
 def bolt_on_parts(vehicle, parsed_dir):
     """Bolt-on body parts the vehicle ships with: bonnet, bumpers, spoilers, skirts.
 
@@ -544,6 +564,15 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
             seen[key] = name
             meshes.append({"name": name, "path": key})
         loc, q, scl = world(e)
+        dashboard_attach = None
+        if e.get("Class") == "MTDashboard":
+            dashboard_attach = dashboard_socket(p)
+            dloc, dq, dscl = dashboard_local(p)
+            scaled_local = (dloc[0] * scl[0], dloc[1] * scl[1], dloc[2] * scl[2])
+            rotated_local = q_rotate(q, scaled_local)
+            loc = tuple(loc[i] + rotated_local[i] for i in range(3))
+            q = q_normalize(q_mul(q, dq))
+            scl = tuple(scl[i] * dscl[i] for i in range(3))
         # UE cm -> metres, axis swap (x, z, -y)
         pos_m = (loc[0] / 100.0, loc[2] / 100.0, -loc[1] / 100.0)
         q_gltf = ue_to_gltf_quat(q)
@@ -556,7 +585,9 @@ def build(parsed_json_path, vehicle, out_dir, parsed_dir=None, inherit=True):
             "rotation": [round(v, 6) for v in q_gltf],
             "scale": [round(scl[0], 5), round(scl[2], 5), round(scl[1], 5)],
         }
-        if e.get("ExportName") in socket_names:
+        if dashboard_attach:
+            part["attachSocket"] = dashboard_attach
+        elif e.get("ExportName") in socket_names:
             part["attachSocket"] = socket_names[e["ExportName"]]
         parts.append(part)
 
