@@ -20,12 +20,13 @@
     if (data.type === "ready") {
       ready = true;
       frame.hidden = false;
+      frame.setAttribute("aria-hidden", "false");
       stage.classList.add("is-interactive");
       if (status) status.hidden = true;
       return;
     }
     if (data.type === "error" && !ready) {
-      frame.hidden = true;
+      frame.setAttribute("aria-hidden", "true");
       if (status) status.textContent = "Interactive 3D could not be loaded; showing the static preview.";
     }
   });

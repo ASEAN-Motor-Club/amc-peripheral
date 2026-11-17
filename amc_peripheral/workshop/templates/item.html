@@ -22,7 +22,7 @@
         {% if snapshot and snapshot.status not in ('unsupported', 'failed_permanent') %}<div class="preview-pending" id="item-snapshot-pending"><span class="preview-spinner" aria-hidden="true"></span>Rendering preview…</div>{% endif %}
         {% endif %}
         {% if config and config.vehicle.assetAvailable %}
-        <iframe id="item-viewer-frame" src="/vehicles/index.html?workshop={{ item.id }}&amp;ui=0&amp;embed=1" title="Interactive 3D preview of the {{ item.vehicleKey|replace('_',' ') }} workshop configuration" allow="fullscreen" hidden></iframe>
+        <iframe id="item-viewer-frame" src="/vehicles/index.html?workshop={{ item.id }}&amp;ui=0&amp;embed=1" title="Interactive 3D preview of the {{ item.vehicleKey|replace('_',' ') }} workshop configuration" allow="fullscreen" aria-hidden="true"></iframe>
         <div class="viewer-embed-status" id="item-viewer-status" role="status">Loading interactive 3D…</div>
         {% endif %}
       </div>
@@ -135,7 +135,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="/workshop/static/item-viewer.js?v=2" defer></script>
+<script src="/workshop/static/item-viewer.js?v=3" defer></script>
 <script>
 (() => {
   const image = document.getElementById("item-snapshot");
