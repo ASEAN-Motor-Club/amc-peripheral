@@ -1,5 +1,7 @@
+import json
 import math
 import unittest
+from pathlib import Path
 
 from tools.attachments import attachment_to_part, component_to_part, rect_light_to_part
 
@@ -71,6 +73,29 @@ class AttachmentTransformTests(unittest.TestCase):
     def test_rect_light_requires_cooked_nits_and_area(self):
         with self.assertRaises(ValueError):
             rect_light_to_part({'Type': 'RectLightComponent', 'Properties': {'Intensity': 10}})
+
+
+class AttachmentCatalogTests(unittest.TestCase):
+    def test_two_metre_blue_and_red_variants_are_catalogued(self):
+        catalog_path = Path(__file__).parents[2] / 'site' / 'attachments' / 'catalog.json'
+        actors = json.loads(catalog_path.read_text())['actors']
+        green = actors['Attachment_LED_Strip_02']
+        for key, color, source in [
+            ('Attachment_LED_Strip_01', [0.0, 0.0, 1.0], 'led_blue_2m'),
+            ('Attachment_LED_Strip_03', [1.0, 0.0, 0.0], 'led_red_2m'),
+        ]:
+            actor = actors[key]
+            self.assertEqual(actor['components'], green['components'])
+            self.assertEqual(actor['mesh'], 'LED_Strips_50cm')
+            self.assertEqual(actor['sourceActor'], source)
+            self.assertEqual(actor['color'], color)
+            self.assertEqual(len(actor['lights']), 1)
+            light = actor['lights'][0]
+            self.assertEqual(light['color'], color)
+            self.assertEqual(light['width'], 2.0)
+            self.assertEqual(light['height'], 0.05)
+            self.assertEqual(light['intensity'], 16.0)
+            self.assertEqual(light['attenuationRadius'], 2.0)
 
 
 if __name__ == '__main__':
