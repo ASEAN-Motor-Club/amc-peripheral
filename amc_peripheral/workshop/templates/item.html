@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ item.vehicleKey|replace('_',' ') }} workshop build — ASEAN Motor Club{% endblock %}
-{% block description %}Motor Town workshop build {{ item.id }} for {{ item.vehicleKey|replace('_',' ') }}{% if item.author %} by {{ item.author }}{% endif %}.{% endblock %}
+{% block description %}Motor Town: Behind The Wheel workshop build {{ item.id }} for {{ item.vehicleKey|replace('_',' ') }}{% if item.author %} by {{ item.author }}{% endif %}.{% endblock %}
 {% block canonical %}https://www.aseanmotorclub.com/workshop/items/{{ item.id }}/{% endblock %}
 {% block content %}
 <div class="wrap detail-layout">

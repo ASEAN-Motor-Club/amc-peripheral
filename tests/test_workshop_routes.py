@@ -73,6 +73,8 @@ async def test_item_page_reports_configuration(client):
     assert response.status == 200
     text = await response.text()
     assert "Configuration" in text
+    assert "Motor Town: Behind The Wheel" in text
+    assert '<a href="/">Main site</a>' in text
     assert 'id="item-viewer-frame"' in text
     assert 'src="/vehicles/index.html?workshop=1&amp;ui=0&amp;embed=1"' in text
     assert 'id="item-viewer-fullscreen"' in text
