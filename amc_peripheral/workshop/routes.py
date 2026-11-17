@@ -17,6 +17,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .character_vehicles import CharacterVehicleRepository, CharacterVehicleUnavailable
 from .config import WorkshopSettings
+from .covers import write_author_cover
 from .payloads import (
     PayloadError,
     asset_version_for,
@@ -187,6 +188,21 @@ def create_app(
             card["snapshotStatus"] = (
                 status["status"] if status else (meta["status"] if meta else "missing")
             )
+
+    def author_cover(account_id: int, items: list[dict[str, Any]]) -> str | None:
+        jobs = {int(item["id"]): job for item in items if (job := snapshot_job(item))}
+        current = snapshots.statuses([job.cache_key for job in jobs.values()])
+        candidates = []
+        for item in items:
+            job = jobs.get(int(item["id"]))
+            if not job:
+                continue
+            snapshot = current.get(job.cache_key)
+            if snapshot and snapshot.get("status") == "ready":
+                candidates.append({**item, "snapshot": snapshot})
+        return write_author_cover(
+            account_id, candidates, settings.snapshot_root / "public"
+        )
 
     @web.middleware
     async def errors(request: web.Request, handler):
@@ -507,8 +523,16 @@ def create_app(
             limit=settings.page_size,
         )
         attach_snapshots(listing["items"])
+        popular = await asyncio.to_thread(
+            repository.list_items,
+            sort="popular",
+            filters=ListFilters(account_id=account_id),
+            limit=60,
+        )
+        cover_url = await asyncio.to_thread(author_cover, account_id, popular["items"])
         return render("author.html", page="gallery", author=author, data=listing,
                       vehicles=[],
+                      social_image=(f"https://www.aseanmotorclub.com{cover_url}" if cover_url else None),
                       canonical_url=f"https://www.aseanmotorclub.com/workshop/authors/{account_id}/")
 
     async def page_vehicle(request: web.Request) -> web.Response:

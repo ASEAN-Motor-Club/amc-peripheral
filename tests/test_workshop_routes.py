@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+from PIL import Image
+
 
 async def test_home_page_renders_without_webgl(client):
     response = await client.get("/workshop/")
@@ -255,3 +257,31 @@ async def test_health_includes_snapshot_worker_state(client):
     assert data["runId"] == 7
     assert data["snapshots"]["queueDepth"] == 0
     assert data["snapshots"]["artifactBytes"] == 0
+
+
+async def test_author_page_publishes_render_collage_metadata(client, settings):
+    from amc_peripheral.workshop.snapshots import SnapshotStore
+
+    queued = await (await client.get("/api/workshop/items/1/snapshot")).json()
+    artifact = settings.snapshot_root / "public/items/aa/author-cover-source.webp"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (960, 540), (20, 80, 140)).save(artifact)
+    SnapshotStore(settings.site_db).complete(
+        queued["key"], artifact_path="items/aa/author-cover-source.webp",
+        width=960, height=540, size=artifact.stat().st_size, sha256="f" * 64,
+    )
+
+    response = await client.get("/workshop/authors/11/")
+    assert response.status == 200
+    text = await response.text()
+    assert 'property="og:image" content="https://www.aseanmotorclub.com/workshop/snapshots/authors/11-' in text
+    assert 'property="og:image:width" content="1200"' in text
+    assert 'property="og:image:height" content="630"' in text
+    assert 'name="twitter:card" content="summary_large_image"' in text
+
+    marker = "https://www.aseanmotorclub.com"
+    url = text.split('property="og:image" content="', 1)[1].split('"', 1)[0]
+    cover = await client.get(url.removeprefix(marker))
+    assert cover.status == 200
+    assert cover.headers["Content-Type"] == "image/webp"
+    assert len(await cover.read()) > 100
