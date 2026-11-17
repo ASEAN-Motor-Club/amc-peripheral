@@ -30,6 +30,19 @@ class SteeringWheelSocketTests(unittest.TestCase):
         self.assertEqual([p['id'] for p in result['parts']], ['Body', 'SteeringWheel'])
         self.assertEqual(result['parts'][1]['hidden'], True)
 
+    def test_native_dashboard_defaults_to_steering_socket(self):
+        manifest = {'parts': [{
+            'id': 'Dashboard', 'class': 'MTDashboard', 'mesh': 'Dashboard_01',
+            'position': [0, 0, 0], 'rotation': [0, 0, 0, 1], 'scale': [1, 1, 1],
+        }]}
+        sockets = [{'name': 'SteeringWheel', 'loc': [66.046104, -46.357258, 88.212555],
+                    'rot': [0, 0, 0], 'scale': [1, 1, 1]}]
+        result = self.run_manifest(manifest, sockets)
+        part = result['parts'][0]
+        self.assertEqual(part['position'], [0.66046, 0.88213, 0.46357])
+        self.assertEqual(part['mountedOn'], 'socket:SteeringWheel')
+        self.assertEqual(self.run_manifest(result, sockets), result)
+
     def test_non_steering_origin_part_is_preserved(self):
         part = {'id': 'ControlPanel', 'position': [0, 0, 0]}
         result = self.run_manifest({'parts': [part]})

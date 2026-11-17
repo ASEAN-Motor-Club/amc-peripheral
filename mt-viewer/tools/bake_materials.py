@@ -62,6 +62,16 @@ def first_containing(tex, needle):
     return None
 
 
+def body_material_entries(build_dir, material_rows):
+    """Preserve BodyMaterialList indices, including repeated material assets."""
+    ordered_path = os.path.join(build_dir, "body_materials.json")
+    if os.path.exists(ordered_path):
+        with open(ordered_path) as f:
+            ordered = json.load(f)
+        return [(raw, material_rows.get(raw)) for raw in ordered]
+    return list(material_rows.items())
+
+
 def main(build_dir, out_dir):
     mm_path = os.path.join(build_dir, "mesh_materials.json")
     if not os.path.exists(mm_path):
@@ -196,7 +206,12 @@ def main(build_dir, out_dir):
     # __materials__ table. The viewer offers them as a "livery" choice; the paint
     # colour is then applied on top, which is how the game stacks them.
     variants = []
-    for raw, slot in (mm.get("__materials__") or {}).items():
+    material_rows = (mm.get("__materials__") or {})
+    for source_index, (raw, slot) in enumerate(body_material_entries(build_dir, material_rows)):
+        # The game may repeat a base material whose parameters are not separately
+        # extracted. Keep an untextured variant at the authored index.
+        if slot is None:
+            slot = {}
         if not isinstance(slot, dict):
             continue
         tex = slot.get("textures") or {}
@@ -206,7 +221,7 @@ def main(build_dir, out_dir):
         scal = slot.get("scalars") or {}
         name = os.path.basename(slot.get("material") or raw).split(".")[0]
         v = {
-            "index": len(variants),
+            "index": source_index,
             "material": raw,
             "materialName": name,
             "baseColor": [1.0, 1.0, 1.0],

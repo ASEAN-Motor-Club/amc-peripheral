@@ -109,7 +109,11 @@ def main():
             continue
         explicit_socket = part.get("attachSocket")
         slot = part.get("partSlot")
-        socket_name = explicit_socket or (slot if slot in sockets else key)
+        native_dashboard_socket = (
+            part.get("class") == "MTDashboard" and not explicit_socket
+            and "SteeringWheel" in sockets
+        )
+        socket_name = explicit_socket or ("SteeringWheel" if native_dashboard_socket else (slot if slot in sockets else key))
         sock = sockets.get(socket_name)
         at_origin = all(abs(v) < 1e-6 for v in part.get("position", [0, 0, 0]))
         already_mounted = str(part.get("mountedOn") or "") == "socket:" + str(socket_name)
