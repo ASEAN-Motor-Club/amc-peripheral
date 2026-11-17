@@ -78,7 +78,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { DECAL_PROJECTION_GLSL, decalFallbackSlots } from "./js/decal-projection.js?v=7";
+import { DECAL_PROJECTION_GLSL, decalFallbackSlots } from "./js/decal-projection.js?v=10";
 import { ownerColorForSlot } from "./js/owner-paint.js?v=3";
 import { selectedBodyVariant, isBodyMaterialSlot } from "./js/body-material.js?v=2";
 import { spotlightTarget } from "./js/attachment-lights.js?v=1";
@@ -1002,19 +1002,18 @@ async function load() {
     }
 
     let patched = 0;
-    const wholeSize = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3());
-    const minSpan = Math.max(wholeSize.x, wholeSize.z) * 0.25;
-    const fallbackSlots = decalFallbackSlots(slots, colorSlots, extraPaintSlot);
-    const shellName = n => slots.includes(n) || /^(Palette|Shell)/i.test(n || "")
-      || slots.some(sl => (n || "").startsWith(sl)) || fallbackSlots.has(n);
+    const fallbackSlots = decalFallbackSlots(slots, slotDefs, bodyVariants, liveryIndex);
+    const eligibleSlots = new Set(slots.length ? slots : fallbackSlots);
+    info.eligibility = slots.length ? "game-decal-slots" : "selected-body-material";
+    info.eligibleSlots = [...eligibleSlots];
+    info.targets = [];
+    if (!eligibleSlots.size) { info.step = "no-eligible-slots"; render(); return; }
 
     root.traverse(o => {
-      if (!o.isMesh || o.userData.isAttachment || !o.material || !o.geometry.attributes.uv1) return;
-      const bb = new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3());
-      if (Math.max(bb.x, bb.y, bb.z) < minSpan) return;
+      if (!o.isMesh || o.userData.isAttachment || !o.material) return;
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       const swap = mats.map(m => {
-        if (!shellName(m.name)) return m;
+        if (!eligibleSlots.has(m.name)) return m;
         const c = m.clone();
         c.customProgramCacheKey = () => "mt-decal-shader-5020";
         c.onBeforeCompile = sh => {
@@ -1078,6 +1077,7 @@ async function load() {
         };
         c.needsUpdate = true;
         patched++;
+        info.targets.push({ slot: o.userData.slot, material: m.name });
         return c;
       });
       if (swap.some((m, i) => m !== mats[i])) o.material = Array.isArray(o.material) ? swap : swap[0];

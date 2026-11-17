@@ -3,12 +3,21 @@
 
 const TAU = 2 * Math.PI;
 
-export function decalFallbackSlots(decalSlots, colorSlots, extraPaintSlots) {
+export function decalFallbackSlots(decalSlots, slotDefs, bodyVariants, selectedIndex) {
   if (decalSlots.length) return new Set();
-  return new Set([
-    ...Object.keys(extraPaintSlots),
-    ...Object.entries(colorSlots).filter(([, def]) => !def.useAlpha).map(([key]) => key),
-  ]);
+  const allVariants = bodyVariants || [];
+  const selected = allVariants.find((variant, position) => (variant.index ?? position) === selectedIndex);
+  if (allVariants.length && !selected && selectedIndex >= 0) return new Set();
+  // Without BodyMaterialList metadata, Body/Shell is still a conservative
+  // fallback; Palette requires positive palette-body evidence.
+  const variants = selected ? [selected] : allVariants;
+  const assetName = value => (value || '').split('/').pop().split('.')[0].toLowerCase();
+  const materials = variants.map(v => assetName(v.materialName || v.material));
+  const paletteBody = materials.some(name => /palette|polygoncity/.test(name));
+  return new Set(Object.keys(slotDefs || {}).filter(slot =>
+    /^(Body|Shell)/i.test(slot) ||
+    (paletteBody && /^(Palette|Mat_PolygonCity_Texture)/i.test(slot))
+  ));
 }
 
 export function decalAtlasUv(layerIndex, q) {

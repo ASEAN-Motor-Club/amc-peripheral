@@ -24,6 +24,14 @@ class StreamingPerformanceSourceTests(unittest.TestCase):
         stage = self.index[start:end]
         self.assertNotIn('compileAsync', stage)
         self.assertNotIn('render();', stage)
+    def test_decal_eligibility_uses_slots_not_mesh_heuristics(self):
+        source = self.index
+        self.assertIn('eligibleSlots.has(m.name)', source)
+        self.assertIn('decalFallbackSlots(slots, slotDefs, bodyVariants, liveryIndex)', source)
+        self.assertNotIn('const minSpan', source)
+        self.assertNotIn('o.geometry.attributes.uv1', source)
+        self.assertNotIn('const shellName', source)
+
     def test_single_subtle_environment_for_metals(self):
         source = self.index
         self.assertIn('new THREE.PMREMGenerator(renderer)', source)
