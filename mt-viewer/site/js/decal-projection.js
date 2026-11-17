@@ -8,15 +8,13 @@ export function decalFallbackSlots(decalSlots, slotDefs, bodyVariants, selectedI
   const allVariants = bodyVariants || [];
   const selected = allVariants.find((variant, position) => (variant.index ?? position) === selectedIndex);
   if (allVariants.length && !selected && selectedIndex >= 0) return new Set();
-  // Without BodyMaterialList metadata, Body/Shell is still a conservative
-  // fallback; Palette requires positive palette-body evidence.
-  const variants = selected ? [selected] : allVariants;
-  const assetName = value => (value || '').split('/').pop().split('.')[0].toLowerCase();
-  const materials = variants.map(v => assetName(v.materialName || v.material));
-  const paletteBody = materials.some(name => /palette|polygoncity/.test(name));
+  // Without BodyMaterialList metadata, Body/Shell is a conservative fallback. Palette
+  // slots must also count whenever they exist: on Vista the textured shell is
+  // Palette/PolygonCity (8,038 tris) while Body_01 is only 1,912, so restricting
+  // decals to Body_01 silently dropped 24 of 30 layers on item 258880.
   return new Set(Object.keys(slotDefs || {}).filter(slot =>
     /^(Body|Shell)/i.test(slot) ||
-    (paletteBody && /^(Palette|Mat_PolygonCity_Texture)/i.test(slot))
+    /^(Palette|Mat_PolygonCity_Texture|PolygonCityPallete)/i.test(slot)
   ));
 }
 

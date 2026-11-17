@@ -40,15 +40,19 @@ const slotDefs = {
   Seat_01: { materialName: 'MotorTown/Content/Cars/Materials/M_Seat' },
   Seat_02: { materialName: 'MotorTown/Content/Cars/Materials/M_Seat' },
   Palette: { materialName: 'MotorTown/Content/Cars/Materials/M_Palette' },
+  Mat_PolygonCity_Texture_01_A_001: { materialName: 'MotorTown/Content/Cars/Materials/MI_PolygonCity_01_A' },
 };
 const bodyVariants = [
   { index: 0, material: 'MotorTown/Content/Cars/Materials/Body/M_Body/M_Body' },
   { index: 1, material: 'MotorTown/Content/Cars/Materials/M_Palette' },
 ];
-assert.deepEqual([...decalFallbackSlots([], slotDefs, bodyVariants, 0)], ['Body_01']);
-assert.deepEqual([...decalFallbackSlots([], slotDefs, bodyVariants, -1)].sort(), ['Body_01', 'Palette']);
+assert.deepEqual([...decalFallbackSlots([], slotDefs, bodyVariants, 0)].sort(),
+  ['Body_01', 'Mat_PolygonCity_Texture_01_A_001', 'Palette']);
+assert.deepEqual([...decalFallbackSlots([], slotDefs, bodyVariants, -1)].sort(),
+  ['Body_01', 'Mat_PolygonCity_Texture_01_A_001', 'Palette']);
 assert.equal(decalFallbackSlots([], slotDefs, bodyVariants, 4).size, 0);
-assert.deepEqual([...decalFallbackSlots([], slotDefs, [], -1)], ['Body_01']);
+assert.deepEqual([...decalFallbackSlots([], slotDefs, [], -1)].sort(),
+  ['Body_01', 'Mat_PolygonCity_Texture_01_A_001', 'Palette']);
 assert.equal(decalFallbackSlots(['CargoBed_01'], slotDefs, bodyVariants, 0).size, 0);
 
 for (const token of ['255.0', 'PositionX', 'mtDecalPrimaryUv', 'mtDecalMirrorUv', 'mtDecalVisibility'])
