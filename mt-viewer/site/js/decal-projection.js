@@ -11,6 +11,14 @@ export function decalFallbackSlots(decalSlots, colorSlots, extraPaintSlots) {
   ]);
 }
 
+export function decalAtlasUv(layerIndex, q) {
+  const col = layerIndex % 8;
+  const row = Math.floor(layerIndex / 8);
+  // Projection q is correct. Only the image V convention is inverted between
+  // the game textures and the top-to-bottom canvas atlas (flipY=true).
+  return [(col + q[0]) / 8, ((7 - row) + (1 - q[1])) / 8];
+}
+
 function axis(yaw, pitch) {
   const a = TAU * (pitch + 0.25) / 2;
   return [Math.cos(TAU*yaw)*Math.cos(a), Math.sin(TAU*yaw)*Math.cos(a), Math.sin(a)];
@@ -112,6 +120,9 @@ float mtDecalVisibility(vec3 p, vec3 n, vec3 turns, int flags, bool mirrored) {
   float backface = (flags & 8) != 0 ? 1.0 : 0.0;
   return (1.0 + opposite*(clamp(dot(p, c), 0.0, 1.0)-1.0))
        * (1.0 + backface*(clamp(dot(n, c), 0.0, 1.0)-1.0));
+}
+vec2 mtDecalAtlasUv(float col, float row, vec2 q) {
+  return vec2((col+q.x)/8.0, ((7.0-row)+(1.0-q.y))/8.0);
 }
 float mtDecalEdge(float u) {
   return clamp((1.0 - 2.0*abs(u - 0.5))*100000.0, 0.0, 1.0);

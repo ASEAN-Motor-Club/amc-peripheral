@@ -76,7 +76,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
-import { DECAL_PROJECTION_GLSL, decalFallbackSlots } from "./js/decal-projection.js?v=6";
+import { DECAL_PROJECTION_GLSL, decalFallbackSlots } from "./js/decal-projection.js?v=7";
 import { ownerColorForSlot } from "./js/owner-paint.js?v=1";
 
 const params = new URLSearchParams(location.search);
@@ -1008,7 +1008,7 @@ async function load() {
                 float visible = mtDecalVisibility(p, n, uDecalRot[i], flags, false);
                 if (visible > 0.0 && q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
                   float col = mod(float(i), 8.0), row = floor(float(i)/8.0);
-                  vec2 auv = vec2((col+q.x)/8.0, ((7.0-row)+q.y)/8.0);
+                  vec2 auv = mtDecalAtlasUv(col, row, q);
                   vec4 dec = texture2D(decalAtlas, auv);
                   float alpha = dec.a*mtDecalEdge(q.x)*mtDecalEdge(q.y)*size.z;
                   diffuseColor.rgb = mix(diffuseColor.rgb, dec.rgb, alpha);
@@ -1018,7 +1018,7 @@ async function load() {
                   float vm = mtDecalVisibility(p, n, uDecalRot[i], flags, true);
                   if (vm > 0.0 && qm.x >= 0.0 && qm.x <= 1.0 && qm.y >= 0.0 && qm.y <= 1.0) {
                     float col = mod(float(i), 8.0), row = floor(float(i)/8.0);
-                    vec2 auv = vec2((col+qm.x)/8.0, ((7.0-row)+qm.y)/8.0);
+                    vec2 auv = mtDecalAtlasUv(col, row, qm);
                     vec4 dec = texture2D(decalAtlas, auv);
                     float alpha = dec.a*mtDecalEdge(qm.x)*mtDecalEdge(qm.y)*size.z;
                     diffuseColor.rgb = mix(diffuseColor.rgb, dec.rgb, alpha);
