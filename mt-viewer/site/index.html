@@ -553,6 +553,8 @@ async function load() {
     }
   })() : Promise.resolve();
 
+  await previewPromise;
+
   let done = 0;
   async function streamPart(part) {
     try {
