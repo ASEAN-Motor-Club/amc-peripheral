@@ -3,7 +3,7 @@ import math
 import unittest
 from pathlib import Path
 
-from tools.attachments import attachment_to_part, component_to_part, rect_light_to_part, spot_light_to_part, yaw_rotate_part
+from tools.attachments import attachment_to_part, component_to_part, rect_light_to_part, spot_light_to_part
 
 
 class AttachmentTransformTests(unittest.TestCase):
@@ -49,15 +49,6 @@ class AttachmentTransformTests(unittest.TestCase):
         expected = [0.0, 0.0, -math.sqrt(0.5), math.sqrt(0.5)]
         for got, want in zip(part['rotation'], expected):
             self.assertAlmostEqual(got, want)
-    def test_rear_sign_yaw_correction_rotates_position_and_orientation(self):
-        part = {'position': [1, 2, 0], 'rotation': [0, 0, 0, 1], 'scale': [1, 1, 1]}
-        turned = yaw_rotate_part(part, 180)
-        for got, want in zip(turned['position'], [-1, 2, 0]):
-            self.assertAlmostEqual(got, want)
-        for got, want in zip(turned['rotation'], [0, 1, 0, 0]):
-            self.assertAlmostEqual(got, want)
-        self.assertEqual(turned['scale'], [1, 1, 1])
-
     def test_blue_rect_light(self):
         component = {
             'Type': 'RectLightComponent', 'IntensityNits': 19.199999,
@@ -150,14 +141,6 @@ class AttachmentCatalogTests(unittest.TestCase):
             self.assertEqual(light['intensity'], 19.199999)
             self.assertEqual(light['attenuationRadius'], 1.5)
 
-
-    def test_rear_oversize_signs_face_away_from_vehicle(self):
-        catalog_path = Path(__file__).parents[2] / 'site' / 'attachments' / 'catalog.json'
-        actors = json.loads(catalog_path.read_text())['actors']
-        for index in range(1, 8):
-            component = actors[f'Attachment_OversizeLoad_Sign_{index}']['components'][0]
-            self.assertAlmostEqual(abs(component['rotation'][1]), 1)
-            self.assertAlmostEqual(component['rotation'][3], 0)
 
     def test_all_vanilla_light_and_oversize_actors_have_assets(self):
         root = Path(__file__).parents[2] / 'site' / 'attachments'

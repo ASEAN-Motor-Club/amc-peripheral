@@ -40,23 +40,6 @@ def convert(position, rotation, scale=None):
     }
 
 
-def yaw_rotate_part(part, degrees):
-    """Rotate an actor-local part around glTF Y (UE Z), including its position."""
-    import math
-    angle = math.radians(degrees)
-    c, s = math.cos(angle), math.sin(angle)
-    x, y, z = part['position']
-    qx, qy, qz, qw = part['rotation']
-    hy, cw = math.sin(angle / 2), math.cos(angle / 2)
-    return {
-        **part,
-        'position': [c * x + s * z, y, -s * x + c * z],
-        # correction * source quaternion
-        'rotation': [cw * qx + hy * qz, cw * qy + hy * qw,
-                     cw * qz - hy * qx, cw * qw - hy * qy],
-    }
-
-
 def attachment_to_part(record):
     vectors = record.get('vectors', record.get('VectorValues', []))
     strings = record.get('strings', record.get('StringValues', []))

@@ -11,7 +11,7 @@ import math
 import shutil
 from pathlib import Path
 
-from tools.attachments import component_to_part, spot_light_to_part, yaw_rotate_part
+from tools.attachments import component_to_part, spot_light_to_part
 
 LIGHT_ACTORS = {
     **{f'Attachment_Light_{i:02d}': f'Light_{i:02d}' for i in range(1, 9)},
@@ -120,12 +120,6 @@ def main():
                 lights.append(spot_light_to_part(obj))
         if not components:
             raise RuntimeError(f'{key}: no mesh components in {source}')
-
-        if key.startswith('Attachment_OversizeLoad_Sign_'):
-            # Rear-sign meshes are authored with the printed face toward +X.
-            # Rear attachments must present that face toward -X, away from the vehicle.
-            components = [yaw_rotate_part(component, 180) for component in components]
-            lights = [yaw_rotate_part(light, 180) for light in lights]
 
         first_mesh = components[0]['mesh']
         color = lights[0]['color'] if lights else [1.0, 1.0, 1.0]
