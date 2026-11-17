@@ -520,18 +520,15 @@ async function load() {
     frameBox(b);
     alignArena(b);
   }
-  // Load the biggest GLBs first, three at a time. Manifest order is blueprint
-  // order — a wheel can easily be part 1 — so sequential loading shows you a
-  // steering wheel for two seconds and nothing else. Body/chassis are the largest
-  // files, so sorting by Content-Length puts the silhouette on screen almost
-  // immediately and the trim fills in around it.
+  // Start downloads immediately. A previous Content-Length HEAD pass added a full
+  // network round-trip before even the body could start on high-latency phones.
+  // Prefer staged byte sizes when present; otherwise prioritize the silhouette
+  // from manifest metadata, then wheels, then trim. Six workers fill in the rest.
   const parts = visibleParts.slice();
-  const sizes = await Promise.all(parts.map(p =>
-    fetch(`${vehicle}/glb/${p.glb}`, { method: "HEAD" })
-      .then(r => +(r.headers.get("content-length") || 0)).catch(() => 0)));
-  parts.forEach((p, i) => { p.bytes = sizes[i]; });
-  parts.sort((a, b) => (b.bytes || 0) - (a.bytes || 0));
-  window.__order = parts.map(p => p.mesh + "=" + p.bytes);
+  const priority = p => p.bytes || (/^(Body|Frame|Cab|Chassis)$/i.test(p.mesh) ? 1e9 :
+    (/Wheel/i.test(p.class || p.id) ? 1e6 : 0));
+  parts.sort((a, b) => priority(b) - priority(a));
+  window.__order = parts.map(p => p.mesh + "=" + (p.bytes || priority(p)));
 
   let done = 0;
   async function streamPart(part) {
@@ -731,6 +728,9 @@ async function load() {
   ]);
   loadTiming.baseReady = performance.now();
   loadTiming.baseDrawCalls = renderer.info.render.calls;
+  // The base vehicle is usable now. Do not make embedded pages wait for rect
+  // lights and decal shader variants before reporting their first usable frame.
+  notifyEmbed("ready", { stage: "base", configHash: sourceConfig?.source?.configHash || null });
   await streamAttachments();
   loadTiming.attachments = performance.now();
 
@@ -1116,7 +1116,7 @@ catch (e) {
 // give textures a beat to decode before the single frame in sync mode
 await new Promise(r => setTimeout(r, 350));
 if (!syncMode) render();
-notifyEmbed("ready", { configHash: sourceConfig?.source?.configHash || null });
+notifyEmbed("ready", { stage: "complete", configHash: sourceConfig?.source?.configHash || null });
 if (syncMode) {
   render();
   window.__syncFrame = { rendered: true, at: performance.now() };
