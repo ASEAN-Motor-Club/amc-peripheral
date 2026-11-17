@@ -35,6 +35,20 @@ class AttachmentTransformTests(unittest.TestCase):
         ]}
         self.assertEqual(attachment_to_part(record)['scale'], [2, 4, 3])
 
+    def test_partial_zero_scale_axis_is_unset_not_collapsed(self):
+        record = {'slot': '1', 'strings': ['Attachment_X'], 'vectors': [
+            {'X': 0, 'Y': 0, 'Z': 0}, {'X': 0, 'Y': 0, 'Z': 0},
+            {'X': 1, 'Y': 0.88, 'Z': 0},
+        ]}
+        self.assertEqual(attachment_to_part(record)['scale'], [1, 1, 0.88])
+
+    def test_all_zero_scale_is_preserved_as_hidden(self):
+        record = {'slot': '1', 'strings': ['Attachment_X'], 'vectors': [
+            {'X': 0, 'Y': 0, 'Z': 0}, {'X': 0, 'Y': 0, 'Z': 0},
+            {'X': 0, 'Y': 0, 'Z': 0},
+        ]}
+        self.assertEqual(attachment_to_part(record)['scale'], [0, 0, 0])
+
     def test_actor_component_named_rotator(self):
         component = {
             'Name': 'LED1_GEN_VARIABLE',

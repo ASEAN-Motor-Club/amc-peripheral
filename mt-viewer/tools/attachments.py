@@ -30,9 +30,14 @@ def convert(position, rotation, scale=None):
         yaw = float(rotation.get('Yaw', rotation.get('yaw', 0.0)))
     else:
         roll, pitch, yaw = xyz(rotation)
-    # Preserve source scale verbatim: some owned configs intentionally contain
-    # zero-scale axes (hidden attachments); normalising them would make them visible.
+    # Workshop configs commonly leave an unused scale axis at 0 (e.g. (1, 0.88, 0)).
+    # An all-zero triple is an intentional hide; a partial zero is an unset axis and
+    # must not collapse the mesh to degenerate black geometry.
     sx, sy, sz = xyz(scale, 1.0) if scale is not None else (1.0, 1.0, 1.0)
+    if sx or sy or sz:
+        sx = sx or 1.0
+        sy = sy or 1.0
+        sz = sz or 1.0
     return {
         'position': [x / 100.0, z / 100.0, -y / 100.0],
         'rotation': list(ue_to_gltf_quat(rotator_quat(pitch, yaw, roll))),
