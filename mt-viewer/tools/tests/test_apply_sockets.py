@@ -82,6 +82,29 @@ class SteeringWheelSocketTests(unittest.TestCase):
         self.assertEqual(part['mountedOn'], 'socket:RearWing')
 
 
+    def test_native_steering_preserves_small_socket_local_offset(self):
+        part = {
+            'id': 'SteeringWheel', 'mesh': 'Large_1Spoke_01',
+            'position': [-0.02, 0, 0], 'rotation': [0, 0, 0, 1],
+            'scale': [1, 1, 1],
+        }
+        result = self.run_manifest({'parts': [part]}, [{
+            'name': 'SteeringWheel', 'loc': [500, 0, 0], 'rot': [0, 0, 0], 'scale': [1, 1, 1],
+        }])['parts'][0]
+        self.assertAlmostEqual(result['position'][0], 4.98)
+        self.assertEqual(result['socketLocal']['position'], [-0.02, 0, 0])
+        self.assertEqual(result['mountedOn'], 'socket:SteeringWheel')
+
+    def test_vehicle_space_steering_is_not_snapped_twice(self):
+        part = {
+            'id': 'SteeringWheel', 'mesh': 'SteeringWheel',
+            'position': [1.5, 0.9, 0], 'rotation': [0, 0, 0, 1],
+            'scale': [1, 1, 1],
+        }
+        result = self.run_manifest({'parts': [part]})['parts'][0]
+        self.assertEqual(result['position'], [1.5, 0.9, 0])
+        self.assertNotIn('mountedOn', result)
+
     def test_zero_handlebar_stays_in_authored_vehicle_space(self):
         part = {
             'id': 'SteeringWheel', 'mesh': 'Handlebar',

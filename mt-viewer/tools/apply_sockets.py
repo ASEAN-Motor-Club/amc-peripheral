@@ -125,9 +125,13 @@ def main():
             continue
         if key == "SteeringWheel":
             part.pop("hidden", None)
-        # An SCS AttachToName is authoritative even with a local offset. Exact-id
-        # and partSlot mounts retain the old origin-only guard for explicit BP mounts.
-        if not explicit_socket and not (at_origin or already_mounted):
+        # An SCS AttachToName is authoritative. Native steering meshes may also
+        # carry a small local offset from their namesake socket; large offsets are
+        # vehicle-space geometry and must not be snapped a second time.
+        steering_local_offset = key == "SteeringWheel" and all(
+            abs(v) <= 0.1 for v in part.get("position", [0, 0, 0])
+        )
+        if not explicit_socket and not (at_origin or steering_local_offset or already_mounted):
             kept_parts.append(part)
             continue
         if already_mounted:
