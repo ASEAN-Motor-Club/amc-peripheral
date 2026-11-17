@@ -3,7 +3,7 @@ import math
 import unittest
 from pathlib import Path
 
-from tools.attachments import actor_root_rotation, attachment_to_part, component_to_part, rect_light_to_part, spot_light_to_part
+from tools.attachments import attachment_to_part, component_to_part, rect_light_to_part, spot_light_to_part
 
 
 class AttachmentTransformTests(unittest.TestCase):
@@ -34,16 +34,6 @@ class AttachmentTransformTests(unittest.TestCase):
             {'X': 2, 'Y': 3, 'Z': 4},
         ]}
         self.assertEqual(attachment_to_part(record)['scale'], [2, 4, 3])
-
-    def test_bidirectional_outward_lights_preserve_actor_basis(self):
-        lights = [
-            {'position': [0.065, 0, 0.5], 'rotation': [0, 0, 0, 1]},
-            {'position': [-0.065, 0, 0.5], 'rotation': [0, 1, 0, 0]},
-        ]
-        self.assertEqual(actor_root_rotation(lights), [0, 0, 0, 1])
-        self.assertEqual(actor_root_rotation(lights[:1]), [0, 1, 0, 0])
-        inward = [dict(light, position=[-light['position'][0], 0, 0.5]) for light in lights]
-        self.assertEqual(actor_root_rotation(inward), [0, 1, 0, 0])
 
     def test_actor_component_named_rotator(self):
         component = {

@@ -40,25 +40,6 @@ def convert(position, rotation, scale=None):
     }
 
 
-def actor_root_rotation(lights):
-    """Preserve authored bases for bidirectional lights that point outward.
-
-    Other attachment meshes retain the catalogue's 180-degree glTF basis
-    correction. The outward-pair rule is derived from component positions and
-    rotations, not vehicle or item IDs.
-    """
-    if len(lights) >= 2:
-        outward = []
-        for light in lights:
-            x, y, z, w = light['rotation']
-            direction_x = 1.0 - 2.0 * (y * y + z * z)
-            position_x = light['position'][0]
-            outward.append(abs(direction_x) > 0.99 and direction_x * position_x > 0.001)
-        if all(outward):
-            return [0.0, 0.0, 0.0, 1.0]
-    return [0.0, 1.0, 0.0, 0.0]
-
-
 def attachment_to_part(record):
     vectors = record.get('vectors', record.get('VectorValues', []))
     strings = record.get('strings', record.get('StringValues', []))

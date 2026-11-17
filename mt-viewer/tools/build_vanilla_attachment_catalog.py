@@ -11,7 +11,7 @@ import math
 import shutil
 from pathlib import Path
 
-from tools.attachments import actor_root_rotation, component_to_part, spot_light_to_part
+from tools.attachments import component_to_part, spot_light_to_part
 
 LIGHT_ACTORS = {
     **{f'Attachment_Light_{i:02d}': f'Light_{i:02d}' for i in range(1, 9)},
@@ -127,7 +127,6 @@ def main():
             'mesh': first_mesh,
             'color': color,
             'sourceActor': source_name.lower(),
-            'rootRotation': actor_root_rotation(lights),
             'components': components,
             'lights': lights,
         }
@@ -155,7 +154,7 @@ def main():
     for texture in (args.materials / 'tex').glob('*.png'):
         shutil.copy2(texture, texture_dir / texture.name)
     catalog['actors'] = dict(sorted(catalog['actors'].items()))
-    catalog['version'] = 4
+    catalog['version'] = 5
     material_table['version'] = 2
     catalog_path.write_text(json.dumps(catalog, indent=1) + '\n')
     materials_path.write_text(json.dumps(material_table, indent=1) + '\n')

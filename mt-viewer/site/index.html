@@ -82,7 +82,7 @@ import { DECAL_PROJECTION_GLSL, decalFallbackSlots } from "./js/decal-projection
 import { ownerColorForSlot } from "./js/owner-paint.js?v=3";
 import { selectedBodyVariant, isBodyMaterialSlot } from "./js/body-material.js?v=2";
 import { spotlightTarget } from "./js/attachment-lights.js?v=1";
-import { attachmentRootRotation } from "./js/attachment-root.js?v=2";
+import { attachmentRootRotation } from "./js/attachment-root.js?v=3";
 
 const params = new URLSearchParams(location.search);
 const workshopId = params.get("workshop");
@@ -633,7 +633,7 @@ async function load() {
     let catalogue, owners, attachmentTable;
     try {
       [catalogue, owners, attachmentTable] = await Promise.all([
-        fetch("attachments/catalog.json?v=4").then(r => r.json()),
+        fetch("attachments/catalog.json?v=5").then(r => r.json()),
         fetch("attachments/vehicles.json?v=1").then(r => r.json()),
         fetch("attachments/materials.json?v=2").then(r => r.json()),
       ]);
@@ -679,7 +679,7 @@ async function load() {
       group.name = `Attachment_${part.slot}`;
       group.userData.attachmentKey = part.key;
       group.position.fromArray(part.position);
-      group.quaternion.fromArray(attachmentRootRotation(part.rotation, actor.rootRotation));
+      group.quaternion.fromArray(attachmentRootRotation(part.rotation));
       group.scale.fromArray(part.scale);
       const attachmentMatrix = new THREE.Matrix4().compose(group.position, group.quaternion, group.scale);
 
