@@ -119,6 +119,9 @@ button:hover, .primary-button:hover { text-decoration: none; filter: brightness(
 .filters select { width: 100%; margin-top: 6px; padding: 9px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }
 .filters .reset { color: var(--muted); font-size: 13px; text-align: center; }
 .results-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 17px; }
+.sort-tabs { display: flex; gap: 6px; }
+.sort-tabs a { padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--muted); font-size: 13px; }
+.sort-tabs a.current { color: var(--text); border-color: #4a6590; background: var(--panel-2); font-weight: 600; }
 .results-head p { font-size: 13px; }
 .gallery-layout .card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .pager { padding: 26px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

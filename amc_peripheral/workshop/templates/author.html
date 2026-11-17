@@ -9,6 +9,15 @@
   <p class="muted">{% if author.accountId %}{{ data['items']|length }} of {{ author.uploads }} builds · {{ author.installs }} installs · {{ author.votes }} votes{% else %}{{ author.uploads }} builds{% endif %}</p>
 </section>
 <section class="wrap section">
+  {% if pagination %}
+  <div class="results-head">
+    <h2>Builds</h2>
+    <nav class="sort-tabs" aria-label="Sort builds">
+      <a href="{{ pagination.popularUrl }}"{% if pagination.sort == 'popular' %} class="current" aria-current="page"{% endif %}>Most popular</a>
+      <a href="{{ pagination.newUrl }}"{% if pagination.sort == 'new' %} class="current" aria-current="page"{% endif %}>Newest</a>
+    </nav>
+  </div>
+  {% endif %}
   <div class="card-grid">
     {% for item in data['items'] %}{{ card(item) }}{% else %}<p class="empty">No builds found.</p>{% endfor %}
   </div>

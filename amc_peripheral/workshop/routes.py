@@ -520,25 +520,32 @@ def create_app(
             page = max(1, int(request.query.get("page", "1")))
         except ValueError:
             raise QueryError("invalid_page", "page must be an integer") from None
+        sort = request.query.get("sort", "popular")
+        if sort not in {"popular", "new"}:
+            raise QueryError("invalid_sort", "sort must be popular or new")
         per_page = settings.page_size
         total = int(author["uploads"])
         total_pages = max(1, (total + per_page - 1) // per_page)
         base_url = f"/workshop/authors/{account_id}/"
+
+        def page_url(number: int) -> str:
+            params = []
+            if sort != "popular":
+                params.append(f"sort={sort}")
+            if number > 1:
+                params.append(f"page={number}")
+            return f"{base_url}?{'&'.join(params)}" if params else base_url
+
         if page > total_pages:
-            raise web.HTTPFound(
-                base_url if total_pages == 1 else f"{base_url}?page={total_pages}"
-            )
+            raise web.HTTPFound(page_url(total_pages))
         listing = await asyncio.to_thread(
             repository.list_items,
-            sort="new",
+            sort=sort,
             filters=ListFilters(account_id=account_id),
             limit=per_page,
             offset=(page - 1) * per_page,
         )
         attach_snapshots(listing["items"])
-
-        def page_url(number: int) -> str:
-            return base_url if number == 1 else f"{base_url}?page={number}"
 
         numbers = sorted({1, total_pages} | {
             n for n in range(page - 2, page + 3) if 1 <= n <= total_pages
@@ -557,6 +564,9 @@ def create_app(
             "total": total,
             "perPage": per_page,
             "pages": pages,
+            "sort": sort,
+            "popularUrl": page_url(1) if sort == "popular" else base_url,
+            "newUrl": f"{base_url}?sort=new",
             "prevUrl": page_url(page - 1) if page > 1 else None,
             "nextUrl": page_url(page + 1) if page < total_pages else None,
             "firstUrl": page_url(1),

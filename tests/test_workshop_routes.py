@@ -199,6 +199,8 @@ async def test_author_page_has_numbered_pagination(settings):
         assert 'href="/workshop/authors/11/?page=2"' in text
         assert 'rel="last"' in text
         assert "Page 1 of 2" in text
+        assert 'class="current" aria-current="page">Most popular</a>' in text
+        assert 'href="/workshop/authors/11/?sort=new"' in text
 
         second = await client.get("/workshop/authors/11/?page=2")
         assert second.status == 200
@@ -212,6 +214,14 @@ async def test_author_page_has_numbered_pagination(settings):
         beyond = await client.get("/workshop/authors/11/?page=99", allow_redirects=False)
         assert beyond.status == 302
         assert beyond.headers["Location"] == "/workshop/authors/11/?page=2"
+
+        newest = await client.get("/workshop/authors/11/?sort=new")
+        assert newest.status == 200
+        newest_text = await newest.text()
+        assert 'class="current" aria-current="page">Newest</a>' in newest_text
+        assert 'href="/workshop/authors/11/?sort=new&amp;page=2"' in newest_text
+        bad_sort = await client.get("/workshop/authors/11/?sort=bogus")
+        assert bad_sort.status == 400
     finally:
         await client.close()
 
