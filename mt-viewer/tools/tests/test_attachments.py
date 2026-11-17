@@ -98,5 +98,27 @@ class AttachmentCatalogTests(unittest.TestCase):
             self.assertEqual(light['attenuationRadius'], 2.0)
 
 
+    def test_fifty_cm_green_and_red_variants_are_catalogued(self):
+        catalog_path = Path(__file__).parents[2] / 'site' / 'attachments' / 'catalog.json'
+        actors = json.loads(catalog_path.read_text())['actors']
+        blue = actors['Attachment_LED_Strip_04']
+        for key, color, source in [
+            ('Attachment_LED_Strip_05', [0.0, 1.0, 0.0], 'led_green_50cm'),
+            ('Attachment_LED_Strip_06', [1.0, 0.0, 0.0], 'led_red_50cm'),
+        ]:
+            actor = actors[key]
+            self.assertEqual(actor['components'], blue['components'])
+            self.assertEqual(actor['mesh'], 'LED_Strips_50cm')
+            self.assertEqual(actor['sourceActor'], source)
+            self.assertEqual(actor['color'], color)
+            self.assertEqual(len(actor['lights']), 1)
+            light = actor['lights'][0]
+            self.assertEqual(light['color'], color)
+            self.assertEqual(light['width'], 0.5)
+            self.assertEqual(light['height'], 0.05)
+            self.assertEqual(light['intensity'], 19.199999)
+            self.assertEqual(light['attenuationRadius'], 1.5)
+
+
 if __name__ == '__main__':
     unittest.main()

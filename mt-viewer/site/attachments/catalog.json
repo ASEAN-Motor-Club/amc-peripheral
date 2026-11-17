@@ -407,6 +407,128 @@
     }
    ]
   },
+  "Attachment_LED_Strip_05": {
+   "mesh": "LED_Strips_50cm",
+   "color": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "components": [
+    {
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "sourceActor": "led_green_50cm",
+   "lights": [
+    {
+     "type": "rect",
+     "position": [
+      0.0,
+      -0.005,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      0.0,
+      1.0,
+      0.0
+     ],
+     "intensity": 19.199999,
+     "width": 0.5,
+     "height": 0.05,
+     "attenuationRadius": 1.5,
+     "barnDoorAngle": 90.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_LED_Strip_06": {
+   "mesh": "LED_Strips_50cm",
+   "color": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "components": [
+    {
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "sourceActor": "led_red_50cm",
+   "lights": [
+    {
+     "type": "rect",
+     "position": [
+      0.0,
+      -0.005,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.0,
+      0.0
+     ],
+     "intensity": 19.199999,
+     "width": 0.5,
+     "height": 0.05,
+     "attenuationRadius": 1.5,
+     "barnDoorAngle": 90.0,
+     "castShadows": false
+    }
+   ]
+  },
   "Attachment_LED_Strip_07": {
    "mesh": "LED_Strips_50cm",
    "color": [
