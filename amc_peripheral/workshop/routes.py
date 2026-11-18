@@ -39,7 +39,7 @@ from .claims import ClaimSynchroniser
 from .collections import CollectionError, CollectionStore
 from .community import CommunityStore
 from .config import WorkshopSettings
-from .covers import write_author_cover
+from .covers import write_author_cover, write_site_cover
 from .payloads import (
     PayloadError,
     asset_version_for,
@@ -276,6 +276,17 @@ def create_app(
         return write_author_cover(
             account_id, candidates, settings.snapshot_root / "public"
         )
+
+    def site_cover(items: list[dict[str, Any]]) -> str | None:
+        jobs = {int(item["id"]): job for item in items if (job := snapshot_job(item))}
+        current = snapshots.statuses([job.cache_key for job in jobs.values()])
+        candidates = []
+        for item in items:
+            job = jobs.get(int(item["id"]))
+            snapshot = current.get(job.cache_key) if job else None
+            if snapshot and snapshot.get("status") == "ready":
+                candidates.append({**item, "snapshot": snapshot})
+        return write_site_cover(candidates, settings.snapshot_root / "public")
 
     @web.middleware
     async def errors(request: web.Request, handler):
@@ -580,9 +591,25 @@ def create_app(
         )
         attach_snapshots(data["popular"] + data["newest"])
         attach_author_snapshots(data["authors"])
+        cover_items = await asyncio.to_thread(
+            repository.list_items,
+            sort="popular",
+            filters=ListFilters(decal=True),
+            limit=6,
+        )
+        attach_snapshots(cover_items["items"])
+        cover_url = await asyncio.to_thread(site_cover, cover_items["items"])
         tags = await asyncio.to_thread(request.app["tags"].index, limit=12)
         return render(
-            request, "home.html", page="home", data=data, stats=stats, tags=tags
+            request,
+            "home.html",
+            page="home",
+            data=data,
+            stats=stats,
+            tags=tags,
+            social_image=(
+                f"https://www.aseanmotorclub.com{cover_url}" if cover_url else None
+            ),
         )
 
     async def page_search(request: web.Request) -> web.Response:
