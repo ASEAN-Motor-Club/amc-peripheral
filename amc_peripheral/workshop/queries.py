@@ -155,6 +155,27 @@ class WorkshopRepository:
     def _connect(self) -> sqlite3.Connection:
         return _open(self.source_db)
 
+    def _copy_override(self, item_id: int) -> int | None:
+        """Return an editorially reviewed copy origin, if one is configured."""
+        if self.site_db is None:
+            return None
+        path = self.site_db.parent / "copy_overrides.json"
+        try:
+            raw = path.read_text(encoding="utf-8")
+            data = json.loads(raw)
+        except (OSError, ValueError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        value = data.get(str(item_id))
+        if not isinstance(value, (int, str)):
+            return None
+        try:
+            origin = int(value)
+        except (TypeError, ValueError):
+            return None
+        return origin if origin > 0 and origin != item_id else None
+
     def _site_home(self) -> dict[str, Any] | None:
         if self.site_db is None or not self.site_db.is_file():
             return None
@@ -322,6 +343,7 @@ class WorkshopRepository:
             "origin": None,
             "originSimilarity": None,
             "threshold": copy_threshold,
+            "manual": False,
         }
         if self.site_db is None or not self.site_db.is_file():
             return empty
@@ -394,12 +416,35 @@ class WorkshopRepository:
             gallery.insert(0, origin)
             del gallery[limit:]
 
+        manual = False
+        override_id = self._copy_override(item_id)
+        if override_id is not None:
+            card = cards.get(override_id)
+            if card is None:
+                with self._connect() as source:
+                    row = source.execute(
+                        f"SELECT {CARD_COLUMNS} FROM workshop w "
+                        f"WHERE w.id = ? AND {PUBLIC_WHERE} AND w.vehicle_key = ?",
+                        (override_id, vehicle),
+                    ).fetchone()
+                card = _card(row) if row is not None else None
+            if card is not None:
+                card["similarity"] = None
+                card["isEarlier"] = True
+                origin = card
+                origin_similarity = None
+                manual = True
+                if card not in gallery:
+                    gallery.insert(0, card)
+                    del gallery[limit:]
+
         return {
             "items": gallery,
             "flagged": origin is not None,
             "origin": origin,
             "originSimilarity": origin_similarity,
             "threshold": flag_similarity,
+            "manual": manual,
         }
 
     def _where(self, filters: ListFilters) -> tuple[str, list[Any]]:
