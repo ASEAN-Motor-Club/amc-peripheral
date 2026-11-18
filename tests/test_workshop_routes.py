@@ -171,6 +171,8 @@ async def test_search_finds_authors_and_opens_exact_item_codes(client):
     assert 'action="/workshop/search/"' in text
     assert 'name="q"' in text
     assert "#179250" in text
+    assert "Vehicle types" not in text
+    assert ">Authors</a>" in text
 
     page = await client.get("/workshop/search/?q=ALI")
     assert page.status == 200
@@ -178,6 +180,12 @@ async def test_search_finds_authors_and_opens_exact_item_codes(client):
     assert "Alice" in body
     assert '/workshop/authors/11/' in body
     assert "Bob" not in body
+
+    vehicle = await client.get("/workshop/search/?q=VAM")
+    assert vehicle.status == 200
+    vehicle_body = await vehicle.text()
+    assert "Vehicles matching" in vehicle_body
+    assert 'href="/workshop/vehicles/Vamos3/"' in vehicle_body
 
     authors = await client.get("/api/workshop/search?q=ALI")
     payload = await authors.json()

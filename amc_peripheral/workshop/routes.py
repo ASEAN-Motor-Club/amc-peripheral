@@ -505,8 +505,12 @@ def create_app(
                 raise web.HTTPNotFound()
             raise web.HTTPFound(f"/workshop/items/{item_id}/")
         authors = await asyncio.to_thread(repository.search_authors, query)
+        vehicles = await asyncio.to_thread(repository.search_vehicles, query)
         attach_author_snapshots(authors)
-        return render(request, "search.html", page="search", query=query, authors=authors)
+        return render(
+            request, "search.html", page="search", query=query,
+            authors=authors, vehicles=vehicles,
+        )
 
     async def page_gallery(request: web.Request) -> web.Response:
         query = request.query
@@ -714,7 +718,7 @@ def create_app(
             limit=60,
         )
         cover_url = await asyncio.to_thread(author_cover, account_id, popular["items"])
-        return render(request, "author.html", page="gallery", author=author, data=listing,
+        return render(request, "author.html", page="authors", author=author, data=listing,
                       vehicles=[], pagination=pagination,
                       social_image=(f"https://www.aseanmotorclub.com{cover_url}" if cover_url else None),
                       canonical_url=f"https://www.aseanmotorclub.com/workshop/authors/{account_id}/")

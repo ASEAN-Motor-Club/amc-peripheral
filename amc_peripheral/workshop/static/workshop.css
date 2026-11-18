@@ -112,6 +112,11 @@ button:hover, .primary-button:hover { text-decoration: none; filter: brightness(
 .author-avatar { width: 42px; height: 42px; flex: none; border-radius: 50%; object-fit: cover; border: 1px solid var(--line); }
 .author-card strong, .author-card span span { display: block; }
 .author-card span span { color: var(--muted); font-size: 13px; }
+.vehicle-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.vehicle-link { display: flex; flex-direction: column; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 15px; color: var(--text); }
+.vehicle-link:hover { text-decoration: none; border-color: #3b4a63; }
+.vehicle-link strong { font-size: 16px; }
+.vehicle-link span { color: var(--muted); font-size: 13px; }
 .page-head { padding: 52px 0 24px; }
 .gallery-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 28px; padding-bottom: 80px; align-items: start; }
 .filters { position: sticky; top: 84px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: grid; gap: 16px; }
@@ -198,6 +203,7 @@ details.panel > summary h2 { display: inline; margin: 0; }
   .hero-inner, .detail-layout { grid-template-columns: 1fr; }
   .stats { max-width: 520px; }
   .author-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vehicle-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail-side { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   .detail-side .panel { margin-top: 0; }
 }
@@ -209,7 +215,7 @@ details.panel > summary h2 { display: inline; margin: 0; }
   .brand-copy small { font-size: 10px; }
   .hero { padding-top: 46px; }
   .search-stub { flex-direction: column; }
-  .stats, .card-grid, .gallery-layout .card-grid, .author-grid, .detail-side { grid-template-columns: 1fr; }
+  .stats, .card-grid, .gallery-layout .card-grid, .author-grid, .vehicle-links, .detail-side { grid-template-columns: 1fr; }
   .gallery-layout { grid-template-columns: 1fr; }
   .filters { position: static; }
   .compare-tray { flex-wrap: wrap; }

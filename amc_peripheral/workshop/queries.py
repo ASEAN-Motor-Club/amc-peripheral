@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .payloads import vehicle_display_name
+
 PUBLIC_WHERE = "w.deleted_at IS NULL AND COALESCE(w.hidden, 0) = 0 AND w.account_id > 0"
 POPULAR_ORDER = "COALESCE(w.installed, 0) DESC, COALESCE(w.votes, 0) DESC, w.id DESC"
 NEW_ORDER = "w.created_at DESC, w.id DESC"
@@ -700,6 +702,32 @@ class WorkshopRepository:
                 for row in rows
             ]
         return {"items": items, "total": total, "query": query}
+
+    def search_vehicles(self, query: str, limit: int = 12) -> list[dict[str, Any]]:
+        """Match vehicle keys or display names, with exact/prefix matches first."""
+        needle = " ".join(query.strip().split()).casefold()
+        if not needle:
+            return []
+        limit = max(1, min(int(limit), 48))
+        matches: list[tuple[int, int, str, str, int]] = []
+        for row in self.vehicles(limit=500):
+            key = str(row["vehicleKey"])
+            name = vehicle_display_name(key)
+            haystacks = {name.casefold(), key.replace("_", " ").casefold(), key.casefold()}
+            score = 3
+            if needle in {n for n in haystacks if n == needle}:
+                score = 0
+            elif any(n.startswith(needle) for n in haystacks):
+                score = 1
+            elif any(needle in n for n in haystacks):
+                score = 2
+            if score < 3:
+                matches.append((score, -int(row["uploads"]), name, key, int(row["uploads"])))
+        matches.sort()
+        return [
+            {"vehicleKey": key, "displayName": name, "uploads": uploads}
+            for _, _, name, key, uploads in matches[:limit]
+        ]
 
     def authors(self, limit: int = 10) -> list[dict[str, Any]]:
         site = self._site_authors(limit)
