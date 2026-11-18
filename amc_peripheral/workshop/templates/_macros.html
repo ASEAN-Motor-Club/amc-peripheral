@@ -2,6 +2,10 @@
 <span class="badge {{ tone }}">{{ label }}</span>
 {%- endmacro %}
 
+{% macro tag_chip(tag) -%}
+<a class="tag-chip" href="/workshop/tags/{{ tag|urlencode }}/">#{{ tag }}</a>
+{%- endmacro %}
+
 {% macro author_card(author) -%}
 <a class="author-card" href="/workshop/authors/{{ author.accountId }}/">
   {% if author.snapshotUrl %}

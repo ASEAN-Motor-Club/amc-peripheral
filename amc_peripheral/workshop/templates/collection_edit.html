@@ -23,6 +23,26 @@
     <button type="submit" class="button">Save details</button>
   </form>
 
+  <h2>Tags</h2>
+  {% if tags %}
+  <div class="tag-row">
+    {% for t in tags %}
+    <form method="post" action="/workshop/collections/{{ collection.id }}/tags/{{ t|urlencode }}/remove" class="tag-remove">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <a class="tag-chip" href="/workshop/tags/{{ t|urlencode }}/">#{{ t }}</a>
+      <button type="submit" aria-label="Remove tag {{ t }}">&times;</button>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <form method="post" action="/workshop/collections/{{ collection.id }}/tags" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Add tags <span class="muted">(up to five, comma or space separated)</span>
+      <input name="tags" maxlength="120" placeholder="#drift #street">
+    </label>
+    <button type="submit" class="button">Add tags</button>
+  </form>
+
   <h2>Builds</h2>
   {% if items %}
   <ol class="edit-list">
