@@ -7,7 +7,16 @@
 <div class="wrap detail-layout">
   <section class="detail-main">
     <p class="eyebrow"><a href="/workshop/gallery/">Workshop</a> / {{ item.vehicleKey|vehicle_name }}</p>
-    <h1>{{ item.vehicleKey|vehicle_name }} <span class="muted">#{{ item.id }}</span></h1>
+    <h1>{{ (meta.title if meta and meta.title else item.vehicleKey|vehicle_name) }} <span class="muted">#{{ item.id }}</span></h1>
+    {% if meta and meta.title %}
+    <p class="muted eyebrow">{{ item.vehicleKey|vehicle_name }} · {{ meta.title }}</p>
+    {% endif %}
+    {% if meta and meta.description %}
+    <p class="lede">{{ meta.description }}</p>
+    {% endif %}
+    {% if can_edit %}
+    <p class="page-actions"><a class="button secondary" href="/workshop/items/{{ item.id }}/edit">Edit title &amp; summary</a></p>
+    {% endif %}
     {% if item.author %}
       <p class="byline">Shared by <a href="/workshop/authors/{{ item.accountId }}/">{{ item.author }}</a> · <time datetime="{{ item.createdAt|iso }}">{{ item.createdAt|date_long }}</time></p>
     {% else %}
