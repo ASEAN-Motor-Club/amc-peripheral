@@ -558,6 +558,8 @@ def create_app(
             limit=settings.similarity_limit,
             min_sim=settings.similarity_min,
             copy_threshold=settings.similarity_copy_threshold,
+            flag_min_layers=settings.similarity_flag_min_layers,
+            flag_min_similarity=settings.similarity_flag_min_similarity,
         )
         if similar["items"]:
             attach_snapshots(similar["items"])
