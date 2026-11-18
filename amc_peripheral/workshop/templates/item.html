@@ -70,67 +70,6 @@
       </p>
     {% endif %}
 
-    <section class="comments" id="comments" aria-labelledby="comments-title">
-      <h2 id="comments-title">Comments <span class="muted">{{ comment_total }}</span></h2>
-
-      {% if comment_error %}<p class="form-error" role="alert">{{ comment_error }}</p>{% endif %}
-
-      {% if comments %}
-      <ol class="comment-list">
-        {% for c in comments %}
-        <li class="comment" id="comment-{{ c.id }}">
-          <p class="comment-meta">
-            <strong>{{ comment_names.get(c.discord_id) or 'A club member' }}</strong>
-            <time datetime="{{ c.created_at }}">{{ c.edited_at or c.created_at }}</time>
-            {% if c.edited_at %}<span class="muted">· edited</span>{% endif %}
-          </p>
-          <div class="comment-body">{{ c.body|nl2br }}</div>
-          {% if comment_viewer == c.discord_id %}
-          <div class="comment-actions">
-            {% if c.id in comment_editable %}
-            <details class="comment-edit">
-              <summary>Edit</summary>
-              <form method="post" action="/workshop/comments/{{ c.id }}/edit" class="stack">
-                <input type="hidden" name="csrf" value="{{ csrf_token }}">
-                <textarea name="body" rows="4" maxlength="1000" required>{{ c.body }}</textarea>
-                <div class="form-actions"><button type="submit" class="button">Save edit</button></div>
-              </form>
-            </details>
-            {% endif %}
-            <form method="post" action="/workshop/comments/{{ c.id }}/delete" class="comment-delete">
-              <input type="hidden" name="csrf" value="{{ csrf_token }}">
-              <button type="submit" class="link-button">Delete</button>
-            </form>
-          </div>
-          {% endif %}
-        </li>
-        {% endfor %}
-      </ol>
-      {% else %}
-      <p class="muted">No comments yet.</p>
-      {% endif %}
-
-      {% if comment_pages > 1 %}
-      <nav class="pager" aria-label="Comment pages">
-        {% if comment_page > 1 %}<a href="?cpage={{ comment_page - 1 }}#comments">&larr; Newer</a>{% endif %}
-        <span class="muted">Page {{ comment_page }} of {{ comment_pages }}</span>
-        {% if comment_page < comment_pages %}<a href="?cpage={{ comment_page + 1 }}#comments">Older &rarr;</a>{% endif %}
-      </nav>
-      {% endif %}
-
-      {% if comment_can_write %}
-      <form method="post" action="/workshop/items/{{ item.id }}/comments" class="stack comment-form">
-        <input type="hidden" name="csrf" value="{{ csrf_token }}">
-        <label for="comment-body">Write a comment
-          <span class="muted">up to 1000 characters, 20 lines; links are stripped</span>
-        </label>
-        <textarea id="comment-body" name="body" rows="4" maxlength="1000" required placeholder="What do you think of this build?">{{ comment_draft }}</textarea>
-        <div class="form-actions"><button type="submit" class="button">Comment</button></div>
-      </form>
-      {% else %}
-      <p class="muted"><a href="/workshop/auth/login?next=/workshop/items/{{ item.id }}/">Sign in to comment</a></p>
-      {% endif %}
-    </section>
 
     {% if similar and similar.flagged and similar.origin %}
     <div class="notice copy-flag" role="note" id="copy-flag">
@@ -304,6 +243,68 @@
     </section>
   </aside>
 </div>
+
+  <section class="wrap comments" id="comments" aria-labelledby="comments-title">
+    <h2 id="comments-title">Comments <span class="muted">{{ comment_total }}</span></h2>
+
+    {% if comment_error %}<p class="form-error" role="alert">{{ comment_error }}</p>{% endif %}
+
+    {% if comments %}
+    <ol class="comment-list">
+      {% for c in comments %}
+      <li class="comment" id="comment-{{ c.id }}">
+        <p class="comment-meta">
+          <strong>{{ comment_names.get(c.discord_id) or 'A club member' }}</strong>
+          <time datetime="{{ c.created_at }}">{{ c.edited_at or c.created_at }}</time>
+          {% if c.edited_at %}<span class="muted">· edited</span>{% endif %}
+        </p>
+        <div class="comment-body">{{ c.body|nl2br }}</div>
+        {% if comment_viewer == c.discord_id %}
+        <div class="comment-actions">
+          {% if c.id in comment_editable %}
+          <details class="comment-edit">
+            <summary>Edit</summary>
+            <form method="post" action="/workshop/comments/{{ c.id }}/edit" class="stack">
+              <input type="hidden" name="csrf" value="{{ csrf_token }}">
+              <textarea name="body" rows="4" maxlength="1000" required>{{ c.body }}</textarea>
+              <div class="form-actions"><button type="submit" class="button">Save edit</button></div>
+            </form>
+          </details>
+          {% endif %}
+          <form method="post" action="/workshop/comments/{{ c.id }}/delete" class="comment-delete">
+            <input type="hidden" name="csrf" value="{{ csrf_token }}">
+            <button type="submit" class="link-button">Delete</button>
+          </form>
+        </div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="muted">No comments yet.</p>
+    {% endif %}
+
+    {% if comment_pages > 1 %}
+    <nav class="pager" aria-label="Comment pages">
+      {% if comment_page > 1 %}<a href="?cpage={{ comment_page - 1 }}#comments">&larr; Newer</a>{% endif %}
+      <span class="muted">Page {{ comment_page }} of {{ comment_pages }}</span>
+      {% if comment_page < comment_pages %}<a href="?cpage={{ comment_page + 1 }}#comments">Older &rarr;</a>{% endif %}
+    </nav>
+    {% endif %}
+
+    {% if comment_can_write %}
+    <form method="post" action="/workshop/items/{{ item.id }}/comments" class="stack comment-form">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label for="comment-body">Write a comment
+        <span class="muted">up to 1000 characters, 20 lines; links are stripped</span>
+      </label>
+      <textarea id="comment-body" name="body" rows="4" maxlength="1000" required placeholder="What do you think of this build?">{{ comment_draft }}</textarea>
+      <div class="form-actions"><button type="submit" class="button">Comment</button></div>
+    </form>
+    {% else %}
+    <p class="muted"><a href="/workshop/auth/login?next=/workshop/items/{{ item.id }}/">Sign in to comment</a></p>
+    {% endif %}
+  </section>
 {% endblock %}
 {% block scripts %}
 <script src="/workshop/static/item-viewer.js?v=6" defer></script>
