@@ -11,8 +11,9 @@ from pathlib import Path
 class WorkshopSettings:
     """Runtime paths and limits.
 
-    The source database is always opened read-only. Writes belong to the scraper
-    and, separately, to the site-state database used by snapshot/aggregate jobs.
+    The source database is always opened read-only. Its only writer is
+    ``amc_workshop_sync`` (see sync.py); the site-state database used by the
+    snapshot/aggregate jobs is separate and disposable.
     """
 
     source_db: Path
@@ -47,7 +48,7 @@ class WorkshopSettings:
             source_db=Path(
                 os.environ.get(
                     "AMC_WORKSHOP_DB",
-                    "/opt/data/workspace/mt-workshop-scrape/workshop.db",
+                    "/var/lib/amc-workshop/source.db",
                 )
             ),
             site_db=Path(
