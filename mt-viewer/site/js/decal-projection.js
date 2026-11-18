@@ -17,6 +17,19 @@ export function decalFallbackSlots(decalSlots, slotDefs, bodyVariants, selectedI
   ));
 }
 
+// Some vehicle assets use a differently named material slot for the painted
+// body panels (Nuke's outer skin is `Seats_01` in the exported glTF, while its
+// CDO only labels `Body_01`). Any slot driven by the generic body shader is a
+// body panel, so include it alongside the CDO's explicit receiver names.
+export function decalReceiverSlots(decalSlots, slotDefs) {
+  const out = new Set(decalSlots || []);
+  for (const [slot, def] of Object.entries(slotDefs || {})) {
+    const material = `${def?.materialName || ""} ${def?.material || ""}`;
+    if (/(^|[\/\s])M_Body([\/.\s]|$)/i.test(material)) out.add(slot);
+  }
+  return out;
+}
+
 export function decalAtlasUv(layerIndex, q) {
   const col = layerIndex % 8;
   const row = Math.floor(layerIndex / 8);

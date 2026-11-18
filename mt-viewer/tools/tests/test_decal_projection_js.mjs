@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { primaryUv, mirrorUv, primaryVisibility, mirrorVisibility, decalFallbackSlots, DECAL_PROJECTION_GLSL } from '../../site/js/decal-projection.js';
+import { primaryUv, mirrorUv, primaryVisibility, mirrorVisibility, decalFallbackSlots, decalReceiverSlots, DECAL_PROJECTION_GLSL } from '../../site/js/decal-projection.js';
 
 const cases = [
   {
@@ -56,6 +56,19 @@ assert.deepEqual([...decalFallbackSlots([], slotDefs, bodyVariants, 4)].sort(),
 assert.deepEqual([...decalFallbackSlots([], slotDefs, [], -1)].sort(),
   ['Body_01', 'Palette']);
 assert.equal(decalFallbackSlots(['CargoBed_01'], slotDefs, bodyVariants, 0).size, 0);
+
+// Nuke's exported shell slot is named Seats_01 but runs the generic body shader.
+const nukeDefs = {
+  Body_01: { materialName: 'M_Body' },
+  Seats_01: { materialName: 'M_Body' },
+  Palette: { materialName: 'M_Palette' },
+};
+assert.deepEqual([...decalReceiverSlots(['Body_01'], nukeDefs)].sort(),
+  ['Body_01', 'Seats_01']);
+assert.deepEqual([...decalReceiverSlots([], nukeDefs)].sort(),
+  ['Body_01', 'Seats_01']);
+assert.deepEqual([...decalReceiverSlots(['Body_01'], { Body_01: { materialName: 'Mat_PolygonStreetRacer_Car_Instance_16' } })],
+  ['Body_01']);
 
 for (const token of ['255.0', 'PositionX', 'mtDecalPrimaryUv', 'mtDecalMirrorUv', 'mtDecalVisibility'])
   assert.ok(DECAL_PROJECTION_GLSL.includes(token), `missing GLSL token ${token}`);
