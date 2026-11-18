@@ -35,7 +35,7 @@ DEFAULT_MIN_LAYERS = 3
 COPY_THRESHOLD = 0.95
 GENERIC_FINGERPRINT = 400
 CANDIDATE_MIN = 0.20
-INDEX_VERSION = 2
+INDEX_VERSION = 3
 
 # kernel scales
 S_POS = 120.0
@@ -91,10 +91,25 @@ CREATE TABLE IF NOT EXISTS similar_meta (
 Layer = dict
 
 
-def _layer(key, colour, x, y, pitch, yaw, roll, scale, stretch, flags) -> Layer:
+def _layer(
+    key,
+    colour,
+    x,
+    y,
+    pitch,
+    yaw,
+    roll,
+    scale,
+    stretch,
+    flags,
+    alpha: float | int | None = 255,
+    coverage: float | int | None = 1.0,
+) -> Layer:
     return {
         "key": key,
         "rgb": (int(colour[0]), int(colour[1]), int(colour[2])),
+        "alpha": float(alpha if alpha is not None else 255),
+        "coverage": float(coverage if coverage is not None else 1.0),
         "x": float(x or 0.0),
         "y": float(y or 0.0),
         "pitch": float(pitch or 0.0),
@@ -133,6 +148,8 @@ def _layers_from_payload(blob: bytes) -> list[Layer]:
                 raw.get("decalScale"),
                 raw.get("stretch"),
                 raw.get("flags"),
+                colour.get("a"),
+                raw.get("coverage"),
             )
         )
     return out
@@ -173,9 +190,11 @@ def load_vehicle_layers(
             scale,
             stretch,
             flags,
+            alpha,
+            coverage,
         ) in conn.execute(
             "SELECT workshop_id, decal_key, r, g, b, x, y, pitch, yaw, roll, "
-            "scale, stretch, flags FROM workshop_decal_layer "
+            "scale, stretch, flags, a, coverage FROM workshop_decal_layer "
             "WHERE workshop_id IN (SELECT id FROM workshop WHERE vehicle_key = ? "
             f"AND {PUBLIC_WHERE}) ORDER BY workshop_id, idx",
             (vehicle_key,),
@@ -183,7 +202,18 @@ def load_vehicle_layers(
             if int(wid) in meta:
                 layers[int(wid)].append(
                     _layer(
-                        key, (r, g, b), x, y, pitch, yaw, roll, scale, stretch, flags
+                        key,
+                        (r, g, b),
+                        x,
+                        y,
+                        pitch,
+                        yaw,
+                        roll,
+                        scale,
+                        stretch,
+                        flags,
+                        alpha,
+                        coverage,
                     )
                 )
     else:
@@ -216,16 +246,30 @@ def layer_distance(a: Layer, b: Layer) -> float:
         abs(math.log(max(a["stretch"], 1e-4) / max(b["stretch"], 1e-4))) / S_STRETCH
     )
     dcolor = math.dist(a["rgb"], b["rgb"]) / S_COLOR
+    dalpha = (
+        abs(math.log(max(a.get("alpha", 255.0), 1.0) / max(b.get("alpha", 255.0), 1.0)))
+        / 0.45
+    )
+    dcoverage = (
+        abs(
+            math.log(
+                max(a.get("coverage", 1.0), 1e-3) / max(b.get("coverage", 1.0), 1e-3)
+            )
+        )
+        / 0.45
+    )
     dflags = 0.0 if a["flags"] == b["flags"] else 0.5
     return (
-        0.34 * dpos**2
+        0.32 * dpos**2
         + 0.12 * dyaw**2
         + 0.16 * droll**2
         + 0.04 * dpitch**2
         + 0.12 * dscale**2
         + 0.10 * dstretch**2
-        + 0.09 * dcolor**2
-        + 0.03 * dflags**2
+        + 0.08 * dcolor**2
+        + 0.02 * dalpha**2
+        + 0.02 * dcoverage**2
+        + 0.02 * dflags**2
     ) ** 0.5
 
 
@@ -247,6 +291,175 @@ def fingerprint(layer: Layer, pos: float = 25.0, ang: float = 10.0, scale: float
         round(layer["stretch"] * scale),
         layer["flags"],
     )
+
+
+# Pair-hash candidate generation (Wang 2003 style).  Every token is relative,
+# so a global drag/rotate/scale keeps the same token; mirrored variants are
+# indexed separately because `flags` is deliberately not in the token.
+PAIR_FANOUT = 8
+PAIR_POS = 25.0
+PAIR_ANG = 10.0
+PAIR_SCALE = 0.125
+PAIR_MIN_SHARED = 3
+
+
+def _pair_token(anchor: Layer, partner: Layer) -> tuple:
+    dx = partner["x"] - anchor["x"]
+    dy = partner["y"] - anchor["y"]
+    dyaw = angle_delta(anchor["yaw"], partner["yaw"])
+    droll = angle_delta(anchor["roll"], partner["roll"])
+    dscl = math.log(max(partner["scale"], 1e-4) / max(anchor["scale"], 1e-4))
+    dstr = math.log(max(partner["stretch"], 1e-4) / max(anchor["stretch"], 1e-4))
+    return (
+        anchor["key"],
+        partner["key"],
+        round(dx / PAIR_POS),
+        round(dy / PAIR_POS),
+        round(dyaw / PAIR_ANG) % 36,
+        round(droll / PAIR_ANG) % 36,
+        round(dscl / PAIR_SCALE),
+        round(dstr / PAIR_SCALE),
+    )
+
+
+def _mirror_layer(layer: Layer) -> Layer:
+    out = dict(layer)
+    out["x"] = -out["x"]
+    out["yaw"] = (-out["yaw"]) % 360.0
+    out["roll"] = (-out["roll"]) % 360.0
+    out["flags"] = int(out["flags"]) ^ 1
+    return out
+
+
+def _token_occurrences(
+    layers: list[Layer],
+) -> dict[tuple, list[tuple[Layer, Layer, bool]]]:
+    out: dict[tuple, list[tuple[Layer, Layer, bool]]] = defaultdict(list)
+    for mirrored, variant in (
+        (False, layers),
+        (True, [_mirror_layer(layer) for layer in layers]),
+    ):
+        for i, anchor in enumerate(variant):
+            neighbours = sorted(
+                (
+                    (math.hypot(anchor["x"] - other["x"], anchor["y"] - other["y"]), j)
+                    for j, other in enumerate(variant)
+                    if j != i
+                ),
+            )[:PAIR_FANOUT]
+            for _distance, j in neighbours:
+                out[_pair_token(anchor, variant[j])].append(
+                    (anchor, variant[j], mirrored)
+                )
+    return out
+
+
+def pair_token_set(layers: list[Layer]) -> set[tuple]:
+    return set(_token_occurrences(layers))
+
+
+def _transform_layers(
+    layers: list[Layer],
+    *,
+    mirrored: bool,
+    theta: float,
+    scale: float,
+    tx: float,
+    ty: float,
+) -> list[Layer]:
+    source = [_mirror_layer(layer) for layer in layers] if mirrored else layers
+    if not source:
+        return []
+    cx = sum(layer["x"] for layer in source) / len(source)
+    cy = sum(layer["y"] for layer in source) / len(source)
+    cos_t, sin_t = math.cos(math.radians(theta)), math.sin(math.radians(theta))
+    out = []
+    for layer in source:
+        x = (layer["x"] - cx) * scale
+        y = (layer["y"] - cy) * scale
+        item = dict(layer)
+        item["x"] = tx + cx + x * cos_t - y * sin_t
+        item["y"] = ty + cy + x * sin_t + y * cos_t
+        item["yaw"] = (item["yaw"] + theta) % 360.0
+        item["scale"] = max(item["scale"] * scale, 1e-4)
+        out.append(item)
+    return out
+
+
+def _transformed_similarity(
+    a_layers: list[Layer], b_layers: list[Layer], shared: set[tuple]
+) -> float:
+    best = matched_similarity(a_layers, b_layers)
+    if len(shared) < PAIR_MIN_SHARED:
+        return best
+    a_occ = _token_occurrences(a_layers)
+    b_occ = _token_occurrences(b_layers)
+    transform = _pair_transform(a_layers, b_layers, a_occ, b_occ, shared)
+    if transform is None:
+        return best
+    a_mirror, b_mirror, theta, scale, tx, ty, _count = transform
+    a_use = [_mirror_layer(layer) for layer in a_layers] if a_mirror else a_layers
+    aligned = _transform_layers(
+        b_layers, mirrored=b_mirror, theta=theta, scale=scale, tx=tx, ty=ty
+    )
+    return max(best, matched_similarity(a_use, aligned))
+
+
+def _pair_transform(
+    a_layers: list[Layer],
+    b_layers: list[Layer],
+    a_occ: dict,
+    b_occ: dict,
+    shared: set[tuple],
+) -> tuple[bool, bool, float, float, float, float, int] | None:
+    """Vote on a global transform from token correspondences.
+
+    Each correspondence gives a rotation and scale ratio directly.  Translation
+    is derived after rotating B about its own centroid, so every matched anchor
+    votes on the same absolute offset.
+    """
+    b_variants = {
+        False: b_layers,
+        True: [_mirror_layer(layer) for layer in b_layers],
+    }
+    centroids = {}
+    for mirrored, variant in b_variants.items():
+        if variant:
+            centroids[mirrored] = (
+                sum(layer["x"] for layer in variant) / len(variant),
+                sum(layer["y"] for layer in variant) / len(variant),
+            )
+    votes: dict[tuple, int] = defaultdict(int)
+    details: dict[tuple, tuple[bool, bool, float, float, float, float]] = {}
+    for token in shared:
+        for a_anchor, _a_partner, a_mirror in a_occ.get(token, ())[:4]:
+            for b_anchor, _b_partner, b_mirror in b_occ.get(token, ())[:4]:
+                theta = (a_anchor["yaw"] - b_anchor["yaw"]) % 360.0
+                scale = max(a_anchor["scale"], 1e-4) / max(b_anchor["scale"], 1e-4)
+                cx, cy = centroids[b_mirror]
+                dx = (b_anchor["x"] - cx) * scale
+                dy = (b_anchor["y"] - cy) * scale
+                cos_t, sin_t = (
+                    math.cos(math.radians(theta)),
+                    math.sin(math.radians(theta)),
+                )
+                tx = a_anchor["x"] - (cx + dx * cos_t - dy * sin_t)
+                ty = a_anchor["y"] - (cy + dx * sin_t + dy * cos_t)
+                key = (
+                    a_mirror,
+                    b_mirror,
+                    round(theta / PAIR_ANG) % 36,
+                    round(math.log(scale) / PAIR_SCALE),
+                    round(tx / PAIR_POS),
+                    round(ty / PAIR_POS),
+                )
+                votes[key] += 1
+                details[key] = (a_mirror, b_mirror, theta, scale, tx, ty)
+    if not votes:
+        return None
+    key, count = max(votes.items(), key=lambda item: item[1])
+    a_mirror, b_mirror, theta, scale, tx, ty = details[key]
+    return a_mirror, b_mirror, theta, scale, tx, ty, count
 
 
 def greedy_dice(
@@ -370,17 +583,21 @@ def scan_vehicle(
     if not targets:
         return []
 
-    fingerprints = {wid: {fingerprint(layer) for layer in layers[wid]} for wid in ids}
+    tokens = {
+        wid: pair_token_set(layers[wid])
+        or {fingerprint(layer) for layer in layers[wid]}
+        for wid in ids
+    }
     index: dict[tuple, list[int]] = defaultdict(list)
     for wid in ids:
-        for value in fingerprints[wid]:
+        for value in tokens[wid]:
             index[value].append(wid)
 
     seen: set[tuple[int, int]] = set()
     rows: list[tuple[str, int, int, float, str, str]] = []
     for wid in targets:
         candidates: dict[int, int] = defaultdict(int)
-        for value in fingerprints[wid]:
+        for value in tokens[wid]:
             members = index[value]
             if len(members) < 2 or len(members) > GENERIC_FINGERPRINT:
                 continue
@@ -392,9 +609,19 @@ def scan_vehicle(
             if (left, right) in seen:
                 continue
             seen.add((left, right))
+            shared = tokens[left] & tokens[right]
+            if min(len(tokens[left]), len(tokens[right])) < PAIR_MIN_SHARED:
+                min_shared = 1
+            else:
+                min_shared = max(
+                    PAIR_MIN_SHARED,
+                    int(0.05 * min(len(tokens[left]), len(tokens[right]))),
+                )
+            if len(shared) < min_shared:
+                continue
             if greedy_dice(layers[left], layers[right]) < CANDIDATE_MIN:
                 continue
-            score = pair_similarity(layers[left], layers[right])
+            score = _transformed_similarity(layers[left], layers[right], shared)
             if score < min_sim:
                 continue
             rows.append(

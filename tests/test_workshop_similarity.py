@@ -5,7 +5,14 @@ from __future__ import annotations
 import sqlite3
 
 from amc_peripheral.workshop.queries import WorkshopRepository
-from amc_peripheral.workshop.similarity import build, greedy_dice, matched_similarity
+from amc_peripheral.workshop.similarity import (
+    _mirror_layer,
+    _transformed_similarity,
+    build,
+    greedy_dice,
+    matched_similarity,
+    pair_token_set,
+)
 
 from workshop_support import _payload, build_fixture_db, seed_similarity
 
@@ -252,6 +259,60 @@ def test_parallel_build_matches_serial(tmp_path):
             conn.close()
 
     assert rows(parallel) == rows(serial)
+
+
+def test_pair_hash_scores_transformed_copies():
+    base = [
+        _test_layer("Numbers_01_014-number_1", 10, 20),
+        _test_layer("Flame_01_Flame54", 40, 20, yaw=10),
+        _test_layer("Shape_01_Shape2", 25, 50, yaw=90),
+        _test_layer("Stripe_01_Stripe7", 70, 60),
+    ]
+
+    def shifted(dx=0.0, dy=0.0, dyaw=0.0, scale=1.0):
+        out = [dict(layer) for layer in base]
+        for layer in out:
+            layer["x"] += dx
+            layer["y"] += dy
+            layer["yaw"] = (layer["yaw"] + dyaw) % 360.0
+            layer["scale"] *= scale
+        return out
+
+    variants = {
+        "drag": shifted(40, 40),
+        "rotate": shifted(dyaw=12),
+        "scale": shifted(scale=1.15),
+        "mirror": [_mirror_layer(layer) for layer in base],
+    }
+    for name, other in variants.items():
+        shared = pair_token_set(base) & pair_token_set(other)
+        assert len(shared) >= 3, name
+        assert _transformed_similarity(base, other, shared) > 0.95, name
+
+
+def _test_layer(key, x, y, yaw=0.0):
+    return {
+        "key": key,
+        "rgb": (100, 100, 100),
+        "alpha": 255.0,
+        "coverage": 1.0,
+        "x": x,
+        "y": y,
+        "pitch": 0.0,
+        "yaw": yaw,
+        "roll": 0.0,
+        "scale": 1.0,
+        "stretch": 1.0,
+        "flags": 10,
+    }
+
+
+def test_alpha_and_coverage_affect_similarity():
+    base = _test_layer("Numbers_01_014-number_1", 10, 20)
+    dim = {**base, "alpha": 127.0}
+    covered = {**base, "coverage": 0.5}
+    assert matched_similarity([base], [dim]) < 0.99
+    assert matched_similarity([base], [covered]) < 0.99
 
 
 def test_matching_penalises_extra_and_removed_layers():
