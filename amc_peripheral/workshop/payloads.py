@@ -18,6 +18,13 @@ VEHICLE_SLUG_ALIASES = {
     "3": "maity",
     "4": "spider",
     "Sports_01": "raton",
+    "Pickup_02": "ranch",
+    "Dory_Wrecker": "dorywrecker",
+    "Kuda_Dryvan_4x2": "kuda_dyrvan_4x2",
+    "Nuke_Police": "nukepolice",
+    "Police_01": "police",
+    "PoliceInterceptor_01": "policeinterceptor1",
+    "Kira_RollbackTow": "kira_rollback",
 }
 VEHICLE_DISPLAY_NAMES = {
     "1": "Hana",
@@ -63,8 +70,6 @@ def vehicle_slug(vehicle_key: str) -> str:
     key = str(vehicle_key or "")
     if key in VEHICLE_SLUG_ALIASES:
         return VEHICLE_SLUG_ALIASES[key]
-    if key.startswith("Trailer_"):
-        return key.removeprefix("Trailer_").lower()
     return key.lower()
 
 
