@@ -63,10 +63,11 @@ const nukeDefs = {
   Seats_01: { materialName: 'M_Body' },
   Palette: { materialName: 'M_Palette' },
 };
-assert.deepEqual([...decalReceiverSlots(['Body_01'], nukeDefs)].sort(),
+assert.deepEqual([...decalReceiverSlots(['Body_01'], nukeDefs, { Body_01: 2, Seats_01: 6.5 })].sort(),
   ['Body_01', 'Seats_01']);
-assert.deepEqual([...decalReceiverSlots([], nukeDefs)].sort(),
+assert.deepEqual([...decalReceiverSlots([], nukeDefs, { Body_01: 6.5, Seats_01: 2 })].sort(),
   ['Body_01', 'Seats_01']);
+assert.deepEqual([...decalReceiverSlots(['Body_01'], nukeDefs)], ['Body_01']);
 assert.deepEqual([...decalReceiverSlots(['Body_01'], { Body_01: { materialName: 'Mat_PolygonStreetRacer_Car_Instance_16' } })],
   ['Body_01']);
 

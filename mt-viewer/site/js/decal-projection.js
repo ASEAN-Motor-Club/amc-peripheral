@@ -21,11 +21,18 @@ export function decalFallbackSlots(decalSlots, slotDefs, bodyVariants, selectedI
 // body panels (Nuke's outer skin is `Seats_01` in the exported glTF, while its
 // CDO only labels `Body_01`). Any slot driven by the generic body shader is a
 // body panel, so include it alongside the CDO's explicit receiver names.
-export function decalReceiverSlots(decalSlots, slotDefs) {
+export function decalReceiverSlots(decalSlots, slotDefs, slotExtents = {}) {
   const out = new Set(decalSlots || []);
+  const baseExtent = Math.max(0, ...[...out].map(slot => slotExtents[slot] || 0));
   for (const [slot, def] of Object.entries(slotDefs || {})) {
+    if (out.has(slot)) continue;
     const material = `${def?.materialName || ""} ${def?.material || ""}`;
-    if (/(^|[\/\s])M_Body([\/.\s]|$)/i.test(material)) out.add(slot);
+    if (!/(^|[\/\s])M_Body([\/.\s]|$)/i.test(material)) continue;
+    // Only add a body-shader slot when it actually covers more body than the
+    // named receivers. This catches Nuke's shell (`Seats_01`) without dragging
+    // seats/interior slots into decals on vehicles whose name list is already
+    // correct.
+    if ((slotExtents[slot] || 0) > baseExtent * 1.5) out.add(slot);
   }
   return out;
 }
