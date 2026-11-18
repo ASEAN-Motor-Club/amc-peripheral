@@ -421,7 +421,11 @@ async def test_account_page_lists_member_builds(auth_client, sso):
 async def test_logout_clears_cookie(auth_client, sso):
     token = sign_session({"sub": "9001", "u": "driver"}, sso.session_secret, 60)
     auth_client.session.cookie_jar.update_cookies({SESSION_COOKIE: token})
-    response = await auth_client.post("/workshop/auth/logout", allow_redirects=False)
+    # State-changing posts now require the session's CSRF token.
+    csrf = auth.csrf_token(auth.verify_session(token, sso.session_secret), sso.session_secret)
+    response = await auth_client.post(
+        "/workshop/auth/logout", data={"csrf": csrf}, allow_redirects=False
+    )
     assert response.status == 302
     assert response.headers["Location"] == "/workshop/"
     assert response.cookies[SESSION_COOKIE].value == ""
