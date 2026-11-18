@@ -44,9 +44,15 @@
       {% if item.similarity is defined and item.similarity %}{{ badge((item.similarity * 100)|round(0)|int ~ '% match', 'decal') }}{% if item.isEarlier %}{{ badge('earlier upload', 'tuned') }}{% endif %}{% endif %}
     </ul>
     <div class="card-meta">
-      <span title="Installs">{{ item.installs }} installs</span>
-      <span title="Votes">{{ item.votes }} votes</span>
-      <time datetime="{{ item.createdAt|iso }}">{{ item.createdAt[:10] }}</time>
+      <span class="stat" title="Installs" aria-label="Installs: {{ item.installs }}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 19h14"/></svg>
+        {{ item.installs }}
+      </span>
+      <span class="stat" title="Votes" aria-label="Votes: {{ item.votes }}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg>
+        {{ item.votes }}
+      </span>
+      <time datetime="{{ item.createdAt|iso }}">{{ item.createdAt|date_long }}</time>
     </div>
   </div>
   {% if compare %}
