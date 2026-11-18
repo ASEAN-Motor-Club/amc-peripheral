@@ -362,6 +362,12 @@ def test_alpha_and_coverage_affect_similarity():
     assert matched_similarity([base], [covered]) < 0.99
 
 
+def test_recolored_layers_are_still_a_copy():
+    base = _test_layer("Numbers_01_014-number_1", 10, 20)
+    recolored = {**base, "rgb": (0, 0, 0)}
+    assert matched_similarity([base], [recolored]) > 0.99
+
+
 def test_matching_penalises_extra_and_removed_layers():
     base = {
         "key": "Numbers_01_014-number_1",
