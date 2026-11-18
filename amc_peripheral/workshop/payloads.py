@@ -108,6 +108,7 @@ VEHICLE_DISPLAY_NAMES = {
     "Goliath4": "Goliath 4",
     "Goliath6": "Goliath 6",
     "Goliath10": "Goliath 10",
+    "Trailer_01": "Trailer 01",
     "Trailer_Bulko": "Bulko",
     "Trailer_Carry": "Carry",
     "Trailer_Cotra_20_3": "Cotra 20-3S",
