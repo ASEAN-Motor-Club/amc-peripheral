@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import mimetypes
 import re
 import secrets
 from datetime import UTC, date, datetime
+from html import escape
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlencode
@@ -696,6 +698,7 @@ def create_app(
             if request.get("user")
             else []
         )
+        meta = await asyncio.to_thread(community.meta, workshop_id)
         claim = await asyncio.to_thread(community.claim_for, workshop_id)
         claim_owner = None
         if claim is not None and claim.revoked_at is None:
@@ -721,6 +724,8 @@ def create_app(
             liked=liked,
             in_collections=in_collections,
             my_collections=my_collections,
+            meta=meta,
+            can_edit=bool(claim_owner and claim_owner["yours"]),
         )
 
     async def item_like(request: web.Request) -> web.Response:
@@ -1393,6 +1398,213 @@ def create_app(
             )
         raise web.HTTPSeeOther(f"/workshop/items/{workshop_id}/")
 
+    # -- member-authored text ----------------------------------------------
+
+    PROFILE_NAME_MIN = 2
+    PROFILE_NAME_MAX = 32
+    PROFILE_BIO_MAX = 400
+
+    def _clean(value: str | None, *, limit: int, field: str) -> str:
+        from .text import clean_text
+
+        return clean_text(value, limit=limit, field=field)
+
+    async def profile_save(request: web.Request) -> web.Response:
+        user = require_member(request)
+        form = await request.post()
+        display_name = _clean(form.get("display_name"), limit=PROFILE_NAME_MAX, field="Display name")
+        bio = _clean(form.get("bio"), limit=PROFILE_BIO_MAX, field="Bio")
+        error = None
+        if display_name and len(display_name) < PROFILE_NAME_MIN:
+            error = "A display name needs at least two characters."
+        elif not display_name and not bio:
+            error = "Nothing to save."
+        if error is None:
+            await asyncio.to_thread(
+                community.save_profile,
+                discord_id=str(user["sub"]),
+                display_name=display_name or None,
+                bio=bio or None,
+                now=_now_iso(),
+            )
+            raise web.HTTPSeeOther("/workshop/account/")
+        raise web.HTTPSeeOther("/workshop/account/?profile-error=" + quote(error))
+
+    async def item_edit(request: web.Request) -> web.Response:
+        """The claim owner's title and summary for their own build."""
+        user = require_member(request)
+        workshop_id = int(request.match_info["id"])
+        item = await asyncio.to_thread(repository.get_item, workshop_id)
+        if item is None:
+            raise web.HTTPNotFound()
+        claim = await asyncio.to_thread(community.claim_for, workshop_id)
+        if not claim or claim.revoked_at is not None or claim.discord_id != str(user["sub"]):
+            raise web.HTTPForbidden(text="Only the owner of this build can edit it.")
+
+        error = None
+        if request.method == "POST":
+            form = await request.post()
+            try:
+                title = _clean(form.get("title"), limit=60, field="Title")
+                description = _clean(form.get("description"), limit=600, field="Summary")
+            except ValueError as exc:
+                meta = await asyncio.to_thread(community.meta, workshop_id)
+                return render(
+                    request,
+                    "item_edit.html",
+                    page="item",
+                    item=item,
+                    meta=meta,
+                    error=str(exc),
+                    draft={"title": form.get("title"), "description": form.get("description")},
+                )
+            await asyncio.to_thread(
+                community.save_meta,
+                workshop_id=workshop_id,
+                title=title or None,
+                description=description or None,
+                discord_id=str(user["sub"]),
+                now=_now_iso(),
+            )
+            raise web.HTTPSeeOther(f"/workshop/items/{workshop_id}/")
+
+        meta = await asyncio.to_thread(community.meta, workshop_id)
+        return render(
+            request,
+            "item_edit.html",
+            page="item",
+            item=item,
+            meta=meta,
+            error=error,
+        )
+
+    # -- engagement JSON and sitemaps --------------------------------------
+
+    SITEMAP_CHUNK = 40_000
+
+    def _site() -> str:
+        return sso.public_url.rstrip("/")
+
+    async def api_item_engagement(request: web.Request) -> web.Response:
+        """One shape for the bot and for any client that wants the numbers."""
+        workshop_id = int(request.match_info["id"])
+        item = await asyncio.to_thread(repository.get_item, workshop_id)
+        if item is None:
+            return _json_error("not_found", "Workshop item not found", 404)
+
+        likes = await asyncio.to_thread(community.like_count, workshop_id)
+        collections = await asyncio.to_thread(
+            request.app["collections"].count_for_item, workshop_id
+        )
+        viewer = request.get("user")
+        liked = bool(
+            viewer
+            and workshop_id
+            in await asyncio.to_thread(
+                community.liked_ids, str(viewer.get("sub")), [workshop_id]
+            )
+        )
+        payload = {
+            "workshopId": workshop_id,
+            "likes": likes,
+            "likedByViewer": liked,
+            "collections": collections,
+            "votes": item.get("votes"),
+        }
+        etag = '"' + hashlib.sha256(
+            json.dumps([likes, collections, item.get("votes")])
+            .encode()
+        ).hexdigest()[:16] + '"'
+        if not viewer and request.headers.get("If-None-Match") == etag:
+            raise web.HTTPNotModified(headers={"ETag": etag})
+        return web.json_response(
+            payload,
+            headers={
+                "ETag": etag,
+                # A viewer's own like state must never sit in a shared cache.
+                "Cache-Control": "private, no-store"
+                if viewer
+                else "public, max-age=30",
+            },
+        )
+
+    def _url_entry(loc: str, lastmod: str | None = None) -> str:
+        stamp = f"<lastmod>{lastmod[:10]}</lastmod>" if lastmod else ""
+        return f"<url><loc>{escape(loc)}</loc>{stamp}</url>"
+
+    async def sitemap_index(request: web.Request) -> web.Response:
+        total = await asyncio.to_thread(repository.count_public_items)
+        chunks = max(1, -(-total // SITEMAP_CHUNK))
+        parts = [
+            f"<sitemap><loc>{_site()}/workshop/sitemap-pages.xml</loc></sitemap>"
+        ]
+        parts += [
+            f"<sitemap><loc>{_site()}/workshop/sitemap-items-{n}.xml</loc></sitemap>"
+            for n in range(1, chunks + 1)
+        ]
+        body = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            + "".join(parts)
+            + "</sitemapindex>"
+        )
+        return web.Response(
+            text=body,
+            content_type="application/xml",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
+    async def sitemap_pages(request: web.Request) -> web.Response:
+        site = _site()
+        entries = [
+            _url_entry(f"{site}/workshop/"),
+            _url_entry(f"{site}/workshop/gallery/"),
+            _url_entry(f"{site}/workshop/authors/"),
+            _url_entry(f"{site}/workshop/collections/"),
+        ]
+        collections = await asyncio.to_thread(
+            request.app["collections"].all_public
+        )
+        entries += [
+            _url_entry(
+                f"{site}/workshop/collections/{c.id}/{c.slug}/", c.updated_at
+            )
+            for c in collections
+        ]
+        body = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            + "".join(entries)
+            + "</urlset>"
+        )
+        return web.Response(
+            text=body,
+            content_type="application/xml",
+            headers={"Cache-Control": "public, max-age=1800"},
+        )
+
+    async def sitemap_items(request: web.Request) -> web.Response:
+        chunk = int(request.match_info["chunk"])
+        if chunk < 1:
+            raise web.HTTPNotFound()
+        ids = await asyncio.to_thread(
+            repository.item_ids_page,
+            offset=(chunk - 1) * SITEMAP_CHUNK,
+            limit=SITEMAP_CHUNK,
+        )
+        site = _site()
+        body = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            + "".join(_url_entry(f"{site}/workshop/items/{i}/") for i in ids)
+            + "</urlset>"
+        )
+        return web.Response(
+            text=body,
+            content_type="application/xml",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
     async def page_account(request: web.Request) -> web.Response:
         user = request.get("user")
         if not user:
@@ -1401,6 +1613,7 @@ def create_app(
             raise web.HTTPFound("/workshop/auth/login?next=/workshop/account/")
         steam_id = await steam_id_for(request, user)
         profile = await asyncio.to_thread(community.profile, str(user["sub"]))
+        profile_error = request.query.get("profile-error")
         claimed = await asyncio.to_thread(community.claims_for, str(user["sub"]))
         active = [claim for claim in claimed.values() if claim.revoked_at is None]
         items: list[dict[str, Any]] = []
@@ -1421,6 +1634,7 @@ def create_app(
             steam_id=steam_id,
             items=items,
             profile=profile,
+            profile_error=profile_error,
             claim_count=len(active),
         )
 
@@ -1437,6 +1651,15 @@ def create_app(
     app.router.add_get("/workshop/items/{id:\\d+}/viewer/", page_item_viewer)
     app.router.add_post("/workshop/items/{id:\\d+}/like", item_like)
     app.router.add_post("/workshop/items/{id:\\d+}/collect", item_collect)
+    app.router.add_post("/workshop/profile", profile_save)
+    app.router.add_get(
+        "/api/workshop/items/{id:\\d+}/engagement", api_item_engagement
+    )
+    app.router.add_get("/workshop/sitemap.xml", sitemap_index)
+    app.router.add_get("/workshop/sitemap-pages.xml", sitemap_pages)
+    app.router.add_get("/workshop/sitemap-items-{chunk:\\d+}.xml", sitemap_items)
+    app.router.add_get("/workshop/items/{id:\\d+}/edit", item_edit)
+    app.router.add_post("/workshop/items/{id:\\d+}/edit", item_edit)
     app.router.add_get("/workshop/collections/", page_collections)
     app.router.add_get("/workshop/collections/new", page_collection_new)
     app.router.add_post("/workshop/collections/new", page_collection_new)

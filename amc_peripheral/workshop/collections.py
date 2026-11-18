@@ -10,7 +10,6 @@ the scrape stays read-only, and a curated list is community data, not game data.
 
 from __future__ import annotations
 
-import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,15 +44,14 @@ CREATE INDEX IF NOT EXISTS ix_collection_item_order
     ON workshop_collection_item(collection_id, position);
 """
 
+from .text import clean_text as _clean_text
+from .text import slugify
+
 MAX_COLLECTIONS = 50
 MAX_ITEMS = 100
 TITLE_MAX = 40
 DESCRIPTION_MAX = 400
 VISIBILITIES = {"public", "unlisted"}
-
-_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
-_URL = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
-_SLUG_STRIP = re.compile(r"[^a-z0-9]+")
 
 
 class CollectionError(ValueError):
@@ -61,23 +59,11 @@ class CollectionError(ValueError):
 
 
 def clean_text(value: str | None, *, limit: int, field: str) -> str:
-    """Trim, drop control characters and URLs, cap length.
-
-    URLs are stripped rather than rendered: a public description field is a
-    free link farm otherwise, and the club already has a place to share links.
-    """
-    text = (value or "").strip()
-    text = _CONTROL.sub("", text)
-    text = _URL.sub("", text)
-    text = re.sub(r"[ \t]{2,}", " ", text)
-    if len(text) > limit:
-        raise CollectionError(f"{field} is limited to {limit} characters.")
-    return text
-
-
-def slugify(title: str, *, fallback: str = "collection") -> str:
-    slug = _SLUG_STRIP.sub("-", title.lower()).strip("-")[:60].strip("-")
-    return slug or fallback
+    """The shared text rules, reported as a collection validation failure."""
+    try:
+        return _clean_text(value, limit=limit, field=field)
+    except ValueError as exc:
+        raise CollectionError(str(exc)) from None
 
 
 @dataclass(frozen=True)
@@ -207,6 +193,24 @@ class CollectionStore:
                 (int(collection_id),),
             ).fetchall()
         return [row[0] for row in rows]
+
+    def count_for_item(self, workshop_id: int) -> int:
+        with self._connect() as conn:
+            return int(
+                conn.execute(
+                    "SELECT COUNT(DISTINCT ci.collection_id)"
+                    " FROM workshop_collection_item ci"
+                    " JOIN workshop_collection c ON c.id = ci.collection_id"
+                    " WHERE ci.workshop_id = ? AND c.visibility = 'public' AND c.hidden = 0",
+                    (int(workshop_id),),
+                ).fetchone()[0]
+            )
+
+    def all_public(self) -> list[Collection]:
+        """Every listed collection — sitemap use, so no pagination."""
+        with self._connect() as conn:
+            rows = conn.execute(_LIST_SELECT + " " + _LIST_ORDER["new"]).fetchall()
+        return [_row_to_collection(row) for row in rows]
 
     def cover_ids(self, collection_ids: list[int]) -> dict[int, int]:
         """First build of each collection, one query for a whole index page."""

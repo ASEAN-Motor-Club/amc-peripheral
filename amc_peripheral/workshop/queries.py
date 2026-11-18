@@ -306,6 +306,24 @@ class WorkshopRepository:
             ).fetchone()
         return _card(row) if row else None
 
+    def item_ids_page(self, *, offset: int, limit: int) -> list[int]:
+        """Ids in a stable order, for sitemaps and bulk work."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT w.id FROM workshop w WHERE {PUBLIC_WHERE}"
+                " ORDER BY w.id LIMIT ? OFFSET ?",
+                (int(limit), int(offset)),
+            ).fetchall()
+        return [row[0] for row in rows]
+
+    def count_public_items(self) -> int:
+        with self._connect() as conn:
+            return int(
+                conn.execute(
+                    f"SELECT COUNT(*) FROM workshop w WHERE {PUBLIC_WHERE}"
+                ).fetchone()[0]
+            )
+
     def items_by_ids(self, workshop_ids: list[int]) -> list[dict[str, Any]]:
         """Cards for a given set of ids, in the order asked for.
 
