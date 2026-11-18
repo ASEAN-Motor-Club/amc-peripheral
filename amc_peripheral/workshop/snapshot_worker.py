@@ -173,6 +173,43 @@ class RemoteRenderer:
             raise RemoteUnavailable(f"unexpected payload: {content_type}")
         return body
 
+    def warm(self) -> str | None:
+        """Ask the agent to re-render its last page before the first real job.
+
+        A freshly launched Chrome pays the module, context and shader cost on
+        whatever renders first; doing it here keeps that off a live job. Best
+        effort: an agent without ``/warm`` (404) or a transport failure yields
+        ``None`` and the caller carries on.
+        """
+        import json
+        import urllib.error
+        import urllib.request
+
+        request = urllib.request.Request(
+            f"{self._url}/warm",
+            data=json.dumps({"force": False}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(
+                request, timeout=self._settings.remote_timeout_s
+            ) as response:
+                payload = json.loads(response.read() or b"{}")
+        except urllib.error.HTTPError as exc:
+            # 404 = older agent without the endpoint; not a renderer failure.
+            if exc.code >= 500:
+                self._mark_down(f"warm HTTP {exc.code}")
+            return None
+        except Exception as exc:  # noqa: BLE001 - refused, timeout, ...
+            self._mark_down(f"warm: {exc}")
+            return None
+        if not isinstance(payload, dict) or not payload.get("warm"):
+            return None
+        if payload.get("skipped"):
+            return "already warm"
+        return f"{payload.get('ms')} ms"
+
 
 class LocalBrowser:
     """Lazily started local Chromium used when the remote renderer is out."""
@@ -360,6 +397,13 @@ def run(settings: SnapshotSettings, *, once: bool = False, max_jobs: int = 0) ->
         RemoteRenderer(settings, settings.remote_url) if settings.remote_url else None
     )
     local = LocalBrowser(settings)
+    if remote is not None:
+        status = remote.warm()
+        log.info(
+            "remote renderer %s %s",
+            settings.remote_url,
+            f"warm ({status})" if status else "(warm-up unavailable)",
+        )
     try:
         while True:
             store.heartbeat(owner)
