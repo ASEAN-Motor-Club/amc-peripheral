@@ -30,6 +30,8 @@ class WorkshopSettings:
     cache_ttl_seconds: float = 60.0
     similarity_min: float = 0.60
     similarity_copy_threshold: float = 0.95
+    similarity_flag_min_layers: int = 8
+    similarity_flag_min_similarity: float = 0.98
     similarity_limit: int = 6
     character_vehicle_dsn: str | None = None
     character_vehicle_public: bool = False
@@ -71,18 +73,18 @@ class WorkshopSettings:
             prewarm_queue_limit=int(
                 os.environ.get("AMC_WORKSHOP_PREWARM_QUEUE_LIMIT", "50")
             ),
-            cache_ttl_seconds=float(
-                os.environ.get("AMC_WORKSHOP_CACHE_SECONDS", "60")
-            ),
-            similarity_min=float(
-                os.environ.get("AMC_WORKSHOP_SIMILARITY_MIN", "0.60")
-            ),
+            cache_ttl_seconds=float(os.environ.get("AMC_WORKSHOP_CACHE_SECONDS", "60")),
+            similarity_min=float(os.environ.get("AMC_WORKSHOP_SIMILARITY_MIN", "0.60")),
             similarity_copy_threshold=float(
                 os.environ.get("AMC_WORKSHOP_SIMILARITY_COPY", "0.95")
             ),
-            similarity_limit=int(
-                os.environ.get("AMC_WORKSHOP_SIMILARITY_LIMIT", "6")
+            similarity_flag_min_layers=int(
+                os.environ.get("AMC_WORKSHOP_SIMILARITY_FLAG_LAYERS", "8")
             ),
+            similarity_flag_min_similarity=float(
+                os.environ.get("AMC_WORKSHOP_SIMILARITY_FLAG_MIN", "0.98")
+            ),
+            similarity_limit=int(os.environ.get("AMC_WORKSHOP_SIMILARITY_LIMIT", "6")),
             character_vehicle_dsn=os.environ.get("AMC_CHARACTER_VEHICLE_DSN"),
             character_vehicle_public=os.environ.get(
                 "AMC_CHARACTER_VEHICLE_PUBLIC", ""

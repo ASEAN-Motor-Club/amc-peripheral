@@ -13,12 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-PUBLIC_WHERE = (
-    "w.deleted_at IS NULL AND COALESCE(w.hidden, 0) = 0 AND w.account_id > 0"
-)
-POPULAR_ORDER = (
-    "COALESCE(w.installed, 0) DESC, COALESCE(w.votes, 0) DESC, w.id DESC"
-)
+PUBLIC_WHERE = "w.deleted_at IS NULL AND COALESCE(w.hidden, 0) = 0 AND w.account_id > 0"
+POPULAR_ORDER = "COALESCE(w.installed, 0) DESC, COALESCE(w.votes, 0) DESC, w.id DESC"
 NEW_ORDER = "w.created_at DESC, w.id DESC"
 
 CARD_COLUMNS = """
@@ -305,25 +301,34 @@ class WorkshopRepository:
         limit: int = 6,
         min_sim: float = 0.60,
         copy_threshold: float = 0.95,
+        flag_min_layers: int = 8,
+        flag_min_similarity: float = 0.98,
     ) -> dict[str, Any]:
         """Ranked similar builds for ``item`` from the precomputed index.
 
         The index lives in the site database (see ``similarity.build``); the
         item rows themselves still come from the read-only source database.
-        ``flagged`` is true when at least one match reaches ``copy_threshold``
-        *and* was uploaded before this item — that is the only ordering signal
-        the archive has, so it is what "potential copy" is based on.
+        ``flagged`` is true only when the match reaches the higher flag
+        threshold, predates this item, and the smaller of the two builds has
+        enough decal layers to make a copy accusation meaningful.
         """
         limit = max(1, min(int(limit), 24))
-        empty = {"items": [], "flagged": False, "origin": None,
-                 "originSimilarity": None, "threshold": copy_threshold}
+        empty = {
+            "items": [],
+            "flagged": False,
+            "origin": None,
+            "originSimilarity": None,
+            "threshold": copy_threshold,
+        }
         if self.site_db is None or not self.site_db.is_file():
             return empty
 
         item_id = int(item["id"])
         vehicle = item["vehicleKey"]
         try:
-            conn = sqlite3.connect(f"file:{self.site_db}?mode=ro", uri=True, timeout=2.0)
+            conn = sqlite3.connect(
+                f"file:{self.site_db}?mode=ro", uri=True, timeout=2.0
+            )
             conn.row_factory = sqlite3.Row
             try:
                 rows = conn.execute(
@@ -354,6 +359,8 @@ class WorkshopRepository:
             }
 
         created = str(item.get("createdAt") or "")
+        item_layers = int(item.get("decalLayers") or 0)
+        flag_similarity = max(copy_threshold, flag_min_similarity)
         gallery: list[dict[str, Any]] = []
         origin: dict[str, Any] | None = None
         origin_similarity: float | None = None
@@ -365,7 +372,12 @@ class WorkshopRepository:
             card["isEarlier"] = bool(card["createdAt"] and card["createdAt"] < created)
             if len(gallery) < limit:
                 gallery.append(card)
-            if sim >= copy_threshold and card["isEarlier"]:
+            smaller_layers = min(item_layers, int(card.get("decalLayers") or 0))
+            if (
+                sim >= flag_similarity
+                and smaller_layers >= flag_min_layers
+                and card["isEarlier"]
+            ):
                 if origin is None or card["createdAt"] < origin["createdAt"]:
                     origin = card
                     origin_similarity = card["similarity"]
@@ -443,7 +455,9 @@ class WorkshopRepository:
                         "Popularity changed; reload the first page",
                     )
                 key = cursor_data.get("k")
-                if not isinstance(key, list) or len(key) != (3 if sort == "popular" else 2):
+                if not isinstance(key, list) or len(key) != (
+                    3 if sort == "popular" else 2
+                ):
                     raise InvalidCursor("invalid_cursor", "Invalid cursor key")
                 if sort == "popular":
                     where += (
@@ -490,7 +504,9 @@ class WorkshopRepository:
             "sort": sort,
         }
 
-    def items_for_steam_id(self, steam_id: int, limit: int = 24) -> list[dict[str, Any]]:
+    def items_for_steam_id(
+        self, steam_id: int, limit: int = 24
+    ) -> list[dict[str, Any]]:
         """Builds a club member uploaded, resolved through ``club_character``.
 
         The workshop scrape carries no Steam identity, so Discord → player →
@@ -637,6 +653,7 @@ class WorkshopRepository:
         cached_home = self._site_home()
         if cached_home:
             return cached_home
+
         def build() -> dict[str, Any]:
             popular = self.list_items(sort="popular", limit=limit)
             newest = self.list_items(sort="new", limit=limit)
@@ -653,6 +670,7 @@ class WorkshopRepository:
         cached_stats = self._site_stats()
         if cached_stats is not None:
             return cached_stats
+
         def build():
             with self._connect() as conn:
                 row = conn.execute(

@@ -95,14 +95,14 @@ def build_fixture_db(path: Path) -> None:
         # id 1 is chronologically newest even though a higher id exists. Its
         # installed/votes tuple exercises popular ordering and NULL safety.
         (1, "Vamos3", 11, "g1", "2026-11-15 12:00:00", "a" * 64, 1, 1, 1, 0,
-         1, 2, '[{"slot":"Body_01"}]', '["drift","night"]', 3, "Alice", 5, 100, 0),
+         9, 2, '[{"slot":"Body_01"}]', '["drift","night"]', 3, "Alice", 5, 100, 0),
         # id 2 is older; id DESC would incorrectly put it before... nothing, but
         # id 1 above proves created_at wins over a lower id only with id 9 below.
         (2, "Boxy", 22, "g2", "2024-01-01 00:00:00", "b" * 64, 1, 0, 0, 0,
          0, 0, None, None, 1, "Bob", 1, 5, 0),
         # Equal installed, lower votes than id 1.
         (3, "Vamos3", 11, "g1", "2025-05-01 00:00:00", "c" * 64, 1, 0, 0, 1,
-         0, 0, None, '["tuned"]', 2, "Alice", 4, 100, 0),
+         8, 0, None, '["tuned"]', 2, "Alice", 4, 100, 0),
         # Canary: account_id 0 and epoch garbage.
         (999999999, "Zydro_Police", 0, "canary", "2000-01-01 00:00:00", "d" * 64,
          1, 0, 0, 0, 0, 0, None, None, 0, None, None, None, 0),

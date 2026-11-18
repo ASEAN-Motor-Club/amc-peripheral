@@ -20,11 +20,13 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sqlite3
 import sys
 import time
 import zlib
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Iterable
 
@@ -33,6 +35,7 @@ DEFAULT_MIN_LAYERS = 3
 COPY_THRESHOLD = 0.95
 GENERIC_FINGERPRINT = 400
 CANDIDATE_MIN = 0.20
+INDEX_VERSION = 2
 
 # kernel scales
 S_POS = 120.0
@@ -56,6 +59,15 @@ CREATE TABLE IF NOT EXISTS similar_pair (
 );
 CREATE INDEX IF NOT EXISTS ix_similar_a ON similar_pair(a, sim DESC);
 CREATE INDEX IF NOT EXISTS ix_similar_b ON similar_pair(b, sim DESC);
+CREATE TABLE IF NOT EXISTS similar_item (
+    workshop_id INTEGER PRIMARY KEY,
+    vehicle_key TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    layer_count INTEGER NOT NULL,
+    indexed_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_similar_item_vehicle
+    ON similar_item(vehicle_key);
 CREATE TABLE IF NOT EXISTS similar_runs (
     run_id      INTEGER PRIMARY KEY,
     finished_at TEXT NOT NULL,
@@ -64,6 +76,10 @@ CREATE TABLE IF NOT EXISTS similar_runs (
     pairs       INTEGER NOT NULL,
     min_sim     REAL NOT NULL,
     min_layers  INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS similar_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 """
 
@@ -95,7 +111,9 @@ def _layers_from_payload(blob: bytes) -> list[Layer]:
         data = json.loads(zlib.decompress(blob))
     except (zlib.error, ValueError, TypeError):
         return []
-    decal = ((data.get("decal") or {}).get("decal") or {}) if isinstance(data, dict) else {}
+    decal = (
+        ((data.get("decal") or {}).get("decal") or {}) if isinstance(data, dict) else {}
+    )
     out = []
     for raw in decal.get("decalLayers") or []:
         if not isinstance(raw, dict):
@@ -103,13 +121,20 @@ def _layers_from_payload(blob: bytes) -> list[Layer]:
         colour = raw.get("color") or {}
         position = raw.get("position") or {}
         rotation = raw.get("rotation") or {}
-        out.append(_layer(
-            raw.get("decalKey") or "",
-            (colour.get("r"), colour.get("g"), colour.get("b")),
-            position.get("x"), position.get("y"),
-            rotation.get("pitch"), rotation.get("yaw"), rotation.get("roll"),
-            raw.get("decalScale"), raw.get("stretch"), raw.get("flags"),
-        ))
+        out.append(
+            _layer(
+                raw.get("decalKey") or "",
+                (colour.get("r"), colour.get("g"), colour.get("b")),
+                position.get("x"),
+                position.get("y"),
+                rotation.get("pitch"),
+                rotation.get("yaw"),
+                rotation.get("roll"),
+                raw.get("decalScale"),
+                raw.get("stretch"),
+                raw.get("flags"),
+            )
+        )
     return out
 
 
@@ -134,7 +159,21 @@ def load_vehicle_layers(
     ).fetchone()
     layers: dict[int, list[Layer]] = defaultdict(list)
     if have_children:
-        for wid, key, r, g, b, x, y, pitch, yaw, roll, scale, stretch, flags in conn.execute(
+        for (
+            wid,
+            key,
+            r,
+            g,
+            b,
+            x,
+            y,
+            pitch,
+            yaw,
+            roll,
+            scale,
+            stretch,
+            flags,
+        ) in conn.execute(
             "SELECT workshop_id, decal_key, r, g, b, x, y, pitch, yaw, roll, "
             "scale, stretch, flags FROM workshop_decal_layer "
             "WHERE workshop_id IN (SELECT id FROM workshop WHERE vehicle_key = ? "
@@ -143,7 +182,9 @@ def load_vehicle_layers(
         ):
             if int(wid) in meta:
                 layers[int(wid)].append(
-                    _layer(key, (r, g, b), x, y, pitch, yaw, roll, scale, stretch, flags)
+                    _layer(
+                        key, (r, g, b), x, y, pitch, yaw, roll, scale, stretch, flags
+                    )
                 )
     else:
         for wid, blob in conn.execute(
@@ -159,6 +200,7 @@ def load_vehicle_layers(
 # scoring
 # --------------------------------------------------------------------------- #
 
+
 def angle_delta(a: float, b: float, mod: float = 360.0) -> float:
     diff = abs((a - b) % mod)
     return min(diff, mod - diff)
@@ -170,18 +212,20 @@ def layer_distance(a: Layer, b: Layer) -> float:
     droll = angle_delta(a["roll"], b["roll"]) / S_ROT
     dpitch = angle_delta(a["pitch"], b["pitch"]) / S_ROT
     dscale = abs(math.log(max(a["scale"], 1e-4) / max(b["scale"], 1e-4))) / S_SCALE
-    dstretch = abs(math.log(max(a["stretch"], 1e-4) / max(b["stretch"], 1e-4))) / S_STRETCH
+    dstretch = (
+        abs(math.log(max(a["stretch"], 1e-4) / max(b["stretch"], 1e-4))) / S_STRETCH
+    )
     dcolor = math.dist(a["rgb"], b["rgb"]) / S_COLOR
     dflags = 0.0 if a["flags"] == b["flags"] else 0.5
     return (
-        0.34 * dpos ** 2
-        + 0.12 * dyaw ** 2
-        + 0.16 * droll ** 2
-        + 0.04 * dpitch ** 2
-        + 0.12 * dscale ** 2
-        + 0.10 * dstretch ** 2
-        + 0.09 * dcolor ** 2
-        + 0.03 * dflags ** 2
+        0.34 * dpos**2
+        + 0.12 * dyaw**2
+        + 0.16 * droll**2
+        + 0.04 * dpitch**2
+        + 0.12 * dscale**2
+        + 0.10 * dstretch**2
+        + 0.09 * dcolor**2
+        + 0.03 * dflags**2
     ) ** 0.5
 
 
@@ -195,14 +239,19 @@ def layer_similarity(a: Layer, b: Layer) -> float:
 def fingerprint(layer: Layer, pos: float = 25.0, ang: float = 10.0, scale: float = 8.0):
     return (
         layer["key"],
-        round(layer["x"] / pos), round(layer["y"] / pos),
-        round(layer["yaw"] / ang) % 36, round(layer["roll"] / ang) % 36,
-        round(layer["scale"] * scale), round(layer["stretch"] * scale),
+        round(layer["x"] / pos),
+        round(layer["y"] / pos),
+        round(layer["yaw"] / ang) % 36,
+        round(layer["roll"] / ang) % 36,
+        round(layer["scale"] * scale),
+        round(layer["stretch"] * scale),
         layer["flags"],
     )
 
 
-def greedy_dice(a_layers: list[Layer], b_layers: list[Layer], gate: float = 0.05) -> float:
+def greedy_dice(
+    a_layers: list[Layer], b_layers: list[Layer], gate: float = 0.05
+) -> float:
     """Unique-assignment greedy Dice — the cheap score used for pruning."""
     if not a_layers or not b_layers:
         return 0.0
@@ -238,7 +287,8 @@ def matched_similarity(a_layers: list[Layer], b_layers: list[Layer]) -> float:
                 weights[i][j] = layer_similarity(layer, other)
     assignment = _hungarian(weights, size)
     total = sum(
-        weights[i][j] for i, j in assignment
+        weights[i][j]
+        for i, j in assignment
         if i < len(a_layers) and j < len(b_layers) and weights[i][j] > 0.02
     )
     return 2.0 * total / (len(a_layers) + len(b_layers))
@@ -297,16 +347,27 @@ def pair_similarity(a_layers: list[Layer], b_layers: list[Layer]) -> float:
 # index build
 # --------------------------------------------------------------------------- #
 
+
 def scan_vehicle(
     conn: sqlite3.Connection,
     vehicle_key: str,
     *,
     min_sim: float = DEFAULT_MIN_SIM,
     min_layers: int = DEFAULT_MIN_LAYERS,
+    changed: set[int] | None = None,
 ) -> list[tuple[str, int, int, float, str, str]]:
+    """Score candidate pairs for a vehicle.
+
+    ``changed`` limits scoring to pairs involving those workshop ids.  The
+    candidate index still covers every item, but unchanged/unchanged pairs are
+    left untouched for the incremental build.
+    """
     layers, meta = load_vehicle_layers(conn, vehicle_key)
     ids = [wid for wid in sorted(layers) if len(layers[wid]) >= min_layers]
     if len(ids) < 2:
+        return []
+    targets = ids if changed is None else [wid for wid in ids if wid in changed]
+    if not targets:
         return []
 
     fingerprints = {wid: {fingerprint(layer) for layer in layers[wid]} for wid in ids}
@@ -314,25 +375,105 @@ def scan_vehicle(
     for wid in ids:
         for value in fingerprints[wid]:
             index[value].append(wid)
-    candidates: dict[tuple[int, int], int] = defaultdict(int)
-    for members in index.values():
-        if len(members) < 2 or len(members) > GENERIC_FINGERPRINT:
-            continue
-        for first in range(len(members)):
-            for second in range(first + 1, len(members)):
-                candidates[(members[first], members[second])] += 1
 
+    seen: set[tuple[int, int]] = set()
     rows: list[tuple[str, int, int, float, str, str]] = []
-    for (left, right), _shared in candidates.items():
-        if greedy_dice(layers[left], layers[right]) < CANDIDATE_MIN:
-            continue
-        score = pair_similarity(layers[left], layers[right])
-        if score < min_sim:
-            continue
-        a, b = (left, right) if left < right else (right, left)
-        rows.append((vehicle_key, a, b, round(score, 4),
-                     meta[a][1], meta[b][1]))
+    for wid in targets:
+        candidates: dict[int, int] = defaultdict(int)
+        for value in fingerprints[wid]:
+            members = index[value]
+            if len(members) < 2 or len(members) > GENERIC_FINGERPRINT:
+                continue
+            for other in members:
+                if other != wid:
+                    candidates[other] += 1
+        for other in candidates:
+            left, right = (wid, other) if wid < other else (other, wid)
+            if (left, right) in seen:
+                continue
+            seen.add((left, right))
+            if greedy_dice(layers[left], layers[right]) < CANDIDATE_MIN:
+                continue
+            score = pair_similarity(layers[left], layers[right])
+            if score < min_sim:
+                continue
+            rows.append(
+                (
+                    vehicle_key,
+                    left,
+                    right,
+                    round(score, 4),
+                    meta[left][1],
+                    meta[right][1],
+                )
+            )
     return rows
+
+
+def _public_items(
+    conn: sqlite3.Connection, vehicle_key: str
+) -> dict[int, tuple[str, int]]:
+    """Return public workshop items as ``{id: (content_hash, layer_count)}``."""
+    return {
+        int(wid): (str(content_hash or ""), int(layer_count or 0))
+        for wid, content_hash, layer_count in conn.execute(
+            "SELECT id, json_sha256, decal_layers FROM workshop "
+            f"WHERE vehicle_key = ? AND {PUBLIC_WHERE}",
+            (vehicle_key,),
+        )
+    }
+
+
+def _indexed_items(conn: sqlite3.Connection, vehicle_key: str) -> dict[int, str]:
+    return {
+        int(wid): str(content_hash or "")
+        for wid, content_hash in conn.execute(
+            "SELECT workshop_id, content_hash FROM similar_item WHERE vehicle_key = ?",
+            (vehicle_key,),
+        )
+    }
+
+
+def _scan_plan(
+    source_db: str,
+    vehicle_key: str,
+    changed: list[int],
+    min_sim: float,
+    min_layers: int,
+) -> tuple[str, list[tuple[str, int, int, float, str, str]]]:
+    """Worker entry point: score only pairs touching ``changed``."""
+    conn = sqlite3.connect(f"file:{source_db}?mode=ro", uri=True, timeout=10.0)
+    try:
+        rows = scan_vehicle(
+            conn,
+            vehicle_key,
+            min_sim=min_sim,
+            min_layers=min_layers,
+            changed=set(changed),
+        )
+    finally:
+        conn.close()
+    return vehicle_key, rows
+
+
+def _chunks(values: list[int], size: int = 400) -> Iterable[list[int]]:
+    for start in range(0, len(values), size):
+        yield values[start : start + size]
+
+
+def _delete_vehicle_pairs(
+    conn: sqlite3.Connection, vehicle_key: str, victims: list[int] | None
+) -> None:
+    if victims is None:
+        conn.execute("DELETE FROM similar_pair WHERE vehicle_key = ?", (vehicle_key,))
+        return
+    for chunk in _chunks(victims):
+        marks = ",".join("?" for _ in chunk)
+        conn.execute(
+            f"DELETE FROM similar_pair WHERE vehicle_key = ? "
+            f"AND (a IN ({marks}) OR b IN ({marks}))",
+            [vehicle_key, *chunk, *chunk],
+        )
 
 
 def build(
@@ -342,9 +483,16 @@ def build(
     vehicles: Iterable[str] | None = None,
     min_sim: float = DEFAULT_MIN_SIM,
     min_layers: int = DEFAULT_MIN_LAYERS,
+    workers: int = 1,
+    full: bool = False,
     progress: Callable[[str], None] | None = None,
 ) -> dict[str, int]:
-    """Recompute the similarity index in ``site_db`` from ``source_db``."""
+    """Build or incrementally update the similarity index in ``site_db``.
+
+    Unchanged vehicles are skipped entirely.  In a changed vehicle only pairs
+    touching a new/edited/removed item are rescored; pairs between unchanged
+    items are preserved.  ``full=True`` forces a clean rebuild.
+    """
     say = progress or (lambda message: None)
     site_db.parent.mkdir(parents=True, exist_ok=True)
     out = sqlite3.connect(site_db, timeout=30.0)
@@ -362,45 +510,203 @@ def build(
     else:
         targets = [str(v) for v in vehicles]
 
-    started = time.time()
-    total_pairs = 0
-    models = 0
-    for position, vehicle in enumerate(targets, 1):
-        rows = scan_vehicle(source, vehicle, min_sim=min_sim, min_layers=min_layers)
-        out.execute("DELETE FROM similar_pair WHERE vehicle_key = ?", (vehicle,))
+    last_run = out.execute(
+        "SELECT min_sim, min_layers FROM similar_runs ORDER BY run_id DESC LIMIT 1"
+    ).fetchone()
+    params_changed = bool(
+        last_run
+        and (
+            abs(float(last_run[0]) - float(min_sim)) > 1e-9
+            or int(last_run[1]) != int(min_layers)
+        )
+    )
+    has_state = out.execute("SELECT 1 FROM similar_item LIMIT 1").fetchone() is not None
+    stored_version = out.execute(
+        "SELECT value FROM similar_meta WHERE key = 'version'"
+    ).fetchone()
+    version_changed = not stored_version or stored_version[0] != str(INDEX_VERSION)
+    full_run = bool(full or params_changed or version_changed or not has_state)
+
+    plans: list[dict] = []
+    for vehicle in targets:
+        public = _public_items(source, vehicle)
+        indexed = _indexed_items(out, vehicle)
+        if full_run:
+            changed = set(public)
+            stale = set(indexed)
+        else:
+            changed = {
+                wid
+                for wid, (content_hash, _layers) in public.items()
+                if indexed.get(wid) != content_hash
+            }
+            stale = set(indexed) - set(public)
+        plans.append(
+            {
+                "vehicle": vehicle,
+                "public": public,
+                "changed": changed,
+                "stale": stale,
+                "full": full_run,
+            }
+        )
+
+    pending = [plan for plan in plans if plan["changed"] or plan["stale"]]
+    say(
+        f"{len(targets)} vehicles, {len(pending)} changed, "
+        f"{sum(len(p['changed']) for p in plans)} new/edited items"
+    )
+
+    results: dict[str, list[tuple[str, int, int, float, str, str]]] = {}
+    runnable = [plan for plan in pending if plan["changed"]]
+    workers = max(1, int(workers or 1))
+    if workers > 1 and len(runnable) > 1:
+        with ProcessPoolExecutor(max_workers=min(workers, len(runnable))) as pool:
+            futures = {
+                pool.submit(
+                    _scan_plan,
+                    str(source_db),
+                    plan["vehicle"],
+                    sorted(plan["changed"]),
+                    min_sim,
+                    min_layers,
+                ): plan
+                for plan in runnable
+            }
+            for future in as_completed(futures):
+                vehicle, rows = future.result()
+                results[vehicle] = rows
+                say(f"[{len(results)}/{len(runnable)}] {vehicle}: {len(rows)} pairs")
+    else:
+        for position, plan in enumerate(runnable, 1):
+            _vehicle, rows = _scan_plan(
+                str(source_db),
+                plan["vehicle"],
+                sorted(plan["changed"]),
+                min_sim,
+                min_layers,
+            )
+            results[plan["vehicle"]] = rows
+            say(f"[{position}/{len(runnable)}] {plan['vehicle']}: {len(rows)} pairs")
+
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    for plan in pending:
+        vehicle = plan["vehicle"]
+        victims = None if plan["full"] else sorted(plan["changed"] | plan["stale"])
+        _delete_vehicle_pairs(out, vehicle, victims)
+        rows = results.get(vehicle, [])
         out.executemany(
             "INSERT OR REPLACE INTO similar_pair "
             "(vehicle_key, a, b, sim, created_a, created_b) VALUES (?,?,?,?,?,?)",
             rows,
         )
-        out.commit()
-        total_pairs += len(rows)
-        models += 1
-        say(
-            f"[{position}/{len(targets)}] {vehicle}: {len(rows)} pairs"
-            f" ({time.time() - started:.0f}s)"
+        if plan["full"]:
+            out.execute("DELETE FROM similar_item WHERE vehicle_key = ?", (vehicle,))
+            indexed_now = plan["public"]
+        else:
+            stale = sorted(plan["stale"])
+            for chunk in _chunks(stale):
+                marks = ",".join("?" for _ in chunk)
+                out.execute(
+                    f"DELETE FROM similar_item WHERE vehicle_key = ? "
+                    f"AND workshop_id IN ({marks})",
+                    [vehicle, *chunk],
+                )
+            indexed_now = {
+                wid: plan["public"][wid]
+                for wid in plan["changed"]
+                if wid in plan["public"]
+            }
+        out.executemany(
+            "INSERT OR REPLACE INTO similar_item "
+            "(workshop_id, vehicle_key, content_hash, layer_count, indexed_at) "
+            "VALUES (?,?,?,?,?)",
+            [
+                (wid, vehicle, content_hash, layer_count, now)
+                for wid, (content_hash, layer_count) in indexed_now.items()
+            ],
         )
+        out.commit()
+
+    if full_run and vehicles is None:
+        if targets:
+            marks = ",".join("?" for _ in targets)
+            out.execute(
+                f"DELETE FROM similar_pair WHERE vehicle_key NOT IN ({marks})",
+                targets,
+            )
+            out.execute(
+                f"DELETE FROM similar_item WHERE vehicle_key NOT IN ({marks})",
+                targets,
+            )
+        else:
+            out.execute("DELETE FROM similar_pair")
+            out.execute("DELETE FROM similar_item")
+
+    if targets:
+        marks = ",".join("?" for _ in targets)
+        total_pairs = int(
+            out.execute(
+                f"SELECT COUNT(*) FROM similar_pair WHERE vehicle_key IN ({marks})",
+                targets,
+            ).fetchone()[0]
+        )
+    else:
+        total_pairs = 0
     out.execute(
-        "INSERT INTO similar_runs (finished_at, vehicles, models, pairs, min_sim, min_layers)"
-        " VALUES (?,?,?,?,?,?)",
-        (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), len(targets), models,
-         total_pairs, min_sim, min_layers),
+        "INSERT INTO similar_runs "
+        "(finished_at, vehicles, models, pairs, min_sim, min_layers) "
+        "VALUES (?,?,?,?,?,?)",
+        (now, len(targets), len(pending), total_pairs, min_sim, min_layers),
+    )
+    out.execute(
+        "INSERT OR REPLACE INTO similar_meta (key, value) VALUES ('version', ?)",
+        (str(INDEX_VERSION),),
     )
     out.commit()
     out.close()
     source.close()
-    return {"vehicles": len(targets), "pairs": total_pairs}
+    return {
+        "vehicles": len(targets),
+        "models": len(pending),
+        "pairs": total_pairs,
+        "changed": sum(len(p["changed"]) for p in plans),
+        "stale": sum(len(p["stale"]) for p in plans),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
     from .config import WorkshopSettings
 
-    parser = argparse.ArgumentParser(description="Build the workshop decal-similarity index")
-    parser.add_argument("--source", type=Path, help="workshop.db (read-only); defaults to AMC_WORKSHOP_DB")
-    parser.add_argument("--site", type=Path, help="site database to write; defaults to AMC_WORKSHOP_SITE_DB")
-    parser.add_argument("--vehicle", action="append", help="limit to a vehicle key (repeatable)")
+    parser = argparse.ArgumentParser(
+        description="Build the workshop decal-similarity index"
+    )
+    parser.add_argument(
+        "--source",
+        type=Path,
+        help="workshop.db (read-only); defaults to AMC_WORKSHOP_DB",
+    )
+    parser.add_argument(
+        "--site",
+        type=Path,
+        help="site database to write; defaults to AMC_WORKSHOP_SITE_DB",
+    )
+    parser.add_argument(
+        "--vehicle", action="append", help="limit to a vehicle key (repeatable)"
+    )
     parser.add_argument("--min-sim", type=float, default=DEFAULT_MIN_SIM)
     parser.add_argument("--min-layers", type=int, default=DEFAULT_MIN_LAYERS)
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=min(4, os.cpu_count() or 1),
+        help="parallel vehicle scans (default: up to 4)",
+    )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="force a clean rebuild instead of the incremental update",
+    )
     args = parser.parse_args(argv)
     source = args.source
     site = args.site
@@ -409,11 +715,19 @@ def main(argv: list[str] | None = None) -> int:
         source = source or settings.source_db
         site = site or settings.site_db
     result = build(
-        source, site, vehicles=args.vehicle,
-        min_sim=args.min_sim, min_layers=args.min_layers,
+        source,
+        site,
+        vehicles=args.vehicle,
+        min_sim=args.min_sim,
+        min_layers=args.min_layers,
+        workers=args.workers,
+        full=args.full,
         progress=lambda message: print(message, flush=True),
     )
-    print(f"indexed {result['pairs']} pairs across {result['vehicles']} vehicles")
+    print(
+        f"indexed {result['pairs']} pairs across {result['vehicles']} vehicles "
+        f"({result['changed']} changed, {result['stale']} removed)"
+    )
     return 0
 
 
