@@ -486,7 +486,7 @@ async function load() {
   }
 
   const [manifest, table] = await Promise.all([
-    fetch(`${vehicle}/${vehicle}.json?v=2`).then(r => r.json()),
+    fetch(`${vehicle}/${vehicle}.json?v=3`).then(r => r.json()),
     fetch(`${vehicle}/materials.json`).then(r => r.json()).catch(() => ({ materials: {} })),
   ]);
   const visibleParts = manifest.parts.filter(p => !p.hidden);
@@ -589,7 +589,21 @@ async function load() {
         // The GLB is rewritten by bake_materials so each primitive's material is
         // named after its UE slot; fall back to slot order if that didn't happen.
         const name = (fallback && defs[fallback]) ? fallback : (order[i] || fallback);
-        const d = defs[name] || defs[fallback];
+        let d = defs[name] || defs[fallback];
+        // A wheel whose atlas texture is missing must not render as white plastic.
+        // The tyre is unpainted rubber in the game; use a matte black fallback only
+        // for wheel meshes, leaving body/interior material handling untouched.
+        if ((/Wheel/i.test(part.class || "") || /^Wheel/i.test(part.id || ""))
+            && (!d || (!d.map && d.mapMissing))) {
+          d = Object.assign({}, d || {}, {
+            baseColor: [0.022, 0.022, 0.024],
+            metalness: 0.0,
+            roughness: 0.88,
+            map: null,
+            roughnessMap: null,
+            metalnessMap: null,
+          });
+        }
         if (part.mesh === "Body") {
           o.geometry.computeBoundingBox();
           const bb = o.geometry.boundingBox.getSize(new THREE.Vector3());
