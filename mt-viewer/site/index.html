@@ -81,8 +81,8 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { DECAL_PROJECTION_GLSL, decalFallbackSlots, decalReceiverSlots } from "./js/decal-projection.js?v=19";
 import { ownerColorForSlot } from "./js/owner-paint.js?v=3";
 import { selectedBodyVariant, isBodyMaterialSlot, liverySlotMatches } from "./js/body-material.js?v=3";
-import { spotlightTarget } from "./js/attachment-lights.js?v=1";
-import { attachmentRootRotation } from "./js/attachment-root.js?v=4";
+import { spotlightTarget } from "./js/attachment-lights.js?v=2";
+import { attachmentRootRotation } from "./js/attachment-root.js?v=5";
 
 const params = new URLSearchParams(location.search);
 const workshopId = params.get("workshop");
@@ -682,8 +682,7 @@ async function load() {
       group.name = `Attachment_${part.slot}`;
       group.userData.attachmentKey = part.key;
       group.position.fromArray(part.position);
-      const actorBasis = (actor.lights || []).length ? [0, 0, 0, 1] : null;
-      group.quaternion.fromArray(attachmentRootRotation(part.rotation, actorBasis));
+      group.quaternion.fromArray(attachmentRootRotation(part.rotation));
       group.scale.fromArray(part.scale);
       const attachmentMatrix = new THREE.Matrix4().compose(group.position, group.quaternion, group.scale);
 
@@ -736,8 +735,11 @@ async function load() {
           }
           light.name = `Light_${part.slot}`;
           light.position.fromArray(ld.position);
-          // UE lights emit along local +X; Three lights emit along -Z.
-          const align = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2);
+          // UE lights emit along local +X; Three lights emit along -Z. The
+          // +90° yaw maps +X to -Z, then the spotlight target is read back from
+          // the resulting quaternion. A -90° alignment put every ray at the
+          // opposite end of the vehicle.
+          const align = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
           light.quaternion.fromArray(ld.rotation).multiply(align);
           if (light.isSpotLight) {
             // Three.js aims spotlights at target.position; rotating the light alone has no effect.
