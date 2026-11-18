@@ -838,14 +838,18 @@ class WorkshopRepository:
             "votes": int(row["votes"] or 0),
         }
 
-    def vehicle_uploads(self, vehicle: str) -> int:
+    def count_items(self, filters: ListFilters | None = None) -> int:
+        filters = filters or ListFilters()
+        where, args = self._where(filters)
         with self._connect() as conn:
             row = conn.execute(
-                f"SELECT COUNT(*) AS total FROM workshop w WHERE {PUBLIC_WHERE} "
-                "AND w.vehicle_key = ?",
-                [vehicle],
+                f"SELECT COUNT(*) AS total FROM workshop w WHERE {where}",
+                args,
             ).fetchone()
         return int(row["total"] if row else 0)
+
+    def vehicle_uploads(self, vehicle: str) -> int:
+        return self.count_items(ListFilters(vehicle=vehicle))
 
     def vehicles(self, limit: int = 200) -> list[dict[str, Any]]:
         sql = f"""
