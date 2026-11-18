@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 
 from amc_peripheral.workshop.queries import WorkshopRepository
+from amc_peripheral.workshop.routes import _date_long
 from amc_peripheral.workshop.similarity import (
     _mirror_layer,
     _transformed_similarity,
@@ -353,3 +354,8 @@ def test_payload_roundtrip_matches_fixture_layers():
     assert len(layers) == 1
     assert layers[0]["key"] == "Numbers_01_077-76"
     assert layers[0]["rgb"] == (255, 0, 0)
+
+
+def test_copy_notice_uses_long_date_format():
+    assert _date_long("2025-02-25 16:58:33") == "25 Feb 2025"
+    assert _date_long("") == ""

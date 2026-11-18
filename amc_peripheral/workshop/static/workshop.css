@@ -219,9 +219,10 @@ details.panel > summary h2 { display: inline; margin: 0; }
 }
 
 /* Decal-similarity gallery + copy flag */
-.notice.copy-flag { border-left-color: var(--danger); background: #241a20; }
+.notice.copy-flag { border-left-color: #d9a441; background: #262218; }
+.notice.copy-flag strong { color: #ffd978; }
 .notice.copy-flag p { margin: 8px 0 0; }
-.notice.copy-flag a { color: #ffd0d0; }
+.notice.copy-flag a { color: #ffe2a3; }
 .similar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px; }
 @media (max-width: 700px) { .similar-grid { grid-template-columns: 1fr; } }
 
