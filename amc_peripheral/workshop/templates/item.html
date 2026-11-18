@@ -97,21 +97,6 @@
     </details>
     {% endif %}
 
-    {% if config.decals %}
-    <details class="panel" open>
-      <summary><span class="panel-title">Decal layers ({{ config.decals|length }})</span></summary>
-      <ol class="detail-list decal-list">
-        {% for decal in config.decals %}
-        <li>
-          <span class="swatch" style="--swatch: rgba({{ decal.color[0] }}, {{ decal.color[1] }}, {{ decal.color[2] }}, {{ decal.color[3] / 255 }})"></span>
-          <code>{{ decal.key }}</code>
-          <span class="muted">scale {{ '%.2f'|format(decal.scale) }} · stretch {{ '%.2f'|format(decal.stretch) }}</span>
-        </li>
-        {% endfor %}
-      </ol>
-    </details>
-    {% endif %}
-
     {% if config.attachments %}
     <details class="panel" open>
       <summary><span class="panel-title">Attachments ({{ config.attachments|length }})</span></summary>
@@ -131,14 +116,31 @@
     {% endif %}
 
     {% if similar and similar['items'] %}
+    {% set older = similar['items']|selectattr('isEarlier')|list %}
+    {% set newer = similar['items']|rejectattr('isEarlier')|list %}
     <section class="panel" aria-labelledby="similar-title" id="similar-builds">
       <h2 id="similar-title">Similar builds</h2>
       <p class="muted">
         Ranked by shared decal work on the {{ item.vehicleKey|vehicle_name }}.
         Matches at {{ (similar.threshold * 100)|round(0)|int }}% or higher against an older upload are flagged as a potential copy.
       </p>
-      <div class="card-grid similar-grid">
-        {% for other in similar['items'] %}{{ card(other) }}{% endfor %}
+      <div class="similar-group">
+        <h3>Potential sources</h3>
+        <p class="muted">Older uploads this build may be based on.</p>
+        <div class="card-grid similar-grid">
+          {% for other in older %}{{ card(other) }}{% else %}
+          <p class="empty">No older matching builds.</p>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="similar-group">
+        <h3>Potential copies</h3>
+        <p class="muted">Newer uploads that may be based on this build.</p>
+        <div class="card-grid similar-grid">
+          {% for other in newer %}{{ card(other) }}{% else %}
+          <p class="empty">No newer matching builds.</p>
+          {% endfor %}
+        </div>
       </div>
     </section>
     {% endif %}

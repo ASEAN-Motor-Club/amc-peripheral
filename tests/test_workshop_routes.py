@@ -112,7 +112,7 @@ async def test_item_page_reports_configuration(client):
     text = await response.text()
     assert "Configuration" in text
     assert "Motor Town: Behind The Wheel" in text
-    assert '<a href="/">Main site</a>' in text
+    assert "Brought to you by" in text
     assert 'id="item-viewer-frame"' in text
     assert 'src="/vehicles/index.html?workshop=1&amp;ui=0&amp;embed=1"' in text
     assert 'id="item-viewer-fullscreen"' in text
@@ -120,7 +120,7 @@ async def test_item_page_reports_configuration(client):
     assert "View in 3D" not in text
     assert "Rendered decals" in text
     assert "snapshot-api" in text
-    assert text.index("Parts (") < text.index("Decal layers (")
+    assert "Decal layers (" not in text
     assert 'class="detail-list part-list"' in text
     redirect = await client.get(
         "/workshop/items/1/viewer/", allow_redirects=False
@@ -171,6 +171,12 @@ async def test_search_finds_authors_and_opens_exact_item_codes(client):
     assert 'action="/workshop/search/"' in text
     assert 'name="q"' in text
     assert "#179250" in text
+    assert "Vehicle types" not in text
+    assert ">Authors</a>" in text
+    assert "Brought to you by" in text
+    assert 'href="/">ASEAN Motor Club</a>' in text
+    assert "Main site" not in text
+    assert "brand-mark" not in text
 
     page = await client.get("/workshop/search/?q=ALI")
     assert page.status == 200
@@ -178,6 +184,12 @@ async def test_search_finds_authors_and_opens_exact_item_codes(client):
     assert "Alice" in body
     assert '/workshop/authors/11/' in body
     assert "Bob" not in body
+
+    vehicle = await client.get("/workshop/search/?q=VAM")
+    assert vehicle.status == 200
+    vehicle_body = await vehicle.text()
+    assert "Vehicles matching" in vehicle_body
+    assert 'href="/workshop/vehicles/Vamos3/"' in vehicle_body
 
     authors = await client.get("/api/workshop/search?q=ALI")
     payload = await authors.json()
