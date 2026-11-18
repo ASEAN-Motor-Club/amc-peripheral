@@ -42,6 +42,7 @@ from .payloads import (
 )
 from .placeholders import vehicle_placeholder_url
 from .queries import (
+    CursorStale,
     ListFilters,
     QueryError,
     WorkshopRepository,
@@ -527,16 +528,26 @@ def create_app(
             tuning=query.get("tuning") == "1",
             club=query.get("club") == "1",
         )
-        data, vehicles = await asyncio.gather(
-            asyncio.to_thread(
-                repository.list_items,
-                sort=query.get("sort", "popular"),
-                filters=filters,
-                limit=settings.page_size,
-                cursor=query.get("cursor"),
-            ),
-            asyncio.to_thread(repository.vehicles),
-        )
+        try:
+            data, vehicles = await asyncio.gather(
+                asyncio.to_thread(
+                    repository.list_items,
+                    sort=query.get("sort", "popular"),
+                    filters=filters,
+                    limit=settings.page_size,
+                    cursor=query.get("cursor"),
+                ),
+                asyncio.to_thread(repository.vehicles),
+            )
+        except CursorStale:
+            # The popularity ranking was rebuilt since this cursor was issued.
+            # Cursors cannot survive a new aggregate run, so restart the listing
+            # at page one instead of showing a dead end.
+            params = [(key, value) for key, value in query.items() if key != "cursor"]
+            target = "/workshop/gallery/"
+            if params:
+                target += "?" + urlencode(params)
+            raise web.HTTPFound(target) from None
         next_query = {key: value for key, value in query.items() if key != "cursor"}
         attach_snapshots(data["items"])
         if data.get("nextCursor"):
