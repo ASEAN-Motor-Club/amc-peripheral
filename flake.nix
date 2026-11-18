@@ -147,6 +147,16 @@
           ...
         }: let
           cfg = config.services.amc-peripheral;
+          # Services resolve this stable symlink at start time. CI publishes a
+          # new Nix closure and flips the link without a nixos-rebuild; the
+          # flake package remains the first-boot fallback.
+          releaseBin = name: pkgs.writeShellScript "amc-workshop-release-${name}" ''
+            release="${cfg.workshop.releaseRoot}/bin/${name}"
+            if [ -x "$release" ]; then
+              exec "$release" "$@"
+            fi
+            exec "${self.packages.${pkgs.system}.default}/bin/${name}" "$@"
+          '';
         in {
           imports = [
             ./radio/liquidsoap.nix
@@ -294,6 +304,15 @@
                 type = lib.types.str;
                 default = "/var/www/www.aseanmotorclub.com/vehicles";
                 description = "Deployed Three.js viewer root.";
+              };
+              releaseRoot = lib.mkOption {
+                type = lib.types.str;
+                default = "/var/lib/amc-workshop/current";
+                description = ''
+                  Stable symlink to the current workshop release. CI flips this
+                  to a Nix store path; services fall back to the flake package
+                  when it is missing.
+                '';
               };
               port = lib.mkOption {
                 type = lib.types.port;
@@ -745,7 +764,7 @@
                   "AMC_WORKSHOP_VIEWER_ROOT=${cfg.workshop.viewerRoot}"
                   "AMC_WORKSHOP_SNAPSHOT_ROOT=/var/lib/amc-workshop/snapshots"
                 ];
-                ExecStart = "${self.packages.${pkgs.system}.default}/bin/amc_workshop_aggregate";
+                ExecStart = "${releaseBin "amc_workshop_aggregate"}";
               };
             };
 
@@ -780,7 +799,7 @@
                   "AMC_WORKSHOP_DB=${cfg.workshop.sourceDb}"
                   "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
                 ];
-                ExecStart = "${self.packages.${pkgs.system}.default}/bin/amc_workshop_similarity";
+                ExecStart = "${releaseBin "amc_workshop_similarity"}";
               };
             };
 
@@ -827,7 +846,7 @@
                 ) cfg.workshop.environmentFile;
               };
               script = ''
-                exec ${self.packages.${pkgs.system}.default}/bin/amc_workshop
+                exec ${releaseBin "amc_workshop"}
               '';
             };
 
@@ -878,7 +897,7 @@
                   "AMC_SNAPSHOT_REMOTE_URL=${cfg.workshop.snapshotRemoteUrl}";
               };
               script = ''
-                exec ${self.packages.${pkgs.system}.default}/bin/amc_workshop_snapshots
+                exec ${releaseBin "amc_workshop_snapshots"}
               '';
             };
 
@@ -912,7 +931,7 @@
                   ];
                 };
                 script = ''
-                  exec ${self.packages.${pkgs.system}.default}/bin/amc_workshop_viewer_origin
+                  exec ${releaseBin "amc_workshop_viewer_origin"}
                 '';
               };
 
