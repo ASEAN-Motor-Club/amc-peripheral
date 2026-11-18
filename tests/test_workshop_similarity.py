@@ -111,8 +111,8 @@ def test_copy_flag_requires_enough_layers(settings):
     assert [item["id"] for item in result["items"]] == [3]
 
 
-def test_copy_flag_requires_high_similarity(settings, tmp_path):
-    site = tmp_path / "site-096.db"
+def test_copy_flag_requires_near_identical_similarity(settings, tmp_path):
+    site = tmp_path / "site-094.db"
     seed_similarity(
         site,
         [
@@ -120,7 +120,7 @@ def test_copy_flag_requires_high_similarity(settings, tmp_path):
                 "Vamos3",
                 1,
                 3,
-                0.96,
+                0.94,
                 "2026-11-15 12:00:00",
                 "2025-05-01 00:00:00",
             ),
@@ -137,6 +137,37 @@ def test_copy_flag_requires_high_similarity(settings, tmp_path):
     )
     assert result["flagged"] is False
     assert [item["id"] for item in result["items"]] == [3]
+
+
+def test_copy_flag_accepts_a_match_with_extra_layers(settings, tmp_path):
+    """A re-share with one added/removed decal still matches at ~0.965."""
+    site = tmp_path / "site-0965.db"
+    seed_similarity(
+        site,
+        [
+            (
+                "Vamos3",
+                1,
+                3,
+                0.9655,
+                "2026-11-15 12:00:00",
+                "2025-05-01 00:00:00",
+            ),
+        ],
+    )
+    repository = WorkshopRepository(settings.source_db, site_db=site, cache_ttl=0)
+    result = repository.similar_items(
+        {
+            "id": 1,
+            "vehicleKey": "Vamos3",
+            "createdAt": "2026-11-15 12:00:00",
+            "decalLayers": 9,
+            "accountId": 99,
+        }
+    )
+    assert result["flagged"] is True
+    assert result["origin"]["id"] == 3
+    assert result["threshold"] == 0.96
 
 
 def test_similar_items_ignores_index_rows_below_the_minimum(settings, tmp_path):

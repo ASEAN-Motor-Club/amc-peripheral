@@ -31,7 +31,7 @@ class WorkshopSettings:
     similarity_min: float = 0.60
     similarity_copy_threshold: float = 0.95
     similarity_flag_min_layers: int = 8
-    similarity_flag_min_similarity: float = 0.98
+    similarity_flag_min_similarity: float = 0.96
     similarity_limit: int = 6
     character_vehicle_dsn: str | None = None
     character_vehicle_public: bool = False
@@ -82,7 +82,7 @@ class WorkshopSettings:
                 os.environ.get("AMC_WORKSHOP_SIMILARITY_FLAG_LAYERS", "8")
             ),
             similarity_flag_min_similarity=float(
-                os.environ.get("AMC_WORKSHOP_SIMILARITY_FLAG_MIN", "0.98")
+                os.environ.get("AMC_WORKSHOP_SIMILARITY_FLAG_MIN", "0.96")
             ),
             similarity_limit=int(os.environ.get("AMC_WORKSHOP_SIMILARITY_LIMIT", "6")),
             character_vehicle_dsn=os.environ.get("AMC_CHARACTER_VEHICLE_DSN"),
