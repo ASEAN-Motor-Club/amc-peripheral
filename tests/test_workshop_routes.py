@@ -14,6 +14,9 @@ async def test_home_page_renders_without_webgl(client):
     assert "Find your next build" in text
     assert "Popular builds" in text
     assert "Vamos3" in text
+    assert 'aria-label="Installs:' in text
+    assert 'aria-label="Votes:' in text
+    assert ">1 May 2025</time>" in text
     assert "webgl" not in text.lower()
     assert "76561198000000000" not in text
 
