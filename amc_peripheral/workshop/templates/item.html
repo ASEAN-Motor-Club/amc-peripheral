@@ -13,6 +13,25 @@
     {% else %}
       <p class="byline muted">Workshop upload · <time datetime="{{ item.createdAt|iso }}">{{ item.createdAt|date_long }}</time></p>
     {% endif %}
+    <div class="like-bar">
+      {% if user %}
+      <form action="/workshop/items/{{ item.id }}/like" method="post" class="like-form">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button type="submit" class="like-button{% if liked %} is-liked{% endif %}"
+                aria-pressed="{{ 'true' if liked else 'false' }}"
+                aria-label="{{ 'Unlike' if liked else 'Like' }} this build">
+          <span aria-hidden="true">&#9829;</span>
+          <span class="like-count">{{ likes }}</span>
+        </button>
+      </form>
+      {% else %}
+      <p class="like-bar">
+        <a href="/workshop/auth/login?next=/workshop/items/{{ item.id }}/">Sign in to like</a>
+        <span class="like-sep">·</span>
+        <span class="like-count">{{ likes }}</span> <span class="muted">likes</span>
+      </p>
+      {% endif %}
+    </div>
     {% if claim %}
       <p class="claim-line">
         <span class="badge">Claimed</span>
