@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 
 from PIL import Image
 
@@ -82,6 +83,25 @@ async def test_gallery_paginates_and_cursor_stays_in_filters(client):
     )
     assert wrong.status == 400
     assert (await wrong.json())["error"]["code"] == "invalid_cursor"
+
+
+async def test_gallery_stale_popular_cursor_redirects_to_first_page(client, settings):
+    first = await client.get("/api/workshop/items?sort=popular&limit=2")
+    assert first.status == 200
+    cursor = (await first.json())["nextCursor"]
+    assert cursor
+
+    with sqlite3.connect(settings.source_db) as conn:
+        conn.execute("UPDATE sync_runs SET run_id = 8")
+        conn.commit()
+
+    response = await client.get(
+        "/workshop/gallery/",
+        params={"sort": "popular", "cursor": cursor},
+        allow_redirects=False,
+    )
+    assert response.status == 302
+    assert response.headers["Location"] == "/workshop/gallery/?sort=popular"
 
 
 async def test_item_and_viewer_endpoints(client):
