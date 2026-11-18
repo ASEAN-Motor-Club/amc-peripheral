@@ -21,10 +21,10 @@
         {{ (similar.originSimilarity * 100)|round(0)|int }}% of this build's decal work matches
         <a href="/workshop/items/{{ similar.origin.id }}/">#{{ similar.origin.id }}</a>{% if similar.origin.author %}
         by {{ similar.origin.author }}{% endif %}, uploaded
-        <time datetime="{{ similar.origin.createdAt|iso }}">{{ similar.origin.createdAt[:10] }}</time>
+        <time datetime="{{ similar.origin.createdAt|iso }}">{{ similar.origin.createdAt|date_long }}</time>
         — uploaded before this item.
       </p>
-      <p class="muted">Similarity is measured on decal geometry (asset, position, rotation, scale, colour), not on the paint or parts of the build. Re-sharing an installed build copies the decal block verbatim, so a high score is evidence of copied decal work rather than proof of intent.</p>
+      <p class="muted">Similarity is based on decal work, not on paint or parts.</p>
     </div>
     {% endif %}
 

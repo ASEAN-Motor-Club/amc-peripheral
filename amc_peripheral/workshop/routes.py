@@ -8,6 +8,7 @@ import logging
 import mimetypes
 import re
 import secrets
+from datetime import date
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -74,6 +75,17 @@ def _iso(value: str | None) -> str | None:
     if not value:
         return None
     return value.replace(" ", "T") + "Z" if "T" not in value else value
+
+
+def _date_long(value: str | None) -> str:
+    """Render an ISO date as ``25 Feb 2025`` for notice copy."""
+    if not value:
+        return ""
+    try:
+        parsed = date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return str(value)[:10]
+    return f"{parsed.day} {parsed.strftime('%b %Y')}"
 
 
 def _page(value: str | int | None, default: int, maximum: int) -> int:
@@ -143,6 +155,7 @@ def create_app(
         enable_async=False,
     )
     env.filters["iso"] = _iso
+    env.filters["date_long"] = _date_long
     env.filters["tag_label"] = lambda value: str(value or "").replace("_", " ")
     env.filters["vehicle_name"] = vehicle_display_name
 
