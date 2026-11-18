@@ -25,7 +25,7 @@
 
   <h2>Tags</h2>
   {% if tags %}
-  <p class="tag-row">
+  <div class="tag-row">
     {% for t in tags %}
     <form method="post" action="/workshop/collections/{{ collection.id }}/tags/{{ t|urlencode }}/remove" class="tag-remove">
       <input type="hidden" name="csrf" value="{{ csrf_token }}">
@@ -33,7 +33,7 @@
       <button type="submit" aria-label="Remove tag {{ t }}">&times;</button>
     </form>
     {% endfor %}
-  </p>
+  </div>
   {% endif %}
   <form method="post" action="/workshop/collections/{{ collection.id }}/tags" class="stack">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">

@@ -139,6 +139,19 @@ class CollectionStore:
 
     # -- reads -------------------------------------------------------------
 
+    def get_many(self, collection_ids: list[int]) -> list[Collection]:
+        """Several collections in one query, in the order asked for."""
+        ids = [int(i) for i in collection_ids]
+        if not ids:
+            return []
+        placeholders = ",".join("?" for _ in ids)
+        with self._connect() as conn:
+            rows = conn.execute(
+                _LIST_SELECT + f" HAVING c.id IN ({placeholders})", ids
+            ).fetchall()
+        found = {row["id"]: _row_to_collection(row) for row in rows}
+        return [found[i] for i in ids if i in found]
+
     def get(self, collection_id: int) -> Collection | None:
         with self._connect() as conn:
             row = conn.execute(
