@@ -1,0 +1,998 @@
+{
+ "format": 3,
+ "materials": {
+  "Palette": {
+   "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+   "blendMode": "BLEND_Opaque",
+   "baseColor": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "metalness": 0.0,
+   "roughness": 0.6,
+   "alphaMode": "OPAQUE",
+   "doubleSided": false,
+   "map": null,
+   "roughnessMap": null,
+   "metalnessMap": null,
+   "normalMap": null,
+   "materialName": "M_Palette",
+   "slot": "Palette"
+  },
+  "Light": {
+   "material": "MotorTown/Content/Materials/M_Light.M_Light",
+   "blendMode": "BLEND_Opaque",
+   "baseColor": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "metalness": 0.0,
+   "roughness": 0.6,
+   "alphaMode": "OPAQUE",
+   "doubleSided": false,
+   "materialName": "M_Light",
+   "slot": "Light"
+  }
+ },
+ "slotsByMesh": {
+  "LED_Strips_50cm": [
+   "Palette",
+   "Light"
+  ],
+  "SM_Veh_Attach_Light_Spot_02": [
+   "StreetRacerSHD137"
+  ],
+  "SM_Veh_Attach_Light_Spot_01": [
+   "StreetRacerSHD136"
+  ],
+  "SM_Veh_Attach_Light_Spot_03": [
+   "StreetRacerSHD138"
+  ],
+  "SM_Veh_Attach_Light_LightBar_01": [
+   "StreetRacerSHD124"
+  ],
+  "SM_Veh_Attach_Light_LightBar_02": [
+   "StreetRacerSHD125"
+  ],
+  "RotatingAmberLight_01_Case": [
+   "Palette",
+   "Glass"
+  ],
+  "RotatingAmberLight_01_Light": [
+   "Light",
+   "Palette"
+  ],
+  "RoofLight_01": [
+   "Palette",
+   "Light",
+   "Glass"
+  ],
+  "RotatingEmergencyLight_01_Case": [
+   "Palette",
+   "LightCover"
+  ],
+  "RotatingEmergencyLight_01_Light": [
+   "Light",
+   "Palette"
+  ],
+  "EmergencyBarLight_01": [
+   "Palette",
+   "LightCover",
+   "Light_01",
+   "Light_02",
+   "Light_02_Backplate",
+   "Light_01_Backplate"
+  ],
+  "EmergencyPointLight_01": [
+   "Palette",
+   "Light"
+  ],
+  "EmergencyPointLight_02": [
+   "Palette",
+   "Light"
+  ],
+  "EmergencyPointLight_03": [
+   "Palette",
+   "Light"
+  ],
+  "FloodLight_01": [
+   "Palette",
+   "Light"
+  ],
+  "SideMarkerLight_01": [
+   "Palette",
+   "Light"
+  ],
+  "EmergencyLightBar_01_Light": [
+   "Palette",
+   "Light"
+  ],
+  "PanelSign_Left": [
+   "Palette"
+  ],
+  "PanelSign_Right": [
+   "Palette"
+  ],
+  "Sign_1": [
+   "Sign",
+   "Palette"
+  ],
+  "Sign_2": [
+   "Sign",
+   "Palette"
+  ],
+  "Sign_3": [
+   "Sign",
+   "Palette"
+  ],
+  "Sign_4": [
+   "Sign",
+   "Palette"
+  ],
+  "Sign_5": [
+   "Sign",
+   "Palette"
+  ],
+  "Sign_6": [
+   "Sign",
+   "Palette"
+  ],
+  "Sign_7": [
+   "Sign",
+   "Palette"
+  ]
+ },
+ "bodyVariants": [],
+ "textures": {},
+ "materialsByMesh": {
+  "SM_Veh_Attach_Light_Spot_02": {
+   "StreetRacerSHD137": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "Mat_PolygonStreetRacer_01_A.Mat_PolygonStreetRacer_01_A",
+    "material": "MotorTown/Content/Models/PolygonStreetRacer/Materials/Mat_PolygonStreetRacer_01_A.Mat_PolygonStreetRacer_01_A",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/T_PolygonStreetRacer_01_A_T_PolygonStreetRacer_01_A.png"
+   },
+   "M_Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "MI_M_AttachmentLight_A6A6A6": {
+    "slot": true,
+    "baseColor": [
+     0.38132602,
+     0.38132602,
+     0.38132602
+    ],
+    "materialName": "MI_M_AttachmentLight_A6A6A6.MI_M_AttachmentLight_A6A6A6",
+    "material": "MotorTown/Content/Objects/VehicleAttachment/Meshes/MIC/MI_M_AttachmentLight_A6A6A6.MI_M_AttachmentLight_A6A6A6",
+    "metalness": 0.0,
+    "roughness": 0.55
+   }
+  },
+  "SM_Veh_Attach_Light_Spot_01": {
+   "StreetRacerSHD136": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "Mat_PolygonStreetRacer_01_A.Mat_PolygonStreetRacer_01_A",
+    "material": "MotorTown/Content/Models/PolygonStreetRacer/Materials/Mat_PolygonStreetRacer_01_A.Mat_PolygonStreetRacer_01_A",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/T_PolygonStreetRacer_01_A_T_PolygonStreetRacer_01_A.png"
+   },
+   "M_Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "MI_M_AttachmentLight_A6A6A6": {
+    "slot": true,
+    "baseColor": [
+     0.38132602,
+     0.38132602,
+     0.38132602
+    ],
+    "materialName": "MI_M_AttachmentLight_A6A6A6.MI_M_AttachmentLight_A6A6A6",
+    "material": "MotorTown/Content/Objects/VehicleAttachment/Meshes/MIC/MI_M_AttachmentLight_A6A6A6.MI_M_AttachmentLight_A6A6A6",
+    "metalness": 0.0,
+    "roughness": 0.55
+   }
+  },
+  "SM_Veh_Attach_Light_Spot_03": {
+   "StreetRacerSHD138": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "Mat_PolygonStreetRacer_01_A.Mat_PolygonStreetRacer_01_A",
+    "material": "MotorTown/Content/Models/PolygonStreetRacer/Materials/Mat_PolygonStreetRacer_01_A.Mat_PolygonStreetRacer_01_A",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/T_PolygonStreetRacer_01_A_T_PolygonStreetRacer_01_A.png"
+   },
+   "M_Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "MI_M_AttachmentLight_A6A6A6": {
+    "slot": true,
+    "baseColor": [
+     0.38132602,
+     0.38132602,
+     0.38132602
+    ],
+    "materialName": "MI_M_AttachmentLight_A6A6A6.MI_M_AttachmentLight_A6A6A6",
+    "material": "MotorTown/Content/Objects/VehicleAttachment/Meshes/MIC/MI_M_AttachmentLight_A6A6A6.MI_M_AttachmentLight_A6A6A6",
+    "metalness": 0.0,
+    "roughness": 0.55
+   },
+   "MI_M_Glass_LightCase_9DA7B0": {
+    "slot": true,
+    "baseColor": [
+     0.33716363,
+     0.38642943,
+     0.43415365
+    ],
+    "materialName": "MI_M_Glass_LightCase_9DA7B0.MI_M_Glass_LightCase_9DA7B0",
+    "material": "MotorTown/Content/Objects/VehicleAttachment/Meshes/MIC/MI_M_Glass_LightCase_9DA7B0.MI_M_Glass_LightCase_9DA7B0",
+    "metalness": 0.3,
+    "roughness": 0.1,
+    "alphaMode": "BLEND",
+    "opacity": 0.9
+   }
+  },
+  "SM_Veh_Attach_Light_LightBar_01": {
+   "StreetRacerSHD124": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "Mat_PolygonStreetRacer_01_A.Mat_PolygonStreetRacer_01_A",
+    "material": "MotorTown/Content/Models/PolygonStreetRacer/Materials/Mat_PolygonStreetRacer_01_A.Mat_PolygonStreetRacer_01_A",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/T_PolygonStreetRacer_01_A_T_PolygonStreetRacer_01_A.png"
+   },
+   "M_Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "MI_M_AttachmentLight_A6A6A6": {
+    "slot": true,
+    "baseColor": [
+     0.38132602,
+     0.38132602,
+     0.38132602
+    ],
+    "materialName": "MI_M_AttachmentLight_A6A6A6.MI_M_AttachmentLight_A6A6A6",
+    "material": "MotorTown/Content/Objects/VehicleAttachment/Meshes/MIC/MI_M_AttachmentLight_A6A6A6.MI_M_AttachmentLight_A6A6A6",
+    "metalness": 0.0,
+    "roughness": 0.55
+   }
+  },
+  "SM_Veh_Attach_Light_LightBar_02": {
+   "StreetRacerSHD125": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "Mat_PolygonStreetRacer_01_A.Mat_PolygonStreetRacer_01_A",
+    "material": "MotorTown/Content/Models/PolygonStreetRacer/Materials/Mat_PolygonStreetRacer_01_A.Mat_PolygonStreetRacer_01_A",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/T_PolygonStreetRacer_01_A_T_PolygonStreetRacer_01_A.png"
+   },
+   "M_Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "MI_M_AttachmentLight_A6A6A6": {
+    "slot": true,
+    "baseColor": [
+     0.38132602,
+     0.38132602,
+     0.38132602
+    ],
+    "materialName": "MI_M_AttachmentLight_A6A6A6.MI_M_AttachmentLight_A6A6A6",
+    "material": "MotorTown/Content/Objects/VehicleAttachment/Meshes/MIC/MI_M_AttachmentLight_A6A6A6.MI_M_AttachmentLight_A6A6A6",
+    "metalness": 0.0,
+    "roughness": 0.55
+   }
+  },
+  "RotatingAmberLight_01_Case": {
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "Glass": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_Glass_LightCase.M_Glass_LightCase",
+    "material": "MotorTown/Content/Cars/Materials/Windows/M_Glass_LightCase.M_Glass_LightCase",
+    "metalness": 0.3,
+    "roughness": 0.1,
+    "alphaMode": "BLEND",
+    "opacity": 0.9
+   }
+  },
+  "RotatingAmberLight_01_Light": {
+   "Light": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_AttachmentLight.M_AttachmentLight",
+    "material": "MotorTown/Content/Cars/Materials/M_AttachmentLight.M_AttachmentLight",
+    "metalness": 0.0,
+    "roughness": 0.55
+   },
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   }
+  },
+  "RoofLight_01": {
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "Light": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_AttachmentLight.M_AttachmentLight",
+    "material": "MotorTown/Content/Cars/Materials/M_AttachmentLight.M_AttachmentLight",
+    "metalness": 0.0,
+    "roughness": 0.55
+   },
+   "Glass": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_Glass_LightCase.M_Glass_LightCase",
+    "material": "MotorTown/Content/Cars/Materials/Windows/M_Glass_LightCase.M_Glass_LightCase",
+    "metalness": 0.3,
+    "roughness": 0.1,
+    "alphaMode": "BLEND",
+    "opacity": 0.9
+   }
+  },
+  "RotatingEmergencyLight_01_Case": {
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "LightCover": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_Glass_LightCase.M_Glass_LightCase",
+    "material": "MotorTown/Content/Cars/Materials/Windows/M_Glass_LightCase.M_Glass_LightCase",
+    "metalness": 0.3,
+    "roughness": 0.1,
+    "alphaMode": "BLEND",
+    "opacity": 0.9
+   }
+  },
+  "RotatingEmergencyLight_01_Light": {
+   "Light": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_AttachmentLight.M_AttachmentLight",
+    "material": "MotorTown/Content/Cars/Materials/M_AttachmentLight.M_AttachmentLight",
+    "metalness": 0.0,
+    "roughness": 0.55
+   },
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   }
+  },
+  "EmergencyBarLight_01": {
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "LightCover": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_Glass_LightCase.M_Glass_LightCase",
+    "material": "MotorTown/Content/Cars/Materials/Windows/M_Glass_LightCase.M_Glass_LightCase",
+    "metalness": 0.3,
+    "roughness": 0.1,
+    "alphaMode": "BLEND",
+    "opacity": 0.9
+   },
+   "Light_01": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_AttachmentLight.M_AttachmentLight",
+    "material": "MotorTown/Content/Cars/Materials/M_AttachmentLight.M_AttachmentLight",
+    "metalness": 0.0,
+    "roughness": 0.55
+   },
+   "Light_02": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_AttachmentLight.M_AttachmentLight",
+    "material": "MotorTown/Content/Cars/Materials/M_AttachmentLight.M_AttachmentLight",
+    "metalness": 0.0,
+    "roughness": 0.55
+   },
+   "Light_02_Backplate": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "Light_01_Backplate": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   }
+  },
+  "EmergencyPointLight_01": {
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "Light": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_AttachmentLight.M_AttachmentLight",
+    "material": "MotorTown/Content/Cars/Materials/M_AttachmentLight.M_AttachmentLight",
+    "metalness": 0.0,
+    "roughness": 0.55
+   }
+  },
+  "EmergencyPointLight_02": {
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "Light": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_AttachmentLight.M_AttachmentLight",
+    "material": "MotorTown/Content/Cars/Materials/M_AttachmentLight.M_AttachmentLight",
+    "metalness": 0.0,
+    "roughness": 0.55
+   }
+  },
+  "EmergencyPointLight_03": {
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "Light": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_AttachmentLight.M_AttachmentLight",
+    "material": "MotorTown/Content/Cars/Materials/M_AttachmentLight.M_AttachmentLight",
+    "metalness": 0.0,
+    "roughness": 0.55
+   }
+  },
+  "FloodLight_01": {
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "Light": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_AttachmentLight.M_AttachmentLight",
+    "material": "MotorTown/Content/Cars/Materials/M_AttachmentLight.M_AttachmentLight",
+    "metalness": 0.0,
+    "roughness": 0.55
+   }
+  },
+  "SideMarkerLight_01": {
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "Light": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_AttachmentLight.M_AttachmentLight",
+    "material": "MotorTown/Content/Cars/Materials/M_AttachmentLight.M_AttachmentLight",
+    "metalness": 0.0,
+    "roughness": 0.55
+   }
+  },
+  "EmergencyLightBar_01_Light": {
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   },
+   "Light": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_Body.M_Body",
+    "material": "MotorTown/Content/Cars/Materials/Body/M_Body.M_Body",
+    "metalness": 0.3,
+    "roughness": 0.5
+   },
+   "M_AttachmentLight": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_AttachmentLight.M_AttachmentLight",
+    "material": "MotorTown/Content/Cars/Materials/M_AttachmentLight.M_AttachmentLight",
+    "metalness": 0.0,
+    "roughness": 0.55
+   }
+  },
+  "PanelSign_Left": {
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   }
+  },
+  "PanelSign_Right": {
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   }
+  },
+  "Sign_1": {
+   "Sign": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_Signs.M_Signs",
+    "material": "MotorTown/Content/Objects/VehicleAttachment/OversizeLoadSigns/Material/M_Signs.M_Signs",
+    "metalness": 0.3,
+    "roughness": 0.5,
+    "map": "/vehicles/attachments/textures/T_Signs_T_Signs.png"
+   },
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   }
+  },
+  "Sign_2": {
+   "Sign": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_Signs.M_Signs",
+    "material": "MotorTown/Content/Objects/VehicleAttachment/OversizeLoadSigns/Material/M_Signs.M_Signs",
+    "metalness": 0.3,
+    "roughness": 0.5,
+    "map": "/vehicles/attachments/textures/T_Signs_T_Signs.png"
+   },
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   }
+  },
+  "Sign_3": {
+   "Sign": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_Signs.M_Signs",
+    "material": "MotorTown/Content/Objects/VehicleAttachment/OversizeLoadSigns/Material/M_Signs.M_Signs",
+    "metalness": 0.3,
+    "roughness": 0.5,
+    "map": "/vehicles/attachments/textures/T_Signs_T_Signs.png"
+   },
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   }
+  },
+  "Sign_4": {
+   "Sign": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_Signs.M_Signs",
+    "material": "MotorTown/Content/Objects/VehicleAttachment/OversizeLoadSigns/Material/M_Signs.M_Signs",
+    "metalness": 0.3,
+    "roughness": 0.5,
+    "map": "/vehicles/attachments/textures/T_Signs_T_Signs.png"
+   },
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   }
+  },
+  "Sign_5": {
+   "Sign": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_Signs.M_Signs",
+    "material": "MotorTown/Content/Objects/VehicleAttachment/OversizeLoadSigns/Material/M_Signs.M_Signs",
+    "metalness": 0.3,
+    "roughness": 0.5,
+    "map": "/vehicles/attachments/textures/T_Signs_T_Signs.png"
+   },
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   }
+  },
+  "Sign_6": {
+   "Sign": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_Signs.M_Signs",
+    "material": "MotorTown/Content/Objects/VehicleAttachment/OversizeLoadSigns/Material/M_Signs.M_Signs",
+    "metalness": 0.3,
+    "roughness": 0.5,
+    "map": "/vehicles/attachments/textures/T_Signs_T_Signs.png"
+   },
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   }
+  },
+  "Sign_7": {
+   "Sign": {
+    "slot": true,
+    "baseColor": [
+     1,
+     1,
+     1
+    ],
+    "materialName": "M_Signs.M_Signs",
+    "material": "MotorTown/Content/Objects/VehicleAttachment/OversizeLoadSigns/Material/M_Signs.M_Signs",
+    "metalness": 0.3,
+    "roughness": 0.5,
+    "map": "/vehicles/attachments/textures/T_Signs_T_Signs.png"
+   },
+   "Palette": {
+    "slot": true,
+    "baseColor": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "materialName": "M_Palette.M_Palette",
+    "material": "MotorTown/Content/Cars/Materials/Palette/M_Palette.M_Palette",
+    "metalness": 0.0,
+    "roughness": 0.55,
+    "map": "/vehicles/attachments/textures/Palette_PolygonCity_Texture_01_A_Palette_PolygonCity_Texture_01_A.png"
+   }
+  }
+ },
+ "version": 2
+}

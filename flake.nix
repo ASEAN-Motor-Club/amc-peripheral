@@ -282,6 +282,13 @@
               description = "Documentation site (Starlight) static build package.";
             };
 
+            # Motor Town vehicle 3D viewer
+            mtViewer.package = lib.mkOption {
+              type = lib.types.package;
+              default = (import ./mt-viewer {inherit pkgs;}).package;
+              description = "Motor Town vehicle 3D viewer static build package.";
+            };
+
             # Sharry file sharing service
             sharry = {
               enable = lib.mkEnableOption "Sharry file sharing service";
@@ -320,6 +327,9 @@
                 "L+ /var/www/nix-static/tire-web - - - - ${cfg.tireWeb.package}"
                 "L+ /var/www/nix-static/code-web - - - - ${cfg.codeWeb.package}"
                 "L+ /var/www/nix-static/docs-web - - - - ${cfg.docsWeb.package}"
+                "d /var/lib/vehicles 0755 root root -"
+                "L+ /var/lib/vehicles/index.html - - - - ${cfg.mtViewer.package}/index.html"
+                "L+ /var/lib/vehicles/README.md - - - - ${cfg.mtViewer.package}/README.md"
               ]
               ++ lib.optionals cfg.sharry.enable [
                 "d /var/lib/sharry 0750 sharry sharry -"
@@ -567,6 +577,35 @@
               };
             };
 
+            # Motor Town Vehicle 3D Viewer — served from the main site exactly like
+            # /map_tiles/: files live under the site root and are rsynced in, so the
+            # 588 MB asset set never goes through the nix store. The www vhost itself
+            # is declared in machines/amc-peripheral/configuration.nix; adding a
+            # location here merges into it.
+            services.nginx.virtualHosts."www.aseanmotorclub.com".locations."/vehicles/" = {
+              root = "/var/www/www.aseanmotorclub.com";
+              index = "index.html";
+              tryFiles = "$uri $uri/ /vehicles/index.html";
+              extraConfig = ''
+                # index.html and the generated json change whenever the catalogue is
+                # restaged, so they must revalidate; the binaries below are immutable.
+                add_header Cache-Control "no-cache, no-store, max-age=0, must-revalidate";
+                # CORS so the models can also be pulled into other AMC tools.
+                add_header 'Access-Control-Allow-Origin' '*';
+              '';
+            };
+            # Per-vehicle binaries: glb + decoded textures never change under a given
+            # name (a restage rewrites them, hence the ETag/mtime fallback).
+            services.nginx.virtualHosts."www.aseanmotorclub.com".locations."~ ^/vehicles/.+/(glb|textures)/" = {
+              root = "/var/www/www.aseanmotorclub.com";
+              extraConfig = ''
+                expires 30d;
+                add_header Cache-Control "public, max-age=2592000";
+                add_header 'Access-Control-Allow-Origin' '*';
+                access_log off;
+              '';
+            };
+
             # Tire Mod Creator (static site + build API)
             services.nginx.virtualHosts.${cfg.nginx.domains.mods} = {
               enableACME = true;
@@ -589,6 +628,10 @@
                   client_max_body_size 50M;
                 '';
               };
+              # Vehicle 3D viewer lives on the main site like /map_tiles/: plain files
+              # under the web root, rsynced in (see machines/amc-peripheral), no nix
+              # store symlink and no directory of its own managed by tmpfiles.
+              # (No vhost of its own — see the www location below.)
             };
 
             # UE4SS dev bridge hub.

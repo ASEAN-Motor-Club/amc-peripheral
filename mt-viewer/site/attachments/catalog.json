@@ -1,0 +1,2085 @@
+{
+ "format": 1,
+ "actors": {
+  "Attachment_LED_Strip_01": {
+   "mesh": "LED_Strips_50cm",
+   "color": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "components": [
+    {
+     "position": [
+      0.0,
+      0.0,
+      -0.25
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "position": [
+      0.0,
+      0.0,
+      0.25
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "position": [
+      0.0,
+      0.0,
+      -0.75
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "position": [
+      0.0,
+      0.0,
+      0.75
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "sourceActor": "led_blue_2m",
+   "lights": [
+    {
+     "type": "rect",
+     "position": [
+      0.0,
+      -0.005,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "intensity": 16.0,
+     "width": 2.0,
+     "height": 0.05,
+     "attenuationRadius": 2.0,
+     "barnDoorAngle": 90.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_LED_Strip_02": {
+   "mesh": "LED_Strips_50cm",
+   "color": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "components": [
+    {
+     "position": [
+      0.0,
+      0.0,
+      -0.25
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "position": [
+      0.0,
+      0.0,
+      0.25
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "position": [
+      0.0,
+      0.0,
+      -0.75
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "position": [
+      0.0,
+      0.0,
+      0.75
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "sourceActor": "led_green_2m",
+   "lights": [
+    {
+     "type": "rect",
+     "position": [
+      0.0,
+      -0.005,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      0.0,
+      1.0,
+      0.0
+     ],
+     "intensity": 16.0,
+     "width": 2.0,
+     "height": 0.05,
+     "attenuationRadius": 2.0,
+     "barnDoorAngle": 90.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_LED_Strip_03": {
+   "mesh": "LED_Strips_50cm",
+   "color": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "components": [
+    {
+     "position": [
+      0.0,
+      0.0,
+      -0.25
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "position": [
+      0.0,
+      0.0,
+      0.25
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "position": [
+      0.0,
+      0.0,
+      -0.75
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "position": [
+      0.0,
+      0.0,
+      0.75
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "sourceActor": "led_red_2m",
+   "lights": [
+    {
+     "type": "rect",
+     "position": [
+      0.0,
+      -0.005,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.0,
+      0.0
+     ],
+     "intensity": 16.0,
+     "width": 2.0,
+     "height": 0.05,
+     "attenuationRadius": 2.0,
+     "barnDoorAngle": 90.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_LED_Strip_04": {
+   "mesh": "LED_Strips_50cm",
+   "color": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "components": [
+    {
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "sourceActor": "led_blue_50cm",
+   "lights": [
+    {
+     "type": "rect",
+     "position": [
+      0.0,
+      -0.005,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "intensity": 19.199999,
+     "width": 0.5,
+     "height": 0.05,
+     "attenuationRadius": 1.5,
+     "barnDoorAngle": 90.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_LED_Strip_05": {
+   "mesh": "LED_Strips_50cm",
+   "color": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "components": [
+    {
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "sourceActor": "led_green_50cm",
+   "lights": [
+    {
+     "type": "rect",
+     "position": [
+      0.0,
+      -0.005,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      0.0,
+      1.0,
+      0.0
+     ],
+     "intensity": 19.199999,
+     "width": 0.5,
+     "height": 0.05,
+     "attenuationRadius": 1.5,
+     "barnDoorAngle": 90.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_LED_Strip_06": {
+   "mesh": "LED_Strips_50cm",
+   "color": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "components": [
+    {
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "sourceActor": "led_red_50cm",
+   "lights": [
+    {
+     "type": "rect",
+     "position": [
+      0.0,
+      -0.005,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.0,
+      0.0
+     ],
+     "intensity": 19.199999,
+     "width": 0.5,
+     "height": 0.05,
+     "attenuationRadius": 1.5,
+     "barnDoorAngle": 90.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_LED_Strip_07": {
+   "mesh": "LED_Strips_50cm",
+   "color": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "components": [
+    {
+     "position": [
+      0.0,
+      0.0,
+      -0.25
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "position": [
+      0.0,
+      0.0,
+      0.25
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "sourceActor": "led_1m",
+   "lights": [
+    {
+     "type": "rect",
+     "position": [
+      0.0,
+      -0.005,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      1.1102230246251565e-16,
+      -0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      0.0,
+      1.0,
+      0.0
+     ],
+     "intensity": 32.0,
+     "width": 1.0,
+     "height": 0.05,
+     "attenuationRadius": 2.0,
+     "barnDoorAngle": 90.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_01": {
+   "mesh": "SM_Veh_Attach_Light_Spot_02",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "light_01",
+   "components": [
+    {
+     "mesh": "SM_Veh_Attach_Light_Spot_02",
+     "position": [
+      0.066029987,
+      0.0,
+      -2.632141e-06
+     ],
+     "rotation": [
+      0.0,
+      -0.7071066886264802,
+      -1.1102230246251565e-16,
+      0.7071068737466027
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "materialSlots": [
+      "M_Palette",
+      "MI_M_AttachmentLight_A6A6A6"
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      0.20364283,
+      0.0,
+      3.8909912e-06
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "intensity": 22.277354790553858,
+     "sourceIntensity": 50.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_02": {
+   "mesh": "SM_Veh_Attach_Light_Spot_01",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "light_02",
+   "components": [
+    {
+     "mesh": "SM_Veh_Attach_Light_Spot_01",
+     "position": [
+      0.066029987,
+      0.0,
+      -2.632141e-06
+     ],
+     "rotation": [
+      0.0,
+      -0.7071066886264802,
+      -1.1102230246251565e-16,
+      0.7071068737466027
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "materialSlots": [
+      "M_Palette",
+      "MI_M_AttachmentLight_A6A6A6"
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      0.20364283,
+      0.0,
+      3.8909912e-06
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "intensity": 22.277354790553858,
+     "sourceIntensity": 50.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_03": {
+   "mesh": "SM_Veh_Attach_Light_Spot_03",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "light_03",
+   "components": [
+    {
+     "mesh": "SM_Veh_Attach_Light_Spot_03",
+     "position": [
+      0.066029987,
+      0.0,
+      -2.632141e-06
+     ],
+     "rotation": [
+      0.0,
+      -0.7071066886264802,
+      -1.1102230246251565e-16,
+      0.7071068737466027
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "materialSlots": [
+      "M_Palette",
+      "MI_M_AttachmentLight_A6A6A6",
+      "MI_M_Glass_LightCase_9DA7B0"
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      0.20364283,
+      0.0,
+      3.8909912e-06
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "intensity": 31.1882967067754,
+     "sourceIntensity": 70.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 15.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_04": {
+   "mesh": "SM_Veh_Attach_Light_LightBar_01",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "light_04",
+   "components": [
+    {
+     "mesh": "SM_Veh_Attach_Light_LightBar_01",
+     "position": [
+      0.066029987,
+      0.0,
+      -2.632141e-06
+     ],
+     "rotation": [
+      0.0,
+      -0.7071066886264802,
+      -1.1102230246251565e-16,
+      0.7071068737466027
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "materialSlots": [
+      "M_Palette",
+      "MI_M_AttachmentLight_A6A6A6"
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      0.20364283,
+      0.0,
+      3.8909912e-06
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "intensity": 22.277354790553858,
+     "sourceIntensity": 50.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_05": {
+   "mesh": "SM_Veh_Attach_Light_LightBar_02",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "light_05",
+   "components": [
+    {
+     "mesh": "SM_Veh_Attach_Light_LightBar_02",
+     "position": [
+      0.066029987,
+      0.0,
+      -2.632141e-06
+     ],
+     "rotation": [
+      0.0,
+      -0.7071066886264802,
+      -1.1102230246251565e-16,
+      0.7071068737466027
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "materialSlots": [
+      "M_Palette",
+      "MI_M_AttachmentLight_A6A6A6"
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      0.20364283,
+      0.0,
+      3.8909912e-06
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "intensity": 89.10941916221543,
+     "sourceIntensity": 200.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 15.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_06": {
+   "mesh": "RotatingAmberLight_01_Case",
+   "color": [
+    1.0,
+    0.6509803921568628,
+    0.0
+   ],
+   "sourceActor": "_base_rotatinglight_01",
+   "components": [
+    {
+     "mesh": "RotatingAmberLight_01_Case",
+     "position": [
+      0.0,
+      -0.011361172,
+      8.533961e-11
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "mesh": "RotatingAmberLight_01_Light",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      6.5116497e-06,
+      0.08434526999999999,
+      0.043116855999999995
+     ],
+     "rotation": [
+      0.0,
+      0.7071066886264802,
+      1.1102230246251565e-16,
+      0.7071068737466027
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 59.3974333894687,
+     "sourceIntensity": 50.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 30.0,
+     "innerConeAngle": 30.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_07": {
+   "mesh": "RoofLight_01",
+   "color": [
+    1.0,
+    0.6509803921568628,
+    0.0
+   ],
+   "sourceActor": "light_07",
+   "components": [
+    {
+     "mesh": "RoofLight_01",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      0.054584102999999995,
+      0.025815725,
+      -1.4210855000000002e-16
+     ],
+     "rotation": [
+      0.0,
+      -1.3877787807814457e-17,
+      0.08715574274765817,
+      0.9961946980917455
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 5.0,
+     "sourceIntensity": 5.0,
+     "intensityUnits": null,
+     "outerConeAngle": 60.0,
+     "innerConeAngle": 60.0,
+     "attenuationRadius": 2.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_08": {
+   "mesh": "RotatingEmergencyLight_01_Case",
+   "color": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "sourceActor": "light_08",
+   "components": [
+    {
+     "mesh": "RotatingEmergencyLight_01_Case",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "mesh": "RotatingEmergencyLight_01_Light",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      -0.01737259,
+      0.16068075,
+      0.045880976000000004
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "intensity": 0.0,
+     "sourceIntensity": 0.0,
+     "intensityUnits": null,
+     "outerConeAngle": 35.0,
+     "innerConeAngle": 35.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_09": {
+   "mesh": "EmergencyBarLight_01",
+   "color": [
+    1.0,
+    0.6509803921568628,
+    0.0
+   ],
+   "sourceActor": "light_09_blinker",
+   "components": [
+    {
+     "mesh": "EmergencyBarLight_01",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      0.06562585,
+      0.063404,
+      0.5
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 22.277354790553858,
+     "sourceIntensity": 50.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    },
+    {
+     "type": "spot",
+     "position": [
+      -0.06562585,
+      0.063404,
+      0.5
+     ],
+     "rotation": [
+      0.0,
+      1.0,
+      2.220446049250313e-16,
+      6.123233995736766e-17
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 22.277354790553858,
+     "sourceIntensity": 50.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    },
+    {
+     "type": "spot",
+     "position": [
+      0.065625863,
+      0.063404,
+      -0.5
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 22.277354790553858,
+     "sourceIntensity": 50.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    },
+    {
+     "type": "spot",
+     "position": [
+      -0.06562584,
+      0.063404,
+      -0.5
+     ],
+     "rotation": [
+      0.0,
+      1.0,
+      2.220446049250313e-16,
+      6.123233995736766e-17
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 22.277354790553858,
+     "sourceIntensity": 50.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_10": {
+   "mesh": "EmergencyPointLight_01",
+   "color": [
+    1.0,
+    0.6509803921568628,
+    0.0
+   ],
+   "sourceActor": "light_10_blinker",
+   "components": [
+    {
+     "mesh": "EmergencyPointLight_01",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      7.993606e-17,
+      0.04038984,
+      -1.9616058e-10
+     ],
+     "rotation": [
+      0.0,
+      -1.1102230246251565e-16,
+      0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 4.455470958110772,
+     "sourceIntensity": 10.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 5.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_11": {
+   "mesh": "EmergencyPointLight_02",
+   "color": [
+    1.0,
+    0.6509803921568628,
+    0.0
+   ],
+   "sourceActor": "light_11_blinker",
+   "components": [
+    {
+     "mesh": "EmergencyPointLight_02",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      5.479742e-09,
+      0.08934409,
+      -1.9616058e-10
+     ],
+     "rotation": [
+      0.0,
+      -1.1102230246251565e-16,
+      0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 8.910941916221544,
+     "sourceIntensity": 20.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 8.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_12": {
+   "mesh": "EmergencyPointLight_03",
+   "color": [
+    1.0,
+    0.6509803921568628,
+    0.0
+   ],
+   "sourceActor": "light_12_blinker",
+   "components": [
+    {
+     "mesh": "EmergencyPointLight_03",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      5.479742e-09,
+      0.08934409,
+      -1.9616058e-10
+     ],
+     "rotation": [
+      0.0,
+      -1.1102230246251565e-16,
+      0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 8.910941916221544,
+     "sourceIntensity": 20.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 8.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_13": {
+   "mesh": "FloodLight_01",
+   "color": [
+    1.0,
+    0.6509803921568628,
+    0.0
+   ],
+   "sourceActor": "light_13",
+   "components": [
+    {
+     "mesh": "FloodLight_01",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      5.479742e-09,
+      0.08934409,
+      -1.9616058e-10
+     ],
+     "rotation": [
+      0.0,
+      -1.1102230246251565e-16,
+      0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 9.549296585513723,
+     "sourceIntensity": 30.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 60.0,
+     "innerConeAngle": 60.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_14": {
+   "mesh": "SideMarkerLight_01",
+   "color": [
+    1.0,
+    0.6509803921568628,
+    0.0
+   ],
+   "sourceActor": "light_14_sidemarker",
+   "components": [
+    {
+     "mesh": "SideMarkerLight_01",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      5.168515999999999e-09,
+      0.022172992,
+      -1.9616058e-10
+     ],
+     "rotation": [
+      0.0,
+      -1.1102230246251565e-16,
+      0.7071067811865475,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 1.591549430918954,
+     "sourceIntensity": 5.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 60.0,
+     "innerConeAngle": 60.0,
+     "attenuationRadius": 3.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_Light_15": {
+   "mesh": "EmergencyLightBar_01_Light",
+   "color": [
+    1.0,
+    0.6509803921568628,
+    0.0
+   ],
+   "sourceActor": "light_15_blinker",
+   "components": [
+    {
+     "mesh": "EmergencyLightBar_01_Light",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "materialSlots": [
+      "M_AttachmentLight"
+     ]
+    }
+   ],
+   "lights": [
+    {
+     "type": "spot",
+     "position": [
+      0.222486,
+      0.063404,
+      6.257699e-10
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 7.256526540021552,
+     "sourceIntensity": 30.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 70.0,
+     "innerConeAngle": 70.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    },
+    {
+     "type": "spot",
+     "position": [
+      0.005825522,
+      0.063404,
+      0.8071213
+     ],
+     "rotation": [
+      0.0,
+      -0.7071067811865475,
+      -1.1102230246251565e-16,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 22.277354790553858,
+     "sourceIntensity": 50.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    },
+    {
+     "type": "spot",
+     "position": [
+      0.005825522,
+      0.063404,
+      -0.8071213
+     ],
+     "rotation": [
+      0.0,
+      0.7071067811865475,
+      1.1102230246251565e-16,
+      0.7071067811865476
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 22.277354790553858,
+     "sourceIntensity": 50.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 50.0,
+     "innerConeAngle": 50.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    },
+    {
+     "type": "spot",
+     "position": [
+      -0.20957073,
+      0.063404,
+      -4.936598e-10
+     ],
+     "rotation": [
+      0.0,
+      1.0,
+      2.220446049250313e-16,
+      6.123233995736766e-17
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "color": [
+      1.0,
+      0.6509803921568628,
+      0.0
+     ],
+     "intensity": 7.256526540021552,
+     "sourceIntensity": 30.0,
+     "intensityUnits": "ELightUnits::Lumens",
+     "outerConeAngle": 70.0,
+     "innerConeAngle": 70.0,
+     "attenuationRadius": 0.0,
+     "castShadows": false
+    }
+   ]
+  },
+  "Attachment_OversizeLoad_PanelSign_Left": {
+   "mesh": "PanelSign_Left",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "oversizeload_panelsign_left",
+   "components": [
+    {
+     "mesh": "PanelSign_Left",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": []
+  },
+  "Attachment_OversizeLoad_PanelSign_Right": {
+   "mesh": "PanelSign_Right",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "oversizeload_panelsign_right",
+   "components": [
+    {
+     "mesh": "PanelSign_Right",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": []
+  },
+  "Attachment_OversizeLoad_Sign_1": {
+   "mesh": "Sign_1",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "oversizeload_sign_1",
+   "components": [
+    {
+     "mesh": "Sign_1",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": []
+  },
+  "Attachment_OversizeLoad_Sign_2": {
+   "mesh": "Sign_2",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "oversizeload_sign_2",
+   "components": [
+    {
+     "mesh": "Sign_2",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": []
+  },
+  "Attachment_OversizeLoad_Sign_3": {
+   "mesh": "Sign_3",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "oversizeload_sign_3",
+   "components": [
+    {
+     "mesh": "Sign_3",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": []
+  },
+  "Attachment_OversizeLoad_Sign_4": {
+   "mesh": "Sign_4",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "oversizeload_sign_4",
+   "components": [
+    {
+     "mesh": "Sign_4",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": []
+  },
+  "Attachment_OversizeLoad_Sign_5": {
+   "mesh": "Sign_5",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "oversizeload_sign_5",
+   "components": [
+    {
+     "mesh": "Sign_5",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": []
+  },
+  "Attachment_OversizeLoad_Sign_6": {
+   "mesh": "Sign_6",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "oversizeload_sign_6",
+   "components": [
+    {
+     "mesh": "Sign_6",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": []
+  },
+  "Attachment_OversizeLoad_Sign_7": {
+   "mesh": "Sign_7",
+   "color": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceActor": "oversizeload_sign_7",
+   "components": [
+    {
+     "mesh": "Sign_7",
+     "position": [
+      0.0,
+      0.0,
+      -0.0
+     ],
+     "rotation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ],
+     "scale": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   ],
+   "lights": []
+  }
+ },
+ "version": 3
+}

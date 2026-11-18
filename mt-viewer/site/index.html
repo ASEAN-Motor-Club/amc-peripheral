@@ -1,0 +1,1249 @@
+<!-- Motor Town vehicle viewer — materials edition.
+     Serves one vehicle per directory: <vehicle>/<vehicle>.json (manifest, metres),
+     <vehicle>/glb/*.glb, <vehicle>/materials.json, <vehicle>/textures/*.png
+
+     URL params:
+       ?vehicle=boxy      which directory to load (default: boxy)
+       ?sync              one-shot render (headless capture, no rAF loop)
+       ?cam=front|side|rear|top|iso    camera preset
+       ?ui=0              hide HUD/buttons (clean screenshots)
+       ?plain             force the old flat grey material (A/B comparison)
+     Materials come from the extractor's UE param sidecars (see tools/bake_materials.py):
+     the GLBs carry material *names* only, so we rebuild MeshStandardMaterial per name.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#15161a">
+<title>Motor Town vehicle viewer</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { height: 100%; }
+  body { margin:0; background:#15161a; color:#eee; font-family:system-ui,sans-serif;
+         overflow:hidden; overscroll-behavior:none; -webkit-tap-highlight-color:transparent;
+         height:100dvh; }
+  /* touch-action:none is what stops the browser stealing the pinch/drag gesture
+     from OrbitControls on Android; without it the page pans/zooms instead. */
+  canvas { display:block; touch-action:none; }
+  #hud { position:fixed; top:12px; left:12px; z-index:10; background:rgba(0,0,0,.62); padding:10px 14px; border-radius:8px; font-size:13px; line-height:1.55; }
+  #hud b { color:#6cf; }
+  #hud .k { color:#8b93a7; }
+  #hud .touch-hint { display:none; }
+  #status { position:fixed; top:12px; right:12px; z-index:10; background:rgba(0,0,0,.62); padding:8px 12px; border-radius:8px; font-size:12px; color:#9f9; white-space:pre; }
+  #status.pending { color:#ffd479; }
+  body.nohud #hud, body.nohud #status { display:none; }
+
+  /* ---- touch / small screens ------------------------------------------------ */
+  @media (max-width: 760px), (pointer: coarse) {
+    #hud { top:8px; left:8px; padding:7px 10px; font-size:11.5px; line-height:1.4;
+           max-width:60vw; border-radius:7px; }
+    #hud .mouse-hint { display:none; }
+    #hud .touch-hint { display:inline; }
+    #status { top:8px; right:8px; padding:5px 8px; font-size:10.5px;
+              max-width:34vw; white-space:normal; border-radius:7px; }
+  }
+  @media (max-height: 520px) {
+    #hud { display:none; }
+  }
+</style>
+</head>
+<body>
+<div id="hud">
+  <b>Motor Town — vehicle</b><br>
+  <span class="mouse-hint"><span class="k">drag</span> orbit · <span class="k">scroll</span> zoom · <span class="k">right-drag</span> pan</span>
+  <span class="touch-hint"><span class="k">1 finger</span> orbit · <span class="k">2 fingers</span> zoom / pan</span><br>
+  <span id="meta">loading…</span>
+</div>
+<div id="status">loading…</div>
+<script type="importmap">
+{ "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script>
+  // capture shader/log failures for the headless probes: a broken injected program
+  // otherwise just leaves meshes undrawn with the reason buried in devtools
+  window.__errs = [];
+  window.addEventListener("error", e => window.__errs.push("error: " + e.message));
+  const _ce = console.error.bind(console);
+  console.error = (...a) => { window.__errs.push("console: " + a.map(String).join(" ").slice(0, 300)); _ce(...a); };
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { DECAL_PROJECTION_GLSL, decalFallbackSlots, decalReceiverSlots } from "./js/decal-projection.js?v=19";
+import { ownerColorForSlot } from "./js/owner-paint.js?v=3";
+import { selectedBodyVariant, isBodyMaterialSlot, liverySlotMatches } from "./js/body-material.js?v=3";
+import { spotlightTarget } from "./js/attachment-lights.js?v=2";
+import { attachmentRootRotation } from "./js/attachment-root.js?v=5";
+
+const params = new URLSearchParams(location.search);
+const workshopId = params.get("workshop");
+const characterVehicleId = params.get("characterVehicle");
+let vehicle = params.get("vehicle") || "boxy";
+let sourceConfig = null;
+const syncMode = params.has("sync");
+const embedMode = params.has("embed");
+function notifyEmbed(type, extra = {}) {
+  if (!embedMode || window.parent === window) return;
+  window.parent.postMessage({
+    source: "amc-mt-viewer", type, id: workshopId, ...extra,
+  }, location.origin);
+}
+const plainMode = params.has("plain");
+if (params.get("ui") === "0") document.body.classList.add("nohud");
+
+const statusEl = document.getElementById("status");
+const metaEl = document.getElementById("meta");
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x15161a);
+// A phone renders the same scene with a third of the pixels: cap the device pixel
+// ratio harder on coarse pointers, otherwise a 3x DPR screen draws 9x the pixels.
+const COARSE = matchMedia("(pointer: coarse)").matches;
+const DPR_CAP = COARSE ? 1.5 : 2;
+const FULL_QUALITY = params.get("quality") === "full";
+const PIXEL_BUDGET = FULL_QUALITY ? Infinity : (COARSE ? 1500000 : 4000000);
+const requestedInteractiveScale = Number(params.get("interactiveScale") || 0.7);
+const INTERACTIVE_SCALE = FULL_QUALITY || syncMode ? 1 :
+  Math.min(1, Math.max(0.4, Number.isFinite(requestedInteractiveScale) ? requestedInteractiveScale : 0.7));
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.01, 500);
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: syncMode });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, DPR_CAP));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.85;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const qualityInfo = (window.__quality = { pixelBudget: PIXEL_BUDGET, interactiveScale: INTERACTIVE_SCALE });
+let basePixelRatio = 1, interacting = false, restoreQuality = false, restoreQualityAt = 0;
+function applyRenderResolution(scale = 1) {
+  const budgetRatio = Math.sqrt(PIXEL_BUDGET / Math.max(1, innerWidth * innerHeight));
+  basePixelRatio = Math.min(devicePixelRatio, DPR_CAP, budgetRatio);
+  const active = basePixelRatio * scale;
+  renderer.setPixelRatio(active);
+  renderer.setSize(innerWidth, innerHeight);
+  Object.assign(qualityInfo, { basePixelRatio, activePixelRatio: active, scale,
+    pixels: renderer.domElement.width * renderer.domElement.height, interacting });
+}
+applyRenderResolution();
+RectAreaLightUniformsLib.init();
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = !syncMode;
+controls.addEventListener("start", () => {
+  if (syncMode) return;
+  interacting = true;
+  restoreQuality = false;
+  if (INTERACTIVE_SCALE < 1) applyRenderResolution(INTERACTIVE_SCALE);
+  needsRender = true;
+});
+controls.addEventListener("end", () => {
+  if (syncMode) return;
+  interacting = false;
+  qualityInfo.interacting = false;
+  restoreQuality = true;
+  restoreQualityAt = performance.now() + 350;
+});
+camera.position.set(4, 2.4, 5);
+camera.lookAt(0, 0.65, 0);
+controls.target.set(0, 0.65, 0);
+
+// Immediate in-scene loading feedback: one GPU-animated point cloud, one draw.
+// It is removed before the base vehicle's first material frame is presented.
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const loadingWaveEnabled = !reducedMotion && !syncMode;
+const ARENA_SIZE = 24, WAVE_GRID = 100, WAVE_POINTS = WAVE_GRID * WAVE_GRID;
+const loadingWaveInfo = (window.__loadingWave = {
+  step: loadingWaveEnabled ? "active" : "skipped", points: loadingWaveEnabled ? WAVE_POINTS : 0,
+  arenaSize: ARENA_SIZE, center: [0, 0.03, 0], time: 0
+});
+let loadingWave = null;
+if (loadingWaveEnabled) {
+  const positions = new Float32Array(WAVE_POINTS * 3);
+  for (let z = 0; z < WAVE_GRID; z++) for (let x = 0; x < WAVE_GRID; x++) {
+    const i = (z * WAVE_GRID + x) * 3;
+    positions[i] = (x / (WAVE_GRID - 1) - 0.5) * ARENA_SIZE;
+    positions[i + 2] = (z / (WAVE_GRID - 1) - 0.5) * ARENA_SIZE;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uPixelRatio: { value: renderer.getPixelRatio() } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `
+      uniform float uTime;
+      uniform float uPixelRatio;
+      varying float vEnergy;
+      void main() {
+        vec3 p = position;
+        float radius = length(p.xz);
+        float wave = sin(radius * 4.5 - uTime * 3.2);
+        p.y = wave * 0.24 + sin(p.x * 2.5 + uTime * 1.7) * 0.08;
+        vEnergy = 0.55 + 0.45 * wave;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = clamp(24.0 * uPixelRatio / -mv.z, 2.0, 8.0);
+      }`,
+    fragmentShader: `
+      varying float vEnergy;
+      void main() {
+        float d = length(gl_PointCoord - vec2(0.5));
+        float alpha = smoothstep(0.5, 0.12, d);
+        vec3 colour = mix(vec3(0.20, 0.55, 1.0), vec3(0.35, 1.0, 0.90), vEnergy);
+        gl_FragColor = vec4(colour, alpha * 0.85);
+      }`,
+  });
+  const points = new THREE.Points(geometry, material);
+  points.name = "LoadingWave";
+  points.position.y = 0.03;
+  points.frustumCulled = false;
+  scene.add(points);
+  loadingWave = { points, material, start: performance.now() };
+}
+function dismissLoadingWave() {
+  if (loadingWave) {
+    scene.remove(loadingWave.points);
+    loadingWave.points.geometry.dispose();
+    loadingWave.material.dispose();
+    loadingWave = null;
+  }
+  if (loadingWaveInfo.step === "active") loadingWaveInfo.step = "done";
+}
+
+// Physically sane exposure: the game's albedos are already mid-grey, so piling on
+// lights turned tyres into white plastic. Keep the key light dominant and modest.
+scene.add(new THREE.HemisphereLight(0xc9d8ff, 0x1f232c, 0.55));
+const key = new THREE.DirectionalLight(0xfff4e6, 1.9); key.position.set(4, 7, 5); scene.add(key);
+const rim = new THREE.DirectionalLight(0x9fc0ff, 0.55); rim.position.set(-5, 3, -6); scene.add(rim);
+const fill = new THREE.DirectionalLight(0xffffff, 0.18); fill.position.set(-2, 1.5, 5); scene.add(fill);
+
+// A single cached studio environment gives metallic trim and synthetic mirrors
+// something to reflect. It is deliberately subtle; the key light still defines exposure.
+const pmrem = new THREE.PMREMGenerator(renderer);
+const environmentScene = new RoomEnvironment();
+const environmentTarget = pmrem.fromScene(environmentScene, 0.04);
+scene.environment = environmentTarget.texture;
+scene.environmentIntensity = 0.45;
+environmentScene.dispose();
+pmrem.dispose();
+
+// neutral studio floor so the car reads against something
+const grid = new THREE.GridHelper(ARENA_SIZE, ARENA_SIZE, 0x39415a, 0x242a3a);
+grid.position.y = -0.001;
+scene.add(grid);
+function alignArena(b) {
+  if (b.isEmpty()) return;
+  const center = b.getCenter(new THREE.Vector3());
+  grid.position.set(center.x, -0.001, center.z);
+  if (loadingWave) loadingWave.points.position.set(center.x, 0.03, center.z);
+  loadingWaveInfo.center = [center.x, 0.03, center.z];
+}
+
+const loader = new GLTFLoader();
+loader.setMeshoptDecoder(MeshoptDecoder);
+function loadImage(uri) {
+  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = uri; });
+}
+const root = new THREE.Group();
+scene.add(root);
+
+const texLoader = new THREE.TextureLoader();
+const texCache = new Map();
+function loadTexture(uri, dataTexture = false) {
+  const key = uri + (dataTexture ? "|data" : "");
+  if (texCache.has(key)) return texCache.get(key);
+  // materials.json stores textures as "textures/<sha>.png", i.e. relative to the
+  // VEHICLE directory — the GLBs embed no images (0 in the glTF "images" array), so
+  // this is the only source of maps. Resolving them against the page instead of the
+  // vehicle dir 404s every texture and leaves every body flat-coloured.
+  const url = /^(?:https?:|\/|data:|\.\.?\/)/.test(uri) ? uri : `${vehicle}/${uri}`;
+  const t = texLoader.load(url, () => { t.needsUpdate = true; render(); });
+  if (!dataTexture) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  t.flipY = false;               // glTF convention
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  texCache.set(key, t);
+  return t;
+}
+
+// material name -> THREE material
+const matCache = new Map();
+let paintColor = new THREE.Color(params.get("paint") || "#c9302c");
+let bodyTint = params.has("paint") ? paintColor.clone() : null;
+
+function buildMaterial(name, def, plain) {
+  if (plain || !def) {
+    const p = new THREE.MeshStandardMaterial({ color: 0xc9cdd4, roughness: 0.55, metalness: 0.2 });
+    p.name = name;
+    return p;
+  }
+  const m = new THREE.MeshStandardMaterial({
+    color: new THREE.Color().setRGB(def.baseColor[0], def.baseColor[1], def.baseColor[2], THREE.LinearSRGBColorSpace),
+    metalness: def.metalness ?? 0.0,
+    roughness: def.roughness ?? 0.55,
+    side: def.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+  });
+  if (def.map) m.map = loadTexture(def.map);
+  if (def.roughnessMap) m.roughnessMap = loadTexture(def.roughnessMap, true);
+  if (def.metalnessMap) m.metalnessMap = loadTexture(def.metalnessMap, true);
+  if (def.normalMap) m.normalMap = loadTexture(def.normalMap, true);
+  if (name === "M_Body" && bodyTint) m.color.copy(bodyTint);
+  if (def.slot) m.name = name;
+  if (params.has("redtest") && name === params.get("redtest")) m.color.setRGB(1, 0, 0);
+  if (def.emissive) {
+    m.emissive = new THREE.Color().setRGB(def.emissive[0], def.emissive[1], def.emissive[2], THREE.LinearSRGBColorSpace);
+    m.emissiveIntensity = def.emissiveIntensity ?? 1;
+  }
+  if (def.alphaMode === "BLEND") {
+    m.transparent = true;
+    m.opacity = def.opacity ?? 0.5;
+    m.depthWrite = def.depthWrite ?? false;
+  } else if (def.alphaMode === "MASK") {
+    m.alphaTest = 0.5;
+  }
+  return m;
+}
+
+function materialFor(name, def, plain, variant = "") {
+  const key = name + "|" + plain + (variant ? "|attachment:" + variant : "");
+  if (matCache.has(key)) return matCache.get(key);
+  const m = buildMaterial(name, def, plain);
+  matCache.set(key, m);
+  return m;
+}
+
+const stats = { meshes: 0, materials: new Set(), textured: 0 };
+let slotDefs = {};        // slot name -> material def (materials.json, keyed by SLOT)
+let slotMesh = {};        // mesh -> ordered slot names
+let colorSlots = {};      // slot -> {defaultColor, metallic, roughness, useAlpha}
+let paints = [];          // [{slot: [r,g,b,a]}] the game's default paint variants
+let extraPaintSlot = {};  // paintable material slot -> index into the colour-slot order
+let colourKeys = [];      // ColorSlots keys, in slot order (duplicates suffixed __N)
+let bodyVariants = [];    // BodyMaterialList: livery/decal materials on the CDO
+let liveryIndex = -1;     // -1 = the material the mesh slot actually names
+let paintIndex = -1;      // -1 = as authored on the material
+const assign = [];        // debug: part.mesh === "Body" primitive -> slot mapping
+
+// UE FColor is sRGB 0-255; THREE.Colour with colour management converts to linear.
+function srgb(r, g, b) {
+  const c = new THREE.Color();
+  c.setStyle(`rgb(${r},${g},${b})`);
+  return c;
+}
+
+// Resolve the colour a slot should show for the active paint scheme.
+// A BodyColors entry lists the RGB per slot; the alpha channel is only meaningful
+// for slots marked bUseColorAlpha (glass), so it must NOT be read as "unset" —
+// Boxy's four default paints are blue / charcoal / light grey / white and three of
+// them carry alpha 0. A slot the scheme doesn't mention keeps its ColorSlot default.
+function slotColour(key) {
+  const scheme = paintIndex >= 0 ? paints[paintIndex] : null;
+  const cs = colorSlots[key] || null;
+  if (scheme) {
+    // Exact slot name first, then a secondary paint region: the Stinger's racing
+    // stripe is a second ColorSlots entry under the same "Body" key, living on its
+    // own material section (Body_1) that no colour names directly. Only after that
+    // the loose Body_1 -> Body fallback, which would otherwise hand the stripe the
+    // body colour and hide it.
+    const exact = scheme[key];
+    if (exact) return exact;
+    const i = extraPaintSlot[key];
+    if (i != null) {
+      const src = colourKeys[i];
+      if (src && scheme[src]) return scheme[src];
+    }
+    const hit = scheme[key.replace(/_\d+$/, "")] ||
+                scheme[key.replace(/(_\d+)$/, "_01")];
+    if (hit) return hit;
+  }
+  if (cs && cs.defaultColor) return cs.defaultColor;
+  return null;
+}
+
+// Which material sections are paintable but not named by a ColorSlots key.
+// Ordered by triangle count so the dominant section takes the first colour slot.
+function indexPaintSlots() {
+  const tris = {};
+  root.traverse(o => {
+    if (!o.isMesh || !o.material) return;
+    const n = o.material.name;
+    const g = o.geometry;
+    tris[n] = (tris[n] || 0) + (g.index ? g.index.count : g.attributes.position.count) / 3;
+  });
+  colourKeys = Object.keys(colorSlots);
+  // Only the body mesh's own sections count: the dashboard also uses M_Palette, and
+  // letting it into the ordering pushed the stripe out of the colour list.
+  // The painted shell, not the first mesh that happens to carry a body slot: the
+  // doors reuse "Body" too, and picking a door left the stripe section out.
+  const bodyMesh = slotMesh["Body"] ? "Body"
+    : Object.keys(slotMesh).reduce((a, b) => ((slotMesh[a] || []).length >= (slotMesh[b] || []).length ? a : b));
+  const pool = bodyMesh ? slotMesh[bodyMesh] : Object.keys(slotDefs);
+  const cand = pool.filter(s => {
+    const d = slotDefs[s] || {};
+    return /M_Body|M_Palette/i.test(d.materialName || "") && !d.map && !colourKeys.includes(s);
+  });
+  cand.sort((a, b) => (tris[b] || 0) - (tris[a] || 0));
+  extraPaintSlot = {};
+  cand.forEach((s, i) => { extraPaintSlot[s] = i; });
+}
+
+function applyPaint() {
+  for (const [key, m] of matCache) {
+    if (key.includes("|attachment:")) continue;
+    const slot = key.split("|")[0];
+    const c = slotColour(slot);
+    if (c && !key.endsWith("|true")) {
+      m.color.copy(srgb(c[0], c[1], c[2]));
+    }
+  }
+  for (const [slot, cs] of Object.entries(colorSlots)) {
+    if (cs.metallic != null) for (const [k, m] of matCache) if (!k.includes("|attachment:") && k.split("|")[0] === slot) m.metalness = cs.metallic;
+    if (cs.roughness != null) for (const [k, m] of matCache) if (!k.includes("|attachment:") && k.split("|")[0] === slot) m.roughness = cs.roughness;
+  }
+}
+
+// Apply a BodyMaterialList entry to the body slots. These are the game's livery /
+// decal materials: the texture carries the stripes or logo, and the paint colour
+// sits on top of it, so the colour is left alone unless a paint variant is active.
+function applyLivery() {
+  const v = selectedBodyVariant(bodyVariants, liveryIndex);
+  window.__bodyMaterial = { requestedIndex: liveryIndex, selectedIndex: v?.index ?? null, name: v?.materialName || null };
+  for (const [key, m] of matCache) {
+    if (key.includes("|attachment:")) continue;
+    const slot = key.split("|")[0];
+    const def = slotDefs[slot] || {};
+    // The visible shell is not always a Body_ slot: on the muscle cars it is the
+    // Palette section (12,690 of 15,543 triangles on the Tuscan), so a livery that
+    // only repainted Body_01 changed nothing on screen.
+    const isBody = isBodyMaterialSlot(slot, def);
+    if (!isBody) continue;
+    // Keep non-body slots (wheels, interior) on their authored material when the
+    // livery is M_Body. Applying it to every Palette slot wipes their texture.
+    if (!liverySlotMatches(def, v)) continue;
+    if (!v) {                        // back to the authored material
+      m.map = def.map ? loadTexture(def.map) : null;
+      m.metalness = def.metalness ?? 0.0;
+      m.roughness = def.roughness ?? 0.55;
+      if (def.baseColor) m.color.setRGB(def.baseColor[0], def.baseColor[1], def.baseColor[2], THREE.LinearSRGBColorSpace);
+      m.needsUpdate = true;
+      continue;
+    }
+    m.map = v.map ? loadTexture(v.map) : null;
+    m.metalness = v.metalness ?? 0.3;
+    m.roughness = v.roughness ?? 0.5;
+    if (v.map) {
+      // A livery texture already carries the paint (NukeTaxi's is pure yellow,
+      // 245,182,51) — multiplying it by the slot's dark default colour renders it
+      // black. Only a colour the user explicitly chose tints a livery.
+      m.color.setRGB(1, 1, 1);
+    } else if (v.baseColor) {
+      m.color.setRGB(v.baseColor[0], v.baseColor[1], v.baseColor[2], THREE.LinearSRGBColorSpace);
+    }
+    m.needsUpdate = true;
+  }
+  if (paintIndex >= 0) applyPaint();
+}
+
+
+async function load() {
+  const loadTiming = (window.__loadTiming = { start: performance.now() });
+  statusEl.classList.add("pending");
+  statusEl.textContent = "loading…";
+  if (workshopId || characterVehicleId) {
+    const endpoint = workshopId
+      ? `/api/workshop/items/${encodeURIComponent(workshopId)}/viewer`
+      : `/api/character-vehicles/${encodeURIComponent(characterVehicleId)}/viewer`;
+    const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
+    if (!response.ok) {
+      window.__configInfo = { step: "error", status: response.status, endpoint };
+      throw new Error(`configuration request failed (${response.status})`);
+    }
+    sourceConfig = await response.json();
+    if (!sourceConfig?.vehicle?.slug) throw new Error("configuration has no vehicle slug");
+    vehicle = sourceConfig.vehicle.slug;
+    if (sourceConfig.vehicle.assetAvailable === false) {
+      window.__configInfo = { step: "unsupported", ...sourceConfig.vehicle };
+      throw new Error(sourceConfig.renderReport?.warnings?.[0] || "3D asset is unavailable");
+    }
+    window.__configInfo = {
+      step: "ready",
+      kind: sourceConfig.source?.kind,
+      id: sourceConfig.source?.id,
+      slug: vehicle,
+      configHash: sourceConfig.source?.configHash,
+      decals: sourceConfig.decals?.length || 0,
+      attachments: sourceConfig.attachments?.length || 0,
+      warnings: sourceConfig.renderReport?.warnings || [],
+    };
+  }
+
+  const [manifest, table] = await Promise.all([
+    fetch(`${vehicle}/${vehicle}.json?v=3`).then(r => r.json()),
+    fetch(`${vehicle}/materials.json`).then(r => r.json()).catch(() => ({ materials: {} })),
+  ]);
+  const visibleParts = manifest.parts.filter(p => !p.hidden);
+  const initialBox = estimateBox();
+  frameBox(initialBox);   // something framed before the first byte arrives
+  alignArena(initialBox);
+  statusEl.textContent = `geometry 0/${visibleParts.length}`;
+  const defs = table.materials || {};
+  slotDefs = defs;
+  slotMesh = table.slotsByMesh || {};
+  colorSlots = manifest.colorSlots || {};
+  paints = manifest.paints || [];
+  bodyVariants = table.bodyVariants || [];
+  liveryIndex = params.has("livery") ? parseInt(params.get("livery"), 10) : (sourceConfig?.paint?.bodyMaterialIndex ?? -1);
+  paintIndex = params.has("scheme") ? parseInt(params.get("scheme"), 10) : -1;
+  // --- stream the geometry: silhouette first ----------------------------------
+  // Each part is added the moment its GLB lands and drawn with one shared wireframe
+  // material, so the shape appears while the rest is still downloading. Shading is
+  // a single pass after every part is present: swapping materials part-by-part made
+  // the model flicker between flat and textured as each texture decoded.
+  const wire = new THREE.MeshBasicMaterial({ color: 0x9fb4d0, wireframe: true, transparent: true, opacity: 0.5 });
+  const streamed = [];
+  // Framing during streaming. The manifest only carries part PIVOTS, which
+  // under-state the real extents (a chassis pivot does not know the cab is 2 m
+  // tall), so the box is the union of the estimated one and what has actually
+  // arrived — and it may only GROW. Fitting to arrived geometry alone zoomed onto
+  // the first wheel; shrinking the frame mid-load lurches. The exact fit runs once
+  // at the end, when every part is present.
+  let lastDiag = 0;
+  function estimateBox() {
+    const b = new THREE.Box3();
+    for (const part of visibleParts) b.expandByPoint(new THREE.Vector3().fromArray(part.position));
+    return b.isEmpty() ? b : b.expandByScalar(1.6);
+  }
+  function frameBox(b) {
+    if (!b || b.isEmpty()) return;
+    const pv = b.getCenter(new THREE.Vector3());
+    const ps = b.getSize(new THREE.Vector3());
+    const rr = Math.max(ps.x, ps.y, ps.z) || 1;
+    const dist = (rr / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) * 1.05;
+    camera.position.copy(pv).add(new THREE.Vector3(0.95, 0.5, 1.15).normalize().multiplyScalar(dist));
+    camera.lookAt(pv);
+    controls.target.copy(pv);
+    controls.update();
+  }
+  function growFrame() {
+    const b = estimateBox().union(new THREE.Box3().setFromObject(root).expandByScalar(1.0));
+    const d = b.getSize(new THREE.Vector3()).length();
+    if (d <= lastDiag * 1.15) return;      // only re-frame on real growth
+    lastDiag = d;
+    frameBox(b);
+    alignArena(b);
+  }
+  // Start downloads immediately. A previous Content-Length HEAD pass added a full
+  // network round-trip before even the body could start on high-latency phones.
+  // Prefer staged byte sizes when present; otherwise prioritize the silhouette
+  // from manifest metadata, then wheels, then trim. Six workers fill in the rest.
+  const parts = visibleParts.slice();
+  const priority = p => p.bytes || (/^(Body|Frame|Cab|Chassis)$/i.test(p.mesh) ? 1e9 :
+    (/Wheel/i.test(p.class || p.id) ? 1e6 : 0));
+  parts.sort((a, b) => priority(b) - priority(a));
+  window.__order = parts.map(p => p.mesh + "=" + (p.bytes || priority(p)));
+
+  let previewModel = null;
+  let fullPartsAdded = 0;
+  const previewPromise = manifest.preview?.glb ? (async () => {
+    const info = (window.__previewInfo = { step: "loading", bytes: manifest.preview.bytes || 0 });
+    try {
+      const g = await loader.loadAsync(`${vehicle}/${manifest.preview.glb}`);
+      if (fullPartsAdded) { info.step = "superseded"; return; }
+      previewModel = g.scene;
+      previewModel.traverse(o => { if (o.isMesh) o.material = wire; });
+      root.add(previewModel);
+      growFrame();
+      render();
+      info.step = "shown";
+      info.shownAt = performance.now();
+      loadTiming.preview = info.shownAt;
+    } catch (e) {
+      info.step = "error:" + e.message;
+      console.warn("lightweight preview failed", e);
+    }
+  })() : Promise.resolve();
+
+  await previewPromise;
+
+  let done = 0;
+  async function streamPart(part) {
+    try {
+      const g = await loader.loadAsync(`${vehicle}/glb/${part.glb}`);
+      const model = g.scene;
+      // GLB primitives come out in material-slot order, so index into the mesh's
+      // ordered slot list and give each primitive its own material instance. This
+      // is what keeps Body_01 / Body_02 (same M_Body asset, different paint) apart.
+      const order = slotMesh[part.mesh] || [];
+      const prims = [];
+      model.traverse(o => { if (o.isMesh) prims.push(o); });
+      prims.forEach((o, i) => {
+        const fallback = Array.isArray(o.material) ? o.material[0]?.name : o.material?.name;
+        // The GLB is rewritten by bake_materials so each primitive's material is
+        // named after its UE slot; fall back to slot order if that didn't happen.
+        const name = (fallback && defs[fallback]) ? fallback : (order[i] || fallback);
+        let d = defs[name] || defs[fallback];
+        // A wheel whose atlas texture is missing must not render as white plastic.
+        // The tyre is unpainted rubber in the game; use a matte black fallback only
+        // for wheel meshes, leaving body/interior material handling untouched.
+        if ((/Wheel/i.test(part.class || "") || /^Wheel/i.test(part.id || ""))
+            && (!d || (!d.map && d.mapMissing))) {
+          d = Object.assign({}, d || {}, {
+            baseColor: [0.022, 0.022, 0.024],
+            metalness: 0.0,
+            roughness: 0.88,
+            map: null,
+            roughnessMap: null,
+            metalnessMap: null,
+          });
+        }
+        if (part.mesh === "Body") {
+          o.geometry.computeBoundingBox();
+          const bb = o.geometry.boundingBox.getSize(new THREE.Vector3());
+          assign.push(`${i}:${name}:v${o.geometry.attributes.position.count}:` +
+                      `${bb.x.toFixed(1)}x${bb.y.toFixed(1)}x${bb.z.toFixed(1)}`);
+        }
+        stats.materials.add(name);
+        if (d && d.map) stats.textured++;
+        stats.meshes++;
+        o.userData.slot = name;                  // remembered for the shading pass
+        o.userData.def = d;
+        o.material = wire;
+      });
+      model.position.fromArray(part.position);
+      model.quaternion.fromArray(part.rotation);
+      model.scale.fromArray(part.scale);
+      root.add(model);
+      fullPartsAdded++;
+      if (previewModel) {
+        root.remove(previewModel);
+        previewModel = null;
+        if (window.__previewInfo) window.__previewInfo.step = "replaced";
+      }
+      streamed.push(model);
+      growFrame();
+      render();
+    } catch (e) { console.warn("part failed", part.id, e.message); }
+    done++;
+    statusEl.textContent = `wireframe ${done}/${parts.length}`;
+  }
+  // Six workers keep HTTP/2 busy without flooding the main thread with GLB parses.
+  let next = 0;
+  await Promise.all([0, 1, 2, 3, 4, 5].map(async () => {
+    while (next < parts.length) await streamPart(parts[next++]);
+  }));
+  loadTiming.geometry = performance.now();
+
+  // --- shade the base vehicle first ------------------------------------------
+
+  // --- owned attachments: attachment transform -> actor-local components ----
+  async function streamAttachments() {
+    const info = (window.__attachmentInfo = { step: "start", records: 0, resolved: 0, components: 0, instances: 0, instancedDraws: 0, lights: 0, lightBudgetSkipped: 0, missing: [] });
+    if (params.get("attachments") === "0") { info.step = "off"; return; }
+    let catalogue, owners, attachmentTable;
+    try {
+      [catalogue, owners, attachmentTable] = await Promise.all([
+        fetch("attachments/catalog.json?v=5").then(r => r.json()),
+        fetch("attachments/vehicles.json?v=1").then(r => r.json()),
+        fetch("attachments/materials.json?v=2").then(r => r.json()),
+      ]);
+    } catch (e) { info.step = "fetch-failed:" + e.message; return; }
+    const rec = sourceConfig
+      ? { attachments: sourceConfig.attachments || [], ownerVehicleId: sourceConfig.source?.id }
+      : (owners.vehicles?.[vehicle] || Object.values(owners.vehicles || {}).find(r => r.slug === vehicle));
+    const records = rec?.attachments || [];
+    info.records = records.length;
+    info.ownerVehicleId = rec?.ownerVehicleId;
+    info.dynamicConfiguration = Boolean(sourceConfig);
+    if (!records.length) { info.step = "no-record"; return; }
+
+    const actors = catalogue.actors || {};
+    const attachmentDefs = attachmentTable.materials || {};
+    const needed = new Set(records.filter(p => actors[p.key]).flatMap(p => {
+      const actor = actors[p.key];
+      return actor.components.map(component => component.mesh || actor.mesh);
+    }));
+    const models = {};
+    await Promise.all([...needed].map(async mesh => {
+      try { models[mesh] = (await loader.loadAsync(`attachments/glb/${mesh}.glb`)).scene; }
+      catch (e) { console.warn("attachment mesh failed", mesh, e.message); }
+    }));
+    const primitives = {};
+    for (const [mesh, model] of Object.entries(models)) {
+      model.updateMatrixWorld(true);
+      primitives[mesh] = [];
+      model.traverse(o => { if (o.isMesh) primitives[mesh].push(o); });
+    }
+
+    // One InstancedMesh per item key + GLB primitive. Vamos3 keeps the same
+    // 104 transformed primitives but submits 6 draws instead of 104.
+    const buckets = new Map();
+    for (const part of records) {
+      const actor = actors[part.key];
+      if (!actor || !models[actor.mesh]) {
+        if (!info.missing.includes(part.key)) info.missing.push(part.key);
+        continue;
+      }
+      info.resolved++;
+      const group = new THREE.Group();
+      group.name = `Attachment_${part.slot}`;
+      group.userData.attachmentKey = part.key;
+      group.position.fromArray(part.position);
+      group.quaternion.fromArray(attachmentRootRotation(part.rotation));
+      group.scale.fromArray(part.scale);
+      const attachmentMatrix = new THREE.Matrix4().compose(group.position, group.quaternion, group.scale);
+
+      for (const component of actor.components) {
+        const componentMesh = component.mesh || actor.mesh;
+        const order = attachmentTable.slotsByMesh?.[componentMesh] || [];
+        const componentDefs = attachmentTable.materialsByMesh?.[componentMesh] || attachmentDefs;
+        const cq = new THREE.Quaternion().fromArray(component.rotation);
+        const cs = new THREE.Vector3().fromArray(component.scale);
+        const componentMatrix = new THREE.Matrix4().compose(
+          new THREE.Vector3().fromArray(component.position), cq, cs);
+        primitives[componentMesh].forEach((o, i) => {
+          const fallback = Array.isArray(o.material) ? o.material[0]?.name : o.material?.name;
+          const name = component.materialSlots?.[i] || ((fallback && componentDefs[fallback]) ? fallback : (order[i] || fallback));
+          const def = componentDefs[name] || attachmentDefs[name] || {};
+          const isLightMaterial = name === "Light" || def.material?.includes("/M_AttachmentLight.");
+          const attachmentColor = actor.color || [1, 1, 1];
+          const m = materialFor(name, def, plainMode, part.key);
+          if (isLightMaterial) {
+            m.color.setRGB(...attachmentColor, THREE.LinearSRGBColorSpace);
+            m.emissive.setRGB(...attachmentColor, THREE.LinearSRGBColorSpace);
+            m.emissiveIntensity = 2.0;
+          }
+          const bucketKey = `${part.key}|${componentMesh}|${i}`;
+          if (!buckets.has(bucketKey)) buckets.set(bucketKey, {
+            key: part.key, mesh: componentMesh, primitive: i, geometry: o.geometry,
+            material: m, slot: name, def, color: isLightMaterial ? attachmentColor : null,
+            matrices: [],
+          });
+          const matrix = attachmentMatrix.clone().multiply(componentMatrix).multiply(o.matrixWorld);
+          buckets.get(bucketKey).matrices.push(matrix);
+          info.instances++;
+        });
+        info.components++;
+      }
+      if (params.get("attachmentLights") !== "0") {
+        for (const ld of actor.lights || []) {
+          const lightBudget = params.get("attachmentLights") === "full" ? 24 : 4;
+          if (info.lights >= lightBudget) { info.lightBudgetSkipped++; continue; }
+          const color = new THREE.Color().setRGB(...ld.color, THREE.LinearSRGBColorSpace);
+          let light;
+          if (ld.type === "spot") {
+            const outer = THREE.MathUtils.degToRad(ld.outerConeAngle);
+            const penumbra = ld.outerConeAngle > 0 ? THREE.MathUtils.clamp(1 - ld.innerConeAngle / ld.outerConeAngle, 0, 1) : 0;
+            light = new THREE.SpotLight(color, ld.intensity, ld.attenuationRadius || 0, outer, penumbra, 2);
+            group.add(light.target);
+            light.userData.sourceLumens = ld.sourceIntensity;
+          } else {
+            light = new THREE.RectAreaLight(color, ld.intensity, ld.width, ld.height);
+          }
+          light.name = `Light_${part.slot}`;
+          light.position.fromArray(ld.position);
+          // UE lights emit along local +X; Three lights emit along -Z. The
+          // +90° yaw maps +X to -Z, then the spotlight target is read back from
+          // the resulting quaternion. A -90° alignment put every ray at the
+          // opposite end of the vehicle.
+          const align = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+          light.quaternion.fromArray(ld.rotation).multiply(align);
+          if (light.isSpotLight) {
+            // Three.js aims spotlights at target.position; rotating the light alone has no effect.
+            light.target.position.fromArray(spotlightTarget(light.position.toArray(), light.quaternion.toArray()));
+          }
+          light.castShadow = ld.castShadows;
+          light.userData.isAttachmentLight = true;
+          light.userData.attachmentKey = part.key;
+          // Metadata only: Three RectAreaLight has no cutoff or barn-door controls.
+          light.userData.attenuationRadius = ld.attenuationRadius;
+          light.userData.barnDoorAngle = ld.barnDoorAngle;
+          group.add(light);
+          info.lights++;
+        }
+      }
+      root.add(group);
+    }
+
+    for (const b of buckets.values()) {
+      const instanced = new THREE.InstancedMesh(b.geometry, b.material, b.matrices.length);
+      instanced.name = `AttachmentInstances_${b.key}_${b.primitive}`;
+      instanced.userData.slot = b.slot;
+      instanced.userData.def = b.def;
+      instanced.userData.attachmentColor = b.color;
+      instanced.userData.attachmentVariant = b.key;
+      instanced.userData.attachmentKey = b.key;
+      instanced.userData.isAttachment = true;
+      b.matrices.forEach((matrix, i) => instanced.setMatrixAt(i, matrix));
+      instanced.instanceMatrix.needsUpdate = true;
+      instanced.computeBoundingBox();
+      instanced.computeBoundingSphere();
+      root.add(instanced);
+      stats.materials.add(b.slot);
+      stats.meshes += b.matrices.length;
+      info.instancedDraws++;
+    }
+    info.step = "done";
+    if (info.lightBudgetSkipped) console.warn(`attachment lights skipped over budget: ${info.lightBudgetSkipped}`);
+  }
+
+  // --- base materials: get a usable vehicle on screen before enhancements ----
+  statusEl.textContent = `materials ${streamed.length}/${visibleParts.length}`;
+  for (const model of streamed) model.traverse(o => {
+    if (!o.isMesh) return;
+    o.material = materialFor(o.userData.slot, o.userData.def, plainMode);
+  });
+  statusEl.textContent = "vehicle ready · loading attachments & decals…";
+  if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
+  dismissLoadingWave();
+  render();
+  // Yield a real frame so the base vehicle is visible before the expensive
+  // rect-light/decal shader variants begin compiling.
+  await Promise.race([
+    new Promise(resolve => requestAnimationFrame(resolve)),
+    new Promise(resolve => setTimeout(resolve, 100)), // hidden tabs may throttle rAF
+  ]);
+  loadTiming.baseReady = performance.now();
+  loadTiming.baseDrawCalls = renderer.info.render.calls;
+  // The base vehicle is usable now. Do not make embedded pages wait for rect
+  // lights and decal shader variants before reporting their first usable frame.
+  notifyEmbed("ready", { stage: "base", configHash: sourceConfig?.source?.configHash || null });
+  await streamAttachments();
+  loadTiming.attachments = performance.now();
+
+  // (the vehicle list was fetched and wired at the top of load(), so the selector
+  // is already live while this vehicle streams in)
+
+  const box = new THREE.Box3().setFromObject(root);
+  const c = box.getCenter(new THREE.Vector3());
+  const s = box.getSize(new THREE.Vector3());
+  const r = Math.max(s.x, s.y, s.z);
+
+  // Motor Town forward is +X: the car's nose points along +X in this scene.
+  const dirs = {
+    iso: new THREE.Vector3(0.95, 0.5, 1.15),
+    front: new THREE.Vector3(1.0, 0.22, 0.15),
+    side: new THREE.Vector3(0.15, 0.14, 1.0),
+    rear: new THREE.Vector3(-1.0, 0.22, 0.12),
+    top: new THREE.Vector3(0.02, 1.0, 0.02),
+  };
+  // Fit by projecting the model's 8 bounding-box corners and shrinking the distance
+  // until every one lands inside the frustum. An analytic guess from `aspect` alone
+  // is wrong the moment the shape is long, the view is top-down, or the FOV changes;
+  // this measures what actually lands on screen.
+  const corners = [];
+  for (const x of [box.min.x, box.max.x])
+    for (const y of [box.min.y, box.max.y])
+      for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+  let lastNdc = 0;
+  function ndcExtent(dist, dir) {
+    camera.position.copy(c).add(dir.clone().normalize().multiplyScalar(dist));
+    camera.lookAt(c);
+    camera.updateMatrixWorld();
+    let m = 0;
+    for (const p of corners) {
+      const v = p.clone().project(camera);
+      m = Math.max(m, Math.abs(v.x), Math.abs(v.y));
+    }
+    return m;
+  }
+  function fitDist(dir) {
+    // target 0.90 => ~10% margin; ndc extent is ~1/dist for a fixed direction
+    let lo = r * 0.8, hi = r * 12;
+    if (ndcExtent(hi, dir) > 0.9) return hi;         // pathological, refuse to loop
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (ndcExtent(mid, dir) > 0.9) lo = mid; else hi = mid;
+    }
+    lastNdc = ndcExtent(hi, dir);
+    return hi;
+  }
+  let currentLook = params.get("cam") || "iso";
+  let lastAspect = camera.aspect;
+  let lastDist = 0;
+  function setCam(look) {
+    if (look) currentLook = look;
+    const d = dirs[currentLook] || dirs.iso;
+    lastDist = fitDist(d);
+    camera.position.copy(c).add(d.clone().normalize().multiplyScalar(lastDist));
+    camera.lookAt(c);
+    controls.target.copy(c);
+    controls.update();
+    // exposed for the headless fit check (the debug block below is outside this scope)
+    window.__fit = { ndc: lastNdc, dist: lastDist, look: currentLook };
+    render();
+  }
+  window.__setCam = setCam;
+  setCam(currentLook);
+
+  // rotate / address-bar changes: keep the model framed, but don't stomp on a zoom
+  // the user did themselves unless the aspect really moved.
+  function refitIfAspectChanged() {
+    if (!camera.aspect) return;
+    if (Math.abs(camera.aspect - lastAspect) / lastAspect < 0.12) return;
+    lastAspect = camera.aspect;
+    setCam(currentLook);
+  }
+  addEventListener("orientationchange", refitIfAspectChanged);
+  addEventListener("resize", refitIfAspectChanged);
+  if (window.visualViewport) visualViewport.addEventListener("resize", refitIfAspectChanged);
+
+  // Build the caption from parts so a missing texture count can't leave a dangling
+  // separator ("… 14 materials · " was showing up on phones).
+  metaEl.textContent = [
+    manifest.vehicle,
+    `${s.x.toFixed(2)}×${s.y.toFixed(2)}×${s.z.toFixed(2)} m`,
+    `${stats.meshes} meshes`,
+    `${stats.materials.size} materials`,
+    table.__textures ? String(table.__textures) : "",
+  ].filter(Boolean).join(" · ");
+  statusEl.textContent = "vehicle ready · finishing decals…";
+
+  // --- decals: projection transcribed from M_DecalBounds_Test shader 5020 ---
+  // The game bakes each layer through LocalBounds/LocalNormal into a per-mesh
+  // render target. Here the same projection runs per fragment on the original
+  // material, so no UV-space stamp or fitted bounding-box transform is needed.
+  function applyOwnerColors(rec) {
+    const configColors = sourceConfig?.paint?.colors;
+    const colors = configColors?.length
+      ? Object.fromEntries(configColors.map(c => [c.slot, c.rgba]))
+      : rec?.ownerColors;
+    if (!colors) { window.__ownerPaint = null; return; }
+    const applied = [];
+    for (const [key, m] of matCache) {
+      if (key.includes("|attachment:")) continue;
+      if (key.endsWith("|true")) continue; // plain fallback stays neutral
+      const slot = key.split("|")[0];
+      const rgba = ownerColorForSlot(slot, colors, colourKeys, extraPaintSlot);
+      if (!rgba) continue;
+      m.color.setRGB(rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, THREE.SRGBColorSpace);
+      if (colorSlots[slot]?.useAlpha) {
+        m.opacity = rgba[3] / 255;
+        m.transparent = m.opacity < 1;
+      }
+      if (!applied.includes(slot)) applied.push(slot);
+    }
+    window.__ownerPaint = {
+      vehicleId: sourceConfig?.source?.id ?? rec?.ownerVehicleId,
+      kind: sourceConfig?.source?.kind || "baked-record",
+      applied,
+    };
+  }
+
+  async function applyVehicleDecals() {
+    const info = (window.__decalInfo = { step: "start", projection: "shader-5020" });
+    const manifestSlots = manifest.decalSlots || [];
+    info.manifestSlots = manifestSlots.length ? manifestSlots : "empty";
+
+    let idx, cat, receivers;
+    try {
+      [idx, cat, receivers] = await Promise.all([
+        fetch("decals/vehicles.json?v=2").then(r => r.json()),
+        fetch("decals/decals.json?v=3").then(r => r.json()),
+        fetch("decals/receiver-slots.json?v=1").then(r => r.json()).catch(() => ({ vehicles: {} })),
+      ]);
+    } catch (e) { info.step = "fetch-failed:" + e.message; return; }
+    // The receiver table is generated from the vehicle CDO and is authoritative.
+    // Manifests written before the union fix only carry DecalableMaterialSlotNames,
+    // so they may omit the BodyMaterialNames half (e.g. CargoBed without Body_01).
+    const receiverVehicles = receivers?.vehicles || {};
+    const tableSlots = receiverVehicles[manifest.vehicle] || receiverVehicles[vehicle] || [];
+    const slots = tableSlots.length ? tableSlots : manifestSlots;
+    info.slots = slots.length ? slots : "fallback";
+    info.receiverSource = tableSlots.length ? "vehicle-cdo" : (manifestSlots.length ? "manifest" : "legacy-fallback");
+    let rec = idx.vehicles[vehicle] || Object.values(idx.vehicles).find(v => v.slug === vehicle);
+    if (sourceConfig) {
+      rec = {
+        ownerVehicleId: sourceConfig.source?.id,
+        ownerColors: null,
+        layers: sourceConfig.decals || [],
+      };
+      info.dynamicConfiguration = true;
+    }
+    applyOwnerColors(rec);
+    if (params.get("decals") === "0") { info.step = "off"; render(); return; }
+    info.rec = rec ? rec.layers.length : 0;
+    if (!rec || !rec.layers.length) { info.step = "no-record"; return; }
+
+    const byKey = new Map(cat.decals.map(d => [d.key, d]));
+    const layers = rec.layers.filter(L => byKey.get(L.key)).slice(0, 32);
+    if (!layers.length) { info.step = "no-known-keys"; return; }
+
+    // One atlas keeps the fragment pass to a single sampler. Colour is applied
+    // with source-in just as the brush multiplies the decal by its layer Colour.
+    const TILE = 256, GRID = 8;
+    const atlas = document.createElement("canvas");
+    atlas.width = atlas.height = TILE * GRID;
+    const actx = atlas.getContext("2d");
+    let packed = 0;
+    const images = await Promise.all(layers.map(L => {
+      const d = byKey.get(L.key);
+      return loadImage(`decals/tex/${d.category}/${d.name}.png`).catch(() => null);
+    }));
+    for (let i = 0; i < layers.length; i++) {
+      const d = byKey.get(layers[i].key);
+      const img = images[i];
+      if (!img) continue;
+      const t = document.createElement("canvas");
+      t.width = t.height = TILE;
+      const tc = t.getContext("2d");
+      tc.drawImage(img, 0, 0, TILE, TILE);
+      tc.globalCompositeOperation = "source-in";
+      const c = layers[i].color;
+      tc.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+      tc.fillRect(0, 0, TILE, TILE);
+      actx.drawImage(t, (i % GRID) * TILE, Math.floor(i / GRID) * TILE);
+      packed++;
+    }
+    info.packed = packed;
+    if (!packed) { info.step = "no-textures"; return; }
+    const atlasTex = new THREE.CanvasTexture(atlas);
+    atlasTex.colorSpace = THREE.SRGBColorSpace;
+    atlasTex.flipY = true;
+    atlasTex.magFilter = THREE.NearestFilter;
+    atlasTex.minFilter = THREE.NearestFilter;
+    atlasTex.generateMipmaps = false;
+
+    // Saved rotations are degrees. The material preshader consumes turns and
+    // multiplies them by 2π. Position stays in UE centimetres; only the glTF
+    // vertex position needs conversion (metres, Y-up -> centimetres, Z-up).
+    const posArr = [], rotArr = [], sizeArr = [], flagArr = [];
+    for (let i = 0; i < 32; i++) {
+      const L = layers[i];
+      if (!L) {
+        posArr.push(new THREE.Vector2());
+        rotArr.push(new THREE.Vector3());
+        sizeArr.push(new THREE.Vector3());
+        flagArr.push(0);
+        continue;
+      }
+      posArr.push(new THREE.Vector2(L.pos[0], L.pos[1]));
+      rotArr.push(new THREE.Vector3(L.rot[0]/360, L.rot[1]/360, L.rot[2]/360));
+      sizeArr.push(new THREE.Vector3(L.scale, L.stretch, L.coverage ?? 1));
+      flagArr.push(L.flags | 0);
+    }
+
+    let patched = 0;
+    const fallbackSlots = decalFallbackSlots(slots, slotDefs, bodyVariants, liveryIndex);
+    // A slot can be named anything; the generic body shader is the reliable
+    // signal. Size the slot's geometry so a small trim slot (Nuke's `Body_01`)
+    // does not win over the full shell (`Seats_01`).
+    const slotExtents = {};
+    root.traverse(o => {
+      if (!o.isMesh || !o.material || !o.geometry) return;
+      o.geometry.computeBoundingBox();
+      const b = o.geometry.boundingBox;
+      if (!b) return;
+      const extent = Math.hypot(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z);
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) slotExtents[m.name] = Math.max(slotExtents[m.name] || 0, extent);
+    });
+    const eligibleSlots = decalReceiverSlots(slots.length ? slots : fallbackSlots, slotDefs, slotExtents);
+    info.eligibility = slots.length ? "game-decal-slots" : "legacy-body-fallback";
+    info.eligibleSlots = [...eligibleSlots];
+    info.targets = [];
+    if (!eligibleSlots.size) { info.step = "no-eligible-slots"; render(); return; }
+
+    root.traverse(o => {
+      if (!o.isMesh || o.userData.isAttachment || !o.material) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      const swap = mats.map(m => {
+        if (!eligibleSlots.has(m.name)) return m;
+        const c = m.clone();
+        c.customProgramCacheKey = () => "mt-decal-shader-5020";
+        c.onBeforeCompile = sh => {
+          window.__shaderRuns = (window.__shaderRuns || 0) + 1;
+          Object.assign(sh.uniforms, {
+            decalAtlas: { value: atlasTex },
+            uDecalCount: { value: packed },
+            uDecalPos: { value: posArr },
+            uDecalRot: { value: rotArr },
+            uDecalSize: { value: sizeArr },
+            uDecalFlags: { value: flagArr },
+            uDecalRootInverse: { value: root.matrixWorld.clone().invert() },
+            uDecalDebug: { value: params.has("dbg") ? 1 : 0 },
+          });
+          sh.vertexShader = "uniform mat4 uDecalRootInverse;\nvarying vec3 vDecalLocal;\nvarying vec3 vDecalNrm;\n" + sh.vertexShader
+            .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvDecalLocal = (uDecalRootInverse * modelMatrix * vec4(position, 1.0)).xyz;\n\tvDecalNrm = normalize(mat3(uDecalRootInverse) * mat3(modelMatrix) * normal);");
+          sh.fragmentShader = `
+            uniform sampler2D decalAtlas;
+            uniform int uDecalCount;
+            uniform vec2 uDecalPos[32];
+            uniform vec3 uDecalRot[32];
+            uniform vec3 uDecalSize[32];
+            uniform int uDecalFlags[32];
+            uniform float uDecalDebug;
+            varying vec3 vDecalLocal;
+            varying vec3 vDecalNrm;
+            ${DECAL_PROJECTION_GLSL}
+          ` + sh.fragmentShader.replace("#include <map_fragment>", `#include <map_fragment>
+            if (uDecalDebug > 0.5) { diffuseColor.rgb = vec3(1.0, 0.0, 1.0); }
+            else {
+              vec3 p = vec3(vDecalLocal.x, -vDecalLocal.z, vDecalLocal.y)*100.0;
+              vec3 n = normalize(vec3(vDecalNrm.x, -vDecalNrm.z, vDecalNrm.y));
+              for (int i = 0; i < 32; i++) {
+                if (i >= uDecalCount) break;
+                int flags = uDecalFlags[i];
+                float flip = (flags & 1) != 0 ? 1.0 : 0.0;
+                vec3 size = uDecalSize[i];
+                vec2 q = mtDecalPrimaryUv(p, uDecalPos[i], uDecalRot[i], size.x, size.y, flip);
+                float visible = mtDecalVisibility(p, n, uDecalRot[i], flags, false);
+                if (visible > 0.0 && q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
+                  float col = mod(float(i), 8.0), row = floor(float(i)/8.0);
+                  vec2 auv = mtDecalAtlasUv(col, row, q);
+                  vec4 dec = texture2D(decalAtlas, auv);
+                  float alpha = dec.a*mtDecalEdge(q.x)*mtDecalEdge(q.y)*size.z;
+                  diffuseColor.rgb = mix(diffuseColor.rgb, dec.rgb, alpha);
+                }
+                if ((flags & 2) != 0) {
+                  vec2 qm = mtDecalMirrorUv(p, uDecalPos[i], uDecalRot[i], size.x, size.y, flip);
+                  float vm = mtDecalVisibility(p, n, uDecalRot[i], flags, true);
+                  if (vm > 0.0 && qm.x >= 0.0 && qm.x <= 1.0 && qm.y >= 0.0 && qm.y <= 1.0) {
+                    float col = mod(float(i), 8.0), row = floor(float(i)/8.0);
+                    vec2 auv = mtDecalAtlasUv(col, row, qm);
+                    vec4 dec = texture2D(decalAtlas, auv);
+                    float alpha = dec.a*mtDecalEdge(qm.x)*mtDecalEdge(qm.y)*size.z;
+                    diffuseColor.rgb = mix(diffuseColor.rgb, dec.rgb, alpha);
+                  }
+                }
+              }
+            }`);
+          if (!sh.fragmentShader.includes("mtDecalPrimaryUv")) window.__patchMiss = (window.__patchMiss || 0) + 1;
+        };
+        c.needsUpdate = true;
+        patched++;
+        info.targets.push({ slot: o.userData.slot, material: m.name });
+        return c;
+      });
+      if (swap.some((m, i) => m !== mats[i])) o.material = Array.isArray(o.material) ? swap : swap[0];
+    });
+    info.patched = patched;
+    info.step = "compiling";
+    info.layers = layers.map(L => ({ key: L.key, pos: L.pos, rot: L.rot, scale: L.scale, flags: L.flags }));
+    if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
+    loadTiming.decals = performance.now();
+    info.step = "done";
+    try { render(); } catch (e) { try { renderer.render(scene, camera); } catch (e2) {} }
+  }
+  applyVehicleDecals().catch(e => {
+    console.warn("decals:", e);
+    window.__decalInfo = { step: "error:" + e.message };
+  }).finally(() => {
+    const failed = /^(?:error:|fetch-failed:)/.test(window.__decalInfo?.step || "");
+    statusEl.textContent = failed ? "loaded · decals unavailable" : `loaded ${visibleParts.length}/${visibleParts.length}`;
+  });
+
+  window.__viewer = { scene, root, camera, renderer, manifest, defs, stats, setCam };
+  // exposed for headless probes (ray casts, section visibility) that need the three.js namespace
+  window.__THREE = THREE;
+
+  indexPaintSlots();     // needs the finished model to know each section's size
+  applyPaint();
+  applyLivery();
+
+  statusEl.classList.remove("pending");
+  statusEl.textContent = "vehicle ready · finishing decals…";
+  render();
+
+  if (params.has("debug")) {
+    document.title = JSON.stringify({
+      paintIndex, paints: paints.length, colorSlots: Object.keys(colorSlots),
+      liveryIndex, bodyVariants: bodyVariants.map(v => v.materialName + (v.map ? "*" : "")),
+      maps: [...matCache].filter(([k]) => /^Body/i.test(k.split("|")[0]))
+        .map(([k, m]) => k.split("|")[0] + "=" + (m.map ? (m.map.image ? (m.map.image.src || "").split("/").pop() : "pending") : "none")),
+      slotKeys: Object.keys(defs), meshes: Object.keys(slotMesh),
+      cache: [...matCache.keys()],
+      assigned: assign,
+      big: (() => {
+        const out = [];
+        root.traverse(o => {
+          if (!o.isMesh) return;
+          const n = o.geometry.attributes.position.count;
+          if (n < 800) return;
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          out.push(`${o.parent?.name || "?"}:${n}:${mats.map(m => m.name + "=" + m.color.getHexString() + (m.transparent ? "T" : "")).join(",")}`);
+        });
+        return out;
+      })(),
+      body: (() => { const m = matCache.get("Body_01|false"); return m ? m.color.getHexString() : null; })(),
+    });
+  }
+
+  render();
+}
+
+let needsRender = true;
+function render() {
+  if (!syncMode) { needsRender = true; return; }
+  controls.update();
+  renderer.render(scene, camera);
+}
+function anim() {
+  requestAnimationFrame(anim);
+  if (loadingWave) {
+    const time = (performance.now() - loadingWave.start) / 1000;
+    loadingWave.material.uniforms.uTime.value = time;
+    loadingWaveInfo.time = time;
+    needsRender = true;
+  }
+  const moved = controls.update();
+  if (!interacting && restoreQuality && !moved && performance.now() >= restoreQualityAt) {
+    applyRenderResolution(1);
+    restoreQuality = false;
+    needsRender = true;
+  }
+  if (moved || needsRender) {
+    renderer.render(scene, camera);
+    needsRender = false;
+  }
+}
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  applyRenderResolution(interacting ? INTERACTIVE_SCALE : 1);
+  if (loadingWave) loadingWave.material.uniforms.uPixelRatio.value = renderer.getPixelRatio();
+  render();
+});
+
+if (!syncMode) anim();
+try { await load(); }
+catch (e) {
+  dismissLoadingWave();
+  statusEl.textContent = "load failed";
+  notifyEmbed("error", { message: String(e?.message || e) });
+  throw e;
+}
+// give textures a beat to decode before the single frame in sync mode
+await new Promise(r => setTimeout(r, 350));
+if (!syncMode) render();
+notifyEmbed("ready", { stage: "complete", configHash: sourceConfig?.source?.configHash || null });
+if (syncMode) {
+  render();
+  window.__syncFrame = { rendered: true, at: performance.now() };
+  if (params.has("debug")) {
+    // Ground truth: average the pixels that are actually on screen, so we can tell
+    // "the material is blue" apart from "the mesh is drawn with something else".
+    const gl = renderer.getContext();
+    const w = renderer.domElement.width, h = renderer.domElement.height;
+    const buf = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    let n = 0, r = 0, g2 = 0, b = 0;
+    for (let i = 0; i < buf.length; i += 4) {
+      const lum = 0.2126 * buf[i] + 0.7152 * buf[i + 1] + 0.0722 * buf[i + 2];
+      if (lum < 45) continue;                    // background / grid
+      n++; r += buf[i]; g2 += buf[i + 1]; b += buf[i + 2];
+    }
+    document.title += `|px=${n} mean=${n ? [r / n, g2 / n, b / n].map(v => v.toFixed(0)).join(",") : "-"}`;
+    document.title += `|vp=${innerWidth}x${innerHeight} dpr=${devicePixelRatio} coarse=${COARSE ? 1 : 0} aspect=${camera.aspect.toFixed(3)}`;
+  }
+}
+</script>
+</body>
+</html>
