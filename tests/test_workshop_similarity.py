@@ -25,6 +25,8 @@ async def test_item_page_does_not_flag_same_author_work(client):
     assert "Potential copy of another workshop item" not in text
     assert "/workshop/items/3/" in text
     assert 'id="similar-builds"' in text
+    assert "Potential sources" in text
+    assert "No newer matching builds." in text
 
 
 async def test_earlier_item_is_not_flagged_but_still_lists_the_match(client):
@@ -34,6 +36,8 @@ async def test_earlier_item_is_not_flagged_but_still_lists_the_match(client):
     assert "Potential copy of another workshop item" not in text
     assert "Similar builds" in text
     assert "/workshop/items/1/" in text
+    assert "Potential copies" in text
+    assert "No older matching builds." in text
 
 
 async def test_item_without_matches_hides_the_gallery(client):

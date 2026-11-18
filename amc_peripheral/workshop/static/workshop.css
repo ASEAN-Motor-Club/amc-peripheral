@@ -230,6 +230,9 @@ details.panel > summary h2 { display: inline; margin: 0; }
 .notice.copy-flag p { margin: 8px 0 0; }
 .notice.copy-flag a { color: #ffe2a3; }
 .similar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px; }
+.similar-group h3 { margin: 0; font-size: 16px; }
+.similar-group .muted { margin: 4px 0 0; }
+.similar-group + .similar-group { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
 @media (max-width: 700px) { .similar-grid { grid-template-columns: 1fr; } }
 
 /* Discord sign-in (workshop SSO) */
