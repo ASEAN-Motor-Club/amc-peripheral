@@ -325,7 +325,7 @@ class WorkshopRepository:
         min_sim: float = 0.60,
         copy_threshold: float = 0.95,
         flag_min_layers: int = 8,
-        flag_min_similarity: float = 0.96,
+        flag_min_similarity: float = 0.95,
     ) -> dict[str, Any]:
         """Ranked similar builds for ``item`` from the precomputed index.
 
