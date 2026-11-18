@@ -87,12 +87,14 @@ function visibility(point, normal, yaw, pitch, flags, mirrored) {
   const cp = Math.cos(TAU * pitch);
   const sp = Math.sin(TAU * pitch);
   const c = [cy*cp, sy*cp, sp];
-  const dp = c[0]*point[0] + c[1]*point[1] + c[2]*point[2];
   const dn = c[0]*normal[0] + c[1]*normal[1] + c[2]*normal[2];
-  const opposite = (flags & 4) ? 1 : 0;
+  const opposite = 0;
   const backface = (flags & 8) ? 1 : 0;
-  return (1 + opposite*(Math.max(0, Math.min(1, dn))-1))
-       * (1 + backface*(Math.max(0, Math.min(1, dn))-1));
+  // OppositeCull (bit 4) is a paint-editor hint, not a visibility test for the
+  // viewer's per-fragment projection. Applying it hid wrapped gradients
+  // (Raton item 1000); only BackFaceCull is enforced here.
+  const face = dn >= 0 ? 1 : 0;
+  return (1 + backface*(face-1));
 }
 
 export function primaryVisibility(point, normal, yaw, pitch, flags) {
@@ -143,10 +145,9 @@ float mtDecalVisibility(vec3 p, vec3 n, vec3 turns, int flags, bool mirrored) {
   float cp = cos(6.283185307179586*turns.y);
   float sp = sin(6.283185307179586*turns.y);
   vec3 c = vec3(cy*cp, sy*cp, sp);
-  float opposite = (flags & 4) != 0 ? 1.0 : 0.0;
   float backface = (flags & 8) != 0 ? 1.0 : 0.0;
-  return (1.0 + opposite*(clamp(dot(n, c), 0.0, 1.0)-1.0))
-       * (1.0 + backface*(clamp(dot(n, c), 0.0, 1.0)-1.0));
+  float face = step(0.0, dot(n, c));
+  return mix(1.0, face, backface);
 }
 vec2 mtDecalAtlasUv(float col, float row, vec2 q) {
   return vec2((col+q.x)/8.0, ((7.0-row)+(1.0-q.y))/8.0);
