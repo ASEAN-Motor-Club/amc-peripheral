@@ -18,7 +18,7 @@
 
 {% macro card(item, compare=false) -%}
 {% set pending = item.snapshotKey and not item.snapshotCardUrl and item.snapshotStatus not in ('unsupported', 'failed_permanent') %}
-<article class="vehicle-card" data-workshop-id="{{ item.id }}"{% if pending %} data-snapshot-key="{{ item.snapshotKey }}" data-snapshot-api="/api/workshop/items/{{ item.id }}/snapshot?via=card"{% endif %}>
+<article class="vehicle-card{% if item.isOriginal %} original-card{% endif %}" data-workshop-id="{{ item.id }}"{% if pending %} data-snapshot-key="{{ item.snapshotKey }}" data-snapshot-api="/api/workshop/items/{{ item.id }}/snapshot?via=card"{% endif %}>
   <a class="card-visual" href="/workshop/items/{{ item.id }}/" aria-hidden="true" tabindex="-1">
     {% if item.snapshotCardUrl %}
     <img src="{{ item.snapshotCardUrl }}" srcset="{{ item.snapshotCardUrl }} 480w, {{ item.snapshotUrl }} 960w" sizes="(max-width: 640px) 100vw, 360px" alt="" width="480" height="270" loading="lazy" decoding="async">
@@ -41,7 +41,8 @@
       {% if item.hasDecal %}{{ badge(item.decalLayers ~ ' decals', 'decal') }}{% endif %}
       {% if item.hasParts %}{{ badge(item.partCount ~ ' parts') }}{% endif %}
       {% if item.hasTunings %}{{ badge('Tuned', 'tuned') }}{% endif %}
-      {% if item.similarity is defined and item.similarity %}{{ badge((item.similarity * 100)|round(0)|int ~ '% match', 'decal') }}{% if item.isEarlier %}{{ badge('earlier upload', 'tuned') }}{% endif %}{% endif %}
+      {% if item.similarity is defined and item.similarity %}{{ badge((item.similarity * 100)|round(0)|int ~ '% match', 'decal') }}{% endif %}
+      {% if item.isOriginal %}{{ badge('Original', 'original') }}{% elif item.isEarlier %}{{ badge('earlier upload', 'tuned') }}{% endif %}
     </ul>
     <div class="card-meta">
       <span class="stat" title="Installs" aria-label="Installs: {{ item.installs }}">

@@ -82,6 +82,8 @@ button:hover, .primary-button:hover { text-decoration: none; filter: brightness(
   transition: border-color .18s, transform .18s;
 }
 .vehicle-card:hover { border-color: #3b4a63; transform: translateY(-2px); }
+.vehicle-card.original-card { border-color: #c99a3d; box-shadow: 0 0 0 1px rgba(240, 196, 106, .35), 0 10px 28px rgba(0, 0, 0, .18); }
+.vehicle-card.original-card .card-visual { box-shadow: inset 0 0 0 2px rgba(240, 196, 106, .55); }
 .card-visual { position: relative; aspect-ratio: 16 / 9; background: #0a0e16; overflow: hidden; }
 .card-visual img { width: 100%; height: 100%; object-fit: cover; opacity: .9; }
 .preview-pending { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px; color: #dbe7f5; background: rgba(5, 10, 17, .7); font-size: 13px; }
@@ -99,6 +101,7 @@ button:hover, .primary-button:hover { text-decoration: none; filter: brightness(
 .badge { display: inline-block; padding: 3px 7px; border-radius: 999px; font-size: 11px; color: #cbd7ea; background: var(--panel-2); border: 1px solid #2a3549; }
 .badge.decal { color: #b9d4ff; border-color: #2e4970; }
 .badge.tuned { color: #f5d7a1; border-color: #5a482c; }
+.badge.original { color: #0b111a; background: #f0c46a; border-color: #f0c46a; font-weight: 700; }
 .card-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: auto; padding-top: 6px; color: var(--muted); font-size: 12px; }
 .card-meta .stat { display: inline-flex; align-items: center; gap: 4px; }
 .card-meta .stat svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }

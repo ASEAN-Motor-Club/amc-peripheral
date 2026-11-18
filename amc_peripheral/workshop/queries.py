@@ -438,6 +438,17 @@ class WorkshopRepository:
                     gallery.insert(0, card)
                     del gallery[limit:]
 
+        earlier = [card for card in cards.values() if card.get("isEarlier")]
+        if earlier:
+            oldest = min(
+                earlier,
+                key=lambda card: (str(card.get("createdAt") or ""), int(card["id"])),
+            )
+            oldest["isOriginal"] = True
+            if oldest not in gallery:
+                gallery.insert(0, oldest)
+                del gallery[limit:]
+
         return {
             "items": gallery,
             "flagged": origin is not None,
