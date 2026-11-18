@@ -171,7 +171,7 @@ def test_copy_flag_accepts_a_match_with_extra_layers(settings, tmp_path):
     )
     assert result["flagged"] is True
     assert result["origin"]["id"] == 3
-    assert result["threshold"] == 0.96
+    assert result["threshold"] == 0.95
 
 
 def test_similar_items_ignores_index_rows_below_the_minimum(settings, tmp_path):
