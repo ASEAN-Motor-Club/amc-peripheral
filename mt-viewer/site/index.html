@@ -919,16 +919,25 @@ async function load() {
 
   async function applyVehicleDecals() {
     const info = (window.__decalInfo = { step: "start", projection: "shader-5020" });
-    const slots = manifest.decalSlots || [];
-    info.slots = slots.length ? slots : "fallback";
+    const manifestSlots = manifest.decalSlots || [];
+    info.manifestSlots = manifestSlots.length ? manifestSlots : "empty";
 
-    let idx, cat;
+    let idx, cat, receivers;
     try {
-      [idx, cat] = await Promise.all([
+      [idx, cat, receivers] = await Promise.all([
         fetch("decals/vehicles.json?v=2").then(r => r.json()),
         fetch("decals/decals.json?v=3").then(r => r.json()),
+        fetch("decals/receiver-slots.json?v=1").then(r => r.json()).catch(() => ({ vehicles: {} })),
       ]);
     } catch (e) { info.step = "fetch-failed:" + e.message; return; }
+    // The receiver table is generated from the vehicle CDO and is authoritative.
+    // Manifests written before the union fix only carry DecalableMaterialSlotNames,
+    // so they may omit the BodyMaterialNames half (e.g. CargoBed without Body_01).
+    const receiverVehicles = receivers?.vehicles || {};
+    const tableSlots = receiverVehicles[manifest.vehicle] || receiverVehicles[vehicle] || [];
+    const slots = tableSlots.length ? tableSlots : manifestSlots;
+    info.slots = slots.length ? slots : "fallback";
+    info.receiverSource = tableSlots.length ? "vehicle-cdo" : (manifestSlots.length ? "manifest" : "legacy-fallback");
     let rec = idx.vehicles[vehicle] || Object.values(idx.vehicles).find(v => v.slug === vehicle);
     if (sourceConfig) {
       rec = {
@@ -1004,7 +1013,7 @@ async function load() {
     let patched = 0;
     const fallbackSlots = decalFallbackSlots(slots, slotDefs, bodyVariants, liveryIndex);
     const eligibleSlots = new Set(slots.length ? slots : fallbackSlots);
-    info.eligibility = slots.length ? "game-decal-slots" : "selected-body-material";
+    info.eligibility = slots.length ? "game-decal-slots" : "legacy-body-fallback";
     info.eligibleSlots = [...eligibleSlots];
     info.targets = [];
     if (!eligibleSlots.size) { info.step = "no-eligible-slots"; render(); return; }

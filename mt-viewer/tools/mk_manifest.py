@@ -382,24 +382,28 @@ def body_material_data(exports, vehicle="", base_exports=None, base_vehicle=""):
 
 
 def decal_slots(exports, vehicle="", base_exports=None, base_vehicle=""):
-    """DecalableMaterialSlotNames -- which material slots accept decals.
+    """Material slots that receive decals: BodyMaterialNames ∪ DecalableMaterialSlotNames.
 
-    Decals are not authored data: a vehicle ships with an empty decal render target
-    and the player stamps layers onto it (MTVehicleDecalLayer: DecalKey, Color,
-    Position/Rotation in UV space, DecalScale, Stretch, Coverage). Which slots can
-    receive those stamps is the one thing the vehicle itself declares.
+    The game's decal component walks every material slot on every mesh component and
+    keeps a slot when its name is in the vehicle's BodyMaterialNames OR in
+    DecalableMaterialSlotNames (the latter is extended at runtime with decalable
+    slots from equipped parts).  BodyMaterialNames alone is not enough: tankers and
+    cargo bodies declare extra slots such as CargoBed, Wire, Signs and Palette_Decal
+    which never appear in the paint list.
     """
-    cdo = next((e for e in exports
-                if str(e.get("ExportName", "")).startswith("Default__" + vehicle + "_")), None)
-    names = (cdo.get("Properties") or {}).get("DecalableMaterialSlotNames") if cdo else None
-    if not isinstance(names, list) and base_exports:
-        bcdo = next((e for e in base_exports
-                     if str(e.get("ExportName", "")).startswith("Default__" + base_vehicle + "_")), None)
-        if bcdo:
-            names = (bcdo.get("Properties") or {}).get("DecalableMaterialSlotNames")
-    if not isinstance(names, list):
-        return {"decalSlots": []}
-    return {"decalSlots": [str(n) for n in names if isinstance(n, str)]}
+    def cdo_props(exp, name):
+        cdo = next((e for e in exp
+                    if str(e.get("ExportName", "")).startswith("Default__" + name + "_")), None)
+        return (cdo.get("Properties") or {}) if cdo else {}
+
+    def names_from(key):
+        value = cdo_props(exports, vehicle).get(key)
+        if not isinstance(value, list) and base_exports and base_vehicle:
+            value = cdo_props(base_exports, base_vehicle).get(key)
+        return [str(n) for n in value if isinstance(n, str)] if isinstance(value, list) else []
+
+    names = names_from("BodyMaterialNames") + names_from("DecalableMaterialSlotNames")
+    return {"decalSlots": list(dict.fromkeys(names))}
 
 
 def mesh_import(props):

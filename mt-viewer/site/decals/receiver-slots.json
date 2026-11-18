@@ -1,0 +1,506 @@
+{
+ "format": 1,
+ "vehicles": {
+  "AirCity": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Atlas_4x2_Semi": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Atlas_6x2_Dryvan": [
+   "Body_01",
+   "Body_02",
+   "Body_03"
+  ],
+  "Atlas_6x2_Garbage": [
+   "Body_01",
+   "Body_02",
+   "CargoBed"
+  ],
+  "Atlas_6x2_Semi": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Atlas_6x2_Tanker": [
+   "Body_01",
+   "Body_02",
+   "CargoBed"
+  ],
+  "Atlas_6x4_Semi": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Atlas_8x4_Dump": [
+   "CargoBed_01",
+   "Body_01",
+   "Body_02",
+   "CargoBed_02"
+  ],
+  "Bongo": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Bora": [
+   "Body_01",
+   "CargoBed"
+  ],
+  "Boxy": [
+   "Body_01"
+  ],
+  "Brutus_Ambulance": [
+   "Body_01",
+   "CargoBed_01"
+  ],
+  "Brutus_FireEngine": [
+   "Body_01",
+   "CargoBed_01"
+  ],
+  "Brutus_Tanker": [
+   "Body_01",
+   "CargoBed_01"
+  ],
+  "Brutus_Wrecker": [
+   "Body_01",
+   "CargoBed_01",
+   "CargoBed_02"
+  ],
+  "Bulko": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Campy": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Carry": [
+   "Body_01"
+  ],
+  "Cervos": [
+   "Body_01",
+   "Body_02",
+   "Body_03"
+  ],
+  "CheetahMk1": [
+   "Body_01",
+   "Body_02",
+   "Body_03"
+  ],
+  "Civo": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Conter_Lead_20ft": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Conter_Lead_40ft": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Conter_Rear_20ft": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Conter_Rear_40ft": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Cora": [
+   "Body_01"
+  ],
+  "Dabo": [
+   "Body_01",
+   "Body_02",
+   "CargoBed_01"
+  ],
+  "Daffy": [
+   "Body"
+  ],
+  "Dinky_Dryvan": [
+   "Body_01",
+   "Body_03"
+  ],
+  "Dinky_Flatbed": [
+   "Body_01",
+   "Body_02",
+   "Body_03"
+  ],
+  "Dinky_Tanker": [
+   "Body_01",
+   "Body_02",
+   "Body_03",
+   "Body_04"
+  ],
+  "Dooly_D1": [
+   "Body_01"
+  ],
+  "Dooly_D2": [
+   "Body_01"
+  ],
+  "Dooly_S1": [
+   "Body_01"
+  ],
+  "Dooly_S2": [
+   "Body_01"
+  ],
+  "Dory": [
+   "Body",
+   "CargoBed"
+  ],
+  "DoryWrecker": [
+   "Body",
+   "CargoBed"
+  ],
+  "Dumbi": [
+   "Body_01"
+  ],
+  "Dumpy": [
+   "Body",
+   "CargoBed_01"
+  ],
+  "EVan": [
+   "Body_01"
+  ],
+  "Eastwood": [
+   "Body_01",
+   "Body_02",
+   "Body_04"
+  ],
+  "Elisa": [
+   "Body"
+  ],
+  "Elisa2": [
+   "Body"
+  ],
+  "Essam": [
+   "Body_01"
+  ],
+  "FL1": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Flaber_Lead": [
+   "Body_01",
+   "Body_02",
+   "Cargobed_01"
+  ],
+  "Flaber_Rear": [
+   "Body_01",
+   "Body_02",
+   "Cargobed_01"
+  ],
+  "Flanker3": [
+   "Body_01"
+  ],
+  "Flanker3S": [
+   "Body_01"
+  ],
+  "Goliath10": [
+   "Body_01"
+  ],
+  "Goliath4": [
+   "Body_01"
+  ],
+  "Goliath6": [
+   "Body_01"
+  ],
+  "GolimaRotator": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Golima_Semi": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Hana": [
+   "Body"
+  ],
+  "Hobber_Lead": [
+   "Body_01",
+   "Body_02",
+   "Body_03"
+  ],
+  "Hobber_Rear": [
+   "Body_01",
+   "Body_02",
+   "Body_03"
+  ],
+  "Jemusi": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Jemusi_Dump": [
+   "Body_01",
+   "Body_02",
+   "Cargobed_01",
+   "Cargobed_02"
+  ],
+  "Jemusi_Flatbed": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Jemusi_Semi": [
+   "Body_01",
+   "Body_02",
+   "Body_03"
+  ],
+  "Jemusi_Tanker": [
+   "Body_01",
+   "Body_02",
+   "CargoBed_01"
+  ],
+  "Kira_Box": [
+   "Cargobed",
+   "Body_01"
+  ],
+  "Kira_Flatbed": [
+   "Body_01",
+   "Cargobed"
+  ],
+  "Kira_Rollback": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Kira_Tanker": [
+   "Body_01"
+  ],
+  "Kira_Van": [
+   "Body_01"
+  ],
+  "Koma": [
+   "Body_01"
+  ],
+  "Kuda_Container_6x2": [
+   "Body_01",
+   "Body_02",
+   "CargoSpace_01",
+   "CargoSpace_02"
+  ],
+  "Kuda_Dyrvan_4x2": [
+   "Body_01",
+   "Body_02",
+   "Body_03"
+  ],
+  "Kuda_Flatbed_4x2": [
+   "Body_01",
+   "Body_02",
+   "Body_03",
+   "CargoBed_01",
+   "CargoBed_02"
+  ],
+  "Kuda_LiveFishTank_4x2": [
+   "Body_01",
+   "Body_02",
+   "Palette_Decal",
+   "CargoBed"
+  ],
+  "Kuda_Semi": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Liliput": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Lobo": [
+   "Body_01"
+  ],
+  "LoboVan": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Lomax": [
+   "Body_01"
+  ],
+  "Longhorn_Rollback": [
+   "Body_01",
+   "Body_02",
+   "Palette_Decaled"
+  ],
+  "Longhorn_Semi": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Longhorn_Semi_4x2": [
+   "Body_01"
+  ],
+  "Mammoth": [
+   "Body_01"
+  ],
+  "Micky": [
+   "Body_01"
+  ],
+  "Mitage": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Mixi": [
+   "Body",
+   "CargoBed_01"
+  ],
+  "Monarch": [
+   "Body_01"
+  ],
+  "Monarch_Limo": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Muhan": [
+   "Body_01"
+  ],
+  "Muhan_Police": [
+   "Body_01"
+  ],
+  "Neo": [
+   "Body_01"
+  ],
+  "Nimo": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Nuke": [
+   "Body_01"
+  ],
+  "NukePolice": [
+   "Body_01"
+  ],
+  "Olbe": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Oldum": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Ollok": [
+   "Body_01"
+  ],
+  "Pulio": [
+   "Body"
+  ],
+  "Pulse": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Ranch": [
+   "Body",
+   "CargoBed"
+  ],
+  "Raton": [
+   "Body"
+  ],
+  "Raven": [
+   "Body_01"
+  ],
+  "Roadmaster": [
+   "Body_01",
+   "Body_02",
+   "Body_03"
+  ],
+  "Shobed_10": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Shobed_7": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Shotan_10": [
+   "Body_01"
+  ],
+  "Shotan_7": [
+   "Body_01"
+  ],
+  "Shovan_10": [
+   "Body_01"
+  ],
+  "Shovan_7": [
+   "Body_01"
+  ],
+  "Stinger": [
+   "Body"
+  ],
+  "Taber_Lead": [
+   "Signs",
+   "Body_01",
+   "Body_02"
+  ],
+  "Taber_Rear": [
+   "Signs",
+   "Body_01",
+   "Body_02"
+  ],
+  "Tanko40": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Tavan": [
+   "Body_01",
+   "Body_03"
+  ],
+  "Tavan_Ambulance": [
+   "Body_01"
+  ],
+  "Terra": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Titan": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Townie": [
+   "Body"
+  ],
+  "Trailer_01": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Trailer_SPT1": [
+   "Body_01"
+  ],
+  "Trailer_Small_Cage_01": [
+   "Body_01",
+   "Wire"
+  ],
+  "Tronko": [
+   "Body_01",
+   "CargoBox"
+  ],
+  "Trophy2": [
+   "Body_01"
+  ],
+  "Tuscan": [
+   "Body_01",
+   "Body_02"
+  ],
+  "Vamos3": [
+   "Body_01",
+   "Body_02",
+   "Body_03"
+  ],
+  "Vani": [
+   "Body"
+  ],
+  "Vista": [
+   "Body_01"
+  ],
+  "Voltex": [
+   "Body_01"
+  ],
+  "Vulcan": [
+   "Body"
+  ],
+  "Zino": [
+   "Body_01"
+  ],
+  "Zydro": [
+   "Body_01"
+  ],
+  "Zydro_Police": [
+   "Body_01"
+  ]
+ }
+}
