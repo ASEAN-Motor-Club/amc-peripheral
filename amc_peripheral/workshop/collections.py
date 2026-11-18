@@ -384,6 +384,16 @@ class CollectionStore:
             conn.execute(
                 "DELETE FROM workshop_collection WHERE id = ?", (int(collection_id),)
             )
+            # Tag rows would otherwise outlive the collection and keep the tag
+            # index counting something that no longer exists. The table belongs
+            # to TagStore, so an old database without it is not an error.
+            try:
+                conn.execute(
+                    "DELETE FROM workshop_collection_tag WHERE collection_id = ?",
+                    (int(collection_id),),
+                )
+            except sqlite3.OperationalError:
+                pass
         return True
 
     def add_item(
