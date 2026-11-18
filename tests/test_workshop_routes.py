@@ -114,6 +114,8 @@ async def test_item_copy_override_survives_similarity_gap(client, settings):
     assert 'id="copy-flag"' in text
     assert "manually identified as a copy" in text
     assert 'href="/workshop/items/3/"' in text
+    assert "original-card" in text
+    assert ">Original<" in text
 
 
 async def test_item_and_viewer_endpoints(client):

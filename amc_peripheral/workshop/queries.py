@@ -429,6 +429,7 @@ class WorkshopRepository:
                     ).fetchone()
                 card = _card(row) if row is not None else None
             if card is not None:
+                cards[override_id] = card
                 card["similarity"] = None
                 card["isEarlier"] = True
                 origin = card
