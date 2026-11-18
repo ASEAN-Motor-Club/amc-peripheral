@@ -14,8 +14,11 @@
     {% if meta and meta.description %}
     <p class="lede">{{ meta.description }}</p>
     {% endif %}
+    {% if tags %}
+    <p class="tag-row" aria-label="Tags">{% for t in tags %}<a class="tag-chip" href="/workshop/tags/{{ t|urlencode }}/">#{{ t }}</a>{% endfor %}</p>
+    {% endif %}
     {% if can_edit %}
-    <p class="page-actions"><a class="button secondary" href="/workshop/items/{{ item.id }}/edit">Edit title &amp; summary</a></p>
+    <p class="page-actions"><a class="button secondary" href="/workshop/items/{{ item.id }}/edit">Edit title, summary &amp; tags</a></p>
     {% endif %}
     {% if item.author %}
       <p class="byline">Shared by <a href="/workshop/authors/{{ item.accountId }}/">{{ item.author }}</a> · <time datetime="{{ item.createdAt|iso }}">{{ item.createdAt|date_long }}</time></p>
