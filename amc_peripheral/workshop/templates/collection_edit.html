@@ -2,11 +2,13 @@
 {% block title %}Edit {{ collection.title }} — Motor Town Workshop{% endblock %}
 {% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
 {% block content %}
-<div class="wrap narrow">
+<div class="wrap narrow form-page">
   <p class="crumb"><a href="/workshop/collections/{{ collection.id }}/{{ collection.slug }}/">{{ collection.title }}</a></p>
-  <h1>Edit collection</h1>
+  <header class="form-head"><h1>Edit collection</h1></header>
   {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
 
+  <section class="form-section">
+  <h2>Details</h2>
   <form method="post" action="/workshop/collections/{{ collection.id }}/edit" class="stack">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
     <label>Title
@@ -20,9 +22,14 @@
       <label class="inline"><input type="radio" name="visibility" value="public" {% if collection.visibility == 'public' %}checked{% endif %}> Public — listed in Collections</label>
       <label class="inline"><input type="radio" name="visibility" value="unlisted" {% if collection.visibility == 'unlisted' %}checked{% endif %}> Unlisted — anyone with the link, not listed</label>
     </fieldset>
-    <button type="submit" class="button">Save details</button>
+    <div class="form-actions">
+      <button type="submit" class="button">Save details</button>
+      <a class="button secondary" href="/workshop/collections/{{ collection.id }}/{{ collection.slug }}/">View collection</a>
+    </div>
   </form>
+  </section>
 
+  <section class="form-section">
   <h2>Tags</h2>
   {% if tags %}
   <div class="tag-row">
@@ -40,9 +47,11 @@
     <label>Add tags <span class="muted">(up to five, comma or space separated)</span>
       <input name="tags" maxlength="120" placeholder="#drift #street">
     </label>
-    <button type="submit" class="button">Add tags</button>
+    <div class="form-actions"><button type="submit" class="button">Add tags</button></div>
   </form>
+  </section>
 
+  <section class="form-section">
   <h2>Builds</h2>
   {% if items %}
   <ol class="edit-list">
@@ -74,9 +83,11 @@
       <span class="muted">Paste the item link from the workshop, or just the number: 33425</span>
       <input name="workshop_id" placeholder="https://www.aseanmotorclub.com/workshop/items/33425/ or 33425">
     </label>
-    <button type="submit" class="button">Add</button>
+    <div class="form-actions"><button type="submit" class="button">Add build</button></div>
   </form>
+  </section>
 
+  <section class="form-section">
   <h2>Delete</h2>
   <p class="muted">Deleting a collection does not touch the builds themselves.</p>
   {% if confirm_delete %}
@@ -92,5 +103,6 @@
   {% else %}
   <p><a class="button danger" href="/workshop/collections/{{ collection.id }}/edit?delete=1">Delete this collection</a></p>
   {% endif %}
+  </section>
 </div>
 {% endblock %}
