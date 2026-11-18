@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "_macros.html" import author_card %}
+{% block title %}Workshop authors — ASEAN Motor Club{% endblock %}
+{% block description %}Browse Motor Town workshop creators, ranked by installs.{% endblock %}
+{% block content %}
+<section class="page-head wrap">
+  <p class="eyebrow"><a href="/workshop/">Workshop</a> / Authors</p>
+  <h1>Workshop authors.</h1>
+  <p class="lede">Every public creator, ranked by total installs.</p>
+  <form class="search-stub" action="/workshop/authors/" method="get" role="search">
+    <label class="sr-only" for="author-search">Search authors by name</label>
+    <input id="author-search" name="q" type="search" value="{{ query }}" placeholder="Search author name" autocomplete="off" maxlength="80">
+    <button type="submit">Search</button>
+  </form>
+</section>
+<section class="section wrap" aria-labelledby="authors-list-title">
+  <div class="section-head">
+    <div>
+      <p class="eyebrow">{% if query %}Author search{% else %}Builders worth following{% endif %}</p>
+      <h2 id="authors-list-title">{% if query %}Authors matching “{{ query }}”{% else %}All authors{% endif %}</h2>
+    </div>
+    <span class="muted">{{ pagination.total }} author{% if pagination.total != 1 %}s{% endif %}</span>
+  </div>
+  <div class="author-grid">
+    {% for author in authors %}{{ author_card(author) }}{% else %}
+      <p class="empty">{% if query %}No public authors matched that name.{% else %}No creators to show yet.{% endif %}</p>
+    {% endfor %}
+  </div>
+  {% if pagination.totalPages > 1 %}
+  <nav class="pager" aria-label="Author pages">
+    {% if pagination.page > 1 %}
+      <a href="{{ pagination.firstUrl }}" rel="first">« First</a>
+      <a href="{{ pagination.prevUrl }}" rel="prev">← Previous</a>
+    {% endif %}
+    {% for entry in pagination.pages %}
+      {% if entry.gap %}<span class="pager-gap" aria-hidden="true">…</span>
+      {% elif entry.current %}<a href="{{ entry.url }}" aria-current="page" class="current">{{ entry.number }}</a>
+      {% else %}<a href="{{ entry.url }}">{{ entry.number }}</a>{% endif %}
+    {% endfor %}
+    {% if pagination.page < pagination.totalPages %}
+      <a href="{{ pagination.nextUrl }}" rel="next">Next →</a>
+      <a href="{{ pagination.lastUrl }}" rel="last">Last »</a>
+    {% endif %}
+    <span class="muted pager-summary">Page {{ pagination.page }} of {{ pagination.totalPages }}</span>
+  </nav>
+  {% endif %}
+</section>
+{% endblock %}

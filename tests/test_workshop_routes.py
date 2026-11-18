@@ -28,6 +28,32 @@ async def test_home_page_renders_without_webgl(client):
     assert "76561198000000000" not in text
 
 
+async def test_authors_page_lists_all_sorted_by_installs(client):
+    response = await client.get("/workshop/authors/")
+    assert response.status == 200
+    text = await response.text()
+    assert "Workshop authors." in text
+    assert "/workshop/authors/11/" in text
+    assert "/workshop/authors/22/" in text
+    assert text.index("/workshop/authors/11/") < text.index("/workshop/authors/22/")
+    assert "2 authors" in text
+
+
+async def test_authors_page_search_filters_by_name(client):
+    response = await client.get("/workshop/authors/?q=Bob")
+    assert response.status == 200
+    text = await response.text()
+    assert "/workshop/authors/22/" in text
+    assert "/workshop/authors/11/" not in text
+    assert "1 author" in text
+
+
+async def test_authors_page_links_from_home(client):
+    response = await client.get("/workshop/")
+    text = await response.text()
+    assert 'href="/workshop/authors/"' in text
+
+
 async def test_home_api_excludes_canary_and_exposes_no_steam_ids(client):
     response = await client.get("/api/workshop/home")
     assert response.status == 200
