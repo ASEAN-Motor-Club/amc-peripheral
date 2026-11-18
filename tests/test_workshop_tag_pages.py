@@ -254,6 +254,35 @@ async def test_tag_page_shows_the_build_and_related_tags(client):
     assert 'content="noindex' in text  # only two builds
 
 
+async def test_tag_page_lists_tagged_collections(client):
+    _unlimited(client)
+    cookies, form = _as()
+    await client.post(
+        "/workshop/collections/new",
+        data={"title": "Drift school", "description": "", "visibility": "public", **form},
+        cookies=cookies,
+        allow_redirects=False,
+    )
+    collection = client.workshop_app["collections"].owned(OWNER)[0]
+    await client.post(
+        f"/workshop/collections/{collection.id}/items",
+        data={"workshop_id": "1", **form},
+        cookies=cookies,
+        allow_redirects=False,
+    )
+    await client.post(
+        f"/workshop/collections/{collection.id}/tags",
+        data={"tags": "#drift", **form},
+        cookies=cookies,
+        allow_redirects=False,
+    )
+
+    text = await (await client.get("/workshop/tags/drift/")).text()
+    assert "Drift school" in text
+    assert f"/workshop/collections/{collection.id}/" in text
+    assert "1 collection" in text
+
+
 async def test_tag_page_301s_to_canonical(client):
     response = await client.get("/workshop/tags/Cat/", allow_redirects=False)
     assert response.status == 301

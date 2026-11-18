@@ -1701,22 +1701,29 @@ def create_app(
             community.like_counts, [i["id"] for i in items]
         )
         collections_store: CollectionStore = request.app["collections"]
-        collections = []
-        for cid in collection_ids:
-            found = await asyncio.to_thread(collections_store.get, cid)
-            if found is not None and found.is_public:
-                collections.append(found)
+        collections = [
+            c
+            for c in await asyncio.to_thread(
+                collections_store.get_many, collection_ids
+            )
+            if c.is_public
+        ]
+        # Counts are what is *live*: a build that left the scrape should not
+        # keep a tag page looking populated.
+        live = usage.__class__(
+            tag=canonical, items=len(items), collections=len(collections)
+        )
         return render(
             request,
             "tag.html",
             page="tags",
             tag=canonical,
-            usage=usage,
+            usage=live,
             items=items,
             collections=collections,
             related=related,
             likes=likes,
-            noindex=usage.items < 3,
+            noindex=live.items < 3,
         )
 
     async def api_tags(request: web.Request) -> web.Response:
