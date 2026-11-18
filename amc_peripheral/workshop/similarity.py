@@ -37,14 +37,13 @@ GENERIC_FINGERPRINT = 400
 RARE_TOKEN_MIN = 2
 RARE_TOKEN_MAX = 50
 CANDIDATE_MIN = 0.40
-INDEX_VERSION = 3
+INDEX_VERSION = 4
 
 # kernel scales
 S_POS = 120.0
 S_ROT = 25.0
 S_SCALE = 0.45
 S_STRETCH = 0.45
-S_COLOR = 90.0
 TAU = 0.35
 
 PUBLIC_WHERE = "deleted_at IS NULL AND COALESCE(hidden, 0) = 0 AND account_id > 0"
@@ -247,7 +246,6 @@ def layer_distance(a: Layer, b: Layer) -> float:
     dstretch = (
         abs(math.log(max(a["stretch"], 1e-4) / max(b["stretch"], 1e-4))) / S_STRETCH
     )
-    dcolor = math.dist(a["rgb"], b["rgb"]) / S_COLOR
     dalpha = (
         abs(math.log(max(a.get("alpha", 255.0), 1.0) / max(b.get("alpha", 255.0), 1.0)))
         / 0.45
@@ -268,7 +266,6 @@ def layer_distance(a: Layer, b: Layer) -> float:
         + 0.04 * dpitch**2
         + 0.12 * dscale**2
         + 0.10 * dstretch**2
-        + 0.08 * dcolor**2
         + 0.02 * dalpha**2
         + 0.02 * dcoverage**2
         + 0.02 * dflags**2
@@ -468,6 +465,8 @@ def greedy_dice(
     a_layers: list[Layer], b_layers: list[Layer], gate: float = 0.05
 ) -> float:
     """Unique-assignment greedy Dice — the cheap score used for pruning."""
+    a_layers = [layer for layer in a_layers if layer.get("alpha", 255.0) > 0.0]
+    b_layers = [layer for layer in b_layers if layer.get("alpha", 255.0) > 0.0]
     if not a_layers or not b_layers:
         return 0.0
     by_key: dict[str, list[tuple[int, Layer]]] = defaultdict(list)
@@ -492,6 +491,8 @@ def greedy_dice(
 
 def matched_similarity(a_layers: list[Layer], b_layers: list[Layer]) -> float:
     """Dice coefficient over a maximum-weight bipartite layer assignment."""
+    a_layers = [layer for layer in a_layers if layer.get("alpha", 255.0) > 0.0]
+    b_layers = [layer for layer in b_layers if layer.get("alpha", 255.0) > 0.0]
     if not a_layers or not b_layers:
         return 0.0
     size = max(len(a_layers), len(b_layers))
