@@ -251,3 +251,16 @@ def test_delta_widens_once_when_the_probe_saturates(tmp_path, monkeypatch) -> No
     connection = store.connect()
     assert connection.execute("SELECT COUNT(*) FROM workshop").fetchone()[0] == 200
     assert store.watermark(connection, "Tuscan") == 300
+
+
+def test_vehicle_keys_include_0720_additions():
+    keys = sync.vehicle_keys()
+    for key in (
+        "Atlas_6x2_Flatbed",
+        "Duro",
+        "Lamas",
+        "Tippa",
+        "Trailer_Drover_Van",
+    ):
+        assert key in keys
+    assert len(keys) == len(set(keys))
