@@ -341,6 +341,19 @@ async def test_vehicle_page_has_numbered_pagination(settings):
         newest = await client.get("/workshop/vehicles/Vamos3/?sort=new")
         assert newest.status == 200
         assert 'class="current" aria-current="page">Newest</a>' in await newest.text()
+
+        filtered = await client.get("/workshop/vehicles/Vamos3/?paint=1")
+        assert filtered.status == 200
+        filtered_text = await filtered.text()
+        assert "/workshop/items/1/" in filtered_text
+        assert "/workshop/items/3/" not in filtered_text
+        assert 'name="paint" value="1" checked' in filtered_text
+        assert 'action="/workshop/vehicles/Vamos3/"' in filtered_text
+
+        tuned = await client.get("/workshop/vehicles/Vamos3/?tuning=1")
+        tuned_text = await tuned.text()
+        assert "/workshop/items/3/" in tuned_text
+        assert "/workshop/items/1/" not in tuned_text
     finally:
         await client.close()
 

@@ -743,25 +743,37 @@ def create_app(
         sort = request.query.get("sort", "popular")
         if sort not in {"popular", "new"}:
             raise QueryError("invalid_sort", "sort must be popular or new")
+        filters = ListFilters(
+            vehicle=vehicle,
+            paint=request.query.get("paint") == "1",
+            decal=request.query.get("decal") == "1",
+            parts=request.query.get("parts") == "1",
+            tuning=request.query.get("tuning") == "1",
+            club=request.query.get("club") == "1",
+        )
+        filter_params = [
+            (name, "1")
+            for name in ("paint", "decal", "parts", "tuning", "club")
+            if getattr(filters, name)
+        ]
         per_page = settings.page_size
-        total = await asyncio.to_thread(repository.vehicle_uploads, vehicle)
+        total = await asyncio.to_thread(repository.count_items, filters)
         total_pages = max(1, (total + per_page - 1) // per_page)
         base_url = f"/workshop/vehicles/{vehicle}/"
 
-        def page_url(number: int) -> str:
-            params = []
-            if sort != "popular":
-                params.append(f"sort={sort}")
+        def page_url(number: int, *, page_sort: str = sort) -> str:
+            params = [("sort", page_sort)] if page_sort != "popular" else []
+            params.extend(filter_params)
             if number > 1:
-                params.append(f"page={number}")
-            return f"{base_url}?{'&'.join(params)}" if params else base_url
+                params.append(("page", str(number)))
+            return f"{base_url}?{urlencode(params)}" if params else base_url
 
         if page > total_pages:
             raise web.HTTPFound(page_url(total_pages))
         listing = await asyncio.to_thread(
             repository.list_items,
             sort=sort,
-            filters=ListFilters(vehicle=vehicle),
+            filters=filters,
             limit=per_page,
             offset=(page - 1) * per_page,
         )
@@ -785,8 +797,8 @@ def create_app(
             "perPage": per_page,
             "pages": pages,
             "sort": sort,
-            "popularUrl": page_url(1) if sort == "popular" else base_url,
-            "newUrl": f"{base_url}?sort=new",
+            "popularUrl": page_url(1, page_sort="popular"),
+            "newUrl": page_url(1, page_sort="new"),
             "prevUrl": page_url(page - 1) if page > 1 else None,
             "nextUrl": page_url(page + 1) if page < total_pages else None,
             "firstUrl": page_url(1),
@@ -799,6 +811,7 @@ def create_app(
                     "installs": 0, "votes": 0, "accountId": None},
             data=listing,
             vehicles=[],
+            filters=filters,
             pagination=pagination,
             canonical_url=f"https://www.aseanmotorclub.com{base_url}",
         )
