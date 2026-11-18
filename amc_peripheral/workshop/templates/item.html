@@ -97,21 +97,6 @@
     </details>
     {% endif %}
 
-    {% if config.decals %}
-    <details class="panel" open>
-      <summary><span class="panel-title">Decal layers ({{ config.decals|length }})</span></summary>
-      <ol class="detail-list decal-list">
-        {% for decal in config.decals %}
-        <li>
-          <span class="swatch" style="--swatch: rgba({{ decal.color[0] }}, {{ decal.color[1] }}, {{ decal.color[2] }}, {{ decal.color[3] / 255 }})"></span>
-          <code>{{ decal.key }}</code>
-          <span class="muted">scale {{ '%.2f'|format(decal.scale) }} · stretch {{ '%.2f'|format(decal.stretch) }}</span>
-        </li>
-        {% endfor %}
-      </ol>
-    </details>
-    {% endif %}
-
     {% if config.attachments %}
     <details class="panel" open>
       <summary><span class="panel-title">Attachments ({{ config.attachments|length }})</span></summary>

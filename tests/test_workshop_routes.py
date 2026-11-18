@@ -120,7 +120,7 @@ async def test_item_page_reports_configuration(client):
     assert "View in 3D" not in text
     assert "Rendered decals" in text
     assert "snapshot-api" in text
-    assert text.index("Parts (") < text.index("Decal layers (")
+    assert "Decal layers (" not in text
     assert 'class="detail-list part-list"' in text
     redirect = await client.get(
         "/workshop/items/1/viewer/", allow_redirects=False
