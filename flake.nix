@@ -816,16 +816,26 @@
               };
             };
 
+            systemd.sockets.amc-workshop-web = lib.mkIf cfg.workshop.enable {
+              description = "Socket for the AMC Motor Town workshop browser";
+              wantedBy = ["sockets.target"];
+              listenStreams = [
+                "127.0.0.1:${toString cfg.workshop.port}"
+              ];
+              socketConfig.Accept = false;
+            };
+
             systemd.services.amc-workshop-web = lib.mkIf cfg.workshop.enable {
               description = "AMC Motor Town workshop browser";
               wantedBy = ["multi-user.target"];
-              after = ["network.target"];
+              after = ["network.target" "amc-workshop-web.socket"];
               # No aggregate ordering or Requires: a web restart should neither
               # pull nor wait for a 10–30s aggregate rebuild. The timer refreshes
               # the site DB independently, and the web app can serve the
               # previous snapshot while that runs.
               serviceConfig = {
                 Type = "simple";
+                Sockets = ["amc-workshop-web.socket"];
                 User = cfg.workshop.user;
                 Group = cfg.workshop.group;
                 StateDirectory = "amc-workshop";
