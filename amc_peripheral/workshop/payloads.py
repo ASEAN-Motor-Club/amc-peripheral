@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import zlib
 from pathlib import Path
 from typing import Any
@@ -83,14 +84,59 @@ VEHICLE_DISPLAY_NAMES = {
     "2": "Stinger",
     "3": "Maity",
     "4": "Spider",
+    "Bus": "Air City",
     "Sports_01": "Raton",
+    "Pickup_02": "Ranch",
+    "PoliceInterceptor_01": "Police Interceptor 1",
+    "Police_01": "Police",
+    "SchoolBus_01": "SV200",
+    "SemiTruck_01": "FL1",
+    "TowTruck_01": "Pulio",
+    "Van_01": "Vani",
+    "DumpTruck_01": "Dumpy",
+    "MixerTruck_01": "Mixi",
     "GarbageTruck_01": "Compacty",
+    "Kuda_LiveFishTank_4x2": "Kuda LFT",
+    "Kira_RollbackTow": "Kira Rollback Tow",
+    "EVan": "E-Van",
+    "FormulaSCM": "Formula SCM",
+    "EnfoGT": "Enfo GT",
+    "CheetahMk1": "Cheetah Mk1",
+    "GolimaRotator": "Golima Rotator",
+    "Trophy2": "Trophy 2",
+    "Elisa2": "Elisa 2",
+    "Goliath4": "Goliath 4",
+    "Goliath6": "Goliath 6",
+    "Goliath10": "Goliath 10",
+    "Trailer_Bulko": "Bulko",
+    "Trailer_Carry": "Carry",
+    "Trailer_Cotra_20_3": "Cotra 20-3S",
+    "Trailer_Cotra_20_3L": "Cotra 20-3L",
+    "Trailer_Cotra_40_3": "Cotra 40-3",
+    "Trailer_Shovan_7": "Shovan 7",
+    "Trailer_Shovan_10": "Shovan 10",
+    "Trailer_Shobed_7": "Shobed 7",
+    "Trailer_Shobed_10": "Shobed 10",
+    "Trailer_Shotan_7": "Shotan 7",
+    "Trailer_Shotan_10": "Shotan 10",
+    "Trailer_30ft_Log_01": "30 Foot Log Trailer",
+    "Trailer_30ft_Tanker_01": "30 Foot Tanker Trailer",
+    "Trailer_9m_Flat_01": "9m Flat Trailer",
+    "Trailer_Small_Cage_01": "Small Cage Trailer",
+    "Trailer_Middle_Tanker_01": "Middle Tanker Trailer",
 }
 
 
 def vehicle_display_name(vehicle_key: str) -> str:
     key = str(vehicle_key or "")
-    return VEHICLE_DISPLAY_NAMES.get(key, key.replace("_", " "))
+    if key in VEHICLE_DISPLAY_NAMES:
+        return VEHICLE_DISPLAY_NAMES[key]
+    # Convert internal CamelCase keys (FormulaSCM, Kira_RollbackTow) into
+    # readable labels; underscore-separated keys keep their existing shape.
+    label = key[len("Trailer_"):] if key.startswith("Trailer_") else key
+    label = label.replace("_", " ")
+    label = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", label)
+    return re.sub(r"\s+", " ", label).strip()
 
 
 class PayloadError(ValueError):
