@@ -70,18 +70,27 @@
 
   <form method="post" action="/workshop/collections/{{ collection.id }}/items" class="stack">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <label>Add a build by its workshop id
-      <input name="workshop_id" inputmode="numeric" placeholder="e.g. 33425">
+    <label>Add a build
+      <span class="muted">Paste the item link from the workshop, or just the number: 33425</span>
+      <input name="workshop_id" placeholder="https://www.aseanmotorclub.com/workshop/items/33425/ or 33425">
     </label>
     <button type="submit" class="button">Add</button>
   </form>
 
   <h2>Delete</h2>
   <p class="muted">Deleting a collection does not touch the builds themselves.</p>
-  <form method="post" action="/workshop/collections/{{ collection.id }}/delete">
-    <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <input type="hidden" name="confirm" value="yes">
-    <button type="submit" class="danger">Delete this collection</button>
-  </form>
+  {% if confirm_delete %}
+  <div class="confirm-box">
+    <p><strong>Delete &ldquo;{{ collection.title }}&rdquo;?</strong> This cannot be undone.</p>
+    <form method="post" action="/workshop/collections/{{ collection.id }}/delete">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="confirm" value="yes">
+      <button type="submit" class="danger">Yes, delete it</button>
+      <a class="button secondary" href="/workshop/collections/{{ collection.id }}/edit">Cancel</a>
+    </form>
+  </div>
+  {% else %}
+  <p><a class="button danger" href="/workshop/collections/{{ collection.id }}/edit?delete=1">Delete this collection</a></p>
+  {% endif %}
 </div>
 {% endblock %}

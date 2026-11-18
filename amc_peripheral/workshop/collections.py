@@ -417,9 +417,14 @@ class CollectionStore:
                 (int(collection_id),),
             ).fetchone()[0]
             conn.execute(
-                "INSERT INTO workshop_collection_item"
-                " (collection_id, workshop_id, position, added_at) VALUES (?, ?, ?, ?)",
-                (int(collection_id), int(workshop_id), int(position), now),
+                "INSERT INTO workshop_collection_item (collection_id, workshop_id, position, added_at)"
+                " VALUES (?, ?, ?, ?)",
+                (int(collection_id), int(workshop_id), position, now),
+            )
+            # A collection's age is when it last changed, not when it was created.
+            conn.execute(
+                "UPDATE workshop_collection SET updated_at = ? WHERE id = ?",
+                (now, int(collection_id)),
             )
             conn.execute(
                 "UPDATE workshop_collection SET updated_at = ? WHERE id = ?",
@@ -428,7 +433,12 @@ class CollectionStore:
         return True
 
     def remove_item(
-        self, *, collection_id: int, discord_id: str, workshop_id: int
+        self,
+        *,
+        collection_id: int,
+        discord_id: str,
+        workshop_id: int,
+        now: str | None = None,
     ) -> bool:
         with self._connect() as conn:
             owned = conn.execute(
@@ -442,10 +452,20 @@ class CollectionStore:
                 " WHERE collection_id = ? AND workshop_id = ?",
                 (int(collection_id), int(workshop_id)),
             )
+            if now and cursor.rowcount:
+                conn.execute(
+                    "UPDATE workshop_collection SET updated_at = ? WHERE id = ?",
+                    (now, int(collection_id)),
+                )
         return cursor.rowcount > 0
 
     def reorder(
-        self, *, collection_id: int, discord_id: str, ordered_ids: list[int]
+        self,
+        *,
+        collection_id: int,
+        discord_id: str,
+        ordered_ids: list[int],
+        now: str | None = None,
     ) -> bool:
         """Rewrite positions to match ``ordered_ids``, ignoring ids not present."""
         with self._connect() as conn:

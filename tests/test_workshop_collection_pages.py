@@ -248,6 +248,75 @@ async def test_save_to_collection_from_the_item_page(client):
     assert _store(client).item_ids(collection.id) == [1]
 
 
+async def test_short_collection_url_redirects_to_the_slug(client):
+    location = await _create(client)
+    collection_id = int(location.split("/")[3])
+    response = await client.get(f"/workshop/collections/{collection_id}", allow_redirects=False)
+    assert response.status == 301
+    assert response.headers["Location"].endswith(location)
+
+
+async def test_my_collections_lists_unlisted(client):
+    await _create(client, title="Public one", visibility="public")
+    await _create(client, title="Hidden one", visibility="unlisted")
+
+    response = await client.get("/workshop/collections/mine/", allow_redirects=False)
+    assert response.status == 302  # anonymous
+
+    cookies, _ = _as(client)
+    page = await client.get("/workshop/collections/mine/", cookies=cookies)
+    assert page.status == 200
+    text = await page.text()
+    assert "Public one" in text
+    assert "Hidden one" in text
+    assert "unlisted — link only" in text
+
+
+async def test_my_collections_is_per_member(client):
+    await _create(client, title="Mine")
+    cookies, _ = _as(client, OTHER)
+    text = await (await client.get("/workshop/collections/mine/", cookies=cookies)).text()
+    assert "Mine" not in text
+
+
+async def test_delete_is_confirmed_before_it_happens(client):
+    await _create(client)
+    collection = _store(client).owned(MEMBER)[0]
+    cookies, _ = _as(client)
+
+    # The edit page only offers a link to a confirmation step.
+    page = await (await client.get(f"/workshop/collections/{collection.id}/edit", cookies=cookies)).text()
+    assert "?delete=1" in page
+    assert 'name="confirm"' not in page
+
+    confirm_page = await (
+        await client.get(f"/workshop/collections/{collection.id}/edit?delete=1", cookies=cookies)
+    ).text()
+    assert "Yes, delete it" in confirm_page
+    assert _store(client).get(collection.id) is not None
+
+
+async def test_add_build_accepts_a_pasted_link(client):
+    from amc_peripheral.workshop.ratelimit import RateLimiter
+
+    client.workshop_app["limiters"]["collection"] = RateLimiter(limit=99, window=0.0)
+    await _create(client)
+    collection = _store(client).owned(MEMBER)[0]
+    cookies, form = _as(client)
+
+    response = await client.post(
+        f"/workshop/collections/{collection.id}/items",
+        data={
+            "workshop_id": "https://www.aseanmotorclub.com/workshop/items/1/",
+            **form,
+        },
+        cookies=cookies,
+        allow_redirects=False,
+    )
+    assert response.status == 303
+    assert _store(client).item_ids(collection.id) == [1]
+
+
 async def test_delete_requires_confirmation(client):
     location = await _create(client)
     collection = _store(client).owned(MEMBER)[0]

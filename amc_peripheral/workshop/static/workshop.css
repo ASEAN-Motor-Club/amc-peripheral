@@ -345,3 +345,23 @@ details.panel > summary h2 { display: inline; margin: 0; }
 .section-title { margin: 26px 0 10px; font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .collection-links { list-style: none; padding: 0; display: grid; gap: 8px; }
 .tag-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 22px; }
+
+/* Collections UI: one card must not stretch, pills must read at a glance. */
+.page-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 6px; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid rgba(255,255,255,0.16); }
+.pill.public { color: #9fe0b0; border-color: rgba(120,220,150,0.35); }
+.pill.unlisted { color: #ffd79a; border-color: rgba(240,196,106,0.4); }
+.mine-list { list-style: none; padding: 0; display: grid; gap: 10px; }
+.mine-row { display: flex; justify-content: space-between; align-items: center; gap: 14px;
+  padding: 12px 14px; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+  background: rgba(255,255,255,0.02); }
+.mine-title { font-weight: 600; text-decoration: none; }
+.mine-row .byline { margin: 3px 0 0; }
+.confirm-box { border: 1px solid rgba(220,80,90,0.45); border-radius: 12px; padding: 14px 16px;
+  background: rgba(200,60,70,0.08); margin: 10px 0; }
+.confirm-box form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 8px; }
+.stack label.inline, .inline { display: flex; gap: 8px; align-items: center; }
+fieldset { border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 10px 14px; display: grid; gap: 8px; }
+fieldset legend { padding: 0 6px; color: var(--muted); font-size: 13px; }
+/* Builds in a collection read as gallery cards, capped so one card is a card. */
+.collection-builds { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important; }

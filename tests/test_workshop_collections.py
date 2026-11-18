@@ -33,6 +33,25 @@ def _make(store, *, owner=ME, title="Hana drift", visibility="public", now=NOW):
     )
 
 
+def test_adding_or_removing_a_build_bumps_updated_at(store):
+    collection = _make(store, now="2026-01-01T00:00:00Z")
+    store.add_item(
+        collection_id=collection.id,
+        discord_id=ME,
+        workshop_id=1,
+        now="2026-02-02T00:00:00Z",
+    )
+    assert store.get(collection.id).updated_at.startswith("2026-02-02")
+
+    store.remove_item(
+        collection_id=collection.id,
+        discord_id=ME,
+        workshop_id=1,
+        now="2026-03-03T00:00:00Z",
+    )
+    assert store.get(collection.id).updated_at.startswith("2026-03-03")
+
+
 def test_create_and_read_back(store):
     collection = _make(store)
     assert collection.slug == "hana-drift"

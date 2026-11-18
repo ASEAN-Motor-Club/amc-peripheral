@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Your collections — Motor Town Workshop{% endblock %}
+{% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block content %}
+<div class="wrap">
+  <header class="page-head">
+    <p class="crumb"><a href="/workshop/collections/">Collections</a></p>
+    <h1>Your collections</h1>
+    <p class="lede">
+      {% if collections %}
+      {{ counts.public }} public · {{ counts.unlisted }} unlisted.
+      Unlisted collections are reachable by link only — this is the only place that lists them.
+      {% else %}
+      Nothing yet. A collection is a list of builds you put together — yours or anyone's.
+      {% endif %}
+    </p>
+    <p class="page-actions">
+      <a class="button" href="/workshop/collections/new">New collection</a>
+    </p>
+  </header>
+
+  {% if collections %}
+  <ul class="mine-list">
+    {% for c in collections %}
+    <li class="mine-row">
+      <div>
+        <a class="mine-title" href="/workshop/collections/{{ c.id }}/{{ c.slug }}/">{{ c.title }}</a>
+        <p class="byline muted">
+          {{ c.item_count }} build{% if c.item_count != 1 %}s{% endif %}
+          · {% if c.visibility == 'public' %}<span class="pill public">public</span>{% else %}<span class="pill unlisted">unlisted — link only</span>{% endif %}
+        </p>
+      </div>
+      <span class="edit-actions">
+        <a class="button secondary" href="/workshop/collections/{{ c.id }}/edit">Edit</a>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endblock %}
