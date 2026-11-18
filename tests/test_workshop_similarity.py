@@ -31,6 +31,33 @@ async def test_item_page_does_not_flag_same_author_work(client):
     assert ">Original<" in text
 
 
+async def test_low_similarity_original_renders_the_source_banner(settings, tmp_path):
+    from dataclasses import replace
+
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from amc_peripheral.workshop.routes import create_app
+
+    site = tmp_path / "site-low-original.db"
+    seed_similarity(
+        site,
+        [("Vamos3", 1, 3, 0.61, "2026-11-15 12:00:00", "2025-05-01 00:00:00")],
+    )
+    client = TestClient(TestServer(create_app(replace(settings, site_db=site))))
+    await client.start_server()
+    try:
+        response = await client.get("/workshop/items/1/")
+        assert response.status == 200
+        text = await response.text()
+        assert 'id="copy-flag"' not in text
+        assert 'id="source-flag"' in text
+        assert "Possible original source" in text
+        assert "61% of its decal work" in text
+        assert "below the 95% copy threshold" in text
+    finally:
+        await client.close()
+
+
 async def test_earlier_item_is_not_flagged_but_still_lists_the_match(client):
     response = await client.get("/workshop/items/3/")
     assert response.status == 200
@@ -144,6 +171,7 @@ def test_copy_flag_requires_near_identical_similarity(settings, tmp_path):
     )
     assert result["flagged"] is False
     assert [item["id"] for item in result["items"]] == [3]
+    assert result["original"]["id"] == 3
 
 
 def test_copy_flag_accepts_a_match_with_extra_layers(settings, tmp_path):
