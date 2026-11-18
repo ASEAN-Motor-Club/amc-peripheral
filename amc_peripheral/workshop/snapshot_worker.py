@@ -7,6 +7,7 @@ import hashlib
 import io
 import logging
 import os
+import shutil
 import time
 import uuid
 from dataclasses import dataclass
@@ -42,6 +43,10 @@ class SnapshotSettings:
     remote_url: str | None = None
     remote_timeout_s: float = 150.0
     remote_cooldown_s: float = 120.0
+    # Refuse to start new renders when the snapshot volume is this close to
+    # full. The artifacts are tiny (a full library is a few hundred MB), so
+    # this is a safety rail against a full disk, not a working limit.
+    min_free_bytes: int = 5 * 1024**3
 
     @classmethod
     def from_env(cls) -> SnapshotSettings:
@@ -71,6 +76,11 @@ class SnapshotSettings:
             ),
             remote_cooldown_s=float(
                 os.environ.get("AMC_SNAPSHOT_REMOTE_COOLDOWN", "120")
+            ),
+            min_free_bytes=int(
+                os.environ.get(
+                    "AMC_SNAPSHOT_MIN_FREE_BYTES", str(5 * 1024 * 1024 * 1024)
+                )
             ),
         )
 
@@ -404,9 +414,25 @@ def run(settings: SnapshotSettings, *, once: bool = False, max_jobs: int = 0) ->
             settings.remote_url,
             f"warm ({status})" if status else "(warm-up unavailable)",
         )
+    disk_ok = True
     try:
         while True:
             store.heartbeat(owner)
+            free = shutil.disk_usage(settings.snapshot_root).free
+            if free < settings.min_free_bytes:
+                if disk_ok:
+                    log.error(
+                        "snapshot volume nearly full (%.1f GB free < %.1f GB); "
+                        "pausing renders",
+                        free / 1e9,
+                        settings.min_free_bytes / 1e9,
+                    )
+                    disk_ok = False
+                if once:
+                    break
+                time.sleep(max(settings.idle_seconds, 30.0))
+                continue
+            disk_ok = True
             row = store.claim(owner, settings.lease_seconds)
             if row is None:
                 if once:
