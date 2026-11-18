@@ -52,6 +52,7 @@ amc_workshop_snapshots = "amc_peripheral.workshop.snapshot_worker:main"
 amc_workshop_viewer_origin = "amc_peripheral.workshop.viewer_origin:main"
 amc_workshop_aggregate = "amc_peripheral.workshop.aggregate:main"
 amc_workshop_similarity = "amc_peripheral.workshop.similarity:cli"
+amc_workshop_sync = "amc_peripheral.workshop.sync:main"
 
 [build-system]
 requires = ["hatchling", "editables"]

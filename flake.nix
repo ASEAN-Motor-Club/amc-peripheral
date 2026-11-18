@@ -297,8 +297,11 @@
               enable = lib.mkEnableOption "Motor Town workshop browser";
               sourceDb = lib.mkOption {
                 type = lib.types.str;
-                default = "/opt/data/workspace/mt-workshop-scrape/workshop.db";
-                description = "Read-only workshop scrape database.";
+                default = "/var/lib/amc-workshop/source.db";
+                description = ''
+                  Workshop scrape database. Written only by
+                  amc-workshop-sync, opened read-only by everything else.
+                '';
               };
               viewerRoot = lib.mkOption {
                 type = lib.types.str;
@@ -777,6 +780,77 @@
                 OnBootSec = "2min";
                 OnUnitActiveSec = "15min";
                 Unit = "amc-workshop-aggregate.service";
+              };
+            };
+
+            # Sole writer of cfg.workshop.sourceDb: reads the in-game workshop
+            # API. `delta` keeps it current in the background, `full` is the
+            # weekly reconciliation that also tombstones removed entries.
+            systemd.services.amc-workshop-sync = lib.mkIf cfg.workshop.enable {
+              description = "Sync the AMC workshop source database";
+              wantedBy = ["multi-user.target"];
+              after = ["network-online.target"];
+              wants = ["network-online.target"];
+              serviceConfig = {
+                Type = "oneshot";
+                User = cfg.workshop.user;
+                Group = cfg.workshop.group;
+                StateDirectory = "amc-workshop";
+                StateDirectoryMode = "0750";
+                UMask = "0077";
+                # A full pass re-reads every vehicle key (~2 GB, ~10 min).
+                TimeoutStartSec = "3600";
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                PrivateTmp = true;
+                NoNewPrivileges = true;
+                ReadWritePaths = [(dirOf cfg.workshop.sourceDb)];
+                Environment = ["AMC_WORKSHOP_DB=${cfg.workshop.sourceDb}"];
+                ExecStart = "${releaseBin "amc_workshop_sync"} --mode delta";
+              };
+            };
+
+            systemd.timers.amc-workshop-sync = lib.mkIf cfg.workshop.enable {
+              wantedBy = ["timers.target"];
+              timerConfig = {
+                OnBootSec = "5min";
+                OnUnitActiveSec = "1h";
+                RandomizedDelaySec = "300";
+                Unit = "amc-workshop-sync.service";
+              };
+            };
+
+            systemd.services.amc-workshop-sync-full = lib.mkIf cfg.workshop.enable {
+              description = "Full reconcile of the AMC workshop source database";
+              after = ["network-online.target" "amc-workshop-sync.service"];
+              wants = ["network-online.target"];
+              # The periodic delta must not overlap a full pass.
+              conflicts = ["amc-workshop-sync.service"];
+              serviceConfig = {
+                Type = "oneshot";
+                User = cfg.workshop.user;
+                Group = cfg.workshop.group;
+                StateDirectory = "amc-workshop";
+                StateDirectoryMode = "0750";
+                UMask = "0077";
+                TimeoutStartSec = "7200";
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                PrivateTmp = true;
+                NoNewPrivileges = true;
+                ReadWritePaths = [(dirOf cfg.workshop.sourceDb)];
+                Environment = ["AMC_WORKSHOP_DB=${cfg.workshop.sourceDb}"];
+                ExecStart = "${releaseBin "amc_workshop_sync"} --mode full";
+              };
+            };
+
+            systemd.timers.amc-workshop-sync-full = lib.mkIf cfg.workshop.enable {
+              wantedBy = ["timers.target"];
+              timerConfig = {
+                OnCalendar = "Mon *-*-* 03:00:00";
+                Persistent = true;
+                RandomizedDelaySec = "900";
+                Unit = "amc-workshop-sync-full.service";
               };
             };
 
