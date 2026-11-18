@@ -33,6 +33,29 @@ def _make(store, *, owner=ME, title="Hana drift", visibility="public", now=NOW):
     )
 
 
+def test_delete_takes_the_tag_rows_with_it(store):
+    collection = _make(store)
+    with store._connect() as conn:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS workshop_collection_tag ("
+            " collection_id INTEGER NOT NULL, tag TEXT NOT NULL,"
+            " added_by TEXT NOT NULL, added_at TEXT NOT NULL,"
+            " PRIMARY KEY (collection_id, tag))"
+        )
+        conn.execute(
+            "INSERT INTO workshop_collection_tag VALUES (?, 'drift', ?, ?)",
+            (collection.id, ME, NOW),
+        )
+
+    assert store.delete(collection_id=collection.id, discord_id=ME) is True
+    with store._connect() as conn:
+        left = conn.execute(
+            "SELECT COUNT(*) FROM workshop_collection_tag WHERE collection_id = ?",
+            (collection.id,),
+        ).fetchone()[0]
+    assert left == 0
+
+
 def test_adding_or_removing_a_build_bumps_updated_at(store):
     collection = _make(store, now="2026-01-01T00:00:00Z")
     store.add_item(
