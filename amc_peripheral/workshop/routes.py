@@ -8,7 +8,7 @@ import logging
 import mimetypes
 import re
 import secrets
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -31,6 +31,8 @@ from .auth import (
     verify_session,
 )
 from .character_vehicles import CharacterVehicleRepository, CharacterVehicleUnavailable
+from .claims import ClaimSynchroniser
+from .community import CommunityStore
 from .config import WorkshopSettings
 from .covers import write_author_cover
 from .payloads import (
@@ -171,6 +173,9 @@ def create_app(
     app["player_identity"] = player_identity
     (settings.snapshot_root / "public").mkdir(parents=True, exist_ok=True)
     snapshots = SnapshotStore(settings.site_db)
+    community = CommunityStore(settings.site_db)
+    app["community"] = community
+    claims = ClaimSynchroniser(community, repository, player_identity)
 
     def snapshot_job(card: dict[str, Any], *, priority: int = PRIORITY_VISIBLE) -> SnapshotJob | None:
         config_hash = card.get("configHash") or ""
@@ -284,6 +289,18 @@ def create_app(
             if sso.enabled
             else None
         )
+        user = request["user"]
+        if user and request.method == "GET" and not request.path.startswith("/api/"):
+            # Claims are derived from the backend's character GUIDs; keep them in
+            # step off page loads, throttled per member inside the synchroniser.
+            try:
+                await asyncio.to_thread(
+                    claims.sync,
+                    str(user.get("sub") or ""),
+                    now=datetime.now(UTC).isoformat(timespec="seconds"),
+                )
+            except Exception:
+                log.warning("claim sync failed", exc_info=True)
         return await handler(request)
 
     app.middlewares.append(sessions)
