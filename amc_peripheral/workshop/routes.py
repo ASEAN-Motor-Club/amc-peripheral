@@ -594,7 +594,7 @@ def create_app(
                 raise web.HTTPNotFound()
             raise web.HTTPFound(f"/workshop/items/{item_id}/")
         if query.startswith("#") and query != "#":
-            # "#cat" is a tag lookup, not a text search — same trick as item codes.
+            # "#drift" is a tag lookup, not a text search — same trick as item codes.
             canonical = normalise_tag(query)
             usage = await asyncio.to_thread(request.app["tags"].usage, canonical)
             if canonical and usage is not None:
