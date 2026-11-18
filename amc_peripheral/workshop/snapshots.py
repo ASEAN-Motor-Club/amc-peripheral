@@ -129,8 +129,29 @@ class SnapshotStore:
                   next_attempt=CASE
                     WHEN excluded.priority>snapshot_jobs.priority THEN excluded.next_attempt
                     ELSE snapshot_jobs.next_attempt END,
-                  updated_at=excluded.updated_at
+                  updated_at=excluded.updated_at,
+                  -- SQLite applies SET assignments in order, so every reset
+                  -- below must precede the status flip that gates it.
+                  attempts=CASE
+                    WHEN snapshot_jobs.status='failed_permanent' THEN 0
+                    ELSE snapshot_jobs.attempts END,
+                  lease_owner=CASE
+                    WHEN snapshot_jobs.status='failed_permanent' THEN NULL
+                    ELSE snapshot_jobs.lease_owner END,
+                  lease_until=CASE
+                    WHEN snapshot_jobs.status='failed_permanent' THEN NULL
+                    ELSE snapshot_jobs.lease_until END,
+                  error_code=CASE
+                    WHEN snapshot_jobs.status='failed_permanent' THEN NULL
+                    ELSE snapshot_jobs.error_code END,
+                  error_message=CASE
+                    WHEN snapshot_jobs.status='failed_permanent' THEN NULL
+                    ELSE snapshot_jobs.error_message END,
+                  status=CASE
+                    WHEN snapshot_jobs.status='failed_permanent' THEN 'pending'
+                    ELSE snapshot_jobs.status END
                 WHERE snapshot_jobs.status IN ('pending','retry_pending')
+                   OR (snapshot_jobs.status='failed_permanent' AND excluded.priority>=?)
                 """,
                 (
                     job.cache_key,
@@ -144,6 +165,7 @@ class SnapshotStore:
                     now,
                     now,
                     now,
+                    PRIORITY_DIRECT,
                 ),
             )
         return self.status(job.cache_key) or {"status": "pending"}
@@ -328,8 +350,7 @@ class SnapshotStore:
                 "UPDATE snapshot_jobs SET status=?, attempts=?, next_attempt=?, "
                 "lease_owner=NULL, lease_until=NULL, error_code=?, "
                 "error_message=?, updated_at=? WHERE cache_key=?",
-                (status, attempts, next_attempt, code, message[:300], now,
-                 cache_key),
+                (status, attempts, next_attempt, code, message[:300], now, cache_key),
             )
 
     def supersede_missing(self, live_keys: set[str]) -> int:
@@ -338,7 +359,9 @@ class SnapshotStore:
             rows = conn.execute(
                 "SELECT cache_key FROM snapshot_jobs WHERE status='ready'"
             ).fetchall()
-            stale = [row["cache_key"] for row in rows if row["cache_key"] not in live_keys]
+            stale = [
+                row["cache_key"] for row in rows if row["cache_key"] not in live_keys
+            ]
             for key in stale:
                 conn.execute(
                     "UPDATE snapshot_jobs SET status='superseded', updated_at=? "
