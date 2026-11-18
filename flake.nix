@@ -336,6 +336,46 @@
                   Without it the site runs anonymously: no sign-in link.
                 '';
               };
+              viewerOrigin = {
+                enable = lib.mkEnableOption ''
+                  private viewer origin (viewer assets plus proxied workshop
+                  API) so snapshot renderers on other machines do not have to
+                  pull assets through the public edge
+                '';
+                bind = lib.mkOption {
+                  type = lib.types.str;
+                  default = "0.0.0.0";
+                  description = ''
+                    Address the private viewer origin binds to. With the
+                    default the port is only opened on tailscale0.
+                  '';
+                };
+                port = lib.mkOption {
+                  type = lib.types.port;
+                  default = 7004;
+                  description = "Port for the private viewer origin.";
+                };
+                renderUrl = lib.mkOption {
+                  type = lib.types.nullOr lib.types.str;
+                  default = null;
+                  description = ''
+                    Address remote renderers use to reach the viewer origin,
+                    e.g. "http://100.64.0.10:7004". Defaults to
+                    http://<bind>:<port>, which is only right for a loopback
+                    or specific-interface bind.
+                  '';
+                };
+              };
+              snapshotRemoteUrl = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = ''
+                  Optional remote render agent (POST /render -> PNG) used when
+                  it is reachable. The local SwiftShader browser stays in place
+                  as the fallback, so an offline desktop only slows renders
+                  down instead of stalling the queue.
+                '';
+              };
             };
 
             # Sharry file sharing service
@@ -812,18 +852,75 @@
                 NoNewPrivileges = true;
                 MemoryMax = "2G";
                 ReadOnlyPaths = [cfg.workshop.sourceDb cfg.workshop.viewerRoot];
-                Environment = [
-                  "HOME=/var/lib/amc-workshop"
-                  "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
-                  "AMC_WORKSHOP_SNAPSHOT_ROOT=/var/lib/amc-workshop/snapshots"
-                  "AMC_WORKSHOP_VIEWER_URL=${cfg.workshop.publicScheme}://${cfg.workshop.publicHost}/vehicles/index.html"
-                  "AMC_SNAPSHOT_CHROME=${lib.getExe pkgs.chromium}"
-                ];
+                Environment = let
+                  originBase =
+                    if cfg.workshop.viewerOrigin.renderUrl != null
+                    then cfg.workshop.viewerOrigin.renderUrl
+                    else "http://${cfg.workshop.viewerOrigin.bind}:${
+                      toString cfg.workshop.viewerOrigin.port
+                    }";
+                  # A remote renderer has to fetch the page itself, so it gets
+                  # the private origin when one exists; the local browser keeps
+                  # using the public URL.
+                  viewerUrl =
+                    if cfg.workshop.viewerOrigin.enable
+                    then "${originBase}/vehicles/index.html"
+                    else "${cfg.workshop.publicScheme}://${cfg.workshop.publicHost}/vehicles/index.html";
+                in
+                  [
+                    "HOME=/var/lib/amc-workshop"
+                    "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
+                    "AMC_WORKSHOP_SNAPSHOT_ROOT=/var/lib/amc-workshop/snapshots"
+                    "AMC_WORKSHOP_VIEWER_URL=${viewerUrl}"
+                    "AMC_SNAPSHOT_CHROME=${lib.getExe pkgs.chromium}"
+                  ]
+                  ++ lib.optional (cfg.workshop.snapshotRemoteUrl != null)
+                  "AMC_SNAPSHOT_REMOTE_URL=${cfg.workshop.snapshotRemoteUrl}";
               };
               script = ''
                 exec ${self.packages.${pkgs.system}.default}/bin/amc_workshop_snapshots
               '';
             };
+
+            systemd.services.amc-workshop-viewer-origin =
+              lib.mkIf (cfg.workshop.enable && cfg.workshop.viewerOrigin.enable) {
+                description = "Private viewer origin for remote snapshot renderers";
+                wantedBy = ["multi-user.target"];
+                after = ["network.target" "amc-workshop-web.service"];
+                requires = ["amc-workshop-web.service"];
+                serviceConfig = {
+                  Type = "simple";
+                  User = cfg.workshop.user;
+                  Group = cfg.workshop.group;
+                  Restart = "always";
+                  RestartSec = "5";
+                  ProtectSystem = "strict";
+                  ProtectHome = true;
+                  PrivateTmp = true;
+                  NoNewPrivileges = true;
+                  MemoryMax = "512M";
+                  ReadOnlyPaths = [cfg.workshop.viewerRoot];
+                  Environment = [
+                    "AMC_WORKSHOP_VIEWER_ROOT=${cfg.workshop.viewerRoot}"
+                    "AMC_VIEWER_ORIGIN_BIND=${cfg.workshop.viewerOrigin.bind}"
+                    "AMC_VIEWER_ORIGIN_PORT=${
+                      toString cfg.workshop.viewerOrigin.port
+                    }"
+                    "AMC_WORKSHOP_ORIGIN_UPSTREAM=http://127.0.0.1:${
+                      toString cfg.workshop.port
+                    }"
+                  ];
+                };
+                script = ''
+                  exec ${self.packages.${pkgs.system}.default}/bin/amc_workshop_viewer_origin
+                '';
+              };
+
+            # The origin is a private service: keep the port off the public
+            # interface and only open it on the tailnet.
+            networking.firewall.interfaces."tailscale0".allowedTCPPorts =
+              lib.mkIf (cfg.workshop.enable && cfg.workshop.viewerOrigin.enable)
+              [cfg.workshop.viewerOrigin.port];
 
             services.nginx.virtualHosts.${cfg.workshop.publicHost}.locations = lib.mkIf cfg.workshop.enable {
               "/workshop" = {
@@ -839,6 +936,25 @@
                 extraConfig = ''
                   expires 1h;
                   add_header Cache-Control "public, max-age=3600";
+                '';
+              };
+              # The vhost catch-all answers no-store, which forced every viewer
+              # load — and every snapshot render — to re-download multi-MB GLBs
+              # and textures. Viewer binaries are referenced without a version
+              # query, so an immutable year would pin stale meshes after a
+              # re-stage: an hour plus stale-while-revalidate collapses repeat
+              # loads without wedging an asset update for long.
+              "/vehicles/" = {
+                root = builtins.dirOf cfg.workshop.viewerRoot;
+                extraConfig = ''
+                  location ~* \.(glb|gltf|bin|png|jpe?g|webp|ktx2|hdr|exr|dds|tga|woff2?|ttf|otf)$ {
+                    root ${builtins.dirOf cfg.workshop.viewerRoot};
+                    add_header Cache-Control "public, max-age=3600, stale-while-revalidate=86400";
+                    access_log off;
+                  }
+                  # Documents and scripts either carry ?v=N or must revalidate
+                  # so a renderer bump actually reaches clients.
+                  add_header Cache-Control "no-cache";
                 '';
               };
               "/api/workshop/" = {
