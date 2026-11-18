@@ -27,6 +27,10 @@ class WorkshopSettings:
     home_limit: int = 10
     prewarm_limit: int = 48
     prewarm_queue_limit: int = 50
+    # How far down the popularity order a prewarm pass may look for items that
+    # have no snapshot yet. Bounds the work an aggregate run does on a library
+    # whose top items are already rendered.
+    prewarm_scan_limit: int = 500
     cache_ttl_seconds: float = 60.0
     similarity_min: float = 0.60
     similarity_copy_threshold: float = 0.95
@@ -72,6 +76,9 @@ class WorkshopSettings:
             prewarm_limit=int(os.environ.get("AMC_WORKSHOP_PREWARM_LIMIT", "48")),
             prewarm_queue_limit=int(
                 os.environ.get("AMC_WORKSHOP_PREWARM_QUEUE_LIMIT", "50")
+            ),
+            prewarm_scan_limit=int(
+                os.environ.get("AMC_WORKSHOP_PREWARM_SCAN_LIMIT", "500")
             ),
             cache_ttl_seconds=float(os.environ.get("AMC_WORKSHOP_CACHE_SECONDS", "60")),
             similarity_min=float(os.environ.get("AMC_WORKSHOP_SIMILARITY_MIN", "0.60")),

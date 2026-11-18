@@ -8,7 +8,7 @@ import logging
 import sqlite3
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Protocol
 
 from .config import WorkshopSettings
 from .payloads import asset_version_for
@@ -58,15 +58,68 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def prewarm_popular(settings: WorkshopSettings, home: dict[str, Any]) -> int:
-    """Queue a bounded popular set behind all user-driven work."""
+# Speculative renders are ordered by the workshop's own popularity order
+# (installs, then votes). The claim query sorts priority DESC, so the head of
+# that order is rendered first; every band stays below PRIORITY_VISIBLE so a
+# real page view still jumps the speculative queue.
+RANK_BANDS: tuple[tuple[int, int], ...] = (
+    (25, PRIORITY_POPULAR + 40),
+    (100, PRIORITY_POPULAR + 30),
+    (500, PRIORITY_POPULAR + 20),
+    (2_000, PRIORITY_POPULAR + 10),
+)
+
+
+def rank_priority(rank: int) -> int:
+    """Priority for speculatively warming the ``rank``-th most popular item."""
+    for limit, priority in RANK_BANDS:
+        if rank < limit:
+            return priority
+    return PRIORITY_POPULAR
+
+
+class PopularSource(Protocol):
+    """The slice of the repository prewarm needs: the popularity order."""
+
+    def list_items(
+        self, *, sort: str, limit: int, offset: int = 0
+    ) -> dict[str, Any]: ...
+
+
+def _popular_candidates(repo: PopularSource, limit: int):
+    """Yield ``(rank, card)`` down the popularity order, one page at a time."""
+    seen = 0
+    while seen < limit:
+        page = repo.list_items(sort="popular", limit=min(60, limit - seen), offset=seen)
+        items = page["items"]
+        if not items:
+            return
+        for card in items:
+            yield seen, card
+            seen += 1
+
+
+def prewarm_popular(
+    settings: WorkshopSettings, home: dict[str, Any], repo: PopularSource
+) -> int:
+    """Queue a bounded popular set behind all user-driven work.
+
+    Walks the popularity order instead of only its head: items that are already
+    rendered are skipped and the scan continues downward until the queue budget
+    is spent or ``prewarm_scan_limit`` items have been considered. Without that
+    scan a prewarmed-and-rendered top set would starve everything below it.
+    """
     store = SnapshotStore(settings.site_db)
     depth = store.queue_depth()
     budget = min(settings.prewarm_limit, max(0, settings.prewarm_queue_limit - depth))
     if budget <= 0:
         return 0
     enqueued = 0
-    for card in home["popular"][:budget]:
+    scanned = 0
+    for rank, card in _popular_candidates(repo, settings.prewarm_scan_limit):
+        scanned += 1
+        if enqueued >= budget:
+            break
         version = asset_version_for(settings.viewer_root, card["vehicleKey"])
         config_hash = card.get("configHash") or ""
         if version == "unversioned" or not config_hash:
@@ -79,16 +132,19 @@ def prewarm_popular(settings: WorkshopSettings, home: dict[str, Any]) -> int:
         )
         if store.status(key) is not None:
             continue
-        store.enqueue(SnapshotJob(
-            cache_key=key,
-            source_kind="workshop",
-            source_id=int(card["id"]),
-            config_hash=config_hash,
-            asset_version=version,
-            camera="default",
-            priority=PRIORITY_POPULAR,
-        ))
+        store.enqueue(
+            SnapshotJob(
+                cache_key=key,
+                source_kind="workshop",
+                source_id=int(card["id"]),
+                config_hash=config_hash,
+                asset_version=version,
+                camera="default",
+                priority=rank_priority(rank),
+            )
+        )
         enqueued += 1
+    log.info("prewarm enqueued %s of %s scanned (limit %s)", enqueued, scanned, budget)
     return enqueued
 
 
@@ -146,7 +202,7 @@ def build(settings: WorkshopSettings) -> dict[str, Any]:
         raise
     finally:
         conn.close()
-    enqueued = prewarm_popular(settings, home)
+    enqueued = prewarm_popular(settings, home, repo)
     if enqueued:
         log.info("queued %d popular snapshots at background priority", enqueued)
     return home
@@ -154,18 +210,27 @@ def build(settings: WorkshopSettings) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--loop", type=float, default=0.0,
-                        help="Repeat every N seconds instead of running once")
+    parser.add_argument(
+        "--loop",
+        type=float,
+        default=0.0,
+        help="Repeat every N seconds instead of running once",
+    )
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     settings = WorkshopSettings.from_env()
     settings.validate()
     while True:
         started = time.monotonic()
         home = build(settings)
-        log.info("aggregate ready: %s items, run %s (%.2fs)",
-                 home["stats"]["items"], home.get("runId"), time.monotonic() - started)
+        log.info(
+            "aggregate ready: %s items, run %s (%.2fs)",
+            home["stats"]["items"],
+            home.get("runId"),
+            time.monotonic() - started,
+        )
         if args.loop <= 0:
             return
         time.sleep(max(1.0, args.loop))
