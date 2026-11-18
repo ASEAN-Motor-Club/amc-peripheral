@@ -1180,6 +1180,32 @@ def create_app(
             mine=mine,
         )
 
+    async def collection_short_link(request: web.Request) -> web.Response:
+        """A pasted /collections/3 should land on the canonical slug URL, not 404."""
+        collection_id = int(request.match_info["id"])
+        collection = await asyncio.to_thread(_collection_store(request).get, collection_id)
+        if collection is None or collection.hidden:
+            raise web.HTTPNotFound()
+        raise web.HTTPMovedPermanently(
+            f"/workshop/collections/{collection.id}/{collection.slug}/"
+        )
+
+    async def page_my_collections(request: web.Request) -> web.Response:
+        """Everything you own, unlisted included — the list the public index cannot show."""
+        user = require_member(request)
+        store = _collection_store(request)
+        collections = await asyncio.to_thread(store.owned, str(user["sub"]))
+        counts = {"public": 0, "unlisted": 0}
+        for collection in collections:
+            counts["public" if collection.visibility == "public" else "unlisted"] += 1
+        return render(
+            request,
+            "collections_mine.html",
+            page="collections",
+            collections=collections,
+            counts=counts,
+        )
+
     async def page_collection(request: web.Request) -> web.Response:
         store = _collection_store(request)
         collection_id = int(request.match_info["id"])
@@ -1201,6 +1227,12 @@ def create_app(
         attach_snapshots(items)
         likes = await asyncio.to_thread(community.like_counts, [i["id"] for i in items])
         mine = await asyncio.to_thread(store.owned, str(user["sub"])) if user else []
+        owner = await asyncio.to_thread(community.profile, collection.discord_id)
+        owner_name = (
+            owner.display_name
+            if owner is not None and not owner.hidden and owner.display_name
+            else None
+        )
         tags = await asyncio.to_thread(request.app["tags"].collection_tags, collection.id)
         return render(
             request,
@@ -1211,6 +1243,7 @@ def create_app(
             items=items,
             likes=likes,
             is_owner=is_owner,
+            owner_name=owner_name,
             mine=mine,
             noindex=not collection.is_public,
         )
@@ -1304,6 +1337,7 @@ def create_app(
             collection=collection,
             items=items,
             tags=tags,
+            confirm_delete=bool(request.query.get("delete")),
             error=error or request.query.get("tag-error"),
         )
 
@@ -1320,7 +1354,9 @@ def create_app(
         back = f"/workshop/collections/{collection_id}/{collection.slug}/edit"
         form = await request.post()
         raw = str(form.get("workshop_id", "")).strip()
-        workshop_id = int(raw) if raw.isdigit() else None
+        # People paste links, not ids: take the number out of /items/33425/.
+        match = re.search(r"/items/(\d+)", raw) or re.fullmatch(r"(\d+)", raw)
+        workshop_id = int(match.group(1)) if match else None
         if workshop_id is None:
             raise web.HTTPSeeOther(f"{back}?error=bad-id")
         item = await asyncio.to_thread(repository.get_item, workshop_id)
@@ -1353,6 +1389,7 @@ def create_app(
             collection_id=collection_id,
             discord_id=str(user["sub"]),
             workshop_id=workshop_id,
+            now=_now_iso(),
         )
         raise web.HTTPSeeOther(
             f"/workshop/collections/{collection_id}/{collection.slug}/edit"
@@ -1384,6 +1421,7 @@ def create_app(
                     collection_id=collection_id,
                     discord_id=str(user["sub"]),
                     ordered_ids=ids,
+                    now=_now_iso(),
                 )
         raise web.HTTPSeeOther(
             f"/workshop/collections/{collection_id}/{collection.slug}/edit"
@@ -1905,6 +1943,8 @@ def create_app(
     app.router.add_get("/workshop/collections/", page_collections)
     app.router.add_get("/workshop/collections/new", page_collection_new)
     app.router.add_post("/workshop/collections/new", page_collection_new)
+    app.router.add_get("/workshop/collections/mine/", page_my_collections)
+    app.router.add_get("/workshop/collections/{id:\\d+}", collection_short_link)
     app.router.add_get("/workshop/collections/{id:\\d+}/{slug}/", page_collection)
     app.router.add_get("/workshop/collections/{id:\\d+}/edit", page_collection_edit)
     app.router.add_post("/workshop/collections/{id:\\d+}/edit", page_collection_edit)

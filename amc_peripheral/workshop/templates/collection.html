@@ -14,18 +14,19 @@
     <p class="tag-row" aria-label="Tags">{% for t in tags %}<a class="tag-chip" href="/workshop/tags/{{ t|urlencode }}/">#{{ t }}</a>{% endfor %}</p>
     {% endif %}
     <p class="byline muted">
-      Curated by a club member · {{ collection.item_count }} build{% if collection.item_count != 1 %}s{% endif %}
-      {% if collection.visibility == 'unlisted' %} · unlisted (link only){% endif %}
+      Curated by {{ owner_name or 'a club member' }} · {{ collection.item_count }} build{% if collection.item_count != 1 %}s{% endif %}
+      {% if collection.visibility == 'unlisted' %} · <span class="pill unlisted">unlisted — link only</span>{% endif %}
     </p>
     {% if is_owner %}
     <p class="page-actions">
       <a class="button" href="/workshop/collections/{{ collection.id }}/edit">Edit collection</a>
+      <a class="button secondary" href="/workshop/collections/mine/">Your collections</a>
     </p>
     {% endif %}
   </header>
 
   {% if items %}
-  <div class="grid">
+  <div class="card-grid collection-builds">
     {% for item in items %}
     <article class="vehicle-card{% if item.isOriginal %} original-card{% endif %}">
       <a class="card-visual" href="/workshop/items/{{ item.id }}/" aria-hidden="true" tabindex="-1">
