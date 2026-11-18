@@ -72,7 +72,9 @@ def search_item_id(query: str) -> int | None:
 
 
 def _json_error(code: str, message: str, status: int = 400) -> web.Response:
-    return web.json_response({"error": {"code": code, "message": message}}, status=status)
+    return web.json_response(
+        {"error": {"code": code, "message": message}}, status=status
+    )
 
 
 def _iso(value: str | None) -> str | None:
@@ -117,10 +119,14 @@ class AttachmentCatalogue:
                 return set()
             if self._mtime == stat.st_mtime and self._keys is not None:
                 return self._keys
+
             def load():
                 data = json.loads(self.path.read_text())
                 actors = data.get("actors") or {}
-                return {str(key) for key in actors} if isinstance(actors, dict) else set()
+                return (
+                    {str(key) for key in actors} if isinstance(actors, dict) else set()
+                )
+
             self._keys = await asyncio.to_thread(load)
             self._mtime = stat.st_mtime
             return self._keys
@@ -177,7 +183,9 @@ def create_app(
     app["community"] = community
     claims = ClaimSynchroniser(community, repository, player_identity)
 
-    def snapshot_job(card: dict[str, Any], *, priority: int = PRIORITY_VISIBLE) -> SnapshotJob | None:
+    def snapshot_job(
+        card: dict[str, Any], *, priority: int = PRIORITY_VISIBLE
+    ) -> SnapshotJob | None:
         config_hash = card.get("configHash") or ""
         if not config_hash:
             return None
@@ -217,7 +225,8 @@ def create_app(
             if job:
                 jobs.append(job)
         ready = snapshots.ready_map(
-            "workshop", [(int(card["id"]), card.get("configHash") or "") for card in items]
+            "workshop",
+            [(int(card["id"]), card.get("configHash") or "") for card in items],
         )
         current = snapshots.statuses([job.cache_key for job in jobs])
         for card in items:
@@ -257,7 +266,9 @@ def create_app(
             return web.Response(text=exc.message, status=exc.status)
         except PayloadError as exc:
             log.warning("workshop payload rejected for %s: %s", request.path, exc)
-            return _json_error("invalid_payload", "Workshop configuration is unavailable", 422)
+            return _json_error(
+                "invalid_payload", "Workshop configuration is unavailable", 422
+            )
         except CharacterVehicleUnavailable:
             return _json_error("not_found", "CharacterVehicle not found", 404)
         except web.HTTPException:
@@ -316,9 +327,7 @@ def create_app(
 
     def mark_asset_availability(config: dict[str, Any]) -> dict[str, Any]:
         slug = config["vehicle"]["slug"]
-        available = (
-            settings.viewer_root / slug / f"{slug}.json"
-        ).is_file()
+        available = (settings.viewer_root / slug / f"{slug}.json").is_file()
         config["vehicle"]["assetAvailable"] = available
         if not available:
             config["renderReport"]["warnings"].insert(
@@ -378,7 +387,9 @@ def create_app(
                 return _json_error("not_found", "Workshop item not found", 404)
             return web.json_response({"type": "item", "item": item})
         authors = await asyncio.to_thread(repository.search_authors, query)
-        return web.json_response({"type": "authors", "query": query, "authors": authors})
+        return web.json_response(
+            {"type": "authors", "query": query, "authors": authors}
+        )
 
     async def api_list(request: web.Request) -> web.Response:
         query = request.query
@@ -408,7 +419,9 @@ def create_app(
         return web.json_response(data)
 
     async def api_item(request: web.Request) -> web.Response:
-        item = await asyncio.to_thread(repository.get_item, int(request.match_info["id"]))
+        item = await asyncio.to_thread(
+            repository.get_item, int(request.match_info["id"])
+        )
         if item is None:
             return _json_error("not_found", "Workshop item not found", 404)
         return web.json_response(item)
@@ -418,20 +431,26 @@ def create_app(
         etag = f'"{config["source"]["configHash"]}"'
         if request.headers.get("If-None-Match") == etag:
             raise web.HTTPNotModified(headers={"ETag": etag})
-        return web.json_response(config, headers={
-            "ETag": etag,
-            "Cache-Control": "public, max-age=300",
-        })
+        return web.json_response(
+            config,
+            headers={
+                "ETag": etag,
+                "Cache-Control": "public, max-age=300",
+            },
+        )
 
     async def api_character_viewer(request: web.Request) -> web.Response:
         config = await character_configuration(int(request.match_info["id"]))
         etag = f'"{config["source"]["configHash"]}"'
         if request.headers.get("If-None-Match") == etag:
             raise web.HTTPNotModified(headers={"ETag": etag})
-        return web.json_response(config, headers={
-            "ETag": etag,
-            "Cache-Control": "private, no-store",
-        })
+        return web.json_response(
+            config,
+            headers={
+                "ETag": etag,
+                "Cache-Control": "private, no-store",
+            },
+        )
 
     async def api_character_meta(request: web.Request) -> web.Response:
         row = await asyncio.to_thread(
@@ -448,14 +467,16 @@ def create_app(
         if item is None:
             return _json_error("not_found", "Workshop item not found", 404)
         if not config["vehicle"].get("assetAvailable"):
-            return web.json_response(
-                {"status": "unsupported", "url": None}, status=200
-            )
+            return web.json_response({"status": "unsupported", "url": None}, status=200)
         item["configHash"] = config["source"]["configHash"]
-        priority = PRIORITY_VISIBLE if request.query.get("via") == "card" else PRIORITY_DIRECT
+        priority = (
+            PRIORITY_VISIBLE if request.query.get("via") == "card" else PRIORITY_DIRECT
+        )
         job = snapshot_job(item, priority=priority)
         if job is None:
-            return _json_error("invalid_payload", "Configuration has no content hash", 422)
+            return _json_error(
+                "invalid_payload", "Configuration has no content hash", 422
+            )
         status = await asyncio.to_thread(snapshots.enqueue, job)
         return web.json_response(
             status,
@@ -464,7 +485,9 @@ def create_app(
         )
 
     async def api_authors(request: web.Request) -> web.Response:
-        author = await asyncio.to_thread(repository.author, int(request.match_info["id"]))
+        author = await asyncio.to_thread(
+            repository.author, int(request.match_info["id"])
+        )
         if author is None:
             return _json_error("not_found", "Author not found", 404)
         listing = await asyncio.to_thread(
@@ -476,7 +499,9 @@ def create_app(
         return web.json_response({"author": author, **listing})
 
     async def api_vehicles(request: web.Request) -> web.Response:
-        return web.json_response({"vehicles": await asyncio.to_thread(repository.vehicles)})
+        return web.json_response(
+            {"vehicles": await asyncio.to_thread(repository.vehicles)}
+        )
 
     async def api_health(request: web.Request) -> web.Response:
         stats, snapshot_health = await asyncio.gather(
@@ -491,9 +516,13 @@ def create_app(
         raw = request.query.get("keys", "")
         keys = [key for key in raw.split(",") if key]
         allowed = set("0123456789abcdef")
-        if not keys or len(keys) > 48 or any(
-            len(key) != 64 or any(char not in allowed for char in key)
-            for key in keys
+        if (
+            not keys
+            or len(keys) > 48
+            or any(
+                len(key) != 64 or any(char not in allowed for char in key)
+                for key in keys
+            )
         ):
             return _json_error(
                 "invalid_keys",
@@ -526,8 +555,12 @@ def create_app(
         vehicles = await asyncio.to_thread(repository.search_vehicles, query)
         attach_author_snapshots(authors)
         return render(
-            request, "search.html", page="search", query=query,
-            authors=authors, vehicles=vehicles,
+            request,
+            "search.html",
+            page="search",
+            query=query,
+            authors=authors,
+            vehicles=vehicles,
         )
 
     async def page_gallery(request: web.Request) -> web.Response:
@@ -575,7 +608,8 @@ def create_app(
             else None
         )
         return render(
-            request, "gallery.html",
+            request,
+            "gallery.html",
             page="gallery",
             data=data,
             vehicles=vehicles,
@@ -610,8 +644,28 @@ def create_app(
         )
         if similar["items"]:
             attach_snapshots(similar["items"])
-        return render(request, "item.html", page="workshop", item=item, config=config,
-                      snapshot=snapshot, similar=similar)
+        claim = await asyncio.to_thread(community.claim_for, workshop_id)
+        claim_owner = None
+        if claim is not None and claim.revoked_at is None:
+            owner = await asyncio.to_thread(community.profile, claim.discord_id)
+            viewer = request.get("user")
+            claim_owner = {
+                "discordId": claim.discord_id,
+                "name": owner.display_name
+                if owner is not None and not owner.hidden and owner.display_name
+                else None,
+                "yours": bool(viewer) and str(viewer.get("sub")) == claim.discord_id,
+            }
+        return render(
+            request,
+            "item.html",
+            page="workshop",
+            item=item,
+            config=config,
+            snapshot=snapshot,
+            similar=similar,
+            claim=claim_owner,
+        )
 
     async def page_item_viewer(request: web.Request) -> web.Response:
         workshop_id = int(request.match_info["id"])
@@ -647,16 +701,18 @@ def create_app(
         if page > total_pages:
             raise web.HTTPFound(page_url(total_pages))
         attach_author_snapshots(data["items"])
-        numbers = sorted({1, total_pages} | {
-            n for n in range(page - 2, page + 3) if 1 <= n <= total_pages
-        })
+        numbers = sorted(
+            {1, total_pages}
+            | {n for n in range(page - 2, page + 3) if 1 <= n <= total_pages}
+        )
         pages: list[dict[str, Any]] = []
         previous = 0
         for number in numbers:
             if number - previous > 1:
                 pages.append({"gap": True})
-            pages.append({"number": number, "url": page_url(number),
-                          "current": number == page})
+            pages.append(
+                {"number": number, "url": page_url(number), "current": number == page}
+            )
             previous = number
         pagination = {
             "page": page,
@@ -714,16 +770,18 @@ def create_app(
         )
         attach_snapshots(listing["items"])
 
-        numbers = sorted({1, total_pages} | {
-            n for n in range(page - 2, page + 3) if 1 <= n <= total_pages
-        })
+        numbers = sorted(
+            {1, total_pages}
+            | {n for n in range(page - 2, page + 3) if 1 <= n <= total_pages}
+        )
         pages: list[dict[str, Any]] = []
         previous = 0
         for number in numbers:
             if number - previous > 1:
                 pages.append({"gap": True})
-            pages.append({"number": number, "url": page_url(number),
-                          "current": number == page})
+            pages.append(
+                {"number": number, "url": page_url(number), "current": number == page}
+            )
             previous = number
         pagination = {
             "page": page,
@@ -746,10 +804,19 @@ def create_app(
             limit=60,
         )
         cover_url = await asyncio.to_thread(author_cover, account_id, popular["items"])
-        return render(request, "author.html", page="authors", author=author, data=listing,
-                      vehicles=[], pagination=pagination,
-                      social_image=(f"https://www.aseanmotorclub.com{cover_url}" if cover_url else None),
-                      canonical_url=f"https://www.aseanmotorclub.com/workshop/authors/{account_id}/")
+        return render(
+            request,
+            "author.html",
+            page="authors",
+            author=author,
+            data=listing,
+            vehicles=[],
+            pagination=pagination,
+            social_image=(
+                f"https://www.aseanmotorclub.com{cover_url}" if cover_url else None
+            ),
+            canonical_url=f"https://www.aseanmotorclub.com/workshop/authors/{account_id}/",
+        )
 
     async def page_vehicle(request: web.Request) -> web.Response:
         vehicle = request.match_info["vehicle"]
@@ -796,16 +863,18 @@ def create_app(
         )
         attach_snapshots(listing["items"])
 
-        numbers = sorted({1, total_pages} | {
-            n for n in range(page - 2, page + 3) if 1 <= n <= total_pages
-        })
+        numbers = sorted(
+            {1, total_pages}
+            | {n for n in range(page - 2, page + 3) if 1 <= n <= total_pages}
+        )
         pages: list[dict[str, Any]] = []
         previous = 0
         for number in numbers:
             if number - previous > 1:
                 pages.append({"gap": True})
-            pages.append({"number": number, "url": page_url(number),
-                          "current": number == page})
+            pages.append(
+                {"number": number, "url": page_url(number), "current": number == page}
+            )
             previous = number
         pagination = {
             "page": page,
@@ -822,10 +891,16 @@ def create_app(
             "lastUrl": page_url(total_pages),
         }
         return render(
-            request, "author.html",
+            request,
+            "author.html",
             page="gallery",
-            author={"displayName": vehicle, "uploads": total,
-                    "installs": 0, "votes": 0, "accountId": None},
+            author={
+                "displayName": vehicle,
+                "uploads": total,
+                "installs": 0,
+                "votes": 0,
+                "accountId": None,
+            },
             data=listing,
             vehicles=[],
             filters=filters,
@@ -837,7 +912,11 @@ def create_app(
         vehicle_id = int(request.match_info["id"])
         config = await character_configuration(vehicle_id)
         return render(
-            request, "character.html", page="workshop", vehicle_id=vehicle_id, config=config
+            request,
+            "character.html",
+            page="workshop",
+            vehicle_id=vehicle_id,
+            config=config,
         )
 
     async def redirect_legacy_character(request: web.Request) -> web.Response:
@@ -949,11 +1028,19 @@ def create_app(
                 raise web.HTTPNotFound()
             raise web.HTTPFound("/workshop/auth/login?next=/workshop/account/")
         steam_id = await steam_id_for(request, user)
+        profile = await asyncio.to_thread(community.profile, str(user["sub"]))
+        claimed = await asyncio.to_thread(community.claims_for, str(user["sub"]))
+        active = [claim for claim in claimed.values() if claim.revoked_at is None]
         items: list[dict[str, Any]] = []
-        if steam_id:
+        if active:
             items = await asyncio.to_thread(
-                repository.items_for_steam_id, steam_id, 24
+                repository.items_for_guids,
+                {claim.character_guid for claim in active},
+                24,
             )
+        elif steam_id:
+            items = await asyncio.to_thread(repository.items_for_steam_id, steam_id, 24)
+        if items:
             attach_snapshots(items)
         return render(
             request,
@@ -961,6 +1048,8 @@ def create_app(
             page="account",
             steam_id=steam_id,
             items=items,
+            profile=profile,
+            claim_count=len(active),
         )
 
     app.router.add_get("/healthz", api_health)
@@ -976,9 +1065,7 @@ def create_app(
     app.router.add_get("/workshop/items/{id:\\d+}/viewer/", page_item_viewer)
     app.router.add_get("/workshop/authors/", page_authors)
     app.router.add_get("/workshop/authors/{id:\\d+}/", page_author)
-    app.router.add_get(
-        "/workshop/vehicles/{vehicle:[A-Za-z0-9_]+}/", page_vehicle
-    )
+    app.router.add_get("/workshop/vehicles/{vehicle:[A-Za-z0-9_]+}/", page_vehicle)
     app.router.add_get("/vehicles/character/{id:\\d+}/", page_character)
     app.router.add_get("/vehicles/", redirect_legacy_character)
 
@@ -993,12 +1080,8 @@ def create_app(
     app.router.add_get("/api/workshop/vehicles", api_vehicles)
     app.router.add_get("/api/workshop/health", api_health)
     app.router.add_get("/api/workshop/me", api_me)
-    app.router.add_get(
-        "/api/character-vehicles/{id:\\d+}/viewer", api_character_viewer
-    )
-    app.router.add_get(
-        "/api/character-vehicles/{id:\\d+}/meta", api_character_meta
-    )
+    app.router.add_get("/api/character-vehicles/{id:\\d+}/viewer", api_character_viewer)
+    app.router.add_get("/api/character-vehicles/{id:\\d+}/meta", api_character_meta)
     app.router.add_static("/workshop/static/", HERE / "static", name="workshop-static")
     app.router.add_static(
         "/workshop/snapshots/",

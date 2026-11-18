@@ -269,3 +269,11 @@ details.panel > summary h2 { display: inline; margin: 0; }
   .user-chip span { display: none; }
   .user-chip { padding: 5px; }
 }
+
+/* Claim lines: ownership is derived from the backend, so the badge is a fact
+   statement, not a promise the site is making about who uploaded what. */
+.claim-line {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 6px 0 14px; font-size: 13px; color: var(--muted);
+}
+.claim-line .badge { background: rgba(97, 218, 251, 0.14); color: #9fe3f7; }

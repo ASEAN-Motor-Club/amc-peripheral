@@ -13,6 +13,13 @@
     {% else %}
       <p class="byline muted">Workshop upload · <time datetime="{{ item.createdAt|iso }}">{{ item.createdAt|date_long }}</time></p>
     {% endif %}
+    {% if claim %}
+      <p class="claim-line">
+        <span class="badge">Claimed</span>
+        {% if claim.name %}by {{ claim.name }}{% else %}by a club member{% endif %}
+        {% if claim.yours %} — <a href="/workshop/account/">this is your build</a>{% endif %}
+      </p>
+    {% endif %}
 
     {% if similar and similar.flagged and similar.origin %}
     <div class="notice copy-flag" role="note" id="copy-flag">
