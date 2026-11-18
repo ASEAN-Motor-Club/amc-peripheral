@@ -23,16 +23,17 @@ export function decalFallbackSlots(decalSlots, slotDefs, bodyVariants, selectedI
 // body panel, so include it alongside the CDO's explicit receiver names.
 export function decalReceiverSlots(decalSlots, slotDefs, slotExtents = {}) {
   const out = new Set(decalSlots || []);
-  const baseExtent = Math.max(0, ...[...out].map(slot => slotExtents[slot] || 0));
-  for (const [slot, def] of Object.entries(slotDefs || {})) {
-    if (out.has(slot)) continue;
+  const bodySlots = Object.entries(slotDefs || {}).filter(([, def]) => {
     const material = `${def?.materialName || ""} ${def?.material || ""}`;
-    if (!/(^|[\/\s])M_Body([\/.\s]|$)/i.test(material)) continue;
-    // Only add a body-shader slot when it actually covers more body than the
-    // named receivers. This catches Nuke's shell (`Seats_01`) without dragging
-    // seats/interior slots into decals on vehicles whose name list is already
-    // correct.
-    if ((slotExtents[slot] || 0) > baseExtent * 1.5) out.add(slot);
+    return /(^|[\/\s])M_Body([\/.\s]|$)/i.test(material);
+  });
+  const maxExtent = Math.max(0, ...bodySlots.map(([slot]) => slotExtents[slot] || 0));
+  if (!maxExtent) return out;
+  // Body panels are the largest M_Body slots. A fixed 1.5x margin missed cars
+  // whose shell is split across two similarly-sized slots (Raton Body/Body_0)
+  // but still excludes seats and other small M_Body trim.
+  for (const [slot] of bodySlots) {
+    if ((slotExtents[slot] || 0) >= maxExtent * 0.6) out.add(slot);
   }
   return out;
 }
