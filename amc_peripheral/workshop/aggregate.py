@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS author_summary (
     votes INTEGER NOT NULL,
     representative_id INTEGER
 );
+CREATE INDEX IF NOT EXISTS author_summary_installs
+    ON author_summary (installs DESC, votes DESC, account_id ASC);
 """
 
 
@@ -126,7 +128,7 @@ def build(settings: WorkshopSettings) -> dict[str, Any]:
                     item["votes"],
                     item["representativeId"],
                 )
-                for item in repo.authors(limit=10_000)
+                for item in repo.authors(limit=100_000)
             ],
         )
         conn.execute(

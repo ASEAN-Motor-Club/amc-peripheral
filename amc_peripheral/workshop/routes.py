@@ -588,6 +588,64 @@ def create_app(
             raise web.HTTPNotFound()
         raise web.HTTPMovedPermanently(f"/workshop/items/{workshop_id}/")
 
+    async def page_authors(request: web.Request) -> web.Response:
+        query = request.query.get("q", "")
+        try:
+            page = max(1, int(request.query.get("page", "1")))
+        except ValueError:
+            raise QueryError("invalid_page", "page must be an integer") from None
+        per_page = settings.page_size
+        data = await asyncio.to_thread(
+            repository.authors_page,
+            query=query,
+            limit=per_page,
+            offset=(page - 1) * per_page,
+        )
+        total_pages = max(1, (int(data["total"]) + per_page - 1) // per_page)
+
+        def page_url(number: int) -> str:
+            params: dict[str, Any] = {}
+            if data["query"]:
+                params["q"] = data["query"]
+            if number > 1:
+                params["page"] = number
+            suffix = urlencode(params)
+            return f"/workshop/authors/?{suffix}" if suffix else "/workshop/authors/"
+
+        if page > total_pages:
+            raise web.HTTPFound(page_url(total_pages))
+        attach_author_snapshots(data["items"])
+        numbers = sorted({1, total_pages} | {
+            n for n in range(page - 2, page + 3) if 1 <= n <= total_pages
+        })
+        pages: list[dict[str, Any]] = []
+        previous = 0
+        for number in numbers:
+            if number - previous > 1:
+                pages.append({"gap": True})
+            pages.append({"number": number, "url": page_url(number),
+                          "current": number == page})
+            previous = number
+        pagination = {
+            "page": page,
+            "totalPages": total_pages,
+            "total": int(data["total"]),
+            "perPage": per_page,
+            "pages": pages,
+            "prevUrl": page_url(page - 1) if page > 1 else None,
+            "nextUrl": page_url(page + 1) if page < total_pages else None,
+            "firstUrl": page_url(1),
+            "lastUrl": page_url(total_pages),
+        }
+        return render(
+            request,
+            "authors.html",
+            page="authors",
+            authors=data["items"],
+            query=data["query"],
+            pagination=pagination,
+        )
+
     async def page_author(request: web.Request) -> web.Response:
         account_id = int(request.match_info["id"])
         author = await asyncio.to_thread(repository.author, account_id)
@@ -821,6 +879,7 @@ def create_app(
     app.router.add_get("/workshop/gallery/", page_gallery)
     app.router.add_get("/workshop/items/{id:\\d+}/", page_item)
     app.router.add_get("/workshop/items/{id:\\d+}/viewer/", page_item_viewer)
+    app.router.add_get("/workshop/authors/", page_authors)
     app.router.add_get("/workshop/authors/{id:\\d+}/", page_author)
     app.router.add_get(
         "/workshop/vehicles/{vehicle:[A-Za-z0-9_]+}/", page_vehicle

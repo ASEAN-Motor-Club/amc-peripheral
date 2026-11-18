@@ -578,6 +578,129 @@ class WorkshopRepository:
             for row in rows
         ]
 
+    def _site_authors_page(
+        self, query: str, limit: int, offset: int
+    ) -> tuple[list[dict[str, Any]], int] | None:
+        if self.site_db is None or not self.site_db.is_file():
+            return None
+        where = ""
+        params: list[Any] = []
+        if query:
+            escaped = query.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+            where = "WHERE display_name LIKE ? ESCAPE '!' COLLATE NOCASE "
+            params.append(f"%{escaped}%")
+        try:
+            conn = sqlite3.connect(
+                f"file:{self.site_db}?mode=ro", uri=True, timeout=2.0
+            )
+            conn.row_factory = sqlite3.Row
+            try:
+                total = int(
+                    conn.execute(
+                        f"SELECT COUNT(*) FROM author_summary {where}", params
+                    ).fetchone()[0]
+                )
+                rows = conn.execute(
+                    "SELECT account_id, display_name, uploads, installs, votes, "
+                    "representative_id FROM author_summary "
+                    f"{where}"
+                    "ORDER BY installs DESC, votes DESC, account_id ASC "
+                    "LIMIT ? OFFSET ?",
+                    [*params, limit, offset],
+                ).fetchall()
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            return None
+        return (
+            [
+                {
+                    "accountId": row["account_id"],
+                    "displayName": row["display_name"],
+                    "uploads": int(row["uploads"]),
+                    "installs": int(row["installs"] or 0),
+                    "votes": int(row["votes"] or 0),
+                    "representativeId": row["representative_id"],
+                }
+                for row in rows
+            ],
+            total,
+        )
+
+    def authors_page(
+        self, *, query: str = "", limit: int = 24, offset: int = 0
+    ) -> dict[str, Any]:
+        """One page of public authors, ranked by installs and optionally searched by name."""
+        query = " ".join(query.strip().split())[:80]
+        limit = max(1, min(int(limit), 60))
+        offset = max(0, int(offset))
+        site = self._site_authors_page(query, limit, offset)
+        if site is not None:
+            items, total = site
+        else:
+            escaped = query.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+            where = ""
+            args: list[Any] = []
+            if query:
+                where = "WHERE display_name LIKE ? ESCAPE '!' COLLATE NOCASE"
+                args.append(f"%{escaped}%")
+            base = f"""
+                WITH public AS (
+                  SELECT w.* FROM workshop w WHERE {PUBLIC_WHERE}
+                ), agg AS (
+                  SELECT account_id,
+                         COUNT(*) AS uploads,
+                         SUM(COALESCE(installed,0)) AS installs,
+                         SUM(COALESCE(votes,0)) AS votes,
+                         (SELECT a2.author_name FROM public a2
+                           WHERE a2.account_id = p.account_id AND a2.author_name IS NOT NULL
+                           ORDER BY a2.created_at DESC, a2.id DESC LIMIT 1) AS display_name,
+                         (SELECT a3.id FROM public a3
+                           WHERE a3.account_id = p.account_id
+                           ORDER BY COALESCE(a3.installed,0) DESC,
+                                    COALESCE(a3.votes,0) DESC, a3.id DESC LIMIT 1)
+                           AS representative_id
+                  FROM public p GROUP BY account_id
+                )
+                SELECT account_id, display_name, uploads, installs, votes,
+                       representative_id, COUNT(*) OVER () AS total
+                FROM agg {where}
+                ORDER BY installs DESC, votes DESC, account_id ASC
+                LIMIT ? OFFSET ?
+            """
+            with self._connect() as conn:
+                rows = conn.execute(
+                    base, [*args, limit, offset]
+                ).fetchall()
+            total = int(rows[0]["total"]) if rows else 0
+            if not rows and offset:
+                count_sql = f"""
+                    WITH public AS (
+                      SELECT w.* FROM workshop w WHERE {PUBLIC_WHERE}
+                    ), agg AS (
+                      SELECT account_id,
+                             (SELECT a2.author_name FROM public a2
+                               WHERE a2.account_id = p.account_id AND a2.author_name IS NOT NULL
+                               ORDER BY a2.created_at DESC, a2.id DESC LIMIT 1) AS display_name
+                      FROM public p GROUP BY account_id
+                    )
+                    SELECT COUNT(*) FROM agg {where}
+                """
+                with self._connect() as conn:
+                    total = int(conn.execute(count_sql, args).fetchone()[0])
+            items = [
+                {
+                    "accountId": row["account_id"],
+                    "displayName": row["display_name"],
+                    "uploads": int(row["uploads"]),
+                    "installs": int(row["installs"] or 0),
+                    "votes": int(row["votes"] or 0),
+                    "representativeId": row["representative_id"],
+                }
+                for row in rows
+            ]
+        return {"items": items, "total": total, "query": query}
+
     def authors(self, limit: int = 10) -> list[dict[str, Any]]:
         site = self._site_authors(limit)
         if site is not None:
