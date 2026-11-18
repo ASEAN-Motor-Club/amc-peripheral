@@ -736,21 +736,71 @@ def create_app(
 
     async def page_vehicle(request: web.Request) -> web.Response:
         vehicle = request.match_info["vehicle"]
+        try:
+            page = max(1, int(request.query.get("page", "1")))
+        except ValueError:
+            raise QueryError("invalid_page", "page must be an integer") from None
+        sort = request.query.get("sort", "popular")
+        if sort not in {"popular", "new"}:
+            raise QueryError("invalid_sort", "sort must be popular or new")
+        per_page = settings.page_size
+        total = await asyncio.to_thread(repository.vehicle_uploads, vehicle)
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        base_url = f"/workshop/vehicles/{vehicle}/"
+
+        def page_url(number: int) -> str:
+            params = []
+            if sort != "popular":
+                params.append(f"sort={sort}")
+            if number > 1:
+                params.append(f"page={number}")
+            return f"{base_url}?{'&'.join(params)}" if params else base_url
+
+        if page > total_pages:
+            raise web.HTTPFound(page_url(total_pages))
         listing = await asyncio.to_thread(
             repository.list_items,
-            sort="popular",
+            sort=sort,
             filters=ListFilters(vehicle=vehicle),
-            limit=settings.page_size,
+            limit=per_page,
+            offset=(page - 1) * per_page,
         )
         attach_snapshots(listing["items"])
+
+        numbers = sorted({1, total_pages} | {
+            n for n in range(page - 2, page + 3) if 1 <= n <= total_pages
+        })
+        pages: list[dict[str, Any]] = []
+        previous = 0
+        for number in numbers:
+            if number - previous > 1:
+                pages.append({"gap": True})
+            pages.append({"number": number, "url": page_url(number),
+                          "current": number == page})
+            previous = number
+        pagination = {
+            "page": page,
+            "totalPages": total_pages,
+            "total": total,
+            "perPage": per_page,
+            "pages": pages,
+            "sort": sort,
+            "popularUrl": page_url(1) if sort == "popular" else base_url,
+            "newUrl": f"{base_url}?sort=new",
+            "prevUrl": page_url(page - 1) if page > 1 else None,
+            "nextUrl": page_url(page + 1) if page < total_pages else None,
+            "firstUrl": page_url(1),
+            "lastUrl": page_url(total_pages),
+        }
         return render(
             request, "author.html",
             page="gallery",
-            author={"displayName": vehicle, "uploads": len(listing["items"]),
+            author={"displayName": vehicle, "uploads": total,
                     "installs": 0, "votes": 0, "accountId": None},
             data=listing,
             vehicles=[],
-            canonical_url=f"https://www.aseanmotorclub.com/workshop/vehicles/{vehicle}/",
+            pagination=pagination,
+            canonical_url=f"https://www.aseanmotorclub.com{base_url}",
         )
 
     async def page_character(request: web.Request) -> web.Response:
