@@ -143,6 +143,7 @@ def test_vehicle_slug_aliases():
     assert vehicle_slug("Trailer_Shovan_7") == "shovan_7"
     assert vehicle_slug("Trailer_30ft_Log_01") == "trailer_9m_log_01"
     assert vehicle_display_name("Sports_01") == "Raton"
+    assert vehicle_display_name("GarbageTruck_01") == "Compacty"
     assert vehicle_display_name("3") == "Maity"
     assert vehicle_display_name("Vamos3") == "Vamos3"
 

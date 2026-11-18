@@ -84,6 +84,7 @@ VEHICLE_DISPLAY_NAMES = {
     "3": "Maity",
     "4": "Spider",
     "Sports_01": "Raton",
+    "GarbageTruck_01": "Compacty",
 }
 
 
