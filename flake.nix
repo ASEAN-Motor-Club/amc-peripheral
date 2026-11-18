@@ -307,7 +307,7 @@
               };
               releaseRoot = lib.mkOption {
                 type = lib.types.str;
-                default = "/var/lib/amc-workshop/current";
+                default = "/var/lib/amc-workshop-releases/current";
                 description = ''
                   Stable symlink to the current workshop release. CI flips this
                   to a Nix store path; services fall back to the flake package
@@ -435,6 +435,9 @@
                 "L+ /var/www/nix-static/tire-web - - - - ${cfg.tireWeb.package}"
                 "L+ /var/www/nix-static/code-web - - - - ${cfg.codeWeb.package}"
                 "L+ /var/www/nix-static/docs-web - - - - ${cfg.docsWeb.package}"
+              ]
+              ++ lib.optionals cfg.workshop.enable [
+                "d /var/lib/amc-workshop-releases 0755 root root -"
               ]
               ++ lib.optionals cfg.sharry.enable [
                 "d /var/lib/sharry 0750 sharry sharry -"
