@@ -274,3 +274,10 @@ async def test_hidden_comments_disappear(client):
     text = await _page(client)
     assert "will be hidden" not in text
     assert 'Comments <span class="muted">1</span>' in text
+
+
+async def test_comments_sit_below_the_build_details(client):
+    """The thread is the last thing on the page, not wedged under the title."""
+    text = await _page(client)
+    assert text.index("detail-side") < text.index('id="comments"')
+    assert text.index("Similar builds") < text.index('id="comments"')
