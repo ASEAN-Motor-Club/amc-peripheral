@@ -820,7 +820,8 @@
               description = "AMC Motor Town workshop browser";
               wantedBy = ["multi-user.target"];
               after = ["network.target" "amc-workshop-aggregate.service"];
-              requires = ["amc-workshop-aggregate.service"];
+              # No hard Requires: a web restart should not pull a 10–30s
+              # aggregate rebuild and leave nginx without an upstream.
               serviceConfig = {
                 Type = "simple";
                 User = cfg.workshop.user;
