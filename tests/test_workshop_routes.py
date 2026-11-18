@@ -306,6 +306,45 @@ async def test_author_page_has_numbered_pagination(settings):
         await client.close()
 
 
+async def test_vehicle_page_has_numbered_pagination(settings):
+    from dataclasses import replace
+
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from amc_peripheral.workshop.routes import create_app
+
+    client = TestClient(TestServer(create_app(replace(settings, page_size=1))))
+    await client.start_server()
+    try:
+        first = await client.get("/workshop/vehicles/Vamos3/")
+        assert first.status == 200
+        text = await first.text()
+        assert "/workshop/items/1/" in text
+        assert "/workshop/items/3/" not in text
+        assert 'aria-current="page" class="current">1</a>' in text
+        assert 'href="/workshop/vehicles/Vamos3/?page=2"' in text
+        assert 'rel="last"' in text
+        assert "Page 1 of 2" in text
+
+        second = await client.get("/workshop/vehicles/Vamos3/?page=2")
+        assert second.status == 200
+        second_text = await second.text()
+        assert "/workshop/items/3/" in second_text
+        assert "/workshop/items/1/" not in second_text
+        assert 'rel="prev"' in second_text
+        assert "Page 2 of 2" in second_text
+
+        beyond = await client.get("/workshop/vehicles/Vamos3/?page=99", allow_redirects=False)
+        assert beyond.status == 302
+        assert beyond.headers["Location"] == "/workshop/vehicles/Vamos3/?page=2"
+
+        newest = await client.get("/workshop/vehicles/Vamos3/?sort=new")
+        assert newest.status == 200
+        assert 'class="current" aria-current="page">Newest</a>' in await newest.text()
+    finally:
+        await client.close()
+
+
 async def test_author_and_vehicle_pages(client, settings):
     author = await client.get("/workshop/authors/11/")
     assert author.status == 200

@@ -838,6 +838,15 @@ class WorkshopRepository:
             "votes": int(row["votes"] or 0),
         }
 
+    def vehicle_uploads(self, vehicle: str) -> int:
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT COUNT(*) AS total FROM workshop w WHERE {PUBLIC_WHERE} "
+                "AND w.vehicle_key = ?",
+                [vehicle],
+            ).fetchone()
+        return int(row["total"] if row else 0)
+
     def vehicles(self, limit: int = 200) -> list[dict[str, Any]]:
         sql = f"""
             SELECT w.vehicle_key, COUNT(*) AS uploads
