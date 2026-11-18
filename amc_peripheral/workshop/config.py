@@ -28,6 +28,9 @@ class WorkshopSettings:
     prewarm_limit: int = 48
     prewarm_queue_limit: int = 50
     cache_ttl_seconds: float = 60.0
+    similarity_min: float = 0.60
+    similarity_copy_threshold: float = 0.95
+    similarity_limit: int = 6
     character_vehicle_dsn: str | None = None
     character_vehicle_public: bool = False
     player_dsn: str | None = None
@@ -70,6 +73,15 @@ class WorkshopSettings:
             ),
             cache_ttl_seconds=float(
                 os.environ.get("AMC_WORKSHOP_CACHE_SECONDS", "60")
+            ),
+            similarity_min=float(
+                os.environ.get("AMC_WORKSHOP_SIMILARITY_MIN", "0.60")
+            ),
+            similarity_copy_threshold=float(
+                os.environ.get("AMC_WORKSHOP_SIMILARITY_COPY", "0.95")
+            ),
+            similarity_limit=int(
+                os.environ.get("AMC_WORKSHOP_SIMILARITY_LIMIT", "6")
             ),
             character_vehicle_dsn=os.environ.get("AMC_CHARACTER_VEHICLE_DSN"),
             character_vehicle_public=os.environ.get(

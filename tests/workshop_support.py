@@ -156,10 +156,36 @@ def build_fixture_db(path: Path) -> None:
     conn.close()
 
 
+def seed_similarity(path: Path, rows) -> None:
+    """Create the precomputed similarity index the item page reads.
+
+    Uses the production DDL from ``amc_peripheral.workshop.similarity`` so the
+    fixture cannot drift from the real table shape.
+    """
+    from amc_peripheral.workshop.similarity import SCHEMA
+
+    conn = sqlite3.connect(path)
+    conn.executescript(SCHEMA)
+    conn.executemany(
+        "INSERT OR REPLACE INTO similar_pair "
+        "(vehicle_key, a, b, sim, created_a, created_b) VALUES (?,?,?,?,?,?)",
+        rows,
+    )
+    conn.commit()
+    conn.close()
+
+
 @pytest.fixture
 def settings(tmp_path: Path) -> WorkshopSettings:
     db = tmp_path / "workshop.db"
     build_fixture_db(db)
+    site = tmp_path / "site.db"
+    seed_similarity(site, [
+        # id 3 (2025-05-01) pre-dates id 1 (2026-11-15): id 1 is the copy.
+        ("Vamos3", 1, 3, 1.0, "2026-11-15 12:00:00", "2025-05-01 00:00:00"),
+        # Hidden item 5 must never surface, even at maximum similarity.
+        ("Vamos3", 1, 5, 1.0, "2026-11-15 12:00:00", "2027-01-01 00:00:00"),
+    ])
     viewer = tmp_path / "viewer"
     (viewer / "attachments").mkdir(parents=True)
     (viewer / "attachments" / "catalog.json").write_text(json.dumps({
@@ -169,7 +195,7 @@ def settings(tmp_path: Path) -> WorkshopSettings:
     (viewer / "vamos3" / "vamos3.json").write_text('{"vehicle":"Vamos3"}')
     return WorkshopSettings(
         source_db=db,
-        site_db=tmp_path / "site.db",
+        site_db=site,
         viewer_root=viewer,
         snapshot_root=tmp_path / "snapshots",
         page_size=2,

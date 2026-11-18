@@ -718,6 +718,42 @@
               };
             };
 
+            systemd.services.amc-workshop-similarity = lib.mkIf cfg.workshop.enable {
+              description = "Index AMC workshop decal similarity";
+              after = ["network.target" "amc-workshop-aggregate.service"];
+              serviceConfig = {
+                Type = "oneshot";
+                User = cfg.workshop.user;
+                Group = cfg.workshop.group;
+                StateDirectory = "amc-workshop";
+                StateDirectoryMode = "0750";
+                UMask = "0077";
+                # Full archive pass is ~20 min single-threaded; do not let
+                # systemd kill it halfway through a vehicle.
+                TimeoutStartSec = "3600";
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                PrivateTmp = true;
+                NoNewPrivileges = true;
+                ReadWritePaths = [(dirOf cfg.workshop.sourceDb)];
+                Environment = [
+                  "AMC_WORKSHOP_DB=${cfg.workshop.sourceDb}"
+                  "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
+                ];
+                ExecStart = "${self.packages.${pkgs.system}.default}/bin/amc_workshop_similarity";
+              };
+            };
+
+            systemd.timers.amc-workshop-similarity = lib.mkIf cfg.workshop.enable {
+              wantedBy = ["timers.target"];
+              timerConfig = {
+                OnBootSec = "12min";
+                OnCalendar = "*-*-* 04:10:00";
+                Persistent = true;
+                Unit = "amc-workshop-similarity.service";
+              };
+            };
+
             systemd.services.amc-workshop-web = lib.mkIf cfg.workshop.enable {
               description = "AMC Motor Town workshop browser";
               wantedBy = ["multi-user.target"];
