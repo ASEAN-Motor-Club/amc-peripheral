@@ -135,6 +135,11 @@ def main(build_dir, out_dir):
 
             diffuse = semantic_maps.get("baseColor") or slot.get("diffusePng") or pick_texture(
                 tex, ["Base Color Texture", "BaseColor", "Diffuse", "PM_Diffuse"]) or first_containing(tex, "Texture_01_A")
+            if diffuse and any(token in os.path.basename(diffuse) for token in
+                               ("Roughness", "Metallic", "Normal", "Emissive")):
+                # Older tables sometimes alias PM_Diffuse to the roughness asset.
+                # Do not paint that greyscale data as base colour.
+                diffuse = None
             if diffuse:
                 entry["map"] = publish(diffuse)
             rough = semantic_maps.get("roughness") or pick_texture(tex, ["PM_Roughness"]) or first_containing(tex, "Roughness")
