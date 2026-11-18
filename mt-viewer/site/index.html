@@ -82,7 +82,7 @@ import { DECAL_PROJECTION_GLSL, decalFallbackSlots, decalReceiverSlots } from ".
 import { ownerColorForSlot } from "./js/owner-paint.js?v=3";
 import { selectedBodyVariant, isBodyMaterialSlot, liverySlotMatches } from "./js/body-material.js?v=3";
 import { spotlightTarget } from "./js/attachment-lights.js?v=1";
-import { attachmentRootRotation } from "./js/attachment-root.js?v=3";
+import { attachmentRootRotation } from "./js/attachment-root.js?v=4";
 
 const params = new URLSearchParams(location.search);
 const workshopId = params.get("workshop");
@@ -682,7 +682,8 @@ async function load() {
       group.name = `Attachment_${part.slot}`;
       group.userData.attachmentKey = part.key;
       group.position.fromArray(part.position);
-      group.quaternion.fromArray(attachmentRootRotation(part.rotation));
+      const actorBasis = (actor.lights || []).length ? [0, 0, 0, 1] : null;
+      group.quaternion.fromArray(attachmentRootRotation(part.rotation, actorBasis));
       group.scale.fromArray(part.scale);
       const attachmentMatrix = new THREE.Matrix4().compose(group.position, group.quaternion, group.scale);
 
