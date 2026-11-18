@@ -1,5 +1,25 @@
 {% extends "base.html" %}
 {% from "_macros.html" import card, author_card %}
+{% block title %}Motor Town Workshop — Paints, Decals & Tuned Builds | ASEAN Motor Club{% endblock %}
+{% block description %}Browse {{ "{:,}".format(stats['items']) }} community-built Motor Town paints, decals, parts and tuned vehicles from the ASEAN Motor Club workshop.{% endblock %}
+{% block canonical %}https://www.aseanmotorclub.com/workshop/{% endblock %}
+{% block social_image_alt %}Popular Motor Town workshop builds with decals{% endblock %}
+{% block head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Motor Town Workshop — ASEAN Motor Club",
+  "url": "https://www.aseanmotorclub.com/workshop/",
+  "description": "Community-built Motor Town paints, decals, parts and tuned vehicles.",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "https://www.aseanmotorclub.com/workshop/search/?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
+{% endblock %}
 {% block content %}
 <section class="hero">
   <div class="wrap hero-inner">

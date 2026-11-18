@@ -13,6 +13,7 @@ from PIL import Image, ImageOps
 COVER_WIDTH = 1200
 COVER_HEIGHT = 630
 COVER_VERSION = 1
+SITE_COVER_VERSION = 1
 
 
 def cover_weight(item: dict[str, Any]) -> float:
@@ -50,27 +51,23 @@ def _grid(count: int) -> tuple[int, int]:
     return 3, 2
 
 
-def write_author_cover(
-    account_id: int,
-    candidates: list[dict[str, Any]],
-    public_root: Path,
-) -> str | None:
-    """Create a 1200x630 collage from candidates with ready snapshot metadata."""
+def _available_candidates(
+    candidates: list[dict[str, Any]], public_root: Path
+) -> list[dict[str, Any]]:
     available = []
     prefix = "/workshop/snapshots/"
     for item in candidates:
         snapshot_url = item["snapshot"].get("url") or ""
-        if snapshot_url.startswith(prefix) and (public_root / snapshot_url.removeprefix(prefix)).is_file():
+        if snapshot_url.startswith(prefix) and (
+            public_root / snapshot_url.removeprefix(prefix)
+        ).is_file():
             available.append(item)
-    if not available:
-        return None
-    selected = sample_cover_items(available, account_id)
-    signature = hashlib.sha256(json.dumps([
-        COVER_VERSION,
-        [(item["id"], item["snapshot"]["key"], item["snapshot"].get("sha256"))
-         for item in selected],
-    ], separators=(",", ":")).encode()).hexdigest()[:20]
-    relative = Path("authors") / f"{account_id}-{signature}.webp"
+    return available
+
+
+def _write_collage(
+    selected: list[dict[str, Any]], public_root: Path, relative: Path
+) -> str | None:
     output = public_root / relative
     url = f"/workshop/snapshots/{relative.as_posix()}"
     if output.exists():
@@ -105,3 +102,52 @@ def write_author_cover(
         for image in opened:
             image.close()
     return url
+
+
+def write_site_cover(
+    candidates: list[dict[str, Any]],
+    public_root: Path,
+) -> str | None:
+    """Create a cover from the most-installed decaled workshop builds."""
+    available = [
+        item
+        for item in _available_candidates(candidates, public_root)
+        if item.get("hasDecal")
+    ]
+    if not available:
+        return None
+    selected = sorted(
+        available,
+        key=lambda item: (
+            int(item.get("installs") or 0),
+            int(item.get("votes") or 0),
+            int(item["id"]),
+        ),
+        reverse=True,
+    )[:6]
+    signature = hashlib.sha256(json.dumps([
+        SITE_COVER_VERSION,
+        [(item["id"], item["snapshot"]["key"], item["snapshot"].get("sha256"))
+         for item in selected],
+    ], separators=(",", ":")).encode()).hexdigest()[:20]
+    relative = Path("home") / f"popular-{signature}.webp"
+    return _write_collage(selected, public_root, relative)
+
+
+def write_author_cover(
+    account_id: int,
+    candidates: list[dict[str, Any]],
+    public_root: Path,
+) -> str | None:
+    """Create a 1200x630 collage from candidates with ready snapshot metadata."""
+    available = _available_candidates(candidates, public_root)
+    if not available:
+        return None
+    selected = sample_cover_items(available, account_id)
+    signature = hashlib.sha256(json.dumps([
+        COVER_VERSION,
+        [(item["id"], item["snapshot"]["key"], item["snapshot"].get("sha256"))
+         for item in selected],
+    ], separators=(",", ":")).encode()).hexdigest()[:20]
+    relative = Path("authors") / f"{account_id}-{signature}.webp"
+    return _write_collage(selected, public_root, relative)

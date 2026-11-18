@@ -6,6 +6,7 @@ from amc_peripheral.workshop.covers import (
     cover_weight,
     sample_cover_items,
     write_author_cover,
+    write_site_cover,
 )
 
 
@@ -60,3 +61,34 @@ def test_author_cover_skips_missing_render_files(tmp_path: Path):
         "snapshot": {"key": "missing", "url": "/workshop/snapshots/items/missing.webp"},
     }
     assert write_author_cover(1, [candidate], tmp_path) is None
+
+
+def test_site_cover_uses_the_most_installed_decaled_items(tmp_path: Path):
+    candidates = []
+    for index in range(6):
+        relative = Path("items") / f"site-{index}.webp"
+        (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (960, 540), (index * 30, 80, 120)).save(tmp_path / relative)
+        candidates.append({
+            "id": index,
+            "votes": index,
+            "installs": (index + 1) * 100,
+            "hasDecal": index != 0,
+            "snapshot": {
+                "key": f"site-{index}",
+                "sha256": f"{index:064d}",
+                "url": f"/workshop/snapshots/{relative.as_posix()}",
+            },
+        })
+
+    url = write_site_cover(candidates, tmp_path)
+    assert url is not None
+    assert "/home/popular-" in url
+    assert url == write_site_cover(candidates, tmp_path)
+    output = tmp_path / url.removeprefix("/workshop/snapshots/")
+    with Image.open(output) as cover:
+        assert cover.size == (1200, 630)
+        assert cover.format == "WEBP"
+
+    candidates[1]["snapshot"]["key"] = "new-render"
+    assert write_site_cover(candidates, tmp_path) != url
