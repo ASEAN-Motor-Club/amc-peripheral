@@ -17,6 +17,14 @@
     {% if similar and similar.flagged and similar.origin %}
     <div class="notice copy-flag" role="note" id="copy-flag">
       <strong>Potential copy of another workshop item</strong>
+      {% if similar.manual %}
+      <p>
+        This build has been manually identified as a copy of
+        <a href="/workshop/items/{{ similar.origin.id }}/">#{{ similar.origin.id }}</a>{% if similar.origin.author %}
+        by {{ similar.origin.author }}{% endif %}, uploaded
+        <time datetime="{{ similar.origin.createdAt|iso }}">{{ similar.origin.createdAt|date_long }}</time>.
+      </p>
+      {% else %}
       <p>
         {{ (similar.originSimilarity * 100)|round(0)|int }}% of this build's decal work matches
         <a href="/workshop/items/{{ similar.origin.id }}/">#{{ similar.origin.id }}</a>{% if similar.origin.author %}
@@ -24,6 +32,7 @@
         <time datetime="{{ similar.origin.createdAt|iso }}">{{ similar.origin.createdAt|date_long }}</time>
         — uploaded before this item.
       </p>
+      {% endif %}
       <p class="muted">Similarity is based on decal work, not on paint or parts.</p>
     </div>
     {% endif %}

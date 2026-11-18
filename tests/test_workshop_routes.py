@@ -104,6 +104,18 @@ async def test_gallery_stale_popular_cursor_redirects_to_first_page(client, sett
     assert response.headers["Location"] == "/workshop/gallery/?sort=popular"
 
 
+async def test_item_copy_override_survives_similarity_gap(client, settings):
+    (settings.site_db.parent / "copy_overrides.json").write_text(
+        '{"1": 3}', encoding="utf-8"
+    )
+    response = await client.get("/workshop/items/1/")
+    text = await response.text()
+    assert response.status == 200
+    assert 'id="copy-flag"' in text
+    assert "manually identified as a copy" in text
+    assert 'href="/workshop/items/3/"' in text
+
+
 async def test_item_and_viewer_endpoints(client):
     item = await client.get("/api/workshop/items/1")
     assert item.status == 200
