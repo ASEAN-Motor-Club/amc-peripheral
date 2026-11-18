@@ -595,6 +595,34 @@ class WorkshopRepository:
             ).fetchall()
         return [_card(row) for row in rows]
 
+    def items_for_guids(
+        self, guids: Any, limit: int = 60
+    ) -> list[dict[str, Any]]:
+        """Builds uploaded by any of these character GUIDs.
+
+        This is the ownership query: GUIDs come from the game server, not from
+        anything the workshop scrape can be talked into believing.
+        """
+        wanted = sorted({str(guid).upper() for guid in guids if guid})[:500]
+        if not wanted:
+            return []
+        limit = max(1, min(int(limit), 60))
+        placeholders = ",".join("?" for _ in wanted)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT {CARD_COLUMNS}, w.character_guid FROM workshop w "
+                f"WHERE {PUBLIC_WHERE} "
+                f"AND UPPER(w.character_guid) IN ({placeholders}) "
+                f"ORDER BY {NEW_ORDER} LIMIT ?",
+                [*wanted, limit],
+            ).fetchall()
+        items = []
+        for row in rows:
+            card = _card(row)
+            card["characterGuid"] = (row["character_guid"] or "").upper()
+            items.append(card)
+        return items
+
     def search_authors(self, query: str, limit: int = 24) -> list[dict[str, Any]]:
         query = " ".join(query.strip().split())[:80]
         if not query:

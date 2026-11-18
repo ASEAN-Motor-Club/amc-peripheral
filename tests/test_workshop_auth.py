@@ -143,8 +143,101 @@ def test_display_name_prefers_global_name():
 
 def test_player_identity_disabled_without_dsn():
     assert PlayerIdentityRepository(None).steam_id_for("1") is None
+    assert PlayerIdentityRepository(None).identity_for("1") is None
     repo = PlayerIdentityRepository("postgresql://ignored/db", enabled=False)
     assert repo.steam_id_for("1") is None
+
+
+class _FakeCursor:
+    def __init__(self, rows, calls):
+        self.rows = rows
+        self.calls = calls
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params=None):
+        self.calls.append((sql, params))
+
+    def fetchall(self):
+        return self.rows
+
+
+class _FakeConnection:
+    def __init__(self, rows, calls):
+        self.rows = rows
+        self.calls = calls
+        self.closed = False
+
+    def cursor(self):
+        return _FakeCursor(self.rows, self.calls)
+
+    def close(self):
+        self.closed = True
+
+
+def test_identity_carries_steam_id_and_character_guids(monkeypatch):
+    """A GUID is what authorises a claim, so it has to come back from the lookup."""
+    repo = PlayerIdentityRepository("postgresql://ignored/db")
+    calls: list[tuple[str, tuple]] = []
+    steam = 76561198000000000
+    rows = [
+        (steam, "8f14e45fceea167a5a36dedd4bea2543"),
+        (steam, "c9f0f895fb98ab9159f51fd0297e236d"),
+        (steam, None),  # a character row with no guid must not break the set
+    ]
+    conns = []
+
+    def connect():
+        conn = _FakeConnection(rows, calls)
+        conns.append(conn)
+        return conn
+
+    monkeypatch.setattr(repo, "_connect", connect)
+
+    identity = repo.identity_for("9001")
+    assert identity is not None
+    assert identity.steam_id == steam
+    assert identity.character_guids == frozenset(
+        {"8F14E45FCEEA167A5A36DEDD4BEA2543", "C9F0F895FB98AB9159F51FD0297E236D"}
+    )
+    assert repo.steam_id_for("9001") == steam
+
+    # Cached: one query for the three calls above.
+    assert len(calls) == 1
+    assert "amc_character" in calls[0][0]
+    assert conns[0].closed
+
+
+def test_identity_is_cached_per_discord_user(monkeypatch):
+    repo = PlayerIdentityRepository("postgresql://ignored/db")
+    calls: list[tuple[str, tuple]] = []
+    monkeypatch.setattr(
+        repo,
+        "_connect",
+        lambda: _FakeConnection([(1, "ab")], calls),
+    )
+
+    repo.identity_for("1")
+    repo.identity_for("1")
+    assert len(calls) == 1
+
+    repo.identity_for("2")
+    assert len(calls) == 2
+
+
+def test_identity_lookup_failure_is_not_fatal(monkeypatch):
+    repo = PlayerIdentityRepository("postgresql://ignored/db")
+
+    def boom():
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(repo, "_connect", boom)
+    assert repo.identity_for("9001") is None
+    assert repo.steam_id_for("9001") is None
 
 
 async def test_login_redirects_to_discord(auth_client):

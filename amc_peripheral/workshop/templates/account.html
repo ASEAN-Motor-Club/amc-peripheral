@@ -37,7 +37,11 @@
   <section class="account-builds" aria-labelledby="builds-title">
     <div class="results-head">
       <h2 id="builds-title">Your workshop builds</h2>
-      {% if steam_id %}<p class="muted">Steam ID {{ steam_id }}</p>{% endif %}
+      {% if claim_count %}
+      <p class="muted">{{ claim_count }} build{{ "" if claim_count == 1 else "s" }} matched to your characters{% if steam_id %} · Steam ID {{ steam_id }}{% endif %}</p>
+      {% elif steam_id %}
+      <p class="muted">Steam ID {{ steam_id }}</p>
+      {% endif %}
     </div>
     {% if items %}
     <div class="card-grid">

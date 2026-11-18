@@ -256,6 +256,14 @@ def display_name(claims: dict[str, Any] | None) -> str:
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class Identity:
+    """A player's in-game identity, as the backend knows it."""
+
+    steam_id: int
+    character_guids: frozenset[str] = frozenset()
+
+
 class PlayerIdentityRepository:
     """Resolve a Discord user to their AMC player row.
 
@@ -263,11 +271,20 @@ class PlayerIdentityRepository:
     the same posture as ``CharacterVehicleRepository``. The workshop scrape
     knows Steam ids (``club_character``) but no Discord ids, so this is the
     only join that can turn "who signed in" into "which builds are theirs".
+
+    The lookup returns the player's Steam id *and* their character GUIDs: the
+    GUID set is what authorises a claim, because a GUID is minted by the game
+    server and bound to one player, unlike a name or an account id.
+
+    ``amc_player.unique_id`` is the primary key, so ``amc_character.player_id``
+    holds the Steam id — not a surrogate row id.
     """
 
-    def __init__(self, dsn: str | None, *, enabled: bool = True):
+    def __init__(self, dsn: str | None, *, enabled: bool = True, ttl: float = 300.0):
         self.dsn = dsn
         self.enabled = bool(dsn) and enabled
+        self.ttl = ttl
+        self._cache: dict[str, tuple[float, Identity | None]] = {}
 
     def _connect(self):
         import psycopg2
@@ -279,11 +296,22 @@ class PlayerIdentityRepository:
         conn.set_session(readonly=True, autocommit=True)
         return conn
 
-    def steam_id_for(self, discord_id: str | int) -> int | None:
+    def identity_for(self, discord_id: str | int) -> Identity | None:
+        """Steam id + character GUIDs for a Discord user, cached for ``ttl``."""
         if not self.enabled:
             return None
+        key = str(discord_id)
+        now = time.monotonic()
+        hit = self._cache.get(key)
+        if hit is not None and now - hit[0] < self.ttl:
+            return hit[1]
+        value = self._fetch(key)
+        self._cache[key] = (now, value)
+        return value
+
+    def _fetch(self, key: str) -> Identity | None:
         try:
-            player_id = int(discord_id)
+            player_id = int(key)
         except (TypeError, ValueError):
             return None
         try:
@@ -294,14 +322,22 @@ class PlayerIdentityRepository:
         try:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT unique_id FROM amc_player "
-                    "WHERE discord_user_id = %s LIMIT 1",
+                    "SELECT p.unique_id, c.guid FROM amc_player p "
+                    "LEFT JOIN amc_character c ON c.player_id = p.unique_id "
+                    "WHERE p.discord_user_id = %s",
                     (player_id,),
                 )
-                row = cur.fetchone()
+                rows = cur.fetchall()
         except Exception as exc:  # noqa: BLE001 - never fail the page on a DB hiccup
             log.warning("player identity lookup failed: %s", exc)
             return None
         finally:
             conn.close()
-        return int(row[0]) if row and row[0] else None
+        if not rows or rows[0][0] is None:
+            return None
+        guids = frozenset(str(guid).upper() for _, guid in rows if guid)
+        return Identity(steam_id=int(rows[0][0]), character_guids=guids)
+
+    def steam_id_for(self, discord_id: str | int) -> int | None:
+        identity = self.identity_for(discord_id)
+        return identity.steam_id if identity else None
