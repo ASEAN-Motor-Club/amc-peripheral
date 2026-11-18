@@ -19,6 +19,8 @@ import aiohttp
 from aiohttp import web
 from aiohttp.web_fileresponse import CONTENT_TYPES
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup
+from markupsafe import escape as markup_escape
 
 from .auth import (
     SESSION_COOKIE,
@@ -37,6 +39,7 @@ from .auth import (
 from .character_vehicles import CharacterVehicleRepository, CharacterVehicleUnavailable
 from .claims import ClaimSynchroniser
 from .collections import CollectionError, CollectionStore
+from .comments import CommentError, CommentStore
 from .community import CommunityStore
 from .config import WorkshopSettings
 from .covers import write_author_cover, write_site_cover
@@ -175,6 +178,13 @@ def create_app(
         autoescape=select_autoescape(("html", "xml")),
         enable_async=False,
     )
+
+    def _nl2br(value: Any) -> Markup:
+        """Escape first, then break lines — never the other way round."""
+        text = str(markup_escape(str(value or "")))
+        return Markup(text.replace("\n", "<br>"))
+
+    env.filters["nl2br"] = _nl2br
     env.filters["iso"] = _iso
     env.filters["date_long"] = _date_long
     env.filters["tag_label"] = lambda value: str(value or "").replace("_", " ")
@@ -195,12 +205,18 @@ def create_app(
     claims = ClaimSynchroniser(community, repository, player_identity)
     tags_store = TagStore(settings.site_db)
     app["tags"] = tags_store
+    comment_store = CommentStore(settings.site_db)
+    app["comments"] = comment_store
     collections_store = CollectionStore(settings.site_db)
     app["collections"] = collections_store
     limiters = {
         "like": RateLimiter(limit=1, window=2.0),
         "collection": RateLimiter(limit=1, window=2.0),
         "tag": RateLimiter(limit=3, window=2.0),
+        # Ten comments per ten minutes, and at least ten seconds between them.
+        # Keyed by member, never by IP: half the club shares a mobile NAT.
+        "comment": RateLimiter(limit=10, window=600.0),
+        "comment_burst": RateLimiter(limit=1, window=10.0),
     }
     app["limiters"] = limiters
 
@@ -697,8 +713,16 @@ def create_app(
             next_url=next_url,
         )
 
-    async def page_item(request: web.Request) -> web.Response:
-        workshop_id = int(request.match_info["id"])
+    COMMENTS_PER_PAGE = 10
+
+    async def item_page(
+        request: web.Request,
+        workshop_id: int,
+        *,
+        comment_error: str | None = None,
+        comment_draft: str = "",
+        cpage: int = 1,
+    ) -> web.Response:
         item = await asyncio.to_thread(repository.get_item, workshop_id)
         if item is None:
             raise web.HTTPNotFound()
@@ -756,6 +780,27 @@ def create_app(
                 else None,
                 "yours": bool(viewer) and str(viewer.get("sub")) == claim.discord_id,
             }
+        comment_store = request.app["comments"]
+        offset = (cpage - 1) * COMMENTS_PER_PAGE
+        page_of_comments = await asyncio.to_thread(
+            comment_store.for_item, workshop_id, limit=COMMENTS_PER_PAGE, offset=offset
+        )
+        total = int(page_of_comments["total"])
+        pages = max(1, (total + COMMENTS_PER_PAGE - 1) // COMMENTS_PER_PAGE)
+        rows = page_of_comments["items"]
+        # One query for every author on the page, not one per comment.
+        profiles = await asyncio.to_thread(
+            community.profiles, [row.discord_id for row in rows]
+        )
+        names = {
+            key: (value.display_name if not value.hidden else None)
+            for key, value in profiles.items()
+        }
+        viewer_sub = str(viewer_user["sub"]) if viewer_user else None
+        stamp = _now_iso()
+        editable = {
+            row.id for row in rows if viewer_sub and row.can_edit(viewer_sub, stamp)
+        }
         return render(
             request,
             "item.html",
@@ -772,7 +817,96 @@ def create_app(
             meta=meta,
             tags=tags,
             can_edit=bool(claim_owner and claim_owner["yours"]),
+            comments=rows,
+            comment_names=names,
+            comment_total=total,
+            comment_page=cpage,
+            comment_pages=pages,
+            comment_can_write=bool(viewer_user),
+            comment_viewer=viewer_sub,
+            comment_editable=editable,
+            comment_error=comment_error,
+            comment_draft=comment_draft,
         )
+
+    async def page_item(request: web.Request) -> web.Response:
+        workshop_id = int(request.match_info["id"])
+        try:
+            cpage = max(1, int(request.query.get("cpage", "1")))
+        except ValueError:
+            raise QueryError("invalid_page", "page must be an integer") from None
+        return await item_page(request, workshop_id, cpage=cpage)
+
+    async def comment_create(request: web.Request) -> web.Response:
+        user = require_member(request)
+        workshop_id = int(request.match_info["id"])
+        store = request.app["comments"]
+        limiters: dict[str, RateLimiter] = request.app["limiters"]
+        sub = str(user["sub"])
+        if not limiters["comment_burst"].allow(sub) or not limiters["comment"].allow(
+            sub
+        ):
+            raise web.HTTPTooManyRequests(
+                text="Slow down a moment.",
+                headers={"Cache-Control": "no-store", "Retry-After": "10"},
+            )
+        form = await request.post()
+        body = str(form.get("body", ""))
+        try:
+            comment = await asyncio.to_thread(
+                store.add,
+                workshop_id=workshop_id,
+                discord_id=sub,
+                body=body,
+                now=_now_iso(),
+            )
+        except CommentError as exc:
+            return await item_page(
+                request, workshop_id, comment_error=exc.message, comment_draft=body
+            )
+        raise web.HTTPSeeOther(f"/workshop/items/{workshop_id}/#comment-{comment.id}")
+
+    async def comment_edit(request: web.Request) -> web.Response:
+        user = require_member(request)
+        comment_id = int(request.match_info["cid"])
+        store = request.app["comments"]
+        comment = await asyncio.to_thread(store.get, comment_id)
+        if comment is None or comment.hidden:
+            raise web.HTTPNotFound()
+        form = await request.post()
+        body = str(form.get("body", ""))
+        try:
+            await asyncio.to_thread(
+                store.edit,
+                comment_id=comment_id,
+                discord_id=str(user["sub"]),
+                body=body,
+                now=_now_iso(),
+            )
+        except CommentError as exc:
+            if exc.code == "missing":
+                raise web.HTTPNotFound() from None
+            return await item_page(
+                request,
+                comment.workshop_id,
+                comment_error=exc.message,
+                comment_draft=body,
+            )
+        raise web.HTTPSeeOther(
+            f"/workshop/items/{comment.workshop_id}/#comment-{comment_id}"
+        )
+
+    async def comment_delete(request: web.Request) -> web.Response:
+        user = require_member(request)
+        comment_id = int(request.match_info["cid"])
+        store = request.app["comments"]
+        comment = await asyncio.to_thread(store.get, comment_id)
+        if comment is None:
+            raise web.HTTPNotFound()
+        await asyncio.to_thread(
+            store.delete, comment_id=comment_id, discord_id=str(user["sub"])
+        )
+        raise web.HTTPSeeOther(f"/workshop/items/{comment.workshop_id}/#comments")
 
     async def item_like(request: web.Request) -> web.Response:
         """Toggle a member's like. Form post for the no-JS path, JSON if asked."""
@@ -1530,7 +1664,11 @@ def create_app(
         if item is None:
             raise web.HTTPNotFound()
         claim = await asyncio.to_thread(community.claim_for, workshop_id)
-        if not claim or claim.revoked_at is not None or claim.discord_id != str(user["sub"]):
+        if (
+            not claim
+            or claim.revoked_at is not None
+            or claim.discord_id != str(user["sub"])
+        ):
             raise web.HTTPForbidden(text="Only the owner of this build can edit it.")
 
         error = None
@@ -1548,7 +1686,10 @@ def create_app(
                     item=item,
                     meta=meta,
                     error=str(exc),
-                    draft={"title": form.get("title"), "description": form.get("description")},
+                    draft={
+                        "title": form.get("title"),
+                        "description": form.get("description"),
+                    },
                 )
             await asyncio.to_thread(
                 community.save_meta,
@@ -1598,17 +1739,26 @@ def create_app(
                 community.liked_ids, str(viewer.get("sub")), [workshop_id]
             )
         )
+        comment_count = await asyncio.to_thread(
+            request.app["comments"].count, workshop_id
+        )
         payload = {
             "workshopId": workshop_id,
             "likes": likes,
             "likedByViewer": liked,
             "collections": collections,
+            "comments": comment_count,
             "votes": item.get("votes"),
         }
-        etag = '"' + hashlib.sha256(
-            json.dumps([likes, collections, item.get("votes")])
-            .encode()
-        ).hexdigest()[:16] + '"'
+        etag = (
+            '"'
+            + hashlib.sha256(
+                json.dumps(
+                    [likes, collections, comment_count, item.get("votes")]
+                ).encode()
+            ).hexdigest()[:16]
+            + '"'
+        )
         if not viewer and request.headers.get("If-None-Match") == etag:
             raise web.HTTPNotModified(headers={"ETag": etag})
         return web.json_response(
@@ -1947,6 +2097,9 @@ def create_app(
     app.router.add_get("/workshop/items/{id:\\d+}/viewer/", page_item_viewer)
     app.router.add_post("/workshop/items/{id:\\d+}/like", item_like)
     app.router.add_post("/workshop/items/{id:\\d+}/collect", item_collect)
+    app.router.add_post("/workshop/items/{id:\\d+}/comments", comment_create)
+    app.router.add_post("/workshop/comments/{cid:\\d+}/edit", comment_edit)
+    app.router.add_post("/workshop/comments/{cid:\\d+}/delete", comment_delete)
     app.router.add_post("/workshop/profile", profile_save)
     app.router.add_get(
         "/api/workshop/items/{id:\\d+}/engagement", api_item_engagement

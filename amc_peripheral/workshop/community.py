@@ -254,6 +254,18 @@ class CommunityStore:
 
     # -- profiles ---------------------------------------------------------
 
+    def profiles(self, discord_ids) -> dict[str, Profile]:
+        """One query for a page of authors instead of one per row."""
+        ids = [str(i) for i in dict.fromkeys(discord_ids)]
+        if not ids:
+            return {}
+        marks = ",".join("?" * len(ids))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM workshop_profile WHERE discord_id IN ({marks})", ids
+            ).fetchall()
+        return {str(row["discord_id"]): _profile(row) for row in rows}
+
     def profile(self, discord_id: str) -> Profile | None:
         with self._connect() as conn:
             row = conn.execute(

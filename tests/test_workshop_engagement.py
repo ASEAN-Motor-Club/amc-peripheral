@@ -49,7 +49,13 @@ async def client(settings, sso):
 
 
 def _session(member: str = MEMBER) -> tuple[dict, dict]:
-    claims = {"sub": member, "u": "driver", "n": "Driver", "m": True, "iat": 1_700_000_000}
+    claims = {
+        "sub": member,
+        "u": "driver",
+        "n": "Driver",
+        "m": True,
+        "iat": 1_700_000_000,
+    }
     return (
         {"amc_workshop_session": sign_session(claims, SECRET, ttl=3600)},
         {"csrf": csrf_token(claims, SECRET)},
@@ -60,10 +66,39 @@ async def test_engagement_shape(client):
     response = await client.get("/api/workshop/items/1/engagement")
     assert response.status == 200
     body = await response.json()
-    assert set(body) == {"workshopId", "likes", "likedByViewer", "collections", "votes"}
+    assert set(body) == {
+        "workshopId",
+        "likes",
+        "likedByViewer",
+        "collections",
+        "comments",
+        "votes",
+    }
     assert body["workshopId"] == 1
     assert body["likes"] == 0
     assert body["likedByViewer"] is False
+    assert body["comments"] == 0
+
+
+async def test_engagement_counts_comments_but_never_returns_them(client):
+    store = client.workshop_app["comments"]
+    store.add(
+        workshop_id=1,
+        discord_id="a",
+        body="a secret thing said in the comments",
+        now="2026-11-18T00:00:00+00:00",
+    )
+    store.add(
+        workshop_id=1,
+        discord_id="b",
+        body="another",
+        now="2026-11-18T00:00:00+00:00",
+    )
+    response = await client.get("/api/workshop/items/1/engagement")
+    body = await response.json()
+    assert body["comments"] == 2
+    raw = await response.text()
+    assert "a secret thing" not in raw
 
 
 async def test_engagement_counts_likes_and_collections(client):
@@ -97,9 +132,7 @@ async def test_engagement_is_viewer_scoped_and_uncacheable(client):
     community.toggle_like(workshop_id=1, discord_id=MEMBER, now="2026-11-18T00:00:00Z")
     cookies, _ = _session()
 
-    response = await client.get(
-        "/api/workshop/items/1/engagement", cookies=cookies
-    )
+    response = await client.get("/api/workshop/items/1/engagement", cookies=cookies)
     body = await response.json()
     assert body["likedByViewer"] is True
     assert response.headers["Cache-Control"] == "private, no-store"
