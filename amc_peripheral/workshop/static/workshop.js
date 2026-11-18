@@ -29,8 +29,8 @@
     picture.width = 480;
     picture.height = 270;
     picture.loading = 'eager';
-    if (!picture.src.includes('placeholder.svg')) column.append(picture);
-    else column.append(element('div', 'compare-placeholder', 'Snapshot pending'));
+    if (article.dataset.snapshotKey) column.append(element('div', 'compare-placeholder', 'Snapshot pending'));
+    else column.append(picture);
 
     const heading = element('h3');
     const headingLink = element('a', '', link?.textContent || 'Build');
