@@ -369,8 +369,15 @@ async def test_author_and_vehicle_pages(client, settings):
     vehicle = await client.get("/workshop/vehicles/Vamos3/")
     assert vehicle.status == 200
     vehicle_text = await vehicle.text()
-    assert "Vamos3" in vehicle_text
+    assert "<title>Vamos3 — Workshop</title>" in vehicle_text
     assert "workshop/vehicles/Vamos3/" in vehicle_text
+
+    atlas = await client.get("/workshop/vehicles/Atlas_6x2_Dryvan/")
+    assert atlas.status == 200
+    atlas_text = await atlas.text()
+    assert "<title>Atlas 6x2 Dryvan — Workshop</title>" in atlas_text
+    assert "<h1>Atlas 6x2 Dryvan</h1>" in atlas_text
+    assert 'action="/workshop/vehicles/Atlas_6x2_Dryvan/"' in atlas_text
 
     from amc_peripheral.workshop.snapshots import SnapshotStore
 
