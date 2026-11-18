@@ -27,6 +27,16 @@
     const data = event.data;
     if (!data || data.source !== "amc-mt-viewer") return;
     if (data.type === "ready") {
+      if (data.stage !== "complete") {
+        frame.hidden = false;
+        frame.setAttribute("aria-hidden", "false");
+        stage.classList.add("is-interactive");
+        if (status) {
+          status.textContent = "Loading vehicle and decals…";
+          status.hidden = false;
+        }
+        return;
+      }
       ready = true;
       frame.hidden = false;
       frame.setAttribute("aria-hidden", "false");
