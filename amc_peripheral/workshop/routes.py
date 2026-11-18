@@ -1343,6 +1343,57 @@ def create_app(
             mine=mine,
         )
 
+    COMMENTS_FEED = 30
+    MOST_COMMENTED = 12
+
+    async def page_comments(request: web.Request) -> web.Response:
+        """Newest comments site-wide, and the builds people are talking about."""
+        try:
+            page_no = max(1, int(request.query.get("page", "1")))
+        except ValueError:
+            raise QueryError("invalid_page", "page must be an integer") from None
+        limit = COMMENTS_FEED
+        offset = (page_no - 1) * limit
+        store = request.app["comments"]
+        rows, total, busiest = await asyncio.gather(
+            asyncio.to_thread(store.latest_global, limit=limit, offset=offset),
+            asyncio.to_thread(store.latest_global_count),
+            asyncio.to_thread(store.most_commented, limit=MOST_COMMENTED * 2),
+        )
+
+        # Comments outlive builds: anything the scrape no longer carries simply
+        # does not appear, rather than turning into a link to a 404.
+        wanted = {comment.workshop_id for comment in rows}
+        wanted.update(workshop_id for workshop_id, _ in busiest)
+        cards = (
+            await asyncio.to_thread(repository.items_by_ids, sorted(wanted))
+            if wanted
+            else []
+        )
+        attach_snapshots(cards)
+        by_id = {card["id"]: card for card in cards}
+        latest = [comment for comment in rows if comment.workshop_id in by_id]
+        ranked = [
+            (by_id[workshop_id], count)
+            for workshop_id, count in busiest
+            if workshop_id in by_id
+        ][:MOST_COMMENTED]
+        names = await asyncio.to_thread(
+            community.profiles, sorted({comment.discord_id for comment in latest})
+        )
+        return render(
+            request,
+            "comments_index.html",
+            page="comments",
+            latest=latest,
+            builds=by_id,
+            ranked=ranked,
+            names={key: value.display_name for key, value in names.items() if not value.hidden},
+            page_no=page_no,
+            total=total,
+            has_next=offset + len(rows) < total,
+        )
+
     async def collection_short_link(request: web.Request) -> web.Response:
         """A pasted /collections/3 should land on the canonical slug URL, not 404."""
         collection_id = int(request.match_info["id"])
@@ -2123,6 +2174,7 @@ def create_app(
     app.router.add_get("/workshop/items/{id:\\d+}/edit", item_edit)
     app.router.add_post("/workshop/items/{id:\\d+}/edit", item_edit)
     app.router.add_get("/workshop/collections/", page_collections)
+    app.router.add_get("/workshop/comments/", page_comments)
     app.router.add_get("/workshop/collections/new", page_collection_new)
     app.router.add_post("/workshop/collections/new", page_collection_new)
     app.router.add_get("/workshop/collections/mine/", page_my_collections)

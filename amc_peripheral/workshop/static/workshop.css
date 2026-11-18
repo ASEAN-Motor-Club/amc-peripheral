@@ -413,3 +413,24 @@ fieldset legend { padding: 0 6px; color: var(--muted); font-size: 13px; }
 .comment-form { margin-top: 8px; }
 .comment-form textarea { width: 100%; }
 .comments .pager { margin: 0 0 18px; }
+
+/* Comments index: the site-wide feed and the busiest builds. */
+.comment-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
+.comment-feed-item { display: grid; grid-template-columns: 128px 1fr; gap: 16px; align-items: start;
+  padding-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+.comment-feed-item:last-child { border-bottom: 0; }
+.comment-feed-thumb img, .ranked-thumb img { width: 100%; height: auto; border-radius: 8px; display: block; }
+.comment-feed-meta { margin: 0 0 6px; font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap;
+  gap: 6px; align-items: baseline; }
+.comment-feed-meta strong { color: inherit; }
+.comment-feed-meta time { font-size: 13px; }
+.comment-feed-body { margin: 0; overflow-wrap: anywhere; line-height: 1.55; white-space: normal; }
+.ranked { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.ranked-item { display: grid; grid-template-columns: 128px 1fr; gap: 14px; align-items: center; }
+.ranked-item h3 { margin: 0 0 4px; font-size: 16px; }
+.ranked-item h3 a { text-decoration: none; }
+@media (max-width: 560px) {
+  .comment-feed-item, .ranked-item { grid-template-columns: 1fr; }
+  .comment-feed-thumb img, .ranked-thumb img { max-width: 180px; }
+}

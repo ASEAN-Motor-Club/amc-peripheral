@@ -190,3 +190,47 @@ def test_store_works_standalone(tmp_path):
     store = CommentStore(tmp_path / "fresh.db")
     _add(store, "hello")
     assert store.count(1) == 1
+
+
+def test_latest_global_respects_limit_and_offset(store):
+    for index in range(5):
+        store.add(
+            workshop_id=index,
+            discord_id="9001",
+            body=f"body {index}",
+            now=NOW,
+        )
+    newest = store.latest_global(limit=2, offset=0)
+    assert [c.body for c in newest] == ["body 4", "body 3"]
+    older = store.latest_global(limit=2, offset=2)
+    assert [c.body for c in older] == ["body 2", "body 1"]
+    assert store.latest_global_count() == 5
+
+
+def test_latest_global_skips_hidden(store):
+    comment = store.add(workshop_id=1, discord_id="9001", body="gone", now=NOW)
+    store.add(workshop_id=1, discord_id="9001", body="stays", now=NOW)
+    store.hide(comment_id=comment.id, admin_id="mod", now=NOW)
+    bodies = [c.body for c in store.latest_global(limit=10)]
+    assert bodies == ["stays"]
+    assert store.latest_global_count() == 1
+
+
+def test_most_commented_counts_comments_not_authors(store):
+    store.add(workshop_id=1, discord_id="a", body="one", now=NOW)
+    store.add(workshop_id=1, discord_id="a", body="two", now=NOW)
+    store.add(workshop_id=2, discord_id="b", body="three", now=NOW)
+    assert store.most_commented(limit=5) == [(1, 2), (2, 1)]
+
+
+def test_most_commented_breaks_ties_on_newest_comment(store):
+    store.add(workshop_id=2, discord_id="a", body="older", now=NOW)
+    store.add(workshop_id=1, discord_id="a", body="newer", now=NOW)
+    assert [wid for wid, _ in store.most_commented(limit=5)] == [1, 2]
+
+
+def test_most_commented_ignores_hidden(store):
+    first = store.add(workshop_id=1, discord_id="a", body="one", now=NOW)
+    store.add(workshop_id=2, discord_id="a", body="two", now=NOW)
+    store.hide(comment_id=first.id, admin_id="mod", now=NOW)
+    assert store.most_commented(limit=5) == [(2, 1)]
