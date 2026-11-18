@@ -151,6 +151,13 @@ def test_vehicle_slug_aliases():
     assert vehicle_display_name("Trailer_01") == "Trailer 01"
     assert vehicle_display_name("3") == "Maity"
     assert vehicle_display_name("Vamos3") == "Vamos3"
+    assert vehicle_display_name("Atlas_6x2_Flatbed") == "Atlas 6x2 Flatbed"
+    assert vehicle_display_name("Duro") == "Duro"
+    assert vehicle_display_name("Lamas") == "Lamas"
+    assert vehicle_display_name("Tippa") == "Tippa"
+    assert vehicle_display_name("Trailer_Drover_Van") == "Drover Van"
+    assert vehicle_slug("Atlas_6x2_Flatbed") == "atlas_6x2_flatbed"
+    assert vehicle_slug("Trailer_Drover_Van") == "trailer_drover_van"
 
 
 def test_character_vehicle_pascal_config_normalizes():
