@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_macros.html" import card %}
+{% block title %}Collections — Motor Town Workshop{% endblock %}
+{% block description %}Club-curated collections of Motor Town builds: paints, decals and tuning grouped by the people who drive them.{% endblock %}
+{% block canonical %}https://www.aseanmotorclub.com/workshop/collections/{% endblock %}
+{% block content %}
+<div class="wrap">
+  <header class="page-head">
+    <h1>Collections</h1>
+    <p class="lede">Builds grouped by the people who drive them. Any signed-in member can curate one.</p>
+    {% if user %}
+    <p class="page-actions"><a class="button" href="/workshop/collections/new">New collection</a></p>
+    {% endif %}
+  </header>
+
+  <nav class="tabs" aria-label="Sort collections">
+    <a href="/workshop/collections/?sort=new" {% if sort == 'new' %}aria-current="page"{% endif %}>Newest</a>
+    <a href="/workshop/collections/?sort=liked" {% if sort == 'liked' %}aria-current="page"{% endif %}>Most liked</a>
+  </nav>
+
+  {% if collections %}
+  <div class="collection-grid">
+    {% for c in collections %}
+    <article class="collection-card">
+      <a class="collection-visual" href="/workshop/collections/{{ c.id }}/{{ c.slug }}/" tabindex="-1" aria-hidden="true">
+        {% if covers.get(c.id) and covers[c.id].snapshotCardUrl %}
+        <img src="{{ covers[c.id].snapshotCardUrl }}" alt="" width="360" height="203" loading="lazy" decoding="async">
+        {% else %}
+        <span class="collection-blank" aria-hidden="true">{{ c.title[:1] }}</span>
+        {% endif %}
+      </a>
+      <div class="card-body">
+        <h2><a href="/workshop/collections/{{ c.id }}/{{ c.slug }}/">{{ c.title }}</a></h2>
+        <p class="byline">Curated by a club member</p>
+        <p class="byline muted">{{ c.item_count }} build{% if c.item_count != 1 %}s{% endif %}{% if c.like_total %} · {{ c.like_total }} like{% if c.like_total != 1 %}s{% endif %}{% endif %}</p>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">No public collections yet. {% if user %}<a href="/workshop/collections/new">Start one.</a>{% endif %}</p>
+  {% endif %}
+
+  {% if page_no > 1 or has_next %}
+  <nav class="pager" aria-label="Pages">
+    {% if page_no > 1 %}<a href="/workshop/collections/?sort={{ sort }}&page={{ page_no - 1 }}">&larr; Previous</a>{% endif %}
+    {% if has_next %}<a href="/workshop/collections/?sort={{ sort }}&page={{ page_no + 1 }}">Next &rarr;</a>{% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}
