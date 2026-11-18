@@ -211,9 +211,16 @@ details.panel > summary h2 { display: inline; margin: 0; }
 }
 @media (max-width: 700px) {
   .wrap { width: calc(100% - 26px); }
-  .header-inner { flex-wrap: wrap; gap: 8px; padding-block: 10px; }
-  .site-header nav { margin-left: auto; }
-  .site-header nav a { padding: 6px 8px; font-size: 13px; }
+  .header-inner { flex-wrap: wrap; gap: 6px; padding-block: 8px 6px; }
+  .brand-block { flex: 1 1 auto; min-width: 0; }
+  .site-header nav {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 2px 4px;
+  }
+  .site-header nav a { padding: 7px 9px; font-size: 13px; }
+  .site-header .user-chip { margin-left: auto; }
   .brand-credit { font-size: 10px; }
   .hero { padding-top: 46px; }
   .search-stub { flex-direction: column; }
