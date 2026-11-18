@@ -80,7 +80,7 @@ import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUnifo
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { DECAL_PROJECTION_GLSL, decalFallbackSlots, decalReceiverSlots } from "./js/decal-projection.js?v=15";
 import { ownerColorForSlot } from "./js/owner-paint.js?v=3";
-import { selectedBodyVariant, isBodyMaterialSlot } from "./js/body-material.js?v=2";
+import { selectedBodyVariant, isBodyMaterialSlot, liverySlotMatches } from "./js/body-material.js?v=3";
 import { spotlightTarget } from "./js/attachment-lights.js?v=1";
 import { attachmentRootRotation } from "./js/attachment-root.js?v=3";
 
@@ -425,6 +425,9 @@ function applyLivery() {
     // only repainted Body_01 changed nothing on screen.
     const isBody = isBodyMaterialSlot(slot, def);
     if (!isBody) continue;
+    // Keep non-body slots (wheels, interior) on their authored material when the
+    // livery is M_Body. Applying it to every Palette slot wipes their texture.
+    if (!liverySlotMatches(def, v)) continue;
     if (!v) {                        // back to the authored material
       m.map = def.map ? loadTexture(def.map) : null;
       m.metalness = def.metalness ?? 0.0;

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { primaryUv, mirrorUv, primaryVisibility, mirrorVisibility, decalFallbackSlots, decalReceiverSlots, DECAL_PROJECTION_GLSL } from '../../site/js/decal-projection.js';
+import { liverySlotMatches } from '../../site/js/body-material.js';
 
 const cases = [
   {
@@ -70,6 +71,11 @@ assert.deepEqual([...decalReceiverSlots([], nukeDefs, { Body_01: 6.5, Seats_01: 
 assert.deepEqual([...decalReceiverSlots(['Body_01'], nukeDefs)], ['Body_01']);
 assert.deepEqual([...decalReceiverSlots(['Body_01'], { Body_01: { materialName: 'Mat_PolygonStreetRacer_Car_Instance_16' } })],
   ['Body_01']);
+
+assert.equal(liverySlotMatches({ materialName: 'M_Body' }, { materialName: 'M_Body' }), true);
+assert.equal(liverySlotMatches({ materialName: 'M_Palette' }, { materialName: 'M_Body' }), false);
+assert.equal(liverySlotMatches({ materialName: 'M_Palette' }, { materialName: 'M_Palette' }), true);
+assert.equal(liverySlotMatches({}, null), true);
 
 for (const token of ['255.0', 'PositionX', 'mtDecalPrimaryUv', 'mtDecalMirrorUv', 'mtDecalVisibility'])
   assert.ok(DECAL_PROJECTION_GLSL.includes(token), `missing GLSL token ${token}`);

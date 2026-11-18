@@ -89,7 +89,15 @@ def main(build_dir, out_dir):
             return None
         src = os.path.join(build_dir, rel)
         if not os.path.exists(src):
-            return None
+            # Older mtmats output stores texture *asset paths* in `textures`
+            # instead of build-relative PNG paths. The decoded files still land
+            # in tex/<Asset>_<Package>.png; resolve that naming before giving up.
+            stem = os.path.basename(rel).replace(".", "_")
+            alt = os.path.join(build_dir, "tex", stem + ".png")
+            if os.path.exists(alt):
+                src = alt
+            else:
+                return None
         data = open(src, "rb").read()
         sha = hashlib.sha1(data).hexdigest()[:16]
         if sha not in by_sha:
