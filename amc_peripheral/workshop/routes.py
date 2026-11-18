@@ -11,7 +11,7 @@ import secrets
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import aiohttp
 from aiohttp import web
@@ -34,6 +34,7 @@ from .auth import (
 )
 from .character_vehicles import CharacterVehicleRepository, CharacterVehicleUnavailable
 from .claims import ClaimSynchroniser
+from .collections import CollectionError, CollectionStore
 from .community import CommunityStore
 from .config import WorkshopSettings
 from .covers import write_author_cover
@@ -189,6 +190,8 @@ def create_app(
     community = CommunityStore(settings.site_db)
     app["community"] = community
     claims = ClaimSynchroniser(community, repository, player_identity)
+    collections_store = CollectionStore(settings.site_db)
+    app["collections"] = collections_store
     limiters = {
         "like": RateLimiter(limit=1, window=2.0),
         "collection": RateLimiter(limit=1, window=2.0),
@@ -683,6 +686,16 @@ def create_app(
                 community.liked_ids, str(viewer_user.get("sub")), [workshop_id]
             )
         )
+        in_collections = await asyncio.to_thread(
+            request.app["collections"].collections_for_item, workshop_id
+        )
+        my_collections = (
+            await asyncio.to_thread(
+                request.app["collections"].owned, str(request["user"]["sub"])
+            )
+            if request.get("user")
+            else []
+        )
         claim = await asyncio.to_thread(community.claim_for, workshop_id)
         claim_owner = None
         if claim is not None and claim.revoked_at is None:
@@ -706,6 +719,8 @@ def create_app(
             claim=claim_owner,
             likes=likes,
             liked=liked,
+            in_collections=in_collections,
+            my_collections=my_collections,
         )
 
     async def item_like(request: web.Request) -> web.Response:
@@ -1059,6 +1074,15 @@ def create_app(
         response.del_cookie(SESSION_COOKIE, path="/")
         raise response
 
+    def require_member(request: web.Request) -> dict[str, Any]:
+        user = request.get("user")
+        if not user:
+            if not sso.enabled:
+                raise web.HTTPNotFound()
+            target = quote(request.path_qs, safe="/")
+            raise web.HTTPFound(f"/workshop/auth/login?next={target}")
+        return user
+
     async def steam_id_for(request: web.Request, claims: dict[str, Any]) -> int | None:
         identity: PlayerIdentityRepository = request.app["player_identity"]
         return await asyncio.to_thread(identity.steam_id_for, claims["sub"])
@@ -1085,6 +1109,289 @@ def create_app(
             },
             headers={"Cache-Control": "no-store"},
         )
+
+    # -- collections -------------------------------------------------------
+
+    COLLECTIONS_PER_PAGE = 24
+
+    def _collection_store(request: web.Request) -> CollectionStore:
+        return request.app["collections"]
+
+    async def page_collections(request: web.Request) -> web.Response:
+        sort = request.query.get("sort", "new")
+        if sort not in {"new", "liked"}:
+            sort = "new"
+        try:
+            page_no = max(1, int(request.query.get("page", "1")))
+        except ValueError:
+            page_no = 1
+        store = _collection_store(request)
+        limit = COLLECTIONS_PER_PAGE
+        offset = (page_no - 1) * limit
+        listed, total = await asyncio.gather(
+            asyncio.to_thread(store.listing, sort=sort, limit=limit, offset=offset),
+            asyncio.to_thread(store.count_public),
+        )
+        covers: dict[int, dict[str, Any]] = {}
+        if listed:
+            cover_ids = await asyncio.to_thread(store.cover_ids, [c.id for c in listed])
+            cards = await asyncio.to_thread(
+                repository.items_by_ids, list(cover_ids.values())
+            )
+            attach_snapshots(cards)
+            by_id = {card["id"]: card for card in cards}
+            covers = {cid: by_id[wid] for cid, wid in cover_ids.items() if wid in by_id}
+        user = request.get("user")
+        mine = await asyncio.to_thread(store.owned, str(user["sub"])) if user else []
+        return render(
+            request,
+            "collections.html",
+            page="collections",
+            collections=listed,
+            covers=covers,
+            sort=sort,
+            page_no=page_no,
+            has_next=offset + len(listed) < total,
+            total=total,
+            mine=mine,
+        )
+
+    async def page_collection(request: web.Request) -> web.Response:
+        store = _collection_store(request)
+        collection_id = int(request.match_info["id"])
+        collection = await asyncio.to_thread(store.get, collection_id)
+        user = request.get("user")
+        if collection is None or collection.hidden:
+            raise web.HTTPNotFound()
+        is_owner = bool(user and str(user["sub"]) == collection.discord_id)
+        if not collection.is_public and not is_owner:
+            # Unlisted is link-only: reachable, but not indexed and not listed.
+            pass
+        slug = request.match_info["slug"]
+        if slug != collection.slug:
+            raise web.HTTPMovedPermanently(
+                f"/workshop/collections/{collection.id}/{collection.slug}/"
+            )
+        ids = await asyncio.to_thread(store.item_ids, collection.id)
+        items = await asyncio.to_thread(repository.items_by_ids, ids)
+        attach_snapshots(items)
+        likes = await asyncio.to_thread(community.like_counts, [i["id"] for i in items])
+        mine = await asyncio.to_thread(store.owned, str(user["sub"])) if user else []
+        return render(
+            request,
+            "collection.html",
+            page="collections",
+            collection=collection,
+            items=items,
+            likes=likes,
+            is_owner=is_owner,
+            mine=mine,
+            noindex=not collection.is_public,
+        )
+
+    async def page_collection_new(request: web.Request) -> web.Response:
+        user = require_member(request)
+        store = _collection_store(request)
+        if request.method == "GET":
+            return render(
+                request,
+                "collection_new.html",
+                page="collections",
+                item=request.query.get("item", ""),
+                error=None,
+            )
+        form = await request.post()
+        try:
+            collection = await asyncio.to_thread(
+                store.create,
+                discord_id=str(user["sub"]),
+                title=str(form.get("title", "")),
+                description=str(form.get("description", "")),
+                visibility=str(form.get("visibility", "public")),
+                now=_now_iso(),
+            )
+        except CollectionError as exc:
+            return render(
+                request,
+                "collection_new.html",
+                page="collections",
+                item=form.get("item", ""),
+                error=str(exc),
+            )
+        seed = str(form.get("item", "")).strip()
+        if seed.isdigit():
+            item = await asyncio.to_thread(repository.get_item, int(seed))
+            if item is not None:
+                await asyncio.to_thread(
+                    store.add_item,
+                    collection_id=collection.id,
+                    discord_id=str(user["sub"]),
+                    workshop_id=item["id"],
+                    now=_now_iso(),
+                )
+        raise web.HTTPSeeOther(
+            f"/workshop/collections/{collection.id}/{collection.slug}/"
+        )
+
+    async def page_collection_edit(request: web.Request) -> web.Response:
+        user = require_member(request)
+        store = _collection_store(request)
+        collection_id = int(request.match_info["id"])
+        collection = await asyncio.to_thread(store.get, collection_id)
+        if collection is None or collection.hidden:
+            raise web.HTTPNotFound()
+        if str(user["sub"]) != collection.discord_id:
+            raise web.HTTPForbidden(text="That collection is not yours.")
+
+        error = None
+        if request.method == "POST":
+            form = await request.post()
+            try:
+                updated = await asyncio.to_thread(
+                    store.update,
+                    collection_id=collection_id,
+                    discord_id=str(user["sub"]),
+                    title=str(form.get("title", "")),
+                    description=str(form.get("description", "")),
+                    visibility=str(form.get("visibility", "public")),
+                    now=_now_iso(),
+                )
+            except CollectionError as exc:
+                error = str(exc)
+            else:
+                if updated:
+                    raise web.HTTPSeeOther(
+                        f"/workshop/collections/{collection_id}/{collection.slug}/"
+                    )
+                raise web.HTTPNotFound()
+
+        ids = await asyncio.to_thread(store.item_ids, collection_id)
+        items = await asyncio.to_thread(repository.items_by_ids, ids)
+        attach_snapshots(items)
+        return render(
+            request,
+            "collection_edit.html",
+            page="collections",
+            collection=collection,
+            items=items,
+            error=error,
+        )
+
+    async def collection_add_item(request: web.Request) -> web.Response:
+        user = require_member(request)
+        store = _collection_store(request)
+        limiters: dict[str, RateLimiter] = request.app["limiters"]
+        if not limiters["collection"].allow(str(user["sub"])):
+            raise web.HTTPTooManyRequests(text="One at a time.")
+        collection_id = int(request.match_info["id"])
+        collection = await asyncio.to_thread(store.get, collection_id)
+        if collection is None or collection.hidden:
+            raise web.HTTPNotFound()
+        back = f"/workshop/collections/{collection_id}/{collection.slug}/edit"
+        form = await request.post()
+        raw = str(form.get("workshop_id", "")).strip()
+        workshop_id = int(raw) if raw.isdigit() else None
+        if workshop_id is None:
+            raise web.HTTPSeeOther(f"{back}?error=bad-id")
+        item = await asyncio.to_thread(repository.get_item, workshop_id)
+        if item is None:
+            raise web.HTTPSeeOther(f"{back}?error=no-item")
+        try:
+            added = await asyncio.to_thread(
+                store.add_item,
+                collection_id=collection_id,
+                discord_id=str(user["sub"]),
+                workshop_id=workshop_id,
+                now=_now_iso(),
+            )
+        except CollectionError:
+            raise web.HTTPSeeOther(f"{back}?error=full") from None
+        if not added:
+            raise web.HTTPSeeOther(f"{back}?error=duplicate")
+        raise web.HTTPSeeOther(f"{back}?added={workshop_id}")
+
+    async def collection_remove_item(request: web.Request) -> web.Response:
+        user = require_member(request)
+        store = _collection_store(request)
+        collection_id = int(request.match_info["id"])
+        workshop_id = int(request.match_info["workshop_id"])
+        collection = await asyncio.to_thread(store.get, collection_id)
+        if collection is None:
+            raise web.HTTPNotFound()
+        await asyncio.to_thread(
+            store.remove_item,
+            collection_id=collection_id,
+            discord_id=str(user["sub"]),
+            workshop_id=workshop_id,
+        )
+        raise web.HTTPSeeOther(
+            f"/workshop/collections/{collection_id}/{collection.slug}/edit"
+        )
+
+    async def collection_reorder(request: web.Request) -> web.Response:
+        user = require_member(request)
+        store = _collection_store(request)
+        collection_id = int(request.match_info["id"])
+        collection = await asyncio.to_thread(store.get, collection_id)
+        if collection is None or str(user["sub"]) != collection.discord_id:
+            raise web.HTTPForbidden(text="That collection is not yours.")
+        form = await request.post()
+        direction = str(form.get("direction", "up"))
+        raw = str(form.get("workshop_id", "")).strip()
+        if not raw.isdigit():
+            raise web.HTTPSeeOther(
+                f"/workshop/collections/{collection_id}/{collection.slug}/edit"
+            )
+        workshop_id = int(raw)
+        ids = await asyncio.to_thread(store.item_ids, collection_id)
+        if workshop_id in ids:
+            index = ids.index(workshop_id)
+            target = index - 1 if direction == "up" else index + 1
+            if 0 <= target < len(ids):
+                ids[index], ids[target] = ids[target], ids[index]
+                await asyncio.to_thread(
+                    store.reorder,
+                    collection_id=collection_id,
+                    discord_id=str(user["sub"]),
+                    ordered_ids=ids,
+                )
+        raise web.HTTPSeeOther(
+            f"/workshop/collections/{collection_id}/{collection.slug}/edit"
+        )
+
+    async def collection_delete(request: web.Request) -> web.Response:
+        user = require_member(request)
+        store = _collection_store(request)
+        collection_id = int(request.match_info["id"])
+        collection = await asyncio.to_thread(store.get, collection_id)
+        if collection is None:
+            raise web.HTTPNotFound()
+        form = await request.post()
+        if str(form.get("confirm", "")) != "yes":
+            raise web.HTTPSeeOther(
+                f"/workshop/collections/{collection_id}/{collection.slug}/edit?delete=1"
+            )
+        await asyncio.to_thread(
+            store.delete, collection_id=collection_id, discord_id=str(user["sub"])
+        )
+        raise web.HTTPSeeOther("/workshop/collections/?deleted=1")
+
+    async def item_collect(request: web.Request) -> web.Response:
+        """`Save to collection` from an item page."""
+        user = require_member(request)
+        store = _collection_store(request)
+        workshop_id = int(request.match_info["id"])
+        form = await request.post()
+        raw = str(form.get("collection_id", "")).strip()
+        if raw.isdigit():
+            await asyncio.to_thread(
+                store.add_item,
+                collection_id=int(raw),
+                discord_id=str(user["sub"]),
+                workshop_id=workshop_id,
+                now=_now_iso(),
+            )
+        raise web.HTTPSeeOther(f"/workshop/items/{workshop_id}/")
 
     async def page_account(request: web.Request) -> web.Response:
         user = request.get("user")
@@ -1129,6 +1436,20 @@ def create_app(
     app.router.add_get("/workshop/items/{id:\\d+}/", page_item)
     app.router.add_get("/workshop/items/{id:\\d+}/viewer/", page_item_viewer)
     app.router.add_post("/workshop/items/{id:\\d+}/like", item_like)
+    app.router.add_post("/workshop/items/{id:\\d+}/collect", item_collect)
+    app.router.add_get("/workshop/collections/", page_collections)
+    app.router.add_get("/workshop/collections/new", page_collection_new)
+    app.router.add_post("/workshop/collections/new", page_collection_new)
+    app.router.add_get("/workshop/collections/{id:\\d+}/{slug}/", page_collection)
+    app.router.add_get("/workshop/collections/{id:\\d+}/edit", page_collection_edit)
+    app.router.add_post("/workshop/collections/{id:\\d+}/edit", page_collection_edit)
+    app.router.add_post("/workshop/collections/{id:\\d+}/items", collection_add_item)
+    app.router.add_post(
+        "/workshop/collections/{id:\\d+}/items/{workshop_id:\\d+}/remove",
+        collection_remove_item,
+    )
+    app.router.add_post("/workshop/collections/{id:\\d+}/reorder", collection_reorder)
+    app.router.add_post("/workshop/collections/{id:\\d+}/delete", collection_delete)
     app.router.add_get("/workshop/authors/", page_authors)
     app.router.add_get("/workshop/authors/{id:\\d+}/", page_author)
     app.router.add_get("/workshop/vehicles/{vehicle:[A-Za-z0-9_]+}/", page_vehicle)

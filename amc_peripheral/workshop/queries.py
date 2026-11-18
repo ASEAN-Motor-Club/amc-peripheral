@@ -306,6 +306,25 @@ class WorkshopRepository:
             ).fetchone()
         return _card(row) if row else None
 
+    def items_by_ids(self, workshop_ids: list[int]) -> list[dict[str, Any]]:
+        """Cards for a given set of ids, in the order asked for.
+
+        Collections store ids, not copies: a build that drops out of the scrape
+        simply disappears from the list instead of rendering as a hole.
+        """
+        ids = [int(i) for i in workshop_ids]
+        if not ids:
+            return []
+        placeholders = ",".join("?" for _ in ids)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT {CARD_COLUMNS} FROM workshop w "
+                f"WHERE w.id IN ({placeholders}) AND {PUBLIC_WHERE}",
+                ids,
+            ).fetchall()
+        by_id = {row["id"]: _card(row) for row in rows}
+        return [by_id[i] for i in ids if i in by_id]
+
     def get_viewer_row(self, workshop_id: int) -> dict[str, Any] | None:
         """The sole web query allowed to read raw payload columns."""
         with self._connect() as conn:
