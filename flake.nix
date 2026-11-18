@@ -819,9 +819,11 @@
             systemd.services.amc-workshop-web = lib.mkIf cfg.workshop.enable {
               description = "AMC Motor Town workshop browser";
               wantedBy = ["multi-user.target"];
-              after = ["network.target" "amc-workshop-aggregate.service"];
-              # No hard Requires: a web restart should not pull a 10–30s
-              # aggregate rebuild and leave nginx without an upstream.
+              after = ["network.target"];
+              # No aggregate ordering or Requires: a web restart should neither
+              # pull nor wait for a 10–30s aggregate rebuild. The timer refreshes
+              # the site DB independently, and the web app can serve the
+              # previous snapshot while that runs.
               serviceConfig = {
                 Type = "simple";
                 User = cfg.workshop.user;
