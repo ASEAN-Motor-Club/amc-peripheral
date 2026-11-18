@@ -27,6 +27,8 @@ async def test_item_page_does_not_flag_same_author_work(client):
     assert 'id="similar-builds"' in text
     assert "Potential sources" in text
     assert "No newer matching builds." in text
+    assert "original-card" in text
+    assert ">Original<" in text
 
 
 async def test_earlier_item_is_not_flagged_but_still_lists_the_match(client):
@@ -97,6 +99,7 @@ def test_similar_items_reports_origin_only_for_older_matches(settings):
     assert copy["flagged"] is True
     assert copy["origin"]["id"] == 3
     assert copy["originSimilarity"] == 1.0
+    assert copy["items"][0]["isOriginal"] is True
 
 
 def test_copy_flag_requires_enough_layers(settings):
