@@ -17,15 +17,12 @@ from amc_peripheral.workshop.similarity import (
 from workshop_support import _payload, build_fixture_db, seed_similarity
 
 
-async def test_item_page_flags_earlier_identical_build(client):
+async def test_item_page_does_not_flag_same_author_work(client):
     response = await client.get("/workshop/items/1/")
     assert response.status == 200
     text = await response.text()
-    assert "Potential copy of another workshop item" in text
+    assert "Potential copy of another workshop item" not in text
     assert "/workshop/items/3/" in text
-    assert "2025-05-01" in text
-    assert "100% match" in text
-    # the flagged original is also part of the gallery
     assert 'id="similar-builds"' in text
 
 
@@ -70,12 +67,26 @@ def test_similar_items_reports_origin_only_for_older_matches(settings):
     assert [item["id"] for item in later["items"]] == [1]
     assert later["items"][0]["isEarlier"] is False
 
+    same_author = repository.similar_items(
+        {
+            "id": 1,
+            "vehicleKey": "Vamos3",
+            "createdAt": "2026-11-15 12:00:00",
+            "decalLayers": 9,
+            "accountId": 11,
+        }
+    )
+    assert same_author["flagged"] is False
+    assert same_author["origin"] is None
+    assert [item["id"] for item in same_author["items"]] == [3]
+
     copy = repository.similar_items(
         {
             "id": 1,
             "vehicleKey": "Vamos3",
             "createdAt": "2026-11-15 12:00:00",
             "decalLayers": 9,
+            "accountId": 99,
         }
     )
     assert copy["flagged"] is True
