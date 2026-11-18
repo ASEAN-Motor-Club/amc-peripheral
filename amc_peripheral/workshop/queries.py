@@ -309,8 +309,9 @@ class WorkshopRepository:
         The index lives in the site database (see ``similarity.build``); the
         item rows themselves still come from the read-only source database.
         ``flagged`` is true only when the match reaches the higher flag
-        threshold, predates this item, and the smaller of the two builds has
-        enough decal layers to make a copy accusation meaningful.
+        threshold, predates this item, belongs to a different author, and the
+        smaller of the two builds has enough decal layers to make a copy
+        accusation meaningful.
         """
         limit = max(1, min(int(limit), 24))
         empty = {
@@ -373,10 +374,16 @@ class WorkshopRepository:
             if len(gallery) < limit:
                 gallery.append(card)
             smaller_layers = min(item_layers, int(card.get("decalLayers") or 0))
+            same_author = bool(
+                item.get("accountId")
+                and card.get("accountId")
+                and int(item["accountId"]) == int(card["accountId"])
+            )
             if (
                 sim >= flag_similarity
                 and smaller_layers >= flag_min_layers
                 and card["isEarlier"]
+                and not same_author
             ):
                 if origin is None or card["createdAt"] < origin["createdAt"]:
                     origin = card
