@@ -20,17 +20,17 @@
   <meta name="twitter:image" content="{{ social_image }}">
   {% endif %}
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/workshop/static/workshop.css?v=11">
+  <link rel="stylesheet" href="/workshop/static/workshop.css?v=12">
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="wrap header-inner">
-      <a class="brand" href="/workshop/" aria-label="ASEAN Motor Club Workshop home">
-        <span class="brand-mark">AMC</span><span class="brand-copy"><strong>Workshop</strong><small>Motor Town: Behind The Wheel</small></span>
-      </a>
+      <div class="brand-block">
+        <a class="brand" href="/workshop/">Workshop</a>
+        <span class="brand-credit">Brought to you by <a href="/">ASEAN Motor Club</a></span>
+      </div>
       <nav aria-label="Workshop">
-        <a href="/">Main site</a>
         <a href="/workshop/" {% if page == 'home' %}aria-current="page"{% endif %}>Discover</a>
         <a href="/workshop/gallery/" {% if page == 'gallery' %}aria-current="page"{% endif %}>Gallery</a>
         <a href="/workshop/authors/" {% if page == 'authors' %}aria-current="page"{% endif %}>Authors</a>

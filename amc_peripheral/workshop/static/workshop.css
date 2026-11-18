@@ -41,14 +41,12 @@ img { display: block; max-width: 100%; }
   position: sticky; top: 0; z-index: 10;
 }
 .header-inner { display: flex; align-items: center; justify-content: space-between; min-height: 64px; gap: 24px; }
-.brand { color: var(--text); display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .01em; }
+.brand-block { display: flex; flex-direction: column; gap: 2px; line-height: 1.2; }
+.brand { color: var(--text); display: inline-flex; align-items: center; font-weight: 700; letter-spacing: .01em; }
 .brand:hover { text-decoration: none; }
-.brand-copy { display: inline-flex; flex-direction: column; line-height: 1.2; }
-.brand-copy small { color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: 0; }
-.brand-mark {
-  font-size: 12px; letter-spacing: .14em; padding: 5px 8px; border-radius: 7px;
-  color: #071018; background: linear-gradient(135deg, var(--accent), #a4f0ff);
-}
+.brand-credit { color: var(--muted); font-size: 11px; font-weight: 500; }
+.brand-credit a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+.brand-credit a:hover { color: var(--text); }
 .site-header nav { display: flex; gap: 8px; }
 .site-header nav a { color: var(--muted); padding: 8px 12px; border-radius: 8px; }
 .site-header nav a:hover, .site-header nav a[aria-current="page"] { color: var(--text); background: var(--panel); text-decoration: none; }
@@ -212,7 +210,7 @@ details.panel > summary h2 { display: inline; margin: 0; }
   .header-inner { flex-wrap: wrap; gap: 8px; padding-block: 10px; }
   .site-header nav { margin-left: auto; }
   .site-header nav a { padding: 6px 8px; font-size: 13px; }
-  .brand-copy small { font-size: 10px; }
+  .brand-credit { font-size: 10px; }
   .hero { padding-top: 46px; }
   .search-stub { flex-direction: column; }
   .stats, .card-grid, .gallery-layout .card-grid, .author-grid, .vehicle-links, .detail-side { grid-template-columns: 1fr; }

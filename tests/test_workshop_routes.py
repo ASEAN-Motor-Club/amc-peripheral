@@ -112,7 +112,7 @@ async def test_item_page_reports_configuration(client):
     text = await response.text()
     assert "Configuration" in text
     assert "Motor Town: Behind The Wheel" in text
-    assert '<a href="/">Main site</a>' in text
+    assert "Brought to you by" in text
     assert 'id="item-viewer-frame"' in text
     assert 'src="/vehicles/index.html?workshop=1&amp;ui=0&amp;embed=1"' in text
     assert 'id="item-viewer-fullscreen"' in text
@@ -173,6 +173,10 @@ async def test_search_finds_authors_and_opens_exact_item_codes(client):
     assert "#179250" in text
     assert "Vehicle types" not in text
     assert ">Authors</a>" in text
+    assert "Brought to you by" in text
+    assert 'href="/">ASEAN Motor Club</a>' in text
+    assert "Main site" not in text
+    assert "brand-mark" not in text
 
     page = await client.get("/workshop/search/?q=ALI")
     assert page.status == 200
