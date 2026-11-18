@@ -49,6 +49,7 @@ amc_bridge = "amc_peripheral.devbridge.server:main"
 amcb = "amc_peripheral.devbridge.cli:main"
 amc_workshop = "amc_peripheral.workshop.server:main"
 amc_workshop_snapshots = "amc_peripheral.workshop.snapshot_worker:main"
+amc_workshop_viewer_origin = "amc_peripheral.workshop.viewer_origin:main"
 amc_workshop_aggregate = "amc_peripheral.workshop.aggregate:main"
 amc_workshop_similarity = "amc_peripheral.workshop.similarity:cli"
 
