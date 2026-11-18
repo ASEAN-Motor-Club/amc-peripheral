@@ -23,7 +23,7 @@
     {% if item.snapshotCardUrl %}
     <img src="{{ item.snapshotCardUrl }}" srcset="{{ item.snapshotCardUrl }} 480w, {{ item.snapshotUrl }} 960w" sizes="(max-width: 640px) 100vw, 360px" alt="" width="480" height="270" loading="lazy" decoding="async">
     {% else %}
-    <img src="/workshop/static/placeholder.svg" alt="" width="480" height="270" loading="lazy">
+    <img src="{{ item.vehicleKey|vehicle_placeholder }}" alt="" width="480" height="270" loading="lazy">
     {% endif %}
     {% if pending %}<span class="preview-pending" data-preview-pending><span class="preview-spinner" aria-hidden="true"></span>Rendering preview…</span>{% endif %}
     <span class="card-id">#{{ item.id }}</span>

@@ -6,6 +6,13 @@ import json
 
 from PIL import Image
 
+from amc_peripheral.workshop.payloads import vehicle_slug
+from amc_peripheral.workshop.placeholders import (
+    MANIFEST_PATH,
+    placeholder_vehicles,
+    vehicle_placeholder_url,
+)
+
 
 async def test_home_page_renders_without_webgl(client):
     response = await client.get("/workshop/")
@@ -334,3 +341,29 @@ async def test_author_page_publishes_render_collage_metadata(client, settings):
     assert cover.status == 200
     assert cover.headers["Content-Type"] == "image/webp"
     assert len(await cover.read()) > 100
+
+
+def test_placeholder_manifest_is_complete():
+    mapping = placeholder_vehicles()
+    assert len(mapping) == 162
+    assert len(set(mapping.values())) == 162
+    assert vehicle_placeholder_url("Boxy") == "/workshop/static/placeholders/boxy.webp"
+    assert vehicle_placeholder_url("Vamos3") == "/workshop/static/placeholders/vamos3.webp"
+    assert vehicle_placeholder_url("not-a-vehicle") == ""
+
+    root = MANIFEST_PATH.parent / "static" / "placeholders"
+    for key, slug in mapping.items():
+        assert vehicle_slug(key) == slug, f"manifest drifted from payload slug for {key}"
+    for slug in sorted(set(mapping.values())):
+        path = root / f"{slug}.webp"
+        assert path.is_file(), f"missing placeholder asset for {slug}"
+        with Image.open(path) as image:
+            assert image.size == (960, 540), f"wrong dimensions for {slug}"
+
+
+async def test_item_page_uses_vehicle_wireframe_placeholder(client):
+    response = await client.get("/workshop/items/2/")
+    assert response.status == 200
+    text = await response.text()
+    assert "/workshop/static/placeholders/boxy.webp" in text
+    assert "placeholder.svg" not in text

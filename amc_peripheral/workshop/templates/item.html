@@ -33,7 +33,7 @@
         {% if snapshot and snapshot.url %}
         <img id="item-snapshot" src="{{ snapshot.url }}" alt="Preview of the {{ item.vehicleKey|vehicle_name }} workshop configuration" width="960" height="540">
         {% else %}
-        <img id="item-snapshot" src="/workshop/static/placeholder.svg" alt="Preview of the {{ item.vehicleKey|vehicle_name }} workshop configuration" width="960" height="540"{% if snapshot and snapshot.status not in ('unsupported', 'failed_permanent') %} data-snapshot-api="/api/workshop/items/{{ item.id }}/snapshot"{% endif %}>
+        <img id="item-snapshot" src="{{ item.vehicleKey|vehicle_placeholder }}" alt="Preview of the {{ item.vehicleKey|vehicle_name }} workshop configuration" width="960" height="540"{% if snapshot and snapshot.status not in ('unsupported', 'failed_permanent') %} data-snapshot-api="/api/workshop/items/{{ item.id }}/snapshot"{% endif %}>
         {% if snapshot and snapshot.status not in ('unsupported', 'failed_permanent') %}<div class="preview-pending" id="item-snapshot-pending"><span class="preview-spinner" aria-hidden="true"></span>Rendering preview…</div>{% endif %}
         {% endif %}
         {% if config and config.vehicle.assetAvailable %}

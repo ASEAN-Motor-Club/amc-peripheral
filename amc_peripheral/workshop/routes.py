@@ -40,6 +40,7 @@ from .payloads import (
     normalize_workshop,
     vehicle_display_name,
 )
+from .placeholders import vehicle_placeholder_url
 from .queries import (
     ListFilters,
     QueryError,
@@ -158,6 +159,7 @@ def create_app(
     env.filters["date_long"] = _date_long
     env.filters["tag_label"] = lambda value: str(value or "").replace("_", " ")
     env.filters["vehicle_name"] = vehicle_display_name
+    env.filters["vehicle_placeholder"] = vehicle_placeholder_url
 
     app = web.Application(client_max_size=64 * 1024)
     app["settings"] = settings
