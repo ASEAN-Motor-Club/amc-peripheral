@@ -339,6 +339,7 @@ class WorkshopRepository:
         limit = max(1, min(int(limit), 24))
         empty = {
             "items": [],
+            "original": None,
             "flagged": False,
             "origin": None,
             "originSimilarity": None,
@@ -450,8 +451,13 @@ class WorkshopRepository:
                 gallery.insert(0, oldest)
                 del gallery[limit:]
 
+        original = next(
+            (card for card in gallery if card.get("isOriginal")),
+            None,
+        )
         return {
             "items": gallery,
+            "original": original,
             "flagged": origin is not None,
             "origin": origin,
             "originSimilarity": origin_similarity,

@@ -35,6 +35,20 @@
       {% endif %}
       <p class="muted">Similarity is based on decal work, not on paint or parts.</p>
     </div>
+    {% elif similar and similar.original and (similar.original.similarity or 0) < similar.threshold %}
+    <div class="notice source-flag" role="note" id="source-flag">
+      <strong>Possible original source</strong>
+      <p>
+        This build shares {{ ((similar.original.similarity or 0) * 100)|round(0)|int }}% of its decal work with
+        <a href="/workshop/items/{{ similar.original.id }}/">#{{ similar.original.id }}</a>{% if similar.original.author %}
+        by {{ similar.original.author }}{% endif %}, uploaded
+        <time datetime="{{ similar.original.createdAt|iso }}">{{ similar.original.createdAt|date_long }}</time>.
+      </p>
+      <p class="muted">
+        That is below the {{ (similar.threshold * 100)|round(0)|int }}% copy threshold, so it is listed as a
+        possible source rather than flagged as a copy.
+      </p>
+    </div>
     {% endif %}
 
     <div class="viewer-stage" id="item-viewer-stage">
