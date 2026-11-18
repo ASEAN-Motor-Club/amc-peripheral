@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% from "_macros.html" import card %}
-{% block title %}{{ author.displayName or 'Creator' }} — Workshop{% endblock %}
+{% block title %}{% if vehicle_label %}{{ vehicle_label }}{% else %}{{ author.displayName or 'Creator' }}{% endif %} — Workshop{% endblock %}
 {% block canonical %}{% if canonical_url is defined %}{{ canonical_url }}{% elif author.accountId %}https://www.aseanmotorclub.com/workshop/authors/{{ author.accountId }}/{% else %}https://www.aseanmotorclub.com/workshop/{% endif %}{% endblock %}
 {% block content %}
 <section class="page-head wrap">
   <p class="eyebrow">{% if author.accountId %}Creator{% else %}Vehicle{% endif %}</p>
-  <h1>{{ author.displayName or 'Workshop builds' }}</h1>
+  <h1>{% if vehicle_label %}{{ vehicle_label }}{% else %}{{ author.displayName or 'Workshop builds' }}{% endif %}</h1>
   <p class="muted">{% if author.accountId %}{{ data['items']|length }} of {{ author.uploads }} builds · {{ author.installs }} installs · {{ author.votes }} votes{% else %}{{ author.uploads }} builds{% if filters and (filters.paint or filters.decal or filters.parts or filters.tuning or filters.club) %} matching filters{% endif %}{% endif %}</p>
 </section>
 {% if not author.accountId %}
 <div class="wrap gallery-layout">
-  <form class="filters" action="/workshop/vehicles/{{ author.displayName }}/" method="get" aria-label="Filter {{ author.displayName }} builds">
+  <form class="filters" action="/workshop/vehicles/{{ vehicle_key }}/" method="get" aria-label="Filter {{ vehicle_label }} builds">
     <input type="hidden" name="sort" value="{{ pagination.sort if pagination else 'popular' }}">
     <fieldset>
       <legend>Contains</legend>
@@ -21,7 +21,7 @@
       <label><input type="checkbox" name="club" value="1" {% if filters and filters.club %}checked{% endif %}> Club member</label>
     </fieldset>
     <button type="submit">Apply filters</button>
-    <a class="reset" href="/workshop/vehicles/{{ author.displayName }}/">Reset</a>
+    <a class="reset" href="/workshop/vehicles/{{ vehicle_key }}/">Reset</a>
   </form>
   <div class="section">
 {% else %}

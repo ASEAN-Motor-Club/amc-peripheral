@@ -1005,6 +1005,8 @@ def create_app(
                 "votes": 0,
                 "accountId": None,
             },
+            vehicle_key=vehicle,
+            vehicle_label=vehicle_display_name(vehicle),
             data=listing,
             vehicles=[],
             filters=filters,
