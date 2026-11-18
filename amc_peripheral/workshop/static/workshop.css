@@ -102,6 +102,8 @@ button:hover, .primary-button:hover { text-decoration: none; filter: brightness(
 .badge.decal { color: #b9d4ff; border-color: #2e4970; }
 .badge.tuned { color: #f5d7a1; border-color: #5a482c; }
 .card-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: auto; padding-top: 6px; color: var(--muted); font-size: 12px; }
+.card-meta .stat { display: inline-flex; align-items: center; gap: 4px; }
+.card-meta .stat svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .compare-check { position: absolute; top: 8px; left: 8px; padding: 5px 8px; border-radius: 7px; background: rgba(4, 8, 14, .78); color: #dce6f4; font-size: 12px; cursor: pointer; }
 .author-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .author-card { display: flex; gap: 13px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 15px; color: var(--text); }
