@@ -34,7 +34,9 @@ DEFAULT_MIN_SIM = 0.60
 DEFAULT_MIN_LAYERS = 3
 COPY_THRESHOLD = 0.95
 GENERIC_FINGERPRINT = 400
-CANDIDATE_MIN = 0.20
+RARE_TOKEN_MIN = 2
+RARE_TOKEN_MAX = 50
+CANDIDATE_MIN = 0.40
 INDEX_VERSION = 3
 
 # kernel scales
@@ -592,14 +594,19 @@ def scan_vehicle(
     for wid in ids:
         for value in tokens[wid]:
             index[value].append(wid)
+    rare_index = {
+        value: members
+        for value, members in index.items()
+        if RARE_TOKEN_MIN <= len(members) <= RARE_TOKEN_MAX
+    }
 
     seen: set[tuple[int, int]] = set()
     rows: list[tuple[str, int, int, float, str, str]] = []
     for wid in targets:
         candidates: dict[int, int] = defaultdict(int)
         for value in tokens[wid]:
-            members = index[value]
-            if len(members) < 2 or len(members) > GENERIC_FINGERPRINT:
+            members = rare_index.get(value)
+            if not members:
                 continue
             for other in members:
                 if other != wid:
@@ -610,6 +617,11 @@ def scan_vehicle(
                 continue
             seen.add((left, right))
             shared = tokens[left] & tokens[right]
+            rare_shared = sum(
+                1
+                for token in shared
+                if RARE_TOKEN_MIN <= len(index.get(token, ())) <= RARE_TOKEN_MAX
+            )
             if min(len(tokens[left]), len(tokens[right])) < PAIR_MIN_SHARED:
                 min_shared = 1
             else:
@@ -617,7 +629,7 @@ def scan_vehicle(
                     PAIR_MIN_SHARED,
                     int(0.05 * min(len(tokens[left]), len(tokens[right]))),
                 )
-            if len(shared) < min_shared:
+            if rare_shared < min_shared:
                 continue
             if greedy_dice(layers[left], layers[right]) < CANDIDATE_MIN:
                 continue
