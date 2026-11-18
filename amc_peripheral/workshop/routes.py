@@ -62,6 +62,7 @@ from .snapshots import (
     SnapshotStore,
     render_key,
 )
+from .tags import TagError, TagStore, normalise_tag
 
 log = logging.getLogger(__name__)
 HERE = Path(__file__).resolve().parent
@@ -192,11 +193,14 @@ def create_app(
     community = CommunityStore(settings.site_db)
     app["community"] = community
     claims = ClaimSynchroniser(community, repository, player_identity)
+    tags_store = TagStore(settings.site_db)
+    app["tags"] = tags_store
     collections_store = CollectionStore(settings.site_db)
     app["collections"] = collections_store
     limiters = {
         "like": RateLimiter(limit=1, window=2.0),
         "collection": RateLimiter(limit=1, window=2.0),
+        "tag": RateLimiter(limit=3, window=2.0),
     }
     app["limiters"] = limiters
 
@@ -576,7 +580,10 @@ def create_app(
         )
         attach_snapshots(data["popular"] + data["newest"])
         attach_author_snapshots(data["authors"])
-        return render(request, "home.html", page="home", data=data, stats=stats)
+        tags = await asyncio.to_thread(request.app["tags"].index, limit=12)
+        return render(
+            request, "home.html", page="home", data=data, stats=stats, tags=tags
+        )
 
     async def page_search(request: web.Request) -> web.Response:
         query = search_query(request)
@@ -586,6 +593,16 @@ def create_app(
             if item is None:
                 raise web.HTTPNotFound()
             raise web.HTTPFound(f"/workshop/items/{item_id}/")
+        if query.startswith("#") and query != "#":
+            # "#cat" is a tag lookup, not a text search — same trick as item codes.
+            canonical = normalise_tag(query)
+            usage = await asyncio.to_thread(request.app["tags"].usage, canonical)
+            if canonical and usage is not None:
+                from urllib.parse import quote
+
+                raise web.HTTPFound(
+                    f"/workshop/tags/{quote(canonical, safe='')}/"
+                )
         authors = await asyncio.to_thread(repository.search_authors, query)
         vehicles = await asyncio.to_thread(repository.search_vehicles, query)
         attach_author_snapshots(authors)
@@ -699,6 +716,7 @@ def create_app(
             else []
         )
         meta = await asyncio.to_thread(community.meta, workshop_id)
+        tags = await asyncio.to_thread(request.app["tags"].item_tags, workshop_id)
         claim = await asyncio.to_thread(community.claim_for, workshop_id)
         claim_owner = None
         if claim is not None and claim.revoked_at is None:
@@ -725,6 +743,7 @@ def create_app(
             in_collections=in_collections,
             my_collections=my_collections,
             meta=meta,
+            tags=tags,
             can_edit=bool(claim_owner and claim_owner["yours"]),
         )
 
@@ -1182,11 +1201,13 @@ def create_app(
         attach_snapshots(items)
         likes = await asyncio.to_thread(community.like_counts, [i["id"] for i in items])
         mine = await asyncio.to_thread(store.owned, str(user["sub"])) if user else []
+        tags = await asyncio.to_thread(request.app["tags"].collection_tags, collection.id)
         return render(
             request,
             "collection.html",
             page="collections",
             collection=collection,
+            tags=tags,
             items=items,
             likes=likes,
             is_owner=is_owner,
@@ -1273,13 +1294,17 @@ def create_app(
         ids = await asyncio.to_thread(store.item_ids, collection_id)
         items = await asyncio.to_thread(repository.items_by_ids, ids)
         attach_snapshots(items)
+        tags = await asyncio.to_thread(
+            request.app["tags"].collection_tags, collection_id
+        )
         return render(
             request,
             "collection_edit.html",
             page="collections",
             collection=collection,
             items=items,
-            error=error,
+            tags=tags,
+            error=error or request.query.get("tag-error"),
         )
 
     async def collection_add_item(request: web.Request) -> web.Response:
@@ -1469,13 +1494,15 @@ def create_app(
             raise web.HTTPSeeOther(f"/workshop/items/{workshop_id}/")
 
         meta = await asyncio.to_thread(community.meta, workshop_id)
+        tags = await asyncio.to_thread(request.app["tags"].item_tags, workshop_id)
         return render(
             request,
             "item_edit.html",
             page="item",
             item=item,
             meta=meta,
-            error=error,
+            tags=tags,
+            error=error or request.query.get("tag-error"),
         )
 
     # -- engagement JSON and sitemaps --------------------------------------
@@ -1605,6 +1632,201 @@ def create_app(
             headers={"Cache-Control": "public, max-age=3600"},
         )
 
+    # -- tags --------------------------------------------------------------
+
+    def _tag_store(request: web.Request) -> TagStore:
+        return request.app["tags"]
+
+    async def page_tags(request: web.Request) -> web.Response:
+        sort = request.query.get("sort", "popular")
+        if sort not in {"popular", "az"}:
+            sort = "popular"
+        try:
+            page_no = max(1, int(request.query.get("page", "1")))
+        except ValueError:
+            page_no = 1
+        store = _tag_store(request)
+        limit = 60
+        offset = (page_no - 1) * limit
+        tags, total = await asyncio.gather(
+            asyncio.to_thread(store.index, sort=sort, limit=limit, offset=offset),
+            asyncio.to_thread(store.count_tags),
+        )
+        return render(
+            request,
+            "tags.html",
+            page="tags",
+            tags=tags,
+            sort=sort,
+            page_no=page_no,
+            has_next=offset + len(tags) < total,
+        )
+
+    async def page_tag(request: web.Request) -> web.Response:
+        from urllib.parse import unquote
+
+        raw = unquote(request.match_info["tag"])
+        canonical = normalise_tag(raw)
+        if not canonical or raw != canonical:
+            if not canonical:
+                raise web.HTTPNotFound()
+            from urllib.parse import quote
+
+            raise web.HTTPMovedPermanently(
+                f"/workshop/tags/{quote(canonical, safe='')}/"
+            )
+        store = _tag_store(request)
+        usage = await asyncio.to_thread(store.usage, canonical)
+        if usage is None:
+            return render(
+                request,
+                "tag.html",
+                page="tags",
+                tag=canonical,
+                usage=None,
+                items=[],
+                collections=[],
+                related=[],
+                likes={},
+                noindex=True,
+            )
+        item_ids, collection_ids, related = await asyncio.gather(
+            asyncio.to_thread(store.item_ids, canonical),
+            asyncio.to_thread(store.collection_ids, canonical),
+            asyncio.to_thread(store.related, canonical),
+        )
+        items = await asyncio.to_thread(repository.items_by_ids, item_ids)
+        attach_snapshots(items)
+        likes = await asyncio.to_thread(
+            community.like_counts, [i["id"] for i in items]
+        )
+        collections_store: CollectionStore = request.app["collections"]
+        collections = []
+        for cid in collection_ids:
+            found = await asyncio.to_thread(collections_store.get, cid)
+            if found is not None and found.is_public:
+                collections.append(found)
+        return render(
+            request,
+            "tag.html",
+            page="tags",
+            tag=canonical,
+            usage=usage,
+            items=items,
+            collections=collections,
+            related=related,
+            likes=likes,
+            noindex=usage.items < 3,
+        )
+
+    async def api_tags(request: web.Request) -> web.Response:
+        query = request.query.get("q", "")
+        results = await asyncio.to_thread(_tag_store(request).search, query, limit=12)
+        return web.json_response(
+            [
+                {"tag": t.tag, "items": t.items, "collections": t.collections}
+                for t in results
+            ],
+            headers={"Cache-Control": "public, max-age=30"},
+        )
+
+    async def _own_item_or_403(request: web.Request, workshop_id: int) -> dict[str, Any]:
+        user = require_member(request)
+        claim = await asyncio.to_thread(community.claim_for, workshop_id)
+        if (
+            not claim
+            or claim.revoked_at is not None
+            or claim.discord_id != str(user["sub"])
+        ):
+            raise web.HTTPForbidden(
+                text="Only the owner of this build can tag it."
+            )
+        return user
+
+    async def item_tags_add(request: web.Request) -> web.Response:
+        workshop_id = int(request.match_info["id"])
+        user = await _own_item_or_403(request, workshop_id)
+        limiters: dict[str, RateLimiter] = request.app["limiters"]
+        if not limiters["tag"].allow(str(user["sub"])):
+            raise web.HTTPTooManyRequests(text="One at a time.")
+        form = await request.post()
+        try:
+            await asyncio.to_thread(
+                _tag_store(request).add_item_tags,
+                workshop_id=workshop_id,
+                discord_id=str(user["sub"]),
+                raw_tags=str(form.get("tags", "")),
+                now=_now_iso(),
+            )
+        except TagError as exc:
+            from urllib.parse import quote
+
+            raise web.HTTPSeeOther(
+                f"/workshop/items/{workshop_id}/edit?tag-error={quote(str(exc))}"
+            ) from None
+        raise web.HTTPSeeOther(f"/workshop/items/{workshop_id}/edit")
+
+    async def item_tag_remove(request: web.Request) -> web.Response:
+        from urllib.parse import unquote
+
+        workshop_id = int(request.match_info["id"])
+        await _own_item_or_403(request, workshop_id)
+        await asyncio.to_thread(
+            _tag_store(request).remove_item_tag,
+            workshop_id=workshop_id,
+            tag=unquote(request.match_info["tag"]),
+        )
+        raise web.HTTPSeeOther(f"/workshop/items/{workshop_id}/edit")
+
+    async def collection_tags_add(request: web.Request) -> web.Response:
+        user = require_member(request)
+        store = _tag_store(request)
+        collections_store: CollectionStore = request.app["collections"]
+        collection_id = int(request.match_info["id"])
+        collection = await asyncio.to_thread(collections_store.get, collection_id)
+        if collection is None or collection.hidden:
+            raise web.HTTPNotFound()
+        if str(user["sub"]) != collection.discord_id:
+            raise web.HTTPForbidden(text="That collection is not yours.")
+        limiters: dict[str, RateLimiter] = request.app["limiters"]
+        if not limiters["tag"].allow(str(user["sub"])):
+            raise web.HTTPTooManyRequests(text="One at a time.")
+        form = await request.post()
+        back = f"/workshop/collections/{collection_id}/{collection.slug}/edit"
+        try:
+            await asyncio.to_thread(
+                store.add_collection_tags,
+                collection_id=collection_id,
+                discord_id=str(user["sub"]),
+                raw_tags=str(form.get("tags", "")),
+                now=_now_iso(),
+            )
+        except TagError as exc:
+            from urllib.parse import quote
+
+            raise web.HTTPSeeOther(f"{back}?tag-error={quote(str(exc))}") from None
+        raise web.HTTPSeeOther(back)
+
+    async def collection_tag_remove(request: web.Request) -> web.Response:
+        from urllib.parse import unquote
+
+        user = require_member(request)
+        collections_store: CollectionStore = request.app["collections"]
+        collection_id = int(request.match_info["id"])
+        collection = await asyncio.to_thread(collections_store.get, collection_id)
+        if collection is None:
+            raise web.HTTPNotFound()
+        if str(user["sub"]) != collection.discord_id:
+            raise web.HTTPForbidden(text="That collection is not yours.")
+        await asyncio.to_thread(
+            _tag_store(request).remove_collection_tag,
+            collection_id=collection_id,
+            tag=unquote(request.match_info["tag"]),
+        )
+        raise web.HTTPSeeOther(
+            f"/workshop/collections/{collection_id}/{collection.slug}/edit"
+        )
+
     async def page_account(request: web.Request) -> web.Response:
         user = request.get("user")
         if not user:
@@ -1654,6 +1876,19 @@ def create_app(
     app.router.add_post("/workshop/profile", profile_save)
     app.router.add_get(
         "/api/workshop/items/{id:\\d+}/engagement", api_item_engagement
+    )
+    app.router.add_get("/workshop/tags/", page_tags)
+    app.router.add_get("/workshop/tags/{tag}/", page_tag)
+    app.router.add_get("/api/workshop/tags", api_tags)
+    app.router.add_post("/workshop/items/{id:\\d+}/tags", item_tags_add)
+    app.router.add_post(
+        "/workshop/items/{id:\\d+}/tags/{tag}/remove", item_tag_remove
+    )
+    app.router.add_post(
+        "/workshop/collections/{id:\\d+}/tags", collection_tags_add
+    )
+    app.router.add_post(
+        "/workshop/collections/{id:\\d+}/tags/{tag}/remove", collection_tag_remove
     )
     app.router.add_get("/workshop/sitemap.xml", sitemap_index)
     app.router.add_get("/workshop/sitemap-pages.xml", sitemap_pages)

@@ -175,13 +175,13 @@ async def test_owner_saves_title_and_summary(client):
     page = await (await client.get("/workshop/items/1/", cookies=cookies)).text()
     assert "Night run Hana" in page
     assert "Built for the Kuching loop." in page
-    assert "Edit title &amp; summary" in page
+    assert "Edit title, summary &amp; tags" in page
 
 
 async def test_anonymous_item_page_shows_no_editor(client):
     _claim(client)
     text = await (await client.get("/workshop/items/1/")).text()
-    assert "Edit title &amp; summary" not in text
+    assert "Edit title, summary &amp; tags" not in text
 
 
 async def test_item_edit_strips_links_and_caps_length(client):

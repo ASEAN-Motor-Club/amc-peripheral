@@ -8,10 +8,15 @@
       <h1>Find your next build.</h1>
       <p class="lede">Browse the largest community catalogue of shared paints, decals, parts and tuned vehicles in Motor Town.</p>
       <form class="search-stub" action="/workshop/search/" method="get" role="search">
-        <label class="sr-only" for="workshop-search">Search by author, vehicle, or item code</label>
-        <input id="workshop-search" name="q" type="search" placeholder="Author, vehicle, or item code — e.g. #179250" autocomplete="off" maxlength="80" required>
+        <label class="sr-only" for="workshop-search">Search by author, vehicle, item code or tag</label>
+        <input id="workshop-search" name="q" type="search" placeholder="Author, vehicle, item code (#179250), or #tag" autocomplete="off" maxlength="80" required>
         <button type="submit">Search</button>
       </form>
+      {% if tags %}
+      <p class="tag-strip" aria-label="Popular tags">
+        {% for t in tags %}<a class="tag-chip" href="/workshop/tags/{{ t.tag|urlencode }}/">#{{ t.tag }}</a>{% endfor %}
+      </p>
+      {% endif %}
     </div>
     <dl class="stats" aria-label="Workshop totals">
       <div><dt>Builds</dt><dd>{{ "{:,}".format(stats['items']) }}</dd></div>

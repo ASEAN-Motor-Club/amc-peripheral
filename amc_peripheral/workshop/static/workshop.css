@@ -323,3 +323,25 @@ details.panel > summary h2 { display: inline; margin: 0; }
 .stack input[type=text], .stack input[name=title], .stack input[name=workshop_id], .stack textarea { padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); color: inherit; width: 100%; }
 .form-error { color: #ffb3ba; }
 .crumb { font-size: 13px; margin: 0 0 6px; }
+
+/* Tags: free-form labels, authorised by ownership of the thing being tagged. */
+.tag-row { display: flex; flex-wrap: wrap; gap: 7px; margin: 8px 0 14px; }
+.tag-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px; border-radius: 999px; font-size: 13px; text-decoration: none;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.13);
+  color: inherit;
+}
+.tag-chip:hover { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.26); }
+.tag-chip.big { font-size: 15px; padding: 6px 14px; }
+.tag-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tag-cloud { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 9px; }
+.tag-remove { display: inline-flex; align-items: center; gap: 2px; }
+.tag-remove button {
+  background: none; border: 0; color: var(--muted); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0 2px;
+}
+.tag-remove button:hover { color: #ffb3ba; }
+.section-title { margin: 26px 0 10px; font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.collection-links { list-style: none; padding: 0; display: grid; gap: 8px; }
+.tag-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 22px; }

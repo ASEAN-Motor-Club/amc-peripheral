@@ -10,6 +10,9 @@
     <p class="crumb"><a href="/workshop/collections/">Collections</a></p>
     <h1>{{ collection.title }}</h1>
     {% if collection.description %}<p class="lede">{{ collection.description }}</p>{% endif %}
+    {% if tags %}
+    <p class="tag-row" aria-label="Tags">{% for t in tags %}<a class="tag-chip" href="/workshop/tags/{{ t|urlencode }}/">#{{ t }}</a>{% endfor %}</p>
+    {% endif %}
     <p class="byline muted">
       Curated by a club member · {{ collection.item_count }} build{% if collection.item_count != 1 %}s{% endif %}
       {% if collection.visibility == 'unlisted' %} · unlisted (link only){% endif %}

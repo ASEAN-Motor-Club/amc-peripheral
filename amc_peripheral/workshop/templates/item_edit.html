@@ -17,5 +17,26 @@
     </label>
     <button type="submit" class="button">Save</button>
   </form>
+
+  <h2>Tags</h2>
+  <p class="muted">Up to five. Members browse by these, so keep them useful: <code>#cat</code>, <code>#drift</code>, <code>#keiju</code>.</p>
+  {% if tags %}
+  <p class="tag-row">
+    {% for t in tags %}
+    <form method="post" action="/workshop/items/{{ item.id }}/tags/{{ t|urlencode }}/remove" class="tag-remove">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <a class="tag-chip" href="/workshop/tags/{{ t|urlencode }}/">#{{ t }}</a>
+      <button type="submit" aria-label="Remove tag {{ t }}">&times;</button>
+    </form>
+    {% endfor %}
+  </p>
+  {% endif %}
+  <form method="post" action="/workshop/items/{{ item.id }}/tags" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Add tags <span class="muted">(comma or space separated)</span>
+      <input name="tags" maxlength="120" placeholder="#cat #drift">
+    </label>
+    <button type="submit" class="button">Add tags</button>
+  </form>
 </div>
 {% endblock %}

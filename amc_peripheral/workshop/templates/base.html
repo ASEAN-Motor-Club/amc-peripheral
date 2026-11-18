@@ -20,7 +20,7 @@
   <meta name="twitter:image" content="{{ social_image }}">
   {% endif %}
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/workshop/static/workshop.css?v=18">
+  <link rel="stylesheet" href="/workshop/static/workshop.css?v=19">
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -35,6 +35,7 @@
         <a href="/workshop/gallery/" {% if page == 'gallery' %}aria-current="page"{% endif %}>Gallery</a>
         <a href="/workshop/authors/" {% if page == 'authors' %}aria-current="page"{% endif %}>Authors</a>
         <a href="/workshop/collections/" {% if page == 'collections' %}aria-current="page"{% endif %}>Collections</a>
+        <a href="/workshop/tags/" {% if page == 'tags' %}aria-current="page"{% endif %}>Tags</a>
         {% if sso_enabled %}
           {% if user %}
           <a class="user-chip" href="/workshop/account/" title="{{ user_name }} on Discord">
