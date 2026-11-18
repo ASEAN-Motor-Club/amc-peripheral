@@ -45,6 +45,15 @@ CREATE TABLE IF NOT EXISTS workshop_item_meta (
     updated_at   TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS workshop_like (
+    workshop_id  INTEGER NOT NULL,
+    discord_id   TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    PRIMARY KEY (workshop_id, discord_id)
+);
+CREATE INDEX IF NOT EXISTS ix_like_item ON workshop_like(workshop_id);
+CREATE INDEX IF NOT EXISTS ix_like_member ON workshop_like(discord_id);
+
 CREATE TABLE IF NOT EXISTS workshop_claim_event (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     workshop_id  INTEGER NOT NULL,
@@ -179,6 +188,69 @@ class CommunityStore:
                 "WHERE workshop_id = ? AND revoked_at IS NULL",
                 (now, workshop_id),
             )
+
+    # -- likes ------------------------------------------------------------
+
+    def toggle_like(
+        self, *, workshop_id: int, discord_id: str, now: str
+    ) -> tuple[bool, int]:
+        """Like or unlike. The primary key makes a double-click a single like."""
+        discord_id = str(discord_id)
+        with self._connect() as conn:
+            removed = conn.execute(
+                "DELETE FROM workshop_like WHERE workshop_id = ? AND discord_id = ?",
+                (workshop_id, discord_id),
+            ).rowcount
+            if removed:
+                liked = False
+            else:
+                conn.execute(
+                    "INSERT INTO workshop_like (workshop_id, discord_id, created_at)"
+                    " VALUES (?, ?, ?)",
+                    (workshop_id, discord_id, now),
+                )
+                liked = True
+            count = conn.execute(
+                "SELECT COUNT(*) FROM workshop_like WHERE workshop_id = ?",
+                (workshop_id,),
+            ).fetchone()[0]
+        return liked, int(count)
+
+    def like_count(self, workshop_id: int) -> int:
+        with self._connect() as conn:
+            return int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM workshop_like WHERE workshop_id = ?",
+                    (workshop_id,),
+                ).fetchone()[0]
+            )
+
+    def like_counts(self, workshop_ids: list[int]) -> dict[int, int]:
+        """One query for a whole page of cards — never count per card."""
+        ids = [int(i) for i in workshop_ids]
+        if not ids:
+            return {}
+        placeholders = ",".join("?" for _ in ids)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT workshop_id, COUNT(*) FROM workshop_like "
+                f"WHERE workshop_id IN ({placeholders}) GROUP BY workshop_id",
+                ids,
+            ).fetchall()
+        return {row[0]: int(row[1]) for row in rows}
+
+    def liked_ids(self, discord_id: str, workshop_ids: list[int]) -> set[int]:
+        ids = [int(i) for i in workshop_ids]
+        if not ids:
+            return set()
+        placeholders = ",".join("?" for _ in ids)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT workshop_id FROM workshop_like "
+                f"WHERE discord_id = ? AND workshop_id IN ({placeholders})",
+                [str(discord_id), *ids],
+            ).fetchall()
+        return {row[0] for row in rows}
 
     # -- profiles ---------------------------------------------------------
 

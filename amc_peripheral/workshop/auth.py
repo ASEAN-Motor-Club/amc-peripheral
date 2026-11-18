@@ -251,6 +251,26 @@ def display_name(claims: dict[str, Any] | None) -> str:
     return str(claims.get("n") or claims.get("u") or "")
 
 
+def csrf_token(claims: dict[str, Any] | None, secret: str) -> str:
+    """Per-session CSRF token.
+
+    SameSite=Lax already keeps a cross-site form from carrying the session
+    cookie, but a subdomain of ours is same-site and would pass: a token bound
+    to the session's own ``sub``/``iat`` closes that.
+    """
+    if not claims:
+        return ""
+    material = f"{claims.get('sub')}:{claims.get('iat')}".encode()
+    return hmac.new(secret.encode(), material, hashlib.sha256).hexdigest()[:32]
+
+
+def verify_csrf(claims: dict[str, Any] | None, token: str | None, secret: str) -> bool:
+    expected = csrf_token(claims, secret)
+    if not expected or not token:
+        return False
+    return hmac.compare_digest(expected, str(token))
+
+
 # ---------------------------------------------------------------------------
 # Steam identity (optional, read-only)
 # ---------------------------------------------------------------------------

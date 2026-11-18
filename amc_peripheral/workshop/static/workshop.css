@@ -277,3 +277,22 @@ details.panel > summary h2 { display: inline; margin: 0; }
   margin: 6px 0 14px; font-size: 13px; color: var(--muted);
 }
 .claim-line .badge { background: rgba(97, 218, 251, 0.14); color: #9fe3f7; }
+
+/* Likes: ours, not the workshop's votes — one per member per build. */
+.like-bar { margin: 10px 0 14px; }
+.like-form { margin: 0; }
+.like-button {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14);
+  color: var(--text, #e8ecf1); font: inherit; font-size: 14px;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.like-button:hover { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.26); }
+.like-button.is-liked {
+  color: #ff7b8a; border-color: rgba(255,123,138,0.45);
+  background: rgba(255,123,138,0.12);
+}
+.like-button.is-liked span[aria-hidden] { color: #ff5c6e; }
+.like-count { font-variant-numeric: tabular-nums; }
+.like-sep { margin: 0 6px; color: var(--muted); }

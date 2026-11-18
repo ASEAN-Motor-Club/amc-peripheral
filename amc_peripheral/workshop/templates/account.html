@@ -30,6 +30,7 @@
       {% endif %}
     </p>
     <form action="/workshop/auth/logout" method="post">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
       <button type="submit" class="secondary">Sign out</button>
     </form>
   </section>

@@ -24,10 +24,12 @@ from .auth import (
     PlayerIdentityRepository,
     SSOSettings,
     authorize_url,
+    csrf_token,
     display_name,
     new_state,
     sign_in,
     sign_session,
+    verify_csrf,
     verify_session,
 )
 from .character_vehicles import CharacterVehicleRepository, CharacterVehicleUnavailable
@@ -49,6 +51,7 @@ from .queries import (
     QueryError,
     WorkshopRepository,
 )
+from .ratelimit import RateLimiter
 from .snapshots import (
     PRIORITY_DIRECT,
     PRIORITY_VISIBLE,
@@ -60,6 +63,10 @@ from .snapshots import (
 log = logging.getLogger(__name__)
 HERE = Path(__file__).resolve().parent
 ITEM_CODE = re.compile(r"#([0-9]{1,9})")
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def search_query(request: web.Request) -> str:
@@ -182,6 +189,11 @@ def create_app(
     community = CommunityStore(settings.site_db)
     app["community"] = community
     claims = ClaimSynchroniser(community, repository, player_identity)
+    limiters = {
+        "like": RateLimiter(limit=1, window=2.0),
+        "collection": RateLimiter(limit=1, window=2.0),
+    }
+    app["limiters"] = limiters
 
     def snapshot_job(
         card: dict[str, Any], *, priority: int = PRIORITY_VISIBLE
@@ -292,6 +304,14 @@ def create_app(
     app.on_startup.append(http_session_startup)
     app.on_cleanup.append(http_session_cleanup)
 
+    async def _post_csrf(request: web.Request) -> str | None:
+        try:
+            form = await request.post()
+        except Exception:  # noqa: BLE001 - malformed body is a failed check, not a crash
+            return None
+        value = form.get("csrf")
+        return str(value) if value is not None else None
+
     @web.middleware
     async def sessions(request: web.Request, handler):
         """Attach the signed-in user (or ``None``) to every request."""
@@ -301,6 +321,13 @@ def create_app(
             else None
         )
         user = request["user"]
+        if request.method == "POST" and not (
+            sso.enabled
+            and verify_csrf(user, await _post_csrf(request), sso.session_secret)
+        ):
+            raise web.HTTPForbidden(
+                text="This form expired or came from another site. Reload and try again."
+            )
         if user and request.method == "GET" and not request.path.startswith("/api/"):
             # Claims are derived from the backend's character GUIDs; keep them in
             # step off page loads, throttled per member inside the synchroniser.
@@ -321,6 +348,9 @@ def create_app(
         context.setdefault("user", request.get("user"))
         context.setdefault("user_name", display_name(request.get("user")))
         context.setdefault("sso_enabled", sso.enabled)
+        context.setdefault(
+            "csrf_token", csrf_token(request.get("user"), sso.session_secret)
+        )
         context.setdefault("request_path", request.path_qs)
         html = env.get_template(template).render(**context)
         return web.Response(text=html, content_type="text/html")
@@ -644,6 +674,15 @@ def create_app(
         )
         if similar["items"]:
             attach_snapshots(similar["items"])
+        likes = await asyncio.to_thread(community.like_count, workshop_id)
+        viewer_user = request.get("user")
+        liked = bool(
+            viewer_user
+            and workshop_id
+            in await asyncio.to_thread(
+                community.liked_ids, str(viewer_user.get("sub")), [workshop_id]
+            )
+        )
         claim = await asyncio.to_thread(community.claim_for, workshop_id)
         claim_owner = None
         if claim is not None and claim.revoked_at is None:
@@ -665,7 +704,33 @@ def create_app(
             snapshot=snapshot,
             similar=similar,
             claim=claim_owner,
+            likes=likes,
+            liked=liked,
         )
+
+    async def item_like(request: web.Request) -> web.Response:
+        """Toggle a member's like. Form post for the no-JS path, JSON if asked."""
+        workshop_id = int(request.match_info["id"])
+        user = request.get("user")
+        if not user:
+            raise web.HTTPFound(
+                f"/workshop/auth/login?next=/workshop/items/{workshop_id}/"
+            )
+        limiters: dict[str, RateLimiter] = request.app["limiters"]
+        if not limiters["like"].allow(str(user.get("sub"))):
+            raise web.HTTPTooManyRequests(text="One at a time.")
+        item = await asyncio.to_thread(repository.get_item, workshop_id)
+        if item is None:
+            raise web.HTTPNotFound()
+        liked, count = await asyncio.to_thread(
+            community.toggle_like,
+            workshop_id=workshop_id,
+            discord_id=str(user.get("sub")),
+            now=_now_iso(),
+        )
+        if "application/json" in request.headers.get("Accept", ""):
+            return web.json_response({"liked": liked, "count": count})
+        raise web.HTTPSeeOther(f"/workshop/items/{workshop_id}/")
 
     async def page_item_viewer(request: web.Request) -> web.Response:
         workshop_id = int(request.match_info["id"])
@@ -1063,6 +1128,7 @@ def create_app(
     app.router.add_get("/workshop/gallery/", page_gallery)
     app.router.add_get("/workshop/items/{id:\\d+}/", page_item)
     app.router.add_get("/workshop/items/{id:\\d+}/viewer/", page_item_viewer)
+    app.router.add_post("/workshop/items/{id:\\d+}/like", item_like)
     app.router.add_get("/workshop/authors/", page_authors)
     app.router.add_get("/workshop/authors/{id:\\d+}/", page_author)
     app.router.add_get("/workshop/vehicles/{vehicle:[A-Za-z0-9_]+}/", page_vehicle)
