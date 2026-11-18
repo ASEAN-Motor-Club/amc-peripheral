@@ -41,6 +41,7 @@
       {% if item.hasDecal %}{{ badge(item.decalLayers ~ ' decals', 'decal') }}{% endif %}
       {% if item.hasParts %}{{ badge(item.partCount ~ ' parts') }}{% endif %}
       {% if item.hasTunings %}{{ badge('Tuned', 'tuned') }}{% endif %}
+      {% if item.similarity is defined and item.similarity %}{{ badge((item.similarity * 100)|round(0)|int ~ '% match', 'decal') }}{% if item.isEarlier %}{{ badge('earlier upload', 'tuned') }}{% endif %}{% endif %}
     </ul>
     <div class="card-meta">
       <span title="Installs">{{ item.installs }} installs</span>

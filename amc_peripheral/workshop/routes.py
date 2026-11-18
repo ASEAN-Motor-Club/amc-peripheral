@@ -552,8 +552,17 @@ def create_app(
             job = snapshot_job(item, priority=PRIORITY_DIRECT)
             if job:
                 snapshot = snapshots.enqueue(job)
+        similar = await asyncio.to_thread(
+            repository.similar_items,
+            item,
+            limit=settings.similarity_limit,
+            min_sim=settings.similarity_min,
+            copy_threshold=settings.similarity_copy_threshold,
+        )
+        if similar["items"]:
+            attach_snapshots(similar["items"])
         return render(request, "item.html", page="workshop", item=item, config=config,
-                      snapshot=snapshot)
+                      snapshot=snapshot, similar=similar)
 
     async def page_item_viewer(request: web.Request) -> web.Response:
         workshop_id = int(request.match_info["id"])

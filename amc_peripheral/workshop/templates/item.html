@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import card %}
 {% block title %}{{ item.vehicleKey|vehicle_name }} workshop build — ASEAN Motor Club{% endblock %}
 {% block description %}Motor Town: Behind The Wheel workshop build {{ item.id }} for {{ item.vehicleKey|vehicle_name }}{% if item.author %} by {{ item.author }}{% endif %}.{% endblock %}
 {% block canonical %}https://www.aseanmotorclub.com/workshop/items/{{ item.id }}/{% endblock %}
@@ -11,6 +12,20 @@
       <p class="byline">Shared by <a href="/workshop/authors/{{ item.accountId }}/">{{ item.author }}</a> · <time datetime="{{ item.createdAt|iso }}">{{ item.createdAt[:10] }}</time></p>
     {% else %}
       <p class="byline muted">Workshop upload · <time datetime="{{ item.createdAt|iso }}">{{ item.createdAt[:10] }}</time></p>
+    {% endif %}
+
+    {% if similar and similar.flagged and similar.origin %}
+    <div class="notice copy-flag" role="note" id="copy-flag">
+      <strong>Potential copy of another workshop item</strong>
+      <p>
+        {{ (similar.originSimilarity * 100)|round(0)|int }}% of this build's decal work matches
+        <a href="/workshop/items/{{ similar.origin.id }}/">#{{ similar.origin.id }}</a>{% if similar.origin.author %}
+        by {{ similar.origin.author }}{% endif %}, uploaded
+        <time datetime="{{ similar.origin.createdAt|iso }}">{{ similar.origin.createdAt[:10] }}</time>
+        — uploaded before this item.
+      </p>
+      <p class="muted">Similarity is measured on decal geometry (asset, position, rotation, scale, colour), not on the paint or parts of the build. Re-sharing an installed build copies the decal block verbatim, so a high score is evidence of copied decal work rather than proof of intent.</p>
+    </div>
     {% endif %}
 
     <div class="viewer-stage" id="item-viewer-stage">
@@ -113,6 +128,19 @@
     {% endif %}
     {% else %}
     <div class="notice error" role="alert">This configuration could not be decoded. The original item may be malformed or quarantined.</div>
+    {% endif %}
+
+    {% if similar and similar['items'] %}
+    <section class="panel" aria-labelledby="similar-title" id="similar-builds">
+      <h2 id="similar-title">Similar builds</h2>
+      <p class="muted">
+        Ranked by shared decal work on the {{ item.vehicleKey|vehicle_name }}.
+        Matches at {{ (similar.threshold * 100)|round(0)|int }}% or higher against an older upload are flagged as a potential copy.
+      </p>
+      <div class="card-grid similar-grid">
+        {% for other in similar['items'] %}{{ card(other) }}{% endfor %}
+      </div>
+    </section>
     {% endif %}
   </section>
 

@@ -298,6 +298,89 @@ class WorkshopRepository:
             ).fetchone()
         return dict(row) if row else None
 
+    def similar_items(
+        self,
+        item: dict[str, Any],
+        *,
+        limit: int = 6,
+        min_sim: float = 0.60,
+        copy_threshold: float = 0.95,
+    ) -> dict[str, Any]:
+        """Ranked similar builds for ``item`` from the precomputed index.
+
+        The index lives in the site database (see ``similarity.build``); the
+        item rows themselves still come from the read-only source database.
+        ``flagged`` is true when at least one match reaches ``copy_threshold``
+        *and* was uploaded before this item — that is the only ordering signal
+        the archive has, so it is what "potential copy" is based on.
+        """
+        limit = max(1, min(int(limit), 24))
+        empty = {"items": [], "flagged": False, "origin": None,
+                 "originSimilarity": None, "threshold": copy_threshold}
+        if self.site_db is None or not self.site_db.is_file():
+            return empty
+
+        item_id = int(item["id"])
+        vehicle = item["vehicleKey"]
+        try:
+            conn = sqlite3.connect(f"file:{self.site_db}?mode=ro", uri=True, timeout=2.0)
+            conn.row_factory = sqlite3.Row
+            try:
+                rows = conn.execute(
+                    "SELECT CASE WHEN a = ? THEN b ELSE a END AS other_id, sim "
+                    "FROM similar_pair "
+                    "WHERE vehicle_key = ? AND (a = ? OR b = ?) AND sim >= ? "
+                    "ORDER BY sim DESC, other_id ASC LIMIT ?",
+                    (item_id, vehicle, item_id, item_id, min_sim, limit * 4),
+                ).fetchall()
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            return empty
+
+        ranked = [(int(row["other_id"]), float(row["sim"])) for row in rows]
+        if not ranked:
+            return empty
+
+        placeholders = ",".join("?" for _ in ranked)
+        with self._connect() as source:
+            cards = {
+                int(row["id"]): _card(row)
+                for row in source.execute(
+                    f"SELECT {CARD_COLUMNS} FROM workshop w "
+                    f"WHERE w.id IN ({placeholders}) AND {PUBLIC_WHERE} AND w.vehicle_key = ?",
+                    [*[other for other, _ in ranked], vehicle],
+                ).fetchall()
+            }
+
+        created = str(item.get("createdAt") or "")
+        gallery: list[dict[str, Any]] = []
+        origin: dict[str, Any] | None = None
+        origin_similarity: float | None = None
+        for other_id, sim in ranked:
+            card = cards.get(other_id)
+            if card is None:
+                continue
+            card["similarity"] = round(sim, 4)
+            card["isEarlier"] = bool(card["createdAt"] and card["createdAt"] < created)
+            if len(gallery) < limit:
+                gallery.append(card)
+            if sim >= copy_threshold and card["isEarlier"]:
+                if origin is None or card["createdAt"] < origin["createdAt"]:
+                    origin = card
+                    origin_similarity = card["similarity"]
+        if origin is not None and origin not in gallery:
+            gallery.insert(0, origin)
+            del gallery[limit:]
+
+        return {
+            "items": gallery,
+            "flagged": origin is not None,
+            "origin": origin,
+            "originSimilarity": origin_similarity,
+            "threshold": copy_threshold,
+        }
+
     def _where(self, filters: ListFilters) -> tuple[str, list[Any]]:
         clauses = [PUBLIC_WHERE]
         args: list[Any] = []
