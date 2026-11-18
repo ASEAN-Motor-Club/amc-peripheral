@@ -206,6 +206,39 @@ class CommentStore:
             )
         return cursor.rowcount > 0
 
+    def latest_global(self, *, limit: int = 30, offset: int = 0) -> list[Comment]:
+        """Newest visible comments across every build, newest first."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM workshop_comment WHERE hidden = 0"
+                " ORDER BY id DESC LIMIT ? OFFSET ?",
+                (int(limit), int(offset)),
+            ).fetchall()
+        return [self._row(row) for row in rows]
+
+    def latest_global_count(self) -> int:
+        with self._connect() as conn:
+            return int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM workshop_comment WHERE hidden = 0"
+                ).fetchone()[0]
+            )
+
+    def most_commented(self, *, limit: int = 24) -> list[tuple[int, int]]:
+        """(workshop_id, visible comment count), busiest first.
+
+        Ties break on the newest comment, so a build that just got busy
+        outranks one that went quiet with the same total.
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT workshop_id, COUNT(*) AS n, MAX(id) AS newest"
+                " FROM workshop_comment WHERE hidden = 0"
+                " GROUP BY workshop_id ORDER BY n DESC, newest DESC LIMIT ?",
+                (int(limit),),
+            ).fetchall()
+        return [(int(row["workshop_id"]), int(row["n"])) for row in rows]
+
     def recent(self, *, limit: int = 100) -> list[Comment]:
         """Newest first, hidden included — for the moderation list."""
         with self._connect() as conn:

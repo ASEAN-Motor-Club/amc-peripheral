@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+
+{% block title %}Comments — Workshop{% endblock %}
+{% block description %}What club members are saying about builds, and the builds getting the most conversation.{% endblock %}
+
+{% block content %}
+<main class="wrap">
+  <header class="page-head">
+    <h1>Comments</h1>
+    <p class="lede">What people are saying about builds right now, and where the conversation is.</p>
+  </header>
+
+  {% if not latest and not ranked %}
+  <div class="empty">
+    <p>Nobody has commented on a build yet.</p>
+    <p><a class="button" href="/workshop/">Find a build to talk about</a></p>
+  </div>
+  {% else %}
+
+  <section aria-labelledby="latest-title">
+    <h2 id="latest-title">Latest</h2>
+    {% if latest %}
+    <ol class="comment-feed">
+      {% for comment in latest %}
+      {% set build = builds[comment.workshop_id] %}
+      <li class="comment-feed-item" id="comment-{{ comment.id }}">
+        <a class="comment-feed-thumb" href="/workshop/items/{{ build.id }}/#comment-{{ comment.id }}" tabindex="-1" aria-hidden="true">
+          {% if build.snapshotCardUrl %}
+          <img src="{{ build.snapshotCardUrl }}" alt="" width="128" height="72" loading="lazy" decoding="async">
+          {% else %}
+          <img src="{{ build.vehicleKey|vehicle_placeholder }}" alt="" width="128" height="72" loading="lazy">
+          {% endif %}
+        </a>
+        <div class="comment-feed-text">
+          <p class="comment-feed-meta">
+            <strong>{{ names.get(comment.discord_id) or 'A club member' }}</strong>
+            on
+            <a href="/workshop/items/{{ build.id }}/#comment-{{ comment.id }}">{{ build.vehicleKey|vehicle_name }}</a>
+            <time datetime="{{ comment.created_at|iso }}">{{ comment.created_at|date_long }}</time>
+            {% if comment.edited_at %}<span class="muted">· edited</span>{% endif %}
+          </p>
+          <p class="comment-feed-body">{{ comment.body|replace("\n", " ")|truncate(200, True, "…") }}</p>
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+
+    {% if page_no > 1 or has_next %}
+    <nav class="pager" aria-label="Comment pages">
+      {% if page_no > 1 %}
+      <a href="/workshop/comments/{% if page_no > 2 %}?page={{ page_no - 1 }}{% endif %}" rel="prev">← Newer</a>
+      {% endif %}
+      <span class="muted">Page {{ page_no }}</span>
+      {% if has_next %}
+      <a href="/workshop/comments/?page={{ page_no + 1 }}" rel="next">Older →</a>
+      {% endif %}
+    </nav>
+    {% endif %}
+    {% else %}
+    <p class="muted">Nothing on this page. <a href="/workshop/comments/">Back to the newest comments</a>.</p>
+    {% endif %}
+  </section>
+
+  {% if ranked %}
+  <section aria-labelledby="busiest-title">
+    <h2 id="busiest-title">Most commented</h2>
+    <ul class="ranked">
+      {% for build, count in ranked %}
+      <li class="ranked-item">
+        <a class="ranked-thumb" href="/workshop/items/{{ build.id }}/" tabindex="-1" aria-hidden="true">
+          {% if build.snapshotCardUrl %}
+          <img src="{{ build.snapshotCardUrl }}" alt="" width="128" height="72" loading="lazy" decoding="async">
+          {% else %}
+          <img src="{{ build.vehicleKey|vehicle_placeholder }}" alt="" width="128" height="72" loading="lazy">
+          {% endif %}
+        </a>
+        <div>
+          <h3><a href="/workshop/items/{{ build.id }}/">{{ build.vehicleKey|vehicle_name }}</a></h3>
+          <p class="comment-feed-meta">
+            {% if build.author %}by {{ build.author }}{% else %}Workshop upload{% endif %}
+            · <a href="/workshop/items/{{ build.id }}/#comments">{{ count }} comment{% if count != 1 %}s{% endif %}</a>
+          </p>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% endif %}
+</main>
+{% endblock %}

@@ -30,7 +30,7 @@
   <meta name="twitter:card" content="summary">
   {% endif %}
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/workshop/static/workshop.css?v=22">
+  <link rel="stylesheet" href="/workshop/static/workshop.css?v=23">
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -47,6 +47,7 @@
         <a href="/workshop/authors/" {% if page == 'authors' %}aria-current="page"{% endif %}>Authors</a>
         <a href="/workshop/collections/" {% if page == 'collections' %}aria-current="page"{% endif %}>Collections</a>
         <a href="/workshop/tags/" {% if page == 'tags' %}aria-current="page"{% endif %}>Tags</a>
+        <a href="/workshop/comments/" {% if page == 'comments' %}aria-current="page"{% endif %}>Comments</a>
         {% if sso_enabled %}
           {% if user %}
           <a class="user-chip" href="/workshop/account/" title="{{ user_name }} on Discord">
