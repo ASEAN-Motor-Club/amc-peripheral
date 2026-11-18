@@ -27,10 +27,10 @@ for (const c of cases) {
   }
 }
 const CULL_BOTH = 4 | 8;
-// DXBC 5020: primary opposite-cull reads LocalBounds (r4), backface-cull reads
-// LocalNormal (r3). The mirror block repeats that same pairing with cb2[15].
+// DXBC 5020: the opposite-cull term is driven by the surface normal. Using the
+// vertex position here hides whole panels on wrapped decals (Raton item 1000).
 assert.equal(primaryVisibility([100,0,0], [1,0,0], 0, 0, CULL_BOTH), 1);
-assert.equal(primaryVisibility([-100,0,0], [1,0,0], 0, 0, CULL_BOTH), 0);
+assert.equal(primaryVisibility([-100,0,0], [1,0,0], 0, 0, CULL_BOTH), 1);
 assert.equal(primaryVisibility([100,0,0], [-1,0,0], 0, 0, CULL_BOTH), 0);
 assert.equal(primaryVisibility([0,100,0], [0,1,0], 0.25, 0, CULL_BOTH), 1);
 assert.equal(mirrorVisibility([0,100,0], [0,1,0], 0.25, 0, CULL_BOTH), 0);

@@ -91,7 +91,7 @@ function visibility(point, normal, yaw, pitch, flags, mirrored) {
   const dn = c[0]*normal[0] + c[1]*normal[1] + c[2]*normal[2];
   const opposite = (flags & 4) ? 1 : 0;
   const backface = (flags & 8) ? 1 : 0;
-  return (1 + opposite*(Math.max(0, Math.min(1, dp))-1))
+  return (1 + opposite*(Math.max(0, Math.min(1, dn))-1))
        * (1 + backface*(Math.max(0, Math.min(1, dn))-1));
 }
 
@@ -145,7 +145,7 @@ float mtDecalVisibility(vec3 p, vec3 n, vec3 turns, int flags, bool mirrored) {
   vec3 c = vec3(cy*cp, sy*cp, sp);
   float opposite = (flags & 4) != 0 ? 1.0 : 0.0;
   float backface = (flags & 8) != 0 ? 1.0 : 0.0;
-  return (1.0 + opposite*(clamp(dot(p, c), 0.0, 1.0)-1.0))
+  return (1.0 + opposite*(clamp(dot(n, c), 0.0, 1.0)-1.0))
        * (1.0 + backface*(clamp(dot(n, c), 0.0, 1.0)-1.0));
 }
 vec2 mtDecalAtlasUv(float col, float row, vec2 q) {
