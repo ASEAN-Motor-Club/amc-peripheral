@@ -652,6 +652,11 @@
                 # this service at amc-bot's store file (single shared list).
                 ANNOUNCEMENTS_DB_PATH = "/var/lib/amc-bots/bot/announcements.db";
                 DEFAULT_AI_MODEL = "deepseek/deepseek-v4-flash-0731:nitro";
+                # Host Web API password (game 0.7.20+ fails closed: every
+                # request carrying an empty password is rejected, which killed
+                # all in-game DJ replies/announcements). Must match
+                # services.motortown-server...HostWebAPIServerPassword.
+                GAME_API_PASSWORD = "hackme";
               };
               preStart = ''
                 # One-time migration to /var/lib/amc-bots/radio: copy the DB
@@ -699,6 +704,9 @@
                 ECONOMY_AUDIT_CHANNEL_ID = "1402660537619320872";
                 COURT_CATEGORY_ID = "1498624085217902602";
                 COURT_CHANNEL_ID = "1498624125227368468";
+                # Same Host Web API password as amc-radio above — the
+                # announcement rotation posts through POST /chat.
+                GAME_API_PASSWORD = "hackme";
               };
               preStart = ''
                 # One-time migration to /var/lib/amc-bots/bot (same rules as

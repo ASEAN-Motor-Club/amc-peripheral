@@ -4,7 +4,8 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from amc_peripheral.utils.game_utils import announce_in_game
+from amc_peripheral import settings
+from amc_peripheral.utils.game_utils import announce_in_game, game_api_request
 
 
 class _FakeResp:
@@ -87,3 +88,36 @@ async def test_announce_does_not_truncate_long_message():
     session = FakeSession()
     await announce_in_game(session, long)
     assert _posted_message(session.urls[0]) == long
+
+
+@pytest.mark.asyncio
+async def test_announce_sends_configured_api_password(monkeypatch):
+    """Host Web API password from settings reaches the request (game 0.7.20+).
+
+    While the password is empty the game rejects EVERY request with
+    "Invalid password", so in-game replies were being generated and dropped.
+    """
+    monkeypatch.setattr(settings, "GAME_API_PASSWORD", "hackme")
+    session = FakeSession()
+    await announce_in_game(session, "hello")
+    query = parse_qs(urlparse(session.urls[0]).query)
+    assert query["password"] == ["hackme"]
+
+
+@pytest.mark.asyncio
+async def test_announce_password_is_blank_when_unset(monkeypatch):
+    """No configured password still sends an explicit (empty) parameter."""
+    monkeypatch.setattr(settings, "GAME_API_PASSWORD", "")
+    session = FakeSession()
+    await announce_in_game(session, "hello")
+    query = parse_qs(urlparse(session.urls[0]).query, keep_blank_values=True)
+    assert query["password"] == [""]
+
+
+@pytest.mark.asyncio
+async def test_explicit_password_overrides_settings(monkeypatch):
+    monkeypatch.setattr(settings, "GAME_API_PASSWORD", "from-settings")
+    session = FakeSession()
+    await game_api_request(session, "/player/list", method="post", password="explicit")
+    query = parse_qs(urlparse(session.urls[0]).query)
+    assert query["password"] == ["explicit"]

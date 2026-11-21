@@ -1,13 +1,28 @@
 import urllib.parse
 import logging
 from yarl import URL
+from amc_peripheral import settings
 from amc_peripheral.settings import GAME_SERVER_API_URL
 from amc_peripheral.utils.text_utils import strip_emoji
 
 log = logging.getLogger(__name__)
 
 
-async def game_api_request(http_session, url, method="get", password="", params={}):
+def _api_password() -> str:
+    """Host Web API password from settings.
+
+    Motor Town 0.7.20+ fails closed: while ``HostWebAPIServerPassword`` is empty
+    the game rejects EVERY Host Web API request with ``Invalid password``, so an
+    empty query parameter is not "unauthenticated access", it is a hard error
+    that silently drops every in-game chat post (DJ Annie replies, the
+    announcement rotation, the translation relay).
+    """
+    return getattr(settings, "GAME_API_PASSWORD", "") or ""
+
+
+async def game_api_request(http_session, url, method="get", password=None, params={}):
+    if password is None:
+        password = _api_password()
     req_params = {"password": password, **params}
     # pyrefly: ignore [bad-argument-type]
     params_str = urllib.parse.urlencode(req_params, quote_via=urllib.parse.quote)
