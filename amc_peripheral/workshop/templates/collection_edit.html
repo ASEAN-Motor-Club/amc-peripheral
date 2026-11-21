@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ collection.title }} — Motor Town Workshop{% endblock %}
+{% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block content %}
+<div class="wrap narrow form-page">
+  <p class="crumb"><a href="/workshop/collections/{{ collection.id }}/{{ collection.slug }}/">{{ collection.title }}</a></p>
+  <header class="form-head"><h1>Edit collection</h1></header>
+  {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+
+  <section class="form-section">
+  <h2>Details</h2>
+  <form method="post" action="/workshop/collections/{{ collection.id }}/edit" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Title
+      <input name="title" maxlength="40" required value="{{ collection.title }}">
+    </label>
+    <label>Description
+      <textarea name="description" rows="4" maxlength="400">{{ collection.description or '' }}</textarea>
+    </label>
+    <fieldset>
+      <legend>Who can see it</legend>
+      <label class="inline"><input type="radio" name="visibility" value="public" {% if collection.visibility == 'public' %}checked{% endif %}> Public — listed in Collections</label>
+      <label class="inline"><input type="radio" name="visibility" value="unlisted" {% if collection.visibility == 'unlisted' %}checked{% endif %}> Unlisted — anyone with the link, not listed</label>
+    </fieldset>
+    <div class="form-actions">
+      <button type="submit" class="button">Save details</button>
+      <a class="button secondary" href="/workshop/collections/{{ collection.id }}/{{ collection.slug }}/">View collection</a>
+    </div>
+  </form>
+  </section>
+
+  <section class="form-section">
+  <h2>Tags</h2>
+  {% if tags %}
+  <div class="tag-row">
+    {% for t in tags %}
+    <form method="post" action="/workshop/collections/{{ collection.id }}/tags/{{ t|urlencode }}/remove" class="tag-remove">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <a class="tag-chip" href="/workshop/tags/{{ t|urlencode }}/">#{{ t }}</a>
+      <button type="submit" aria-label="Remove tag {{ t }}">&times;</button>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <form method="post" action="/workshop/collections/{{ collection.id }}/tags" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Add tags <span class="muted">(up to five, comma or space separated)</span>
+      <input name="tags" maxlength="120" placeholder="#drift #touge">
+    </label>
+    <div class="form-actions"><button type="submit" class="button">Add tags</button></div>
+  </form>
+  </section>
+
+  <section class="form-section">
+  <h2>Builds</h2>
+  {% if items %}
+  <ol class="edit-list">
+    {% for item in items %}
+    <li>
+      <a href="/workshop/items/{{ item.id }}/">{{ item.vehicleKey|vehicle_name }} <span class="muted">#{{ item.id }}</span></a>
+      <span class="edit-actions">
+        <form method="post" action="/workshop/collections/{{ collection.id }}/reorder">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="workshop_id" value="{{ item.id }}">
+          <button name="direction" value="up" {% if loop.first %}disabled{% endif %} aria-label="Move up">&uarr;</button>
+          <button name="direction" value="down" {% if loop.last %}disabled{% endif %} aria-label="Move down">&darr;</button>
+        </form>
+        <form method="post" action="/workshop/collections/{{ collection.id }}/items/{{ item.id }}/remove">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <button type="submit">Remove</button>
+        </form>
+      </span>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="empty">No builds yet.</p>
+  {% endif %}
+
+  <form method="post" action="/workshop/collections/{{ collection.id }}/items" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Add a build
+      <span class="muted">Paste the item link from the workshop, or just the number: 33425</span>
+      <input name="workshop_id" placeholder="https://www.aseanmotorclub.com/workshop/items/33425/ or 33425">
+    </label>
+    <div class="form-actions"><button type="submit" class="button">Add build</button></div>
+  </form>
+  </section>
+
+  <section class="form-section">
+  <h2>Delete</h2>
+  <p class="muted">Deleting a collection does not touch the builds themselves.</p>
+  {% if confirm_delete %}
+  <div class="confirm-box">
+    <p><strong>Delete &ldquo;{{ collection.title }}&rdquo;?</strong> This cannot be undone.</p>
+    <form method="post" action="/workshop/collections/{{ collection.id }}/delete">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="confirm" value="yes">
+      <button type="submit" class="danger">Yes, delete it</button>
+      <a class="button secondary" href="/workshop/collections/{{ collection.id }}/edit">Cancel</a>
+    </form>
+  </div>
+  {% else %}
+  <p><a class="button danger" href="/workshop/collections/{{ collection.id }}/edit?delete=1">Delete this collection</a></p>
+  {% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_macros.html" import card %}
+{% block title %}{{ collection.title }} — a Motor Town collection{% endblock %}
+{% block description %}{{ collection.description or (collection.title ~ ' — a curated Motor Town build collection from the ASEAN Motor Club.') }}{% endblock %}
+{% block canonical %}https://www.aseanmotorclub.com/workshop/collections/{{ collection.id }}/{{ collection.slug }}/{% endblock %}
+{% block robots %}{% if noindex %}<meta name="robots" content="noindex,nofollow">{% else %}<meta name="robots" content="index,follow">{% endif %}{% endblock %}
+{% block content %}
+<div class="wrap">
+  <header class="page-head">
+    <p class="crumb"><a href="/workshop/collections/">Collections</a></p>
+    <h1>{{ collection.title }}</h1>
+    {% if collection.description %}<p class="lede">{{ collection.description }}</p>{% endif %}
+    {% if tags %}
+    <p class="tag-row" aria-label="Tags">{% for t in tags %}<a class="tag-chip" href="/workshop/tags/{{ t|urlencode }}/">#{{ t }}</a>{% endfor %}</p>
+    {% endif %}
+    <p class="byline muted">
+      Curated by {{ owner_name or 'a club member' }} · {{ collection.item_count }} build{% if collection.item_count != 1 %}s{% endif %}
+      {% if collection.visibility == 'unlisted' %} · <span class="pill unlisted">unlisted — link only</span>{% endif %}
+    </p>
+    {% if is_owner %}
+    <p class="page-actions">
+      <a class="button" href="/workshop/collections/{{ collection.id }}/edit">Edit collection</a>
+      <a class="button secondary" href="/workshop/collections/mine/">Your collections</a>
+    </p>
+    {% endif %}
+  </header>
+
+  {% if items %}
+  <div class="card-grid collection-builds">
+    {% for item in items %}
+    <article class="vehicle-card{% if item.isOriginal %} original-card{% endif %}">
+      <a class="card-visual" href="/workshop/items/{{ item.id }}/" aria-hidden="true" tabindex="-1">
+        {% if item.snapshotCardUrl %}
+        <img src="{{ item.snapshotCardUrl }}" alt="" width="480" height="270" loading="lazy" decoding="async">
+        {% else %}
+        <img src="{{ item.vehicleKey|vehicle_placeholder }}" alt="" width="480" height="270" loading="lazy">
+        {% endif %}
+        <span class="card-id">#{{ item.id }}</span>
+      </a>
+      <div class="card-body">
+        <h3><a href="/workshop/items/{{ item.id }}/">{{ item.vehicleKey|vehicle_name }}</a></h3>
+        <p class="byline">{% if item.author %}by {{ item.author }}{% else %}<span class="muted">Workshop upload</span>{% endif %}</p>
+        <p class="byline muted">&#9829; {{ likes.get(item.id, 0) }}</p>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">This collection is empty.</p>
+  {% endif %}
+</div>
+{% endblock %}

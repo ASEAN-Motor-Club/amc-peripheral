@@ -147,6 +147,16 @@
           ...
         }: let
           cfg = config.services.amc-peripheral;
+          # Services resolve this stable symlink at start time. CI publishes a
+          # new Nix closure and flips the link without a nixos-rebuild; the
+          # flake package remains the first-boot fallback.
+          releaseBin = name: pkgs.writeShellScript "amc-workshop-release-${name}" ''
+            release="${cfg.workshop.releaseRoot}/bin/${name}"
+            if [ -x "$release" ]; then
+              exec "$release" "$@"
+            fi
+            exec "${self.packages.${pkgs.system}.default}/bin/${name}" "$@"
+          '';
         in {
           imports = [
             ./radio/liquidsoap.nix
@@ -282,6 +292,114 @@
               description = "Documentation site (Starlight) static build package.";
             };
 
+            # Workshop browser (read-only over the scraper SQLite DB)
+            workshop = {
+              enable = lib.mkEnableOption "Motor Town workshop browser";
+              sourceDb = lib.mkOption {
+                type = lib.types.str;
+                default = "/var/lib/amc-workshop/source.db";
+                description = ''
+                  Workshop scrape database. Written only by
+                  amc-workshop-sync, opened read-only by everything else.
+                '';
+              };
+              viewerRoot = lib.mkOption {
+                type = lib.types.str;
+                default = "/var/www/www.aseanmotorclub.com/vehicles";
+                description = "Deployed Three.js viewer root.";
+              };
+              releaseRoot = lib.mkOption {
+                type = lib.types.str;
+                default = "/var/lib/amc-workshop-releases/current";
+                description = ''
+                  Stable symlink to the current workshop release. CI flips this
+                  to a Nix store path; services fall back to the flake package
+                  when it is missing.
+                '';
+              };
+              port = lib.mkOption {
+                type = lib.types.port;
+                default = 7003;
+                description = "Loopback port for the workshop web process.";
+              };
+              publicHost = lib.mkOption {
+                type = lib.types.str;
+                default = "www.aseanmotorclub.com";
+                description = "Existing nginx virtual host that serves the workshop subpath.";
+              };
+              publicScheme = lib.mkOption {
+                type = lib.types.str;
+                default = "https";
+                description = "Scheme used to reach the workshop from the snapshot worker.";
+              };
+              aliasHost = lib.mkOption {
+                type = lib.types.str;
+                default = "workshop.aseanmotorclub.com";
+                description = "Optional alias hostname that redirects to the workshop subpath.";
+              };
+              user = lib.mkOption {
+                type = lib.types.str;
+                default = "hermes";
+                description = "User that can read the scraper database.";
+              };
+              group = lib.mkOption {
+                type = lib.types.str;
+                default = "hermes";
+                description = "Group of the workshop service.";
+              };
+              environmentFile = lib.mkOption {
+                type = lib.types.nullOr lib.types.path;
+                default = null;
+                description = ''
+                  Environment file with the Discord SSO settings
+                  (AMC_WORKSHOP_DISCORD_CLIENT_ID, ..._CLIENT_SECRET,
+                  AMC_WORKSHOP_SESSION_SECRET, optional
+                  AMC_WORKSHOP_DISCORD_GUILD_ID and AMC_WORKSHOP_PLAYER_DSN).
+                  Without it the site runs anonymously: no sign-in link.
+                '';
+              };
+              viewerOrigin = {
+                enable = lib.mkEnableOption ''
+                  private viewer origin (viewer assets plus proxied workshop
+                  API) so snapshot renderers on other machines do not have to
+                  pull assets through the public edge
+                '';
+                bind = lib.mkOption {
+                  type = lib.types.str;
+                  default = "0.0.0.0";
+                  description = ''
+                    Address the private viewer origin binds to. With the
+                    default the port is only opened on tailscale0.
+                  '';
+                };
+                port = lib.mkOption {
+                  type = lib.types.port;
+                  default = 7004;
+                  description = "Port for the private viewer origin.";
+                };
+                renderUrl = lib.mkOption {
+                  type = lib.types.nullOr lib.types.str;
+                  default = null;
+                  description = ''
+                    Address remote renderers use to reach the viewer origin,
+                    e.g. "http://100.64.0.10:7004". Defaults to
+                    http://<bind>:<port>, which is only right for a loopback
+                    or specific-interface bind.
+                  '';
+                };
+              };
+              snapshotRemoteUrl = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = ''
+                  Optional remote render agent (POST /render -> PNG) used when
+                  it is reachable. The local SwiftShader browser stays in place
+                  as the fallback, so an offline desktop only slows renders
+                  down instead of stalling the queue.
+                '';
+              };
+            };
+
             # Sharry file sharing service
             sharry = {
               enable = lib.mkEnableOption "Sharry file sharing service";
@@ -320,6 +438,9 @@
                 "L+ /var/www/nix-static/tire-web - - - - ${cfg.tireWeb.package}"
                 "L+ /var/www/nix-static/code-web - - - - ${cfg.codeWeb.package}"
                 "L+ /var/www/nix-static/docs-web - - - - ${cfg.docsWeb.package}"
+              ]
+              ++ lib.optionals cfg.workshop.enable [
+                "d /var/lib/amc-workshop-releases 0755 root root -"
               ]
               ++ lib.optionals cfg.sharry.enable [
                 "d /var/lib/sharry 0750 sharry sharry -"
@@ -624,6 +745,342 @@
               };
             };
 
+            systemd.services.amc-workshop-aggregate = lib.mkIf cfg.workshop.enable {
+              description = "Build AMC workshop site aggregates";
+              wantedBy = ["multi-user.target"];
+              after = ["network.target"];
+              serviceConfig = {
+                Type = "oneshot";
+                User = cfg.workshop.user;
+                Group = cfg.workshop.group;
+                StateDirectory = "amc-workshop";
+                StateDirectoryMode = "0750";
+                UMask = "0077";
+                TimeoutStartSec = "180";
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                PrivateTmp = true;
+                NoNewPrivileges = true;
+                # WAL readers need write access to the companion -shm/-wal files,
+                # even though all application connections use PRAGMA query_only.
+                ReadWritePaths = [(dirOf cfg.workshop.sourceDb)];
+                Environment = [
+                  "AMC_WORKSHOP_DB=${cfg.workshop.sourceDb}"
+                  "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
+                  "AMC_WORKSHOP_VIEWER_ROOT=${cfg.workshop.viewerRoot}"
+                  "AMC_WORKSHOP_SNAPSHOT_ROOT=/var/lib/amc-workshop/snapshots"
+                ];
+                ExecStart = "${releaseBin "amc_workshop_aggregate"}";
+              };
+            };
+
+            systemd.timers.amc-workshop-aggregate = lib.mkIf cfg.workshop.enable {
+              wantedBy = ["timers.target"];
+              timerConfig = {
+                OnBootSec = "2min";
+                OnUnitActiveSec = "15min";
+                Unit = "amc-workshop-aggregate.service";
+              };
+            };
+
+            # Sole writer of cfg.workshop.sourceDb: reads the in-game workshop
+            # API. `delta` keeps it current in the background, `full` is the
+            # weekly reconciliation that also tombstones removed entries.
+            systemd.services.amc-workshop-sync = lib.mkIf cfg.workshop.enable {
+              description = "Sync the AMC workshop source database";
+              wantedBy = ["multi-user.target"];
+              after = ["network-online.target"];
+              wants = ["network-online.target"];
+              serviceConfig = {
+                Type = "oneshot";
+                User = cfg.workshop.user;
+                Group = cfg.workshop.group;
+                StateDirectory = "amc-workshop";
+                StateDirectoryMode = "0750";
+                UMask = "0077";
+                # A full pass re-reads every vehicle key (~2 GB, ~10 min).
+                TimeoutStartSec = "3600";
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                PrivateTmp = true;
+                NoNewPrivileges = true;
+                ReadWritePaths = [(dirOf cfg.workshop.sourceDb)];
+                Environment = ["AMC_WORKSHOP_DB=${cfg.workshop.sourceDb}"];
+                ExecStart = "${releaseBin "amc_workshop_sync"} --mode delta";
+              };
+            };
+
+            systemd.timers.amc-workshop-sync = lib.mkIf cfg.workshop.enable {
+              wantedBy = ["timers.target"];
+              timerConfig = {
+                OnBootSec = "5min";
+                OnUnitActiveSec = "1h";
+                RandomizedDelaySec = "300";
+                Unit = "amc-workshop-sync.service";
+              };
+            };
+
+            systemd.services.amc-workshop-sync-full = lib.mkIf cfg.workshop.enable {
+              description = "Full reconcile of the AMC workshop source database";
+              after = ["network-online.target" "amc-workshop-sync.service"];
+              wants = ["network-online.target"];
+              # The periodic delta must not overlap a full pass.
+              conflicts = ["amc-workshop-sync.service"];
+              serviceConfig = {
+                Type = "oneshot";
+                User = cfg.workshop.user;
+                Group = cfg.workshop.group;
+                StateDirectory = "amc-workshop";
+                StateDirectoryMode = "0750";
+                UMask = "0077";
+                TimeoutStartSec = "7200";
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                PrivateTmp = true;
+                NoNewPrivileges = true;
+                ReadWritePaths = [(dirOf cfg.workshop.sourceDb)];
+                Environment = ["AMC_WORKSHOP_DB=${cfg.workshop.sourceDb}"];
+                ExecStart = "${releaseBin "amc_workshop_sync"} --mode full";
+              };
+            };
+
+            systemd.timers.amc-workshop-sync-full = lib.mkIf cfg.workshop.enable {
+              wantedBy = ["timers.target"];
+              timerConfig = {
+                OnCalendar = "Mon *-*-* 03:00:00";
+                Persistent = true;
+                RandomizedDelaySec = "900";
+                Unit = "amc-workshop-sync-full.service";
+              };
+            };
+
+            systemd.services.amc-workshop-similarity = lib.mkIf cfg.workshop.enable {
+              description = "Index AMC workshop decal similarity";
+              after = ["network.target" "amc-workshop-aggregate.service"];
+              serviceConfig = {
+                Type = "oneshot";
+                User = cfg.workshop.user;
+                Group = cfg.workshop.group;
+                StateDirectory = "amc-workshop";
+                StateDirectoryMode = "0750";
+                UMask = "0077";
+                # Full archive pass is ~20 min single-threaded; do not let
+                # systemd kill it halfway through a vehicle.
+                TimeoutStartSec = "3600";
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                PrivateTmp = true;
+                NoNewPrivileges = true;
+                ReadWritePaths = [(dirOf cfg.workshop.sourceDb)];
+                Environment = [
+                  "AMC_WORKSHOP_DB=${cfg.workshop.sourceDb}"
+                  "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
+                ];
+                ExecStart = "${releaseBin "amc_workshop_similarity"}";
+              };
+            };
+
+            systemd.timers.amc-workshop-similarity = lib.mkIf cfg.workshop.enable {
+              wantedBy = ["timers.target"];
+              timerConfig = {
+                OnBootSec = "12min";
+                OnCalendar = "*-*-* 04:10:00";
+                Persistent = true;
+                Unit = "amc-workshop-similarity.service";
+              };
+            };
+
+            systemd.sockets.amc-workshop-web = lib.mkIf cfg.workshop.enable {
+              description = "Socket for the AMC Motor Town workshop browser";
+              wantedBy = ["sockets.target"];
+              listenStreams = [
+                "127.0.0.1:${toString cfg.workshop.port}"
+              ];
+              socketConfig.Accept = false;
+            };
+
+            systemd.services.amc-workshop-web = lib.mkIf cfg.workshop.enable {
+              description = "AMC Motor Town workshop browser";
+              wantedBy = ["multi-user.target"];
+              after = ["network.target" "amc-workshop-web.socket"];
+              # No aggregate ordering or Requires: a web restart should neither
+              # pull nor wait for a 10–30s aggregate rebuild. The timer refreshes
+              # the site DB independently, and the web app can serve the
+              # previous snapshot while that runs.
+              serviceConfig = {
+                Type = "simple";
+                Sockets = ["amc-workshop-web.socket"];
+                User = cfg.workshop.user;
+                Group = cfg.workshop.group;
+                StateDirectory = "amc-workshop";
+                StateDirectoryMode = "0750";
+                UMask = "0077";
+                Restart = "on-failure";
+                RestartSec = "5";
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                PrivateTmp = true;
+                NoNewPrivileges = true;
+                ReadOnlyPaths = [cfg.workshop.viewerRoot];
+                ReadWritePaths = [(dirOf cfg.workshop.sourceDb)];
+                Environment = [
+                  "AMC_WORKSHOP_DB=${cfg.workshop.sourceDb}"
+                  "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
+                  "AMC_WORKSHOP_VIEWER_ROOT=${cfg.workshop.viewerRoot}"
+                  "AMC_WORKSHOP_SNAPSHOT_ROOT=/var/lib/amc-workshop/snapshots"
+                  "AMC_WORKSHOP_PORT=${toString cfg.workshop.port}"
+                  "AMC_WORKSHOP_PUBLIC_URL=${cfg.workshop.publicScheme}://${cfg.workshop.publicHost}"
+                ];
+                EnvironmentFile = lib.optional (
+                  cfg.workshop.environmentFile != null
+                ) cfg.workshop.environmentFile;
+              };
+              script = ''
+                exec ${releaseBin "amc_workshop"}
+              '';
+            };
+
+            systemd.services.amc-workshop-snapshots = lib.mkIf cfg.workshop.enable {
+              description = "Render AMC workshop vehicle snapshots";
+              wantedBy = ["multi-user.target"];
+              after = ["network-online.target" "amc-workshop-web.service"];
+              wants = ["network-online.target"];
+              requires = ["amc-workshop-web.service"];
+              serviceConfig = {
+                Type = "simple";
+                User = cfg.workshop.user;
+                Group = cfg.workshop.group;
+                StateDirectory = "amc-workshop";
+                StateDirectoryMode = "0750";
+                UMask = "0077";
+                Restart = "always";
+                RestartSec = "15";
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                PrivateTmp = true;
+                NoNewPrivileges = true;
+                MemoryMax = "2G";
+                ReadOnlyPaths = [cfg.workshop.sourceDb cfg.workshop.viewerRoot];
+                Environment = let
+                  originBase =
+                    if cfg.workshop.viewerOrigin.renderUrl != null
+                    then cfg.workshop.viewerOrigin.renderUrl
+                    else "http://${cfg.workshop.viewerOrigin.bind}:${
+                      toString cfg.workshop.viewerOrigin.port
+                    }";
+                  # A remote renderer has to fetch the page itself, so it gets
+                  # the private origin when one exists; the local browser keeps
+                  # using the public URL.
+                  viewerUrl =
+                    if cfg.workshop.viewerOrigin.enable
+                    then "${originBase}/vehicles/index.html"
+                    else "${cfg.workshop.publicScheme}://${cfg.workshop.publicHost}/vehicles/index.html";
+                in
+                  [
+                    "HOME=/var/lib/amc-workshop"
+                    "AMC_WORKSHOP_SITE_DB=/var/lib/amc-workshop/workshop_site.db"
+                    "AMC_WORKSHOP_SNAPSHOT_ROOT=/var/lib/amc-workshop/snapshots"
+                    "AMC_WORKSHOP_VIEWER_URL=${viewerUrl}"
+                    "AMC_SNAPSHOT_CHROME=${lib.getExe pkgs.chromium}"
+                  ]
+                  ++ lib.optional (cfg.workshop.snapshotRemoteUrl != null)
+                  "AMC_SNAPSHOT_REMOTE_URL=${cfg.workshop.snapshotRemoteUrl}";
+              };
+              script = ''
+                exec ${releaseBin "amc_workshop_snapshots"}
+              '';
+            };
+
+            systemd.services.amc-workshop-viewer-origin =
+              lib.mkIf (cfg.workshop.enable && cfg.workshop.viewerOrigin.enable) {
+                description = "Private viewer origin for remote snapshot renderers";
+                wantedBy = ["multi-user.target"];
+                after = ["network.target" "amc-workshop-web.service"];
+                requires = ["amc-workshop-web.service"];
+                serviceConfig = {
+                  Type = "simple";
+                  User = cfg.workshop.user;
+                  Group = cfg.workshop.group;
+                  Restart = "always";
+                  RestartSec = "5";
+                  ProtectSystem = "strict";
+                  ProtectHome = true;
+                  PrivateTmp = true;
+                  NoNewPrivileges = true;
+                  MemoryMax = "512M";
+                  ReadOnlyPaths = [cfg.workshop.viewerRoot];
+                  Environment = [
+                    "AMC_WORKSHOP_VIEWER_ROOT=${cfg.workshop.viewerRoot}"
+                    "AMC_VIEWER_ORIGIN_BIND=${cfg.workshop.viewerOrigin.bind}"
+                    "AMC_VIEWER_ORIGIN_PORT=${
+                      toString cfg.workshop.viewerOrigin.port
+                    }"
+                    "AMC_WORKSHOP_ORIGIN_UPSTREAM=http://127.0.0.1:${
+                      toString cfg.workshop.port
+                    }"
+                  ];
+                };
+                script = ''
+                  exec ${releaseBin "amc_workshop_viewer_origin"}
+                '';
+              };
+
+            # The origin is a private service: keep the port off the public
+            # interface and only open it on the tailnet.
+            networking.firewall.interfaces."tailscale0".allowedTCPPorts =
+              lib.mkIf (cfg.workshop.enable && cfg.workshop.viewerOrigin.enable)
+              [cfg.workshop.viewerOrigin.port];
+
+            services.nginx.virtualHosts.${cfg.workshop.publicHost}.locations = lib.mkIf cfg.workshop.enable {
+              "/workshop" = {
+                return = "301 /workshop/";
+              };
+              "/workshop/" = {
+                proxyPass =
+                  "http://127.0.0.1:${toString cfg.workshop.port}/workshop/";
+              };
+              "/workshop/snapshots/" = {
+                proxyPass =
+                  "http://127.0.0.1:${toString cfg.workshop.port}/workshop/snapshots/";
+                extraConfig = ''
+                  expires 1h;
+                  add_header Cache-Control "public, max-age=3600";
+                '';
+              };
+              # The vhost catch-all answers no-store, which forced every viewer
+              # load — and every snapshot render — to re-download multi-MB GLBs
+              # and textures. Viewer binaries are referenced without a version
+              # query, so an immutable year would pin stale meshes after a
+              # re-stage: an hour plus stale-while-revalidate collapses repeat
+              # loads without wedging an asset update for long.
+              "/vehicles/" = {
+                root = builtins.dirOf cfg.workshop.viewerRoot;
+                extraConfig = ''
+                  location ~* \.(glb|gltf|bin|png|jpe?g|webp|ktx2|hdr|exr|dds|tga|woff2?|ttf|otf)$ {
+                    root ${builtins.dirOf cfg.workshop.viewerRoot};
+                    add_header Cache-Control "public, max-age=3600, stale-while-revalidate=86400";
+                    access_log off;
+                  }
+                  # Documents and scripts either carry ?v=N or must revalidate
+                  # so a renderer bump actually reaches clients.
+                  add_header Cache-Control "no-cache";
+                '';
+              };
+              "/api/workshop/" = {
+                proxyPass =
+                  "http://127.0.0.1:${toString cfg.workshop.port}/api/workshop/";
+              };
+            };
+
+            # Keep a memorable hostname working without duplicating the app.
+            services.nginx.virtualHosts.${cfg.workshop.aliasHost} =
+              lib.mkIf cfg.workshop.enable {
+                enableACME = true;
+                forceSSL = true;
+                locations."/".return =
+                  "301 https://${cfg.workshop.publicHost}/workshop/";
+              };
+
             systemd.services.amc-radio = {
               wantedBy = ["multi-user.target"];
               after = ["network.target" "motortown-server.service"];
@@ -656,7 +1113,11 @@
                 # request carrying an empty password is rejected, which killed
                 # all in-game DJ replies/announcements). Must match
                 # services.motortown-server...HostWebAPIServerPassword.
-                GAME_API_PASSWORD = "hackme";
+                # NOTE: named GAME_SERVER_API_PASSWORD (same as amc-backend) on
+                # purpose — peripheral-bots.age still declares an empty
+                # GAME_API_PASSWORD, and an EnvironmentFile value overrides
+                # Environment=, so the empty one would win.
+                GAME_SERVER_API_PASSWORD = "hackme";
               };
               preStart = ''
                 # One-time migration to /var/lib/amc-bots/radio: copy the DB
@@ -705,8 +1166,9 @@
                 COURT_CATEGORY_ID = "1498624085217902602";
                 COURT_CHANNEL_ID = "1498624125227368468";
                 # Same Host Web API password as amc-radio above — the
-                # announcement rotation posts through POST /chat.
-                GAME_API_PASSWORD = "hackme";
+                # announcement rotation posts through POST /chat. (Named
+                # GAME_SERVER_API_PASSWORD for the EnvironmentFile reason above.)
+                GAME_SERVER_API_PASSWORD = "hackme";
               };
               preStart = ''
                 # One-time migration to /var/lib/amc-bots/bot (same rules as

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}#{{ tag }} — Motor Town Workshop{% endblock %}
+{% block description %}Motor Town builds and collections tagged #{{ tag }} by the ASEAN Motor Club.{% endblock %}
+{% block canonical %}https://www.aseanmotorclub.com/workshop/tags/{{ tag|urlencode }}/{% endblock %}
+{% block robots %}{% if noindex %}<meta name="robots" content="noindex,follow">{% else %}<meta name="robots" content="index,follow">{% endif %}{% endblock %}
+{% block content %}
+<div class="wrap">
+  <p class="crumb"><a href="/workshop/tags/">Tags</a></p>
+  <header class="page-head">
+    <h1>#{{ tag }}</h1>
+    {% if usage %}
+    <p class="lede">{{ usage.items }} build{% if usage.items != 1 %}s{% endif %}{% if usage.collections %} · {{ usage.collections }} collection{% if usage.collections != 1 %}s{% endif %}{% endif %}</p>
+    {% else %}
+    <p class="lede">No builds carry this tag yet.</p>
+    {% endif %}
+  </header>
+
+  {% if items %}
+  <div class="card-grid">
+    {% for item in items %}
+    <article class="vehicle-card{% if item.isOriginal %} original-card{% endif %}">
+      <a class="card-visual" href="/workshop/items/{{ item.id }}/" aria-hidden="true" tabindex="-1">
+        {% if item.snapshotCardUrl %}
+        <img src="{{ item.snapshotCardUrl }}" alt="" width="480" height="270" loading="lazy" decoding="async">
+        {% else %}
+        <img src="{{ item.vehicleKey|vehicle_placeholder }}" alt="" width="480" height="270" loading="lazy">
+        {% endif %}
+        <span class="card-id">#{{ item.id }}</span>
+      </a>
+      <div class="card-body">
+        <h3><a href="/workshop/items/{{ item.id }}/">{{ item.vehicleKey|vehicle_name }}</a></h3>
+        <p class="byline">{% if item.author %}by {{ item.author }}{% else %}<span class="muted">Workshop upload</span>{% endif %}</p>
+        <p class="byline muted">&#9829; {{ likes.get(item.id, 0) }}</p>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if collections %}
+  <h2 class="section-title">Collections</h2>
+  <ul class="collection-links">
+    {% for c in collections %}
+    <li><a href="/workshop/collections/{{ c.id }}/{{ c.slug }}/">{{ c.title }}</a> <span class="muted">{{ c.item_count }} builds</span></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if related %}
+  <h2 class="section-title">Related tags</h2>
+  <p class="tag-row">
+    {% for r in related %}<a class="tag-chip" href="/workshop/tags/{{ r.tag|urlencode }}/">#{{ r.tag }}<span class="tag-count">{{ r.items }}</span></a>{% endfor %}
+  </p>
+  {% endif %}
+</div>
+{% endblock %}

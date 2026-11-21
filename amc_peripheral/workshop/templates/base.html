@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Motor Town: Behind The Wheel Workshop — ASEAN Motor Club{% endblock %}</title>
+  <meta name="description" content="{% block description %}Browse vehicle paints, decals and builds for Motor Town: Behind The Wheel, shared by the ASEAN Motor Club community.{% endblock %}">
+  {% block robots %}<meta name="robots" content="index,follow">{% endblock %}
+  <meta name="theme-color" content="#0b1017">
+  <meta name="application-name" content="AMC Workshop">
+  <link rel="canonical" href="{% block canonical %}https://www.aseanmotorclub.com/workshop/{% endblock %}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ASEAN Motor Club">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:url" content="{{ self.canonical() }}">
+  <meta property="og:title" content="{{ self.title() }}">
+  <meta property="og:description" content="{{ self.description() }}">
+  <meta name="twitter:title" content="{{ self.title() }}">
+  <meta name="twitter:description" content="{{ self.description() }}">
+  {% if social_image %}
+  <meta property="og:image" content="{{ social_image }}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/webp">
+  <meta property="og:image:alt" content="{% block social_image_alt %}Motor Town workshop builds by the ASEAN Motor Club community{% endblock %}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="{{ social_image }}">
+  <meta name="twitter:image:alt" content="{{ self.social_image_alt() }}">
+  {% else %}
+  <meta name="twitter:card" content="summary">
+  {% endif %}
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/workshop/static/workshop.css?v=24">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <div class="brand-block">
+        <a class="brand" href="/workshop/">Workshop</a>
+        <span class="brand-credit">Brought to you by <a href="/">ASEAN Motor Club</a></span>
+      </div>
+      <nav aria-label="Workshop">
+        <a href="/workshop/" {% if page == 'home' %}aria-current="page"{% endif %}>Discover</a>
+        <a href="/workshop/gallery/" {% if page == 'gallery' %}aria-current="page"{% endif %}>Gallery</a>
+        <a href="/workshop/authors/" {% if page == 'authors' %}aria-current="page"{% endif %}>Authors</a>
+        <a href="/workshop/collections/" {% if page == 'collections' %}aria-current="page"{% endif %}>Collections</a>
+        <a href="/workshop/tags/" {% if page == 'tags' %}aria-current="page"{% endif %}>Tags</a>
+        <a href="/workshop/comments/" {% if page == 'comments' %}aria-current="page"{% endif %}>Comments</a>
+        {% if sso_enabled %}
+          {% if user %}
+          <a class="user-chip" href="/workshop/account/" title="{{ user_name }} on Discord">
+            <img src="{{ user.a }}" alt="" width="24" height="24" loading="lazy" decoding="async">
+            <span>{{ user_name }}</span>
+          </a>
+          {% else %}
+          <a class="user-chip ghost" href="/workshop/auth/login?next={{ request_path|urlencode }}">Sign in with Discord</a>
+          {% endif %}
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Community workshop browser · ASEAN Motor Club</p>
+    </div>
+  </footer>
+  <script src="/workshop/static/snapshots.js?v=1" defer></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

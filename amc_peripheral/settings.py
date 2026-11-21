@@ -22,7 +22,13 @@ API_BASE_URL = os.environ.get("API_BASE_URL", "https://discord.com/api/v10")
 APPLICATION_ID = os.environ.get("APPLICATION_ID")
 GUILD_ID = int(os.environ.get("GUILD_ID", "1341775494026231859"))
 
-GAME_API_PASSWORD = os.environ.get("GAME_API_PASSWORD", "")
+# Host Web API password for the Motor Town game server.
+# GAME_SERVER_API_PASSWORD is the name the backend uses; it is preferred so the
+# units can set it without colliding with an empty GAME_API_PASSWORD inherited
+# from an env file (systemd applies EnvironmentFile= AFTER Environment=).
+GAME_API_PASSWORD = os.environ.get("GAME_API_PASSWORD") or os.environ.get(
+    "GAME_SERVER_API_PASSWORD", ""
+)
 
 # Liquidsoap
 LIQUIDSOAP_TELNET_HOST = os.environ.get("LIQUIDSOAP_TELNET_HOST", "localhost")

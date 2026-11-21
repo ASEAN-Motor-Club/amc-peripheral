@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% from "_macros.html" import card, author_card %}
+{% block title %}Motor Town Workshop — Paints, Decals & Tuned Builds | ASEAN Motor Club{% endblock %}
+{% block description %}Browse {{ "{:,}".format(stats['items']) }} community-built Motor Town paints, decals, parts and tuned vehicles from the ASEAN Motor Club workshop.{% endblock %}
+{% block canonical %}https://www.aseanmotorclub.com/workshop/{% endblock %}
+{% block social_image_alt %}Popular Motor Town workshop builds with decals{% endblock %}
+{% block head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Motor Town Workshop — ASEAN Motor Club",
+  "url": "https://www.aseanmotorclub.com/workshop/",
+  "description": "Community-built Motor Town paints, decals, parts and tuned vehicles.",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "https://www.aseanmotorclub.com/workshop/search/?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
+{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="wrap hero-inner">
+    <div>
+      <p class="eyebrow">Motor Town community creations</p>
+      <h1>Find your next build.</h1>
+      <p class="lede">Browse the largest community catalogue of shared paints, decals, parts and tuned vehicles in Motor Town.</p>
+      <form class="search-stub" action="/workshop/search/" method="get" role="search">
+        <label class="sr-only" for="workshop-search">Search by author, vehicle, item code or tag</label>
+        <input id="workshop-search" name="q" type="search" placeholder="Author, vehicle, item code (#179250), or #tag" autocomplete="off" maxlength="80" required>
+        <button type="submit">Search</button>
+      </form>
+      {% if tags %}
+      <p class="tag-strip" aria-label="Popular tags">
+        {% for t in tags %}<a class="tag-chip" href="/workshop/tags/{{ t.tag|urlencode }}/">#{{ t.tag }}</a>{% endfor %}
+      </p>
+      {% endif %}
+    </div>
+    <dl class="stats" aria-label="Workshop totals">
+      <div><dt>Builds</dt><dd>{{ "{:,}".format(stats['items']) }}</dd></div>
+      <div><dt>Creators</dt><dd>{{ "{:,}".format(stats['accounts']) }}</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="section wrap" aria-labelledby="popular-title">
+  <div class="section-head">
+    <div><p class="eyebrow">Most installed</p><h2 id="popular-title">Popular builds</h2></div>
+    <a href="/workshop/gallery/?sort=popular">See all popular</a>
+  </div>
+  <div class="card-grid">
+    {% for item in data.popular %}{{ card(item) }}{% else %}
+      <p class="empty">No public workshop items yet.</p>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="section wrap" aria-labelledby="new-title">
+  <div class="section-head">
+    <div><p class="eyebrow">Fresh from the workshop</p><h2 id="new-title">New uploads</h2></div>
+    <a href="/workshop/gallery/?sort=new">See all new</a>
+  </div>
+  <div class="card-grid">
+    {% for item in data.newest %}{{ card(item) }}{% endfor %}
+  </div>
+</section>
+
+<section class="section wrap" aria-labelledby="authors-title">
+  <div class="section-head">
+    <div><p class="eyebrow">Builders worth following</p><h2 id="authors-title">Popular authors</h2></div>
+    <a class="muted" href="/workshop/authors/">View all authors →</a>
+  </div>
+  <div class="author-grid">
+    {% for author in data.authors %}{{ author_card(author) }}{% else %}<p class="empty">No creators to show yet.</p>{% endfor %}
+  </div>
+</section>
+{% endblock %}

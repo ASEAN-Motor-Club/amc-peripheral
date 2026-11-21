@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}New collection — Motor Town Workshop{% endblock %}
+{% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block content %}
+<div class="wrap narrow form-page">
+  <p class="crumb"><a href="/workshop/collections/">Collections</a></p>
+  <header class="form-head">
+    <h1>New collection</h1>
+    <p class="muted">A list of builds you put together — yours or anyone's. You can change everything later.</p>
+  </header>
+  {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+  <form method="post" action="/workshop/collections/new" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    {% if item %}<input type="hidden" name="item" value="{{ item }}">{% endif %}
+    <label>Title
+      <input name="title" maxlength="40" required value="{{ form.title if form else '' }}" placeholder="Hana drift builds">
+    </label>
+    <label>Description <span class="muted">(optional)</span>
+      <textarea name="description" rows="4" maxlength="400" placeholder="What ties these builds together? Links are stripped."></textarea>
+    </label>
+    <fieldset>
+      <legend>Who can see it</legend>
+      <label class="inline"><input type="radio" name="visibility" value="public" checked> Public — listed in Collections</label>
+      <label class="inline"><input type="radio" name="visibility" value="unlisted"> Unlisted — anyone with the link, not listed</label>
+    </fieldset>
+    <div class="form-actions">
+      <button type="submit" class="button">Create collection</button>
+      <a class="button secondary" href="/workshop/collections/mine/">Your collections</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_macros.html" import card %}
+{% block title %}Your account — AMC Workshop{% endblock %}
+{% block canonical %}https://www.aseanmotorclub.com/workshop/account/{% endblock %}
+{% block robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block content %}
+<section class="page-head wrap">
+  <p class="eyebrow">Discord sign-in</p>
+  <h1>Your account</h1>
+  <p class="lede">Signed in with Discord. The session stays valid in this browser until you sign out or it expires.</p>
+</section>
+
+<div class="wrap account-layout">
+  <section class="account-card" aria-labelledby="identity-title">
+    <h2 id="identity-title">Identity</h2>
+    <div class="identity-row">
+      <img class="identity-avatar" src="{{ user.a }}" alt="" width="64" height="64" decoding="async">
+      <div>
+        <strong>{{ user_name }}</strong>
+        <p class="muted">@{{ user.u }} · Discord ID {{ user.sub }}</p>
+      </div>
+    </div>
+    <p class="membership">
+      {% if user.m %}
+      <span class="badge">ASEAN Motor Club member</span>
+      {% elif user.g %}
+      <span class="badge muted-badge">Not in the club Discord server</span>
+      {% else %}
+      <span class="badge muted-badge">Membership check not configured</span>
+      {% endif %}
+    </p>
+    {% if profile_error %}<p class="form-error" role="alert">{{ profile_error }}</p>{% endif %}
+    <form action="/workshop/profile" method="post" class="stack profile-form">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>Display name <span class="muted">(shown on your builds and collections)</span>
+        <input name="display_name" maxlength="32" value="{{ profile.display_name if profile and profile.display_name else '' }}" placeholder="{{ user_name }}">
+      </label>
+      <label>About you <span class="muted">(up to 400 characters, links are stripped)</span>
+        <textarea name="bio" rows="4" maxlength="400" placeholder="What do you drive, what do you build?">{{ profile.bio if profile and profile.bio else '' }}</textarea>
+      </label>
+      <button type="submit" class="button">Save profile</button>
+    </form>
+    <p class="page-actions">
+      <a class="button secondary" href="/workshop/collections/mine/">Your collections</a>
+    </p>
+    <form action="/workshop/auth/logout" method="post">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button type="submit" class="secondary">Sign out</button>
+    </form>
+  </section>
+
+  <section class="account-builds" aria-labelledby="builds-title">
+    <div class="results-head">
+      <h2 id="builds-title">Your workshop builds</h2>
+      {% if claim_count %}
+      <p class="muted">{{ claim_count }} build{{ "" if claim_count == 1 else "s" }} matched to your characters{% if steam_id %} · Steam ID {{ steam_id }}{% endif %}</p>
+      {% elif steam_id %}
+      <p class="muted">Steam ID {{ steam_id }}</p>
+      {% endif %}
+    </div>
+    {% if items %}
+    <div class="card-grid">
+      {% for item in items %}{{ card(item) }}{% endfor %}
+    </div>
+    {% elif steam_id %}
+    <p class="empty">No published builds are attributed to your characters yet.</p>
+    {% else %}
+    <p class="empty">
+      Your Discord account is not linked to an in-game player yet, so builds cannot be matched.
+      Verify in-game first, then sign in again.
+    </p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/workshop/static/snapshots.js?v=1" defer></script>{% endblock %}

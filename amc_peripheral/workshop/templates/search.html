@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% from "_macros.html" import author_card %}
+{% block title %}{% if query %}Search “{{ query }}”{% else %}Search{% endif %} — ASEAN Motor Club Workshop{% endblock %}
+{% block description %}Search Motor Town workshop creators, vehicle names, or open an exact item code.{% endblock %}
+{% block content %}
+<section class="page-head wrap">
+  <p class="eyebrow"><a href="/workshop/">Workshop</a> / Search</p>
+  <h1>Search the workshop.</h1>
+  <p class="lede">Find a creator or vehicle by name, or enter an item code such as <code>#179250</code>.</p>
+  <form class="search-stub" action="/workshop/search/" method="get" role="search">
+    <label class="sr-only" for="workshop-search">Search by author, vehicle, or item code</label>
+    <input id="workshop-search" name="q" type="search" value="{{ query }}" placeholder="Author, vehicle, or #item-code" autocomplete="off" maxlength="80" required autofocus>
+    <button type="submit">Search</button>
+  </form>
+</section>
+{% if query %}
+{% if vehicles %}
+<section class="section wrap" aria-labelledby="vehicle-results-title">
+  <div class="section-head">
+    <div>
+      <p class="eyebrow">Vehicle search</p>
+      <h2 id="vehicle-results-title">Vehicles matching “{{ query }}”</h2>
+    </div>
+    <span class="muted">{{ vehicles|length }} shown</span>
+  </div>
+  <div class="vehicle-links">
+    {% for vehicle in vehicles %}
+    <a class="vehicle-link" href="/workshop/vehicles/{{ vehicle.vehicleKey }}/">
+      <strong>{{ vehicle.displayName }}</strong>
+      <span>{{ "{:,}".format(vehicle.uploads) }} build{% if vehicle.uploads != 1 %}s{% endif %}</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% if authors %}
+<section class="section wrap" aria-labelledby="author-results-title">
+  <div class="section-head">
+    <div>
+      <p class="eyebrow">Creator search</p>
+      <h2 id="author-results-title">Authors matching “{{ query }}”</h2>
+    </div>
+    <span class="muted">{{ authors|length }} shown</span>
+  </div>
+  <div class="author-grid">
+    {% for author in authors %}{{ author_card(author) }}{% endfor %}
+  </div>
+</section>
+{% endif %}
+{% if not vehicles and not authors %}
+<section class="section wrap" aria-labelledby="search-empty-title">
+  <div class="section-head">
+    <div>
+      <p class="eyebrow">No matches</p>
+      <h2 id="search-empty-title">Nothing matched “{{ query }}”</h2>
+    </div>
+  </div>
+  <p class="empty">Try a shorter name, a different spelling, or an item code like <code>#179250</code>.</p>
+</section>
+{% endif %}
+{% else %}
+<section class="section wrap" aria-labelledby="search-start-title">
+  <div class="section-head">
+    <div>
+      <p class="eyebrow">Start searching</p>
+      <h2 id="search-start-title">Find an author or vehicle</h2>
+    </div>
+  </div>
+  <p class="empty">Enter a creator name, a vehicle name such as <code>Raton</code>, or an exact item code above.</p>
+</section>
+{% endif %}
+{% endblock %}

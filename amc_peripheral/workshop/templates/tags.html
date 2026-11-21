@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Tags — Motor Town Workshop{% endblock %}
+{% block description %}Every tag the club has put on a Motor Town build or collection.{% endblock %}
+{% block canonical %}https://www.aseanmotorclub.com/workshop/tags/{% endblock %}
+{% block content %}
+<div class="wrap">
+  <header class="page-head">
+    <h1>Tags</h1>
+    <p class="lede">Labels members put on their own builds and collections — <code>#drift</code>, <code>#taxi</code>, <code>#police</code>, <code>#touge</code>. Free-form by design: if the club has a word for it, that word is the tag.</p>
+  </header>
+
+  <nav class="tabs" aria-label="Sort tags">
+    <a href="/workshop/tags/?sort=popular" {% if sort == 'popular' %}aria-current="page"{% endif %}>Most used</a>
+    <a href="/workshop/tags/?sort=az" {% if sort == 'az' %}aria-current="page"{% endif %}>A–Z</a>
+  </nav>
+
+  {% if tags %}
+  <ul class="tag-cloud">
+    {% for t in tags %}
+    <li>
+      <a class="tag-chip{% if t.items >= 5 %} big{% endif %}" href="/workshop/tags/{{ t.tag|urlencode }}/">
+        #{{ t.tag }}<span class="tag-count">{{ t.total }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No tags yet. Claim a build and tag it, or tag one of your collections.</p>
+  {% endif %}
+
+  {% if page_no > 1 or has_next %}
+  <nav class="pager" aria-label="Pages">
+    {% if page_no > 1 %}<a href="/workshop/tags/?sort={{ sort }}&page={{ page_no - 1 }}">&larr; Previous</a>{% endif %}
+    {% if has_next %}<a href="/workshop/tags/?sort={{ sort }}&page={{ page_no + 1 }}">Next &rarr;</a>{% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

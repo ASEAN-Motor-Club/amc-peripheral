@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "_macros.html" import card %}
+{% block title %}{% if vehicle_label %}{{ vehicle_label }}{% else %}{{ author.displayName or 'Creator' }}{% endif %} — Workshop{% endblock %}
+{% block canonical %}{% if canonical_url is defined %}{{ canonical_url }}{% elif author.accountId %}https://www.aseanmotorclub.com/workshop/authors/{{ author.accountId }}/{% else %}https://www.aseanmotorclub.com/workshop/{% endif %}{% endblock %}
+{% block content %}
+<section class="page-head wrap">
+  <p class="eyebrow">{% if author.accountId %}Creator{% else %}Vehicle{% endif %}</p>
+  <h1>{% if vehicle_label %}{{ vehicle_label }}{% else %}{{ author.displayName or 'Workshop builds' }}{% endif %}</h1>
+  <p class="muted">{% if author.accountId %}{{ data['items']|length }} of {{ author.uploads }} builds · {{ author.installs }} installs · {{ author.votes }} votes{% else %}{{ author.uploads }} builds{% if filters and (filters.paint or filters.decal or filters.parts or filters.tuning or filters.club) %} matching filters{% endif %}{% endif %}</p>
+</section>
+{% if not author.accountId %}
+<div class="wrap gallery-layout">
+  <form class="filters" action="/workshop/vehicles/{{ vehicle_key }}/" method="get" aria-label="Filter {{ vehicle_label }} builds">
+    <input type="hidden" name="sort" value="{{ pagination.sort if pagination else 'popular' }}">
+    <fieldset>
+      <legend>Contains</legend>
+      <label><input type="checkbox" name="paint" value="1" {% if filters and filters.paint %}checked{% endif %}> Paint</label>
+      <label><input type="checkbox" name="decal" value="1" {% if filters and filters.decal %}checked{% endif %}> Decals</label>
+      <label><input type="checkbox" name="parts" value="1" {% if filters and filters.parts %}checked{% endif %}> Parts</label>
+      <label><input type="checkbox" name="tuning" value="1" {% if filters and filters.tuning %}checked{% endif %}> Tuning</label>
+      <label><input type="checkbox" name="club" value="1" {% if filters and filters.club %}checked{% endif %}> Club member</label>
+    </fieldset>
+    <button type="submit">Apply filters</button>
+    <a class="reset" href="/workshop/vehicles/{{ vehicle_key }}/">Reset</a>
+  </form>
+  <div class="section">
+{% else %}
+<section class="wrap section">
+{% endif %}
+  {% if pagination %}
+  <div class="results-head">
+    <h2>Builds</h2>
+    <nav class="sort-tabs" aria-label="Sort builds">
+      <a href="{{ pagination.popularUrl }}"{% if pagination.sort == 'popular' %} class="current" aria-current="page"{% endif %}>Most popular</a>
+      <a href="{{ pagination.newUrl }}"{% if pagination.sort == 'new' %} class="current" aria-current="page"{% endif %}>Newest</a>
+    </nav>
+  </div>
+  {% endif %}
+  <div class="card-grid">
+    {% for item in data['items'] %}{{ card(item) }}{% else %}<p class="empty">No builds match these filters.</p>{% endfor %}
+  </div>
+  {% if pagination and pagination.totalPages > 1 %}
+  <nav class="pager" aria-label="{% if author.accountId %}Creator{% else %}Vehicle{% endif %} pages">
+    {% if pagination.page > 1 %}
+      <a href="{{ pagination.firstUrl }}" rel="first">« First</a>
+      <a href="{{ pagination.prevUrl }}" rel="prev">← Previous</a>
+    {% endif %}
+    {% for entry in pagination.pages %}
+      {% if entry.gap %}<span class="pager-gap" aria-hidden="true">…</span>
+      {% elif entry.current %}<a href="{{ entry.url }}" aria-current="page" class="current">{{ entry.number }}</a>
+      {% else %}<a href="{{ entry.url }}">{{ entry.number }}</a>{% endif %}
+    {% endfor %}
+    {% if pagination.page < pagination.totalPages %}
+      <a href="{{ pagination.nextUrl }}" rel="next">Next →</a>
+      <a href="{{ pagination.lastUrl }}" rel="last">Last »</a>
+    {% endif %}
+    <span class="muted pager-summary">Page {{ pagination.page }} of {{ pagination.totalPages }}</span>
+  </nav>
+  {% endif %}
+{% if not author.accountId %}
+  </div>
+</div>
+{% else %}
+</section>
+{% endif %}
+{% endblock %}
