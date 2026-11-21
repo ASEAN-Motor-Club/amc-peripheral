@@ -1113,7 +1113,11 @@
                 # request carrying an empty password is rejected, which killed
                 # all in-game DJ replies/announcements). Must match
                 # services.motortown-server...HostWebAPIServerPassword.
-                GAME_API_PASSWORD = "hackme";
+                # NOTE: named GAME_SERVER_API_PASSWORD (same as amc-backend) on
+                # purpose — peripheral-bots.age still declares an empty
+                # GAME_API_PASSWORD, and an EnvironmentFile value overrides
+                # Environment=, so the empty one would win.
+                GAME_SERVER_API_PASSWORD = "hackme";
               };
               preStart = ''
                 # One-time migration to /var/lib/amc-bots/radio: copy the DB
@@ -1162,8 +1166,9 @@
                 COURT_CATEGORY_ID = "1498624085217902602";
                 COURT_CHANNEL_ID = "1498624125227368468";
                 # Same Host Web API password as amc-radio above — the
-                # announcement rotation posts through POST /chat.
-                GAME_API_PASSWORD = "hackme";
+                # announcement rotation posts through POST /chat. (Named
+                # GAME_SERVER_API_PASSWORD for the EnvironmentFile reason above.)
+                GAME_SERVER_API_PASSWORD = "hackme";
               };
               preStart = ''
                 # One-time migration to /var/lib/amc-bots/bot (same rules as
