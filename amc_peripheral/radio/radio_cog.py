@@ -51,7 +51,7 @@ from amc_peripheral.settings import (
     JINGLES_PATH,
     SONG_INTROS_PATH,
     RADIO_DB_PATH,
-    DENO_PATH,
+    YT_DLP_NODE_PATH,
     LASTFM_API_KEY,
     KNOWLEDGE_FORUM_CHANNEL_ID,
     BACKEND_API_URL,
@@ -3616,7 +3616,7 @@ Script:
             "quiet": True,
             "default_search": "ytsearch",
             "cookiefile": YT_COOKIES_PATH,
-            "js_runtimes": {"deno": {"path": DENO_PATH}},
+            "js_runtimes": {"node": {"path": YT_DLP_NODE_PATH}},
         }
 
         try:
@@ -3666,7 +3666,7 @@ Script:
             "outtmpl": f"{REQUESTS_PATH}/{base_filename}.%(ext)s",
             "cookiefile": YT_COOKIES_PATH,
             "retries": 5,
-            "js_runtimes": {"deno": {"path": DENO_PATH}},
+            "js_runtimes": {"node": {"path": YT_DLP_NODE_PATH}},
         }
 
         try:
@@ -3703,7 +3703,7 @@ Script:
             "quiet": True,
             "default_search": "ytsearch",
             "cookiefile": YT_COOKIES_PATH,
-            "js_runtimes": {"deno": {"path": DENO_PATH}},
+            "js_runtimes": {"node": {"path": YT_DLP_NODE_PATH}},
         }
 
         try:
@@ -3732,7 +3732,7 @@ Script:
             "outtmpl": f"{output_dir}/{base_filename}.%(ext)s",
             "cookiefile": YT_COOKIES_PATH,
             "retries": 5,
-            "js_runtimes": {"deno": {"path": DENO_PATH}},
+            "js_runtimes": {"node": {"path": YT_DLP_NODE_PATH}},
         }
 
         try:
@@ -4075,7 +4075,7 @@ Script:
             "quiet": True,
             "default_search": "ytsearch",
             "cookiefile": YT_COOKIES_PATH,
-            "js_runtimes": {"deno": {"path": DENO_PATH}},
+            "js_runtimes": {"node": {"path": YT_DLP_NODE_PATH}},
         }
 
         try:
@@ -4124,7 +4124,7 @@ Script:
             "outtmpl": f"{SONG_CACHE_PATH}/{video_id}.%(ext)s",
             "cookiefile": YT_COOKIES_PATH,
             "retries": 5,
-            "js_runtimes": {"deno": {"path": DENO_PATH}},
+            "js_runtimes": {"node": {"path": YT_DLP_NODE_PATH}},
         }
 
         try:

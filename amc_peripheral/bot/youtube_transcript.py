@@ -16,7 +16,7 @@ import re
 
 from requests import Session
 
-from ..settings import YT_COOKIES_PATH, DENO_PATH
+from ..settings import YT_COOKIES_PATH, YT_DLP_NODE_PATH
 
 log = logging.getLogger(__name__)
 
@@ -147,8 +147,8 @@ def _fetch_via_ytdlp(url: str, languages: list[str]) -> list[TranscriptSegment] 
                 "no_warnings": True,
             }
 
-            if DENO_PATH:
-                ydl_opts["js_runtimes"] = {"deno": {"path": DENO_PATH}}
+            if YT_DLP_NODE_PATH:
+                ydl_opts["js_runtimes"] = {"node": {"path": YT_DLP_NODE_PATH}}
                 ydl_opts["remote_components"] = ["ejs:github"]
 
             if YT_COOKIES_PATH and os.path.exists(YT_COOKIES_PATH):

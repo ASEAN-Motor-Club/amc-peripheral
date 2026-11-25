@@ -1093,7 +1093,9 @@
               path = [pkgs.ffmpeg];
               environment = {
                 PLAYLIST_PATH = "/var/lib/radio/playlist";
-                DENO_PATH = "${pkgs.deno}/bin/deno";
+                # yt-dlp 2026.11.23 requires deno >= 2.3.0; this host's deno
+                # is 2.2.12, so point yt-dlp's JS solver at node 22 instead.
+                YT_DLP_NODE_PATH = "${pkgs.nodejs_22}/bin/node";
                 RADIO_PATH = "/var/lib/radio/";
                 REQUESTS_PATH = "/var/lib/radio/requests";
                 SONGS_PATH = "/var/lib/radio/songs";
@@ -1157,7 +1159,7 @@
                 RADIO_DB_PATH = "${cfg.dbPath}";
                 GAME_DB_PATH = "/var/lib/motortown/gamedata.db";
                 YT_COOKIES_PATH = "${cfg.cookiesPath}";
-                DENO_PATH = "${pkgs.deno}/bin/deno";
+                YT_DLP_NODE_PATH = "${pkgs.nodejs_22}/bin/node";
                 MEMORY_DATA_DIR = "/var/lib/amc-bots/bot";
                 DEFAULT_AI_MODEL = "deepseek/deepseek-v4-flash-0731";
                 TRANSLATION_AI_MODEL = "openai/gpt-oss-120b";

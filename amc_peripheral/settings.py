@@ -115,9 +115,7 @@ SONG_INTROS_PATH = os.environ.get(
     "SONG_INTROS_PATH", "/var/lib/radio/tts"
 )
 RADIO_DB_PATH = os.environ.get("RADIO_DB_PATH", os.path.join(RADIO_PATH, "radio.db"))
-DENO_PATH = os.environ.get(
-    "DENO_PATH", "/nix/store/vqh16h1p153k533b66i9h1i91b0k816v-deno-1.46.3/bin/deno"
-)
+YT_DLP_NODE_PATH = os.environ.get("YT_DLP_NODE_PATH", "node")
 
 # Game Database
 GAME_DB_PATH = os.environ.get("GAME_DB_PATH", "/var/lib/motortown/gamedata.db")
