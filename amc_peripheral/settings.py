@@ -39,6 +39,10 @@ STATIC_PATH = os.environ.get("STATIC_PATH", "/srv/www")
 YT_COOKIES_PATH = os.environ.get("YT_COOKIES_PATH")
 DENO_PATH = os.environ.get("DENO_PATH")
 
+# yt-dlp routes YouTube traffic through a SOCKS5 tunnel to asean-mt-server:
+# amc-peripheral's Vultr IP is blocked. Set to "" for a direct connection.
+YTDL_PROXY = os.environ.get("YTDL_PROXY", "socks5h://127.0.0.1:1081")
+
 # AI Config
 DEFAULT_AI_MODEL = os.environ.get("DEFAULT_AI_MODEL", "qwen/qwen3.7-flash")
 TRANSLATION_AI_MODEL = os.environ.get("TRANSLATION_AI_MODEL", "google/gemma-4-31b-it")

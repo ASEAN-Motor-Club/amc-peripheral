@@ -16,7 +16,7 @@ import re
 
 from requests import Session
 
-from ..settings import YT_COOKIES_PATH, YT_DLP_NODE_PATH
+from ..settings import YT_COOKIES_PATH, YT_DLP_NODE_PATH, YTDL_PROXY
 
 log = logging.getLogger(__name__)
 
@@ -145,6 +145,7 @@ def _fetch_via_ytdlp(url: str, languages: list[str]) -> list[TranscriptSegment] 
                 "outtmpl": outtmpl,
                 "quiet": True,
                 "no_warnings": True,
+                "proxy": YTDL_PROXY,
             }
 
             if YT_DLP_NODE_PATH:

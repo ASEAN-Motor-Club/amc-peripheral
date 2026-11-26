@@ -52,6 +52,7 @@ from amc_peripheral.settings import (
     SONG_INTROS_PATH,
     RADIO_DB_PATH,
     YT_DLP_NODE_PATH,
+    YTDL_PROXY,
     LASTFM_API_KEY,
     KNOWLEDGE_FORUM_CHANNEL_ID,
     BACKEND_API_URL,
@@ -3617,6 +3618,7 @@ Script:
             "default_search": "ytsearch",
             "cookiefile": YT_COOKIES_PATH,
             "js_runtimes": {"node": {"path": YT_DLP_NODE_PATH}},
+            "proxy": YTDL_PROXY,
         }
 
         try:
@@ -3667,6 +3669,7 @@ Script:
             "cookiefile": YT_COOKIES_PATH,
             "retries": 5,
             "js_runtimes": {"node": {"path": YT_DLP_NODE_PATH}},
+            "proxy": YTDL_PROXY,
         }
 
         try:
@@ -3704,6 +3707,7 @@ Script:
             "default_search": "ytsearch",
             "cookiefile": YT_COOKIES_PATH,
             "js_runtimes": {"node": {"path": YT_DLP_NODE_PATH}},
+            "proxy": YTDL_PROXY,
         }
 
         try:
@@ -3733,6 +3737,7 @@ Script:
             "cookiefile": YT_COOKIES_PATH,
             "retries": 5,
             "js_runtimes": {"node": {"path": YT_DLP_NODE_PATH}},
+            "proxy": YTDL_PROXY,
         }
 
         try:
@@ -4076,6 +4081,7 @@ Script:
             "default_search": "ytsearch",
             "cookiefile": YT_COOKIES_PATH,
             "js_runtimes": {"node": {"path": YT_DLP_NODE_PATH}},
+            "proxy": YTDL_PROXY,
         }
 
         try:
@@ -4125,6 +4131,7 @@ Script:
             "cookiefile": YT_COOKIES_PATH,
             "retries": 5,
             "js_runtimes": {"node": {"path": YT_DLP_NODE_PATH}},
+            "proxy": YTDL_PROXY,
         }
 
         try:
