@@ -7,6 +7,7 @@ from ..settings import DISCORD_TOKEN, GUILD_ID
 from .knowledge_cog import KnowledgeCog
 from .translation_cog import TranslationCog
 from .utils_cog import UtilsCog
+from .event_sync_cog import EventSyncCog
 from .share_cog import ShareCog
 from .status_cog import StatusCog
 from .auction_cog import AuctionCog
@@ -33,6 +34,7 @@ class AMCBot(commands.Bot):
         await self.add_cog(KnowledgeCog(self))
         await self.add_cog(TranslationCog(self))
         await self.add_cog(UtilsCog(self))
+        await self.add_cog(EventSyncCog(self))
         await self.add_cog(ShareCog(self))
         await self.add_cog(YouTubeCog(self))
         await self.add_cog(StatusCog(self))

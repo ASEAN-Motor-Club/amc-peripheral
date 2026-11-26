@@ -309,3 +309,35 @@ def get_location_index() -> str:
         f"Examples: {sample_s}.\n"
     )
 
+
+def fetch_scheduled_events() -> list[dict]:
+    """Return all Django ScheduledEvent rows as plain dicts.
+
+    Dedicated typed helper for the event-automation cogs. Deliberately does not
+    go through the LLM query gate (keyword blocking / MAX_ROWS) — that is for
+    model-generated SQL, not trusted application code.
+    """
+    try:
+        conn = _get_connection()
+    except Exception as exc:  # noqa: BLE001
+        log.error(f"fetch_scheduled_events: connection failed: {exc}")
+        return []
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, name, start_time, end_time
+            FROM amc_scheduledevent
+            ORDER BY start_time
+            """
+        )
+        return [
+            {"id": row[0], "name": row[1], "start_time": row[2], "end_time": row[3]}
+            for row in cursor.fetchall()
+        ]
+    except Exception as exc:  # noqa: BLE001
+        log.error(f"fetch_scheduled_events: query failed: {exc}")
+        return []
+    finally:
+        conn.close()
+
