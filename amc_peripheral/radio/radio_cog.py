@@ -10,7 +10,7 @@ import time
 import discord
 from io import BytesIO
 from zoneinfo import ZoneInfo
-from datetime import datetime, timedelta, timezone, time as dt_time
+from datetime import UTC, datetime, timedelta, timezone, time as dt_time
 from collections import deque, OrderedDict
 from typing import List, Optional
 
@@ -59,6 +59,7 @@ from amc_peripheral.settings import (
 )
 from amc_peripheral.db import RadioDB
 from amc_peripheral.utils.text_utils import split_markdown, strip_emoji
+from amc_peripheral.bot.backend_db import fetch_scheduled_events
 from amc_peripheral.radio.tts import tts_dispatch, tts_multi_dispatch
 from amc_peripheral.radio.loudness import apply_lufs_tag
 from amc_peripheral.radio.liquidsoap import LiquidsoapController
@@ -787,6 +788,30 @@ class PlaylistEditView(discord.ui.View):
         await self._move(interaction, "down")
 
 
+EVENT_JINGLE_RE = re.compile(r"AMC-SE-(\d+)\.mp3")
+EVENT_JINGLE_GRACE = timedelta(minutes=15)
+EVENT_JINGLE_TEMPLATE = (
+    "Hey everyone, Annie here, coming at you between songs on Radio ASEAN. "
+    "Quick reminder: {name}. The crew meets at {when} GMT plus seven. Join "
+    "through slash events when it goes live. After the run, stick around for "
+    "the car meet, bring the truck, park up, compare builds. Then we do the "
+    "same course again with a trailer bolted on. Expect a bumpy one out "
+    "there. See you on the grid."
+)
+
+
+def build_event_jingle_script(name: str, start: datetime) -> str:
+    """Approved DJ Annie template with the event name and local start time."""
+    local = start.astimezone(timezone(timedelta(hours=7)))
+    return EVENT_JINGLE_TEMPLATE.format(name=name, when=local.strftime("%A at %-I %p"))
+
+
+def _write_event_jingle(path: str, audio: bytes) -> None:
+    with open(path, "wb") as fp:
+        fp.write(audio)
+    os.chmod(path, 0o644)
+
+
 class RadioCog(commands.Cog):
     playlist_group = app_commands.Group(
         name="playlist", description="Manage your playlists", guild_ids=[GUILD_ID]
@@ -850,6 +875,7 @@ class RadioCog(commands.Cog):
     async def cog_load(self):
         self.post_gazette_task.start()
         self.update_jingles.start()
+        self.sync_event_jingles.start()
         self.update_news.start()
         self.update_current_song_embed.start()
         self.auto_queue_trending.start()
@@ -953,6 +979,7 @@ class RadioCog(commands.Cog):
     async def cog_unload(self):
         self.post_gazette_task.cancel()
         self.update_jingles.cancel()
+        self.sync_event_jingles.cancel()
         self.update_news.cancel()
         self.update_current_song_embed.cancel()
         self.auto_queue_trending.cancel()
@@ -5111,6 +5138,69 @@ Script:
         )
 
     # --- Tasks ---
+
+    @tasks.loop(minutes=5)
+    async def sync_event_jingles(self):
+        """Install/remove a DJ Annie jingle for each Django ScheduledEvent."""
+        rows = await asyncio.to_thread(fetch_scheduled_events)
+        now = datetime.now(UTC)
+        wanted: dict[int, dict] = {}
+        for row in rows:
+            end = row["end_time"]
+            if end is not None and end.tzinfo is None:
+                end = end.replace(tzinfo=UTC)
+            if end is None or end > now - EVENT_JINGLE_GRACE:
+                wanted[row["id"]] = row
+
+        try:
+            installed = os.listdir(JINGLES_PATH)
+        except FileNotFoundError:
+            installed = []
+        for filename in installed:
+            match = EVENT_JINGLE_RE.fullmatch(filename)
+            if not match or int(match.group(1)) in wanted:
+                continue
+            try:
+                os.unlink(os.path.join(JINGLES_PATH, filename))
+                self.db.db["generated_jingles"].delete_where(
+                    "audio_filename = ?", [filename]
+                )
+                log.info("Removed event jingle %s", filename)
+            except OSError as exc:
+                log.warning("Failed to remove event jingle %s: %s", filename, exc)
+
+        for se_id, row in wanted.items():
+            filename = f"AMC-SE-{se_id}.mp3"
+            existing = list(
+                self.db.db["generated_jingles"].rows_where(
+                    "audio_filename = ?", [filename]
+                )
+            )
+            if existing:
+                continue
+            start = row["start_time"]
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=UTC)
+            script = build_event_jingle_script(row["name"], start)
+            try:
+                audio = await asyncio.to_thread(
+                    tts_dispatch, script, use_markup=True
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.error("Event jingle TTS failed for SE %s: %s", se_id, exc)
+                continue
+            try:
+                os.makedirs(JINGLES_PATH, exist_ok=True)
+                path = os.path.join(JINGLES_PATH, filename)
+                await asyncio.to_thread(_write_event_jingle, path, audio)
+                self.db.add_jingle(script=script, audio_filename=filename)
+                log.info("Installed event jingle %s", filename)
+            except OSError as exc:
+                log.warning("Failed to install event jingle %s: %s", filename, exc)
+
+    @sync_event_jingles.before_loop
+    async def before_sync_event_jingles(self):
+        await self.bot.wait_until_ready()
 
     async def _update_jingles_logic(self):
         channel = self.bot.get_channel(JINGLES_CHANNEL_ID)
