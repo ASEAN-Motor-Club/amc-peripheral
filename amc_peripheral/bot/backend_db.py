@@ -326,13 +326,13 @@ def fetch_scheduled_events() -> list[dict]:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT id, name, start_time, end_time
+            SELECT id, name, description, start_time, end_time
             FROM amc_scheduledevent
             ORDER BY start_time
             """
         )
         return [
-            {"id": row[0], "name": row[1], "start_time": row[2], "end_time": row[3]}
+            {"id": row[0], "name": row[1], "description": row[2], "start_time": row[3], "end_time": row[4]}
             for row in cursor.fetchall()
         ]
     except Exception as exc:  # noqa: BLE001

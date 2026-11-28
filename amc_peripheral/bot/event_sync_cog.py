@@ -44,10 +44,15 @@ def as_utc(value: datetime | None) -> datetime | None:
 
 
 def description_for(row: dict) -> str:
-    return (
-        f"{row['name']} - community event. Join /events in game when it is live.\n\n"
-        f"{marker_for(row['id'])}"
-    )
+    """Use the Django SE description, capped to Discord's 1000-char limit."""
+    marker = marker_for(row["id"])
+    base = (row.get("description") or "").strip()
+    if not base:
+        base = f"{row['name']} - community event."
+    max_base = 1000 - len(marker) - 2
+    if len(base) > max_base:
+        base = base[:max_base].rstrip()
+    return f"{base}\n\n{marker}"
 
 
 def event_drifted(event: discord.ScheduledEvent, row: dict) -> bool:
@@ -55,6 +60,7 @@ def event_drifted(event: discord.ScheduledEvent, row: dict) -> bool:
     end = as_utc(row["end_time"])
     return (
         event.name != row["name"]
+        or (event.description or "") != description_for(row)
         or as_utc(event.start_time) != start
         or as_utc(event.end_time) != end
     )

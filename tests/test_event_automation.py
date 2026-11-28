@@ -31,6 +31,7 @@ def test_event_drifted():
 
     class FakeEvent:
         name = row["name"]
+        description = event_sync_cog.description_for(row)
         start_time = start
         end_time = start + timedelta(hours=3)
 
@@ -53,7 +54,7 @@ def test_fetch_scheduled_events_uses_readonly_connection(monkeypatch):
             assert "amc_scheduledevent" in sql
 
         def fetchall(self):
-            return [(79, "AMC Duro 290 - Aewol Big", "start", "end")]
+            return [(79, "AMC Duro 290 - Aewol Big", "Full description", "start", "end")]
 
     class FakeConn:
         def cursor(self):
@@ -68,10 +69,19 @@ def test_fetch_scheduled_events_uses_readonly_connection(monkeypatch):
         {
             "id": 79,
             "name": "AMC Duro 290 - Aewol Big",
+            "description": "Full description",
             "start_time": "start",
             "end_time": "end",
         }
     ]
+
+
+def test_description_for_uses_django_description_and_caps_length():
+    row = {"id": 79, "name": "Ignored", "description": "A" * 1200}
+    desc = event_sync_cog.description_for(row)
+    assert len(desc) == 1000
+    assert desc.startswith("A" * 989)
+    assert desc.endswith("\n\nAMC-SE-79")
 
 
 @pytest.mark.asyncio
